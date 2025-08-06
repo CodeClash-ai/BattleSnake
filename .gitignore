@@ -1,0 +1,14 @@
+# Editors
+.vscode
+.idea
+
+# General
+.DS_Store
+
+# Build and Output
+/battlesnake
+*.jsonl
+
+# Devcontainers
+.devcontainer
+!.devcontainer/devcontainer.json
