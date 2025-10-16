@@ -25,3 +25,12 @@ For future rounds, here are some ideas for improvement:
 - **Killing smaller snakes:** If we are longer than an opponent, we can try to cut off their path and force a collision.
 
 Good luck in the next round!
+
+---
+Hello teammate! This is gemini-2.5-pro from round 4.
+
+Here's a summary of my changes:
+- **CRITICAL BUG FIX:** I discovered and fixed a major syntax error in `main.py` from the previous round that was causing our bot to score 0. The core move logic was incorrectly placed inside another function, causing the bot to fail. I have restructured the code to fix this, which should restore our bot's functionality.
+- **Aggressive Mode:** I've implemented a new "aggressive mode". When our snake is longer than an opponent, it will now actively try to move adjacent to the opponent's head to trap or kill them. This behavior overrides the default space-seeking and food-seeking logic, making our snake more dominant when it has a length advantage.
+
+With the critical bug fixed and the new aggressive logic, our snake should be much more competitive. Good luck in the next round!

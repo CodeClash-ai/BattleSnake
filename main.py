@@ -96,21 +96,6 @@ def flood_fill(start_coord: dict, game_state: typing.Dict) -> int:
     
     return count
 
-def move(game_state: typing.Dict) -> typing.Dict:
-    my_head = game_state["you"]["body"][0]
-    my_neck = game_state["you"]["body"][1]
-    board_width = game_state['board']['width']
-    board_height = game_state['board']['height']
-    obstacles = get_obstacles(game_state)
-
-    possible_moves = ["up", "down", "left", "right"]
-
-    if my_neck["x"] < my_head["x"]: possible_moves.remove("left")
-    elif my_neck["x"] > my_head["x"]: possible_moves.remove("right")
-    elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
-    elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
-
-
 def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bool:
     """Checks if a coordinate is at risk of a head-to-head collision."""
     my_len = len(game_state["you"]["body"])
@@ -128,6 +113,20 @@ def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bo
                     return False
     return True
 
+def move(game_state: typing.Dict) -> typing.Dict:
+    my_head = game_state["you"]["body"][0]
+    my_neck = game_state["you"]["body"][1]
+    board_width = game_state['board']['width']
+    board_height = game_state['board']['height']
+    obstacles = get_obstacles(game_state)
+
+    possible_moves = ["up", "down", "left", "right"]
+
+    if my_neck["x"] < my_head["x"]: possible_moves.remove("left")
+    elif my_neck["x"] > my_head["x"]: possible_moves.remove("right")
+    elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
+    elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
+
     safe_moves_with_area = []
     for move_option in possible_moves:
         next_coord = get_next_move_coord(my_head, move_option)
@@ -143,27 +142,48 @@ def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bo
     safe_moves = [move for move, area in safe_moves_with_area]
     next_move = safe_moves[0]
 
-    my_health = game_state['you']['health']
-    food = game_state['board']['food']
+    # Aggressive mode: if we are longer, try to move adjacent to smaller snakes' heads
+    my_len = len(game_state["you"]["body"])
+    attack_move = None
+    # Check our safe moves (already sorted by area) to see if any is an attack move
+    for move_option, area in safe_moves_with_area:
+        next_coord = get_next_move_coord(my_head, move_option)
+        for snake in game_state["board"]["snakes"]:
+            if snake["id"] != game_state["you"]["id"] and my_len > len(snake["body"]):
+                opp_head = snake["body"][0]
+                # If our move lands us next to their head, it's an attack
+                if abs(next_coord['x'] - opp_head['x']) + abs(next_coord['y'] - opp_head['y']) == 1:
+                    print(f"Found attack move {move_option} towards snake {snake['id']}")
+                    attack_move = move_option
+                    break # Found a snake to attack with this move
+        if attack_move:
+            break # Stop searching for other attack moves
     
-    if food and my_health < 50:
-        closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
+    if attack_move:
+        next_move = attack_move
+    else:
+        # Food-seeking logic, only if not attacking
+        my_health = game_state['you']['health']
+        food = game_state['board']['food']
         
-        preferred_moves = []
-        if closest_food['x'] < my_head['x'] and 'left' in safe_moves: preferred_moves.append('left')
-        if closest_food['x'] > my_head['x'] and 'right' in safe_moves: preferred_moves.append('right')
-        if closest_food['y'] < my_head['y'] and 'down' in safe_moves: preferred_moves.append('down')
-        if closest_food['y'] > my_head['y'] and 'up' in safe_moves: preferred_moves.append('up')
-        
-        if preferred_moves:
-            best_food_move = preferred_moves[0]
-            max_area = -1
-            for p_move in preferred_moves:
-                for move, area in safe_moves_with_area:
-                    if p_move == move and area > max_area:
-                        max_area = area
-                        best_food_move = p_move
-            next_move = best_food_move
+        if food and my_health < 50:
+            closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
+            
+            preferred_moves = []
+            if closest_food['x'] < my_head['x'] and 'left' in safe_moves: preferred_moves.append('left')
+            if closest_food['x'] > my_head['x'] and 'right' in safe_moves: preferred_moves.append('right')
+            if closest_food['y'] < my_head['y'] and 'down' in safe_moves: preferred_moves.append('down')
+            if closest_food['y'] > my_head['y'] and 'up' in safe_moves: preferred_moves.append('up')
+            
+            if preferred_moves:
+                best_food_move = preferred_moves[0]
+                max_area = -1
+                for p_move in preferred_moves:
+                    for move, area in safe_moves_with_area:
+                        if p_move == move and area > max_area:
+                            max_area = area
+                            best_food_move = p_move
+                next_move = best_food_move
 
     print(f"MOVE {game_state['turn']}: {next_move}")
     return {"move": next_move}
