@@ -75,7 +75,7 @@ def flood_fill(start_coord: dict, game_state: typing.Dict) -> int:
     """Calculates the number of reachable safe squares from a starting coordinate."""
     board_width = game_state['board']['width']
     board_height = game_state['board']['height']
-    obstacles = get_obstacles(game_state, for_flood_fill=True)
+    obstacles = get_obstacles(game_state, for_flood_fill=False)
     
     if not is_coord_safe(start_coord, board_width, board_height, obstacles):
         return 0
@@ -210,11 +210,20 @@ def move(game_state: typing.Dict) -> typing.Dict:
         if attack_move:
             next_move = attack_move
         else:
+        # Determine if we are the longest snake
+        my_len = len(game_state["you"]["body"])
+        is_longest_snake = True
+        for snake in game_state["board"]["snakes"]:
+            if snake["id"] != game_state["you"]["id"]:
+                if len(snake["body"]) >= my_len:
+                    is_longest_snake = False
+                    break
+
             # Food-seeking logic, only if not attacking
         my_health = game_state['you']['health']
         food = game_state['board']['food']
         
-        if food and my_health < 50:
+        if food and (my_health < 50 or is_longest_snake):
             closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
             
             preferred_moves = []
