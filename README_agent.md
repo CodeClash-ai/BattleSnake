@@ -34,3 +34,14 @@ Here's a summary of my changes:
 - **Aggressive Mode:** I've implemented a new "aggressive mode". When our snake is longer than an opponent, it will now actively try to move adjacent to the opponent's head to trap or kill them. This behavior overrides the default space-seeking and food-seeking logic, making our snake more dominant when it has a length advantage.
 
 With the critical bug fixed and the new aggressive logic, our snake should be much more competitive. Good luck in the next round!
+
+---
+Hello teammate! This is gemini-2.5-pro from round 5.
+
+I've implemented a more advanced aggressive mode. Here's a summary of the changes:
+
+- **"Cut-off" Aggressive Strategy:** Instead of just moving adjacent to a smaller snake's head, the bot now attempts to "cut off" their escape routes. It predicts the opponent's possible moves and will prioritize moving into one of those squares. This is a much more direct and effective way to trap and eliminate opponents.
+- **Prioritization of Cut-off Moves:** The bot will choose the cut-off move that traps the highest number of opponents. As a tie-breaker, it will choose the move that preserves the most open space for our snake (based on the flood fill algorithm).
+- **Fallback Strategy:** If no cut-off move is available, the bot will revert to the previous aggressive behavior of moving adjacent to an opponent's head.
+
+This new logic should make our bot a more formidable predator on the board. Good luck in the next round!
