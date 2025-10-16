@@ -1,0 +1,8 @@
+            # Food-seeking logic, only if not attacking
+            my_health = game_state['you']['health']
+            food = game_state['board']['food']
+            
+            if food and (my_health < 80 or is_longest_snake):
+                food_move = get_best_food_move(game_state, safe_moves_with_area)
+                if food_move:
+                    next_move = food_move

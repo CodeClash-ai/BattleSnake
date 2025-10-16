@@ -1,0 +1,160 @@
+    next_move = "up"  # Default move
+    my_head = game_state["you"]["body"][0]
+    my_neck = game_state["you"]["body"][1]
+    board_width = game_state['board']['width']
+    board_height = game_state['board']['height']
+    obstacles = get_obstacles(game_state)
+
+    possible_moves = ["up", "down", "left", "right"]
+
+    if my_neck["x"] < my_head["x"]: possible_moves.remove("left")
+    elif my_neck["x"] > my_head["x"]: possible_moves.remove("right")
+    elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
+    elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
+    
+    safe_moves = []
+    spatially_safe_moves = []
+    for move in possible_moves:
+        next_coord = get_next_move_coord(my_head, move)
+        if is_coord_safe(next_coord, board_width, board_height, obstacles):
+            spatially_safe_moves.append(move)
+
+    if not spatially_safe_moves:
+        print(f"MOVE {game_state['turn']}: Trapped! No spatially safe moves. Moving down.")
+        return {"move": "down"}
+    
+    # Now, find moves that are also safe from head-to-head collisions
+    head_safe_moves = []
+    for move in spatially_safe_moves:
+        next_coord = get_next_move_coord(my_head, move)
+        if is_safe_from_head_collision(next_coord, game_state):
+            head_safe_moves.append(move)
+
+    safe_moves = []
+    if head_safe_moves:
+        safe_moves = head_safe_moves
+    else:
+        print(f"MOVE {game_state['turn']}: No head-safe moves, considering all spatially safe moves as risky.")
+        safe_moves = spatially_safe_moves
+
+    safe_moves_with_area = []
+    for move in safe_moves:
+        next_coord = get_next_move_coord(my_head, move)
+        area = flood_fill(next_coord, game_state, my_head)
+        safe_moves_with_area.append((move, area))
+
+    # Choose the move with the most available space
+    if safe_moves_with_area:
+        safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
+    if safe_moves_with_area:
+        next_move = safe_moves_with_area[0][0]
+# Tail safety check to prevent self-trapping
+    tail_safe_moves = []
+    for move, area in safe_moves_with_area:
+        next_coord = get_next_move_coord(my_head, move)
+        # Create a hypothetical next game state
+        hypothetical_body = [next_coord] + game_state['you']['body'][:-1]
+        hypothetical_game_state = game_state.copy()
+        hypothetical_game_state['you'] = game_state['you'].copy()
+        hypothetical_game_state['you']['body'] = hypothetical_body
+        hypothetical_game_state['you']['head'] = next_coord
+
+        # Check if the tail can still reach the new head
+        if is_tail_safe(hypothetical_body[-1], hypothetical_game_state):
+            tail_safe_moves.append((move, area))
+
+    if tail_safe_moves:
+        print(f"Found {len(tail_safe_moves)} tail-safe moves.")
+        safe_moves_with_area = tail_safe_moves
+        next_move = safe_moves_with_area[0][0]
+
+    # Aggressive mode
+    attack_move = None
+    my_len = len(game_state["you"]["body"])
+
+    # Cut-off move logic
+    potential_cutoff_moves = {}
+    
+    # Find all possible cut-off moves
+    for move_option, area in safe_moves_with_area:
+        next_coord = get_next_move_coord(my_head, move_option)
+        for snake in game_state["board"]["snakes"]:
+            if snake["id"] != game_state["you"]["id"] and my_len > len(snake["body"]):
+                opp_head = snake["body"][0]
+                
+                # Predict opponent's possible moves
+                opp_possible_moves = ["up", "down", "left", "right"]
+                if len(snake["body"]) > 1:
+                    opp_neck = snake["body"][1]
+                    if opp_neck["x"] < opp_head["x"]: opp_possible_moves.remove("left")
+                    elif opp_neck["x"] > opp_head["x"]: opp_possible_moves.remove("right")
+                    elif opp_neck["y"] < opp_head["y"]: opp_possible_moves.remove("down")
+                    elif opp_neck["y"] > opp_head["y"]: opp_possible_moves.remove("up")
+
+                for opp_move in opp_possible_moves:
+                    opp_next_coord = get_next_move_coord(opp_head, opp_move)
+                    # Check if our move intercepts one of their potential moves
+                    if next_coord['x'] == opp_next_coord['x'] and next_coord['y'] == opp_next_coord['y']:
+                         # Make sure the opponent's move would be "safe" for them, otherwise it's not a real path
+                        if is_move_safe_for_opponent(snake, opp_next_coord, game_state):
+                            if move_option not in potential_cutoff_moves:
+                                potential_cutoff_moves[move_option] = []
+                            potential_cutoff_moves[move_option].append(snake['id'])
+
+    # Choose the best cut-off move. The one that cuts off the most snakes,
+    # and as a tie-breaker, the one that gives us more space.
+    # `safe_moves_with_area` is already sorted by area.
+    if potential_cutoff_moves:
+        best_cutoff_move = None
+        max_cutoff_count = 0
+        for move_option, area in safe_moves_with_area:
+            if move_option in potential_cutoff_moves:
+                cutoff_count = len(potential_cutoff_moves[move_option])
+                if cutoff_count > max_cutoff_count:
+                    max_cutoff_count = cutoff_count
+                    best_cutoff_move = move_option
+        if best_cutoff_move:
+            attack_move = best_cutoff_move
+            print(f"Found cut-off move {attack_move}, cutting off {max_cutoff_count} snake(s)")
+
+
+    if attack_move:
+        next_move = attack_move
+    else:
+        # Fallback to original adjacent-based aggressive mode
+        for move_option, area in safe_moves_with_area:
+            next_coord = get_next_move_coord(my_head, move_option)
+            for snake in game_state["board"]["snakes"]:
+                if snake["id"] != game_state["you"]["id"] and my_len > len(snake["body"]):
+                    opp_head = snake["body"][0]
+                    if abs(next_coord['x'] - opp_head['x']) + abs(next_coord['y'] - opp_head['y']) == 1:
+                        print(f"Found adjacent attack move {move_option} towards snake {snake['id']}")
+                        attack_move = move_option
+                        break 
+            if attack_move:
+                break
+        
+        if attack_move:
+            next_move = attack_move
+        else:
+            # Determine if we are the longest snake
+            my_len = len(game_state["you"]["body"])
+            is_longest_snake = True
+            for snake in game_state["board"]["snakes"]:
+                if snake["id"] != game_state["you"]["id"]:
+                    if len(snake["body"]) >= my_len:
+                        is_longest_snake = False
+                        break
+    
+
+            # Food-seeking logic, only if not attacking
+            my_health = game_state['you']['health']
+            food = game_state['board']['food']
+            
+            if food and (my_health < 80 or is_longest_snake):
+                food_move = get_best_food_move(game_state, safe_moves_with_area)
+                if food_move:
+                    next_move = food_move
+    print(f"MOVE {game_state['turn']}: {next_move}")
+    return {"move": next_move}
+
