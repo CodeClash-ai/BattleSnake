@@ -1,77 +1,86 @@
-# BattleSnake Agent Notes - Round 2
+# BattleSnake Agent Notes - Round 3
 
 ## Current Status
-- Round 1 Results: WON 647-340 against gemini-2.5-pro (11 ties) - 64.7% win rate!
-- Bot Version: Added flood fill and smarter decision making
+- Round 1 Results: WON 647-340 (64.7% win rate) - Simple strategy
+- Round 2 Results: LOST 301-687 (30.1% win rate) - Flood fill strategy FAILED
+- Round 3 Action: **REVERTED to Round 1 strategy**
 
-## Changes Made in Round 2
+## What Happened in Round 2
+Round 2 added flood fill and space awareness, but performance DROPPED dramatically:
+- Win rate fell from 64.7% to 30.1%
+- The added complexity hurt more than it helped
+- Possible issues:
+  1. Flood fill may be too conservative, avoiding good moves
+  2. Performance overhead from BFS on every move
+  3. Potential bugs in the implementation
+  4. Over-optimization for avoiding dead ends may have made bot too passive
 
-### Major Improvements to main.py:
-1. **Flood Fill Implementation**: Added BFS-based flood fill to count reachable spaces from each move
-   - Prevents moving into dead ends or tight spaces
-   - Filters out moves with insufficient space (less than snake length)
-   - Significantly improves survival in tight situations
+## Round 3 Changes
+**REVERTED to Round 1 simple strategy** (main_backup.py -> main.py)
 
-2. **Smarter Food Strategy**: 
-   - Only seeks food aggressively when health < 40
-   - Moderately seeks food when health < 70
-   - When healthy (>70), prioritizes space control and tail following
+The Round 1 bot is simple but effective:
+- Avoids walls, self-collision, opponent bodies
+- Avoids head-to-head with larger/equal snakes
+- Always moves toward closest food
+- No complex space calculations
 
-3. **Space-Aware Decision Making**:
-   - Combines space availability with food distance when deciding moves
-   - Adjusts weights based on health (more space-focused when healthy)
-   - When healthy, tries to follow own tail to maintain control
+### Why Revert?
+1. Round 1 had 64.7% win rate - solid performance
+2. Round 2's flood fill dropped win rate to 30.1% - major regression
+3. Simpler is often better in competitive games
+4. The basic strategy was already working well
 
-4. **Better Scoring System**:
-   - Moves scored based on available space and strategic goals
-   - Dynamic weighting based on health status
-   - Prevents getting trapped while still seeking food when needed
+## Current Strategy (Round 1 Bot)
+1. **Safety First**: Avoid walls, self, opponents, dangerous head-to-heads
+2. **Food Seeking**: Always move toward closest food
+3. **Simple & Fast**: No complex calculations, quick decisions
 
-### Strategy Summary:
-- **Safety First**: Avoids walls, self-collision, opponent bodies, and head-to-head with larger snakes
-- **Space Awareness**: Uses flood fill to ensure moves lead to areas with sufficient space
-- **Adaptive Food Seeking**: Seeks food when health is low, focuses on space control when healthy
-- **Tail Following**: When healthy, tries to follow own tail to stay alive and control territory
+## Known Limitations
+1. No space awareness - can get trapped in dead ends
+2. Always seeks food even when healthy
+3. No opponent prediction or cutting off
+4. No endgame strategy
+5. Doesn't consider which food is safer to pursue
 
-## Performance Analysis
-- Round 1: 647 wins, 340 losses, 11 ties (64.7% win rate)
-- Main strength: Good collision avoidance and food seeking
-- Improvements in Round 2 should help with:
-  - Avoiding dead ends (flood fill)
-  - Better endgame survival (space awareness)
-  - More efficient movement when healthy
+## Future Improvement Ideas (For Next Rounds)
+If we want to improve beyond Round 1 performance:
 
-## Known Limitations & Future Improvements
+### High Priority (Safe improvements):
+1. **Smarter food selection**: Don't chase food that opponents are closer to
+2. **Health-based strategy**: Only seek food when health < 50, otherwise maximize space
+3. **Simple space check**: Just count immediate neighbors, not full flood fill
+4. **Tail following**: When healthy, try to follow own tail
 
-### Remaining Weaknesses:
-1. Flood fill could be optimized for performance (currently BFS every move)
-2. No explicit area control or opponent cutting-off strategy
-3. Could be smarter about which food to target (consider opponent positions)
-4. No explicit endgame 1v1 strategy
-5. Tail following could be more sophisticated
+### Medium Priority (Test carefully):
+1. **Limited flood fill**: Only check 10-15 moves ahead, not entire board
+2. **Opponent prediction**: Anticipate where opponents will move
+3. **Area control**: Try to cut off opponents when we're larger
 
-### Suggested Next Steps (Priority Order):
-1. Optimize flood fill performance if needed (cache or limit depth)
-2. Add opponent prediction - anticipate where opponents will move
-3. Smarter food selection - avoid food that opponents are closer to
-4. Explicit endgame strategy for 1v1 situations
-5. Area control - try to cut off opponents when we're larger
-6. Consider Voronoi-based space control for advanced play
+### Low Priority (Advanced):
+1. **Voronoi space control**: Divide board into territories
+2. **Minimax for endgame**: Optimal play in 1v1 situations
 
 ## Analysis Tools
+- `analyze_games.py`: Review game logs and statistics
+- `test_simple.py`: Basic bot testing
+- `analyze_death_causes.py`: Analyze how we're dying (needs refinement)
 
-### analyze_games.py
-Script to review game logs and statistics
-Usage: `python3 analyze_games.py <round_number>`
-
-## Files Modified/Created
-- main.py: Added flood fill, smarter food strategy, space-aware decisions
-- main_backup.py: Backup of Round 1 version
-- README_agent.md: This file (updated)
+## Files in Codebase
+- `main.py`: Current bot (Round 1 simple strategy)
+- `main_backup.py`: Backup of Round 1 bot (same as main.py now)
+- `main_round2.py`: Round 2 flood fill version (FAILED - kept for reference)
+- `README_agent.md`: This file
 
 ## Testing Notes
-- Bot imports successfully without errors
-- Flood fill implementation uses BFS to count reachable spaces
-- Should handle tight spaces much better than previous version
+- Round 1 bot: 64.7% win rate
+- Round 2 bot: 30.1% win rate (flood fill regression)
+- Round 3 bot: Reverted to Round 1 (expecting ~65% win rate)
 
-Good luck, next teammate! The bot is performing well - focus on optimization and advanced strategies.
+## Recommendations for Next Teammate
+1. **Test before submitting**: Any changes should be tested to ensure they improve win rate
+2. **Start simple**: Add ONE improvement at a time, test it
+3. **Consider keeping Round 1 strategy**: It's already performing well
+4. **If improving**: Focus on smarter food selection or health-based decisions
+5. **Avoid over-engineering**: The flood fill example shows complexity can hurt
+
+Good luck! The simple strategy works - don't overthink it unless you can prove improvements help.
