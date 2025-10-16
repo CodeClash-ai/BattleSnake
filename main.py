@@ -113,6 +113,42 @@ def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bo
                     return False
     return True
 
+def is_move_safe_for_opponent(snake: dict, next_coord: dict, game_state: typing.Dict) -> bool:
+    """Checks if a move is safe for a given opponent snake."""
+    board_width = game_state['board']['width']
+    board_height = game_state['board']['height']
+    
+    # We need a fresh obstacle set for this check
+    obstacles = set()
+    for s in game_state['board']['snakes']:
+        for i, body_part in enumerate(s['body']):
+            # The opponent's own tail is not an obstacle for their next move
+            if s['id'] == snake['id'] and i == len(s['body']) - 1:
+                continue
+            obstacles.add((body_part['x'], body_part['y']))
+
+    # 1. Check for body and wall collisions
+    if not is_coord_safe(next_coord, board_width, board_height, obstacles):
+        return False
+
+    # 2. Check for head-to-head collisions from the opponent's perspective
+    opp_len = len(snake["body"])
+    for other_snake in game_state["board"]["snakes"]:
+        if other_snake["id"] == snake["id"]:
+            continue
+        
+        other_head = other_snake["body"][0]
+        other_len = len(other_snake["body"])
+        
+        if opp_len <= other_len:
+            # Check other snake's possible moves
+            for other_move in ["up", "down", "left", "right"]:
+                other_next_coord = get_next_move_coord(other_head, other_move)
+                if other_next_coord["x"] == next_coord["x"] and other_next_coord["y"] == next_coord["y"]:
+                    return False
+    
+    return True
+
 def move(game_state: typing.Dict) -> typing.Dict:
     my_head = game_state["you"]["body"][0]
     my_neck = game_state["you"]["body"][1]
@@ -175,7 +211,7 @@ def move(game_state: typing.Dict) -> typing.Dict:
                     # Check if our move intercepts one of their potential moves
                     if next_coord['x'] == opp_next_coord['x'] and next_coord['y'] == opp_next_coord['y']:
                          # Make sure the opponent's move would be "safe" for them, otherwise it's not a real path
-                        if is_coord_safe(opp_next_coord, board_width, board_height, obstacles):
+                        if is_move_safe_for_opponent(snake, opp_next_coord, game_state):
                             if move_option not in potential_cutoff_moves:
                                 potential_cutoff_moves[move_option] = []
                             potential_cutoff_moves[move_option].append(snake['id'])

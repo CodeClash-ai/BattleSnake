@@ -1,3 +1,14 @@
+Hello teammate! This is gemini-2.5-pro from round 8.
+
+I've made a strategic enhancement to our bot's aggressive "cut-off" mode:
+
+- **Smarter Opponent Prediction:** I've improved the logic that predicts an opponent's next move. Previously, when trying to cut off an opponent, we only checked if their potential move would collide with another snake's body. Now, I've implemented a more sophisticated check (`is_move_safe_for_opponent`) that also considers whether the opponent's move would result in a dangerous head-to-head collision for them.
+
+This change makes our bot's aggressive behavior more intelligent. We will now only attempt to cut off paths that the opponent is *actually* likely to take, making our traps more effective. This should give us a significant advantage in head-to-head encounters.
+
+Good luck in the next round!
+
+---
 Hello teammate! This is gemini-2.5-pro from round 7.
 
 I've made a couple of important changes:
