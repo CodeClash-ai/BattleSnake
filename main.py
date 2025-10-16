@@ -57,7 +57,7 @@ def is_coord_safe(coord: dict, board_width: int, board_height: int, obstacles: s
         return False
     return True
 
-def get_obstacles(game_state: typing.Dict, for_flood_fill: bool = False) -> set:
+def get_obstacles(game_state: typing.Dict, for_flood_fill: bool = False, coord_to_ignore: dict = None) -> set:
     """Returns a set of all obstacle coordinates."""
     obstacles = set()
     my_id = game_state['you']['id']
@@ -81,13 +81,34 @@ def get_obstacles(game_state: typing.Dict, for_flood_fill: bool = False) -> set:
         my_tail = game_state['you']['body'][-1]
         obstacles.discard((my_tail['x'], my_tail['y']))
             
-    return obstacles
+
+def is_tail_safe(start_coord: dict, game_state: typing.Dict) -> bool:
+    """Checks if the snake's tail can reach its head after a move."""
+    board_width = game_state['board']['width']
+    board_height = game_state['board']['height']
+    my_head = game_state['you']['body'][0]
+obstacles = get_obstacles(game_state, for_flood_fill=True, coord_to_ignore=my_head)
+
+    q = deque([start_coord])
+    visited = { (start_coord['x'], start_coord['y']) }
+
+    while q:
+        curr = q.popleft()
+        if curr['x'] == my_head['x'] and curr['y'] == my_head['y']:
+            return True
+
+        for move in ["up", "down", "left", "right"]:
+            next_coord = get_next_move_coord(curr, move)
+            if (next_coord['x'], next_coord['y']) not in visited and is_coord_safe(next_coord, board_width, board_height, obstacles):
+                visited.add((next_coord['x'], next_coord['y']))
+                q.append(next_coord)
+    return False
 
 def flood_fill(start_coord: dict, game_state: typing.Dict) -> int:
     """Calculates the number of reachable safe squares from a starting coordinate."""
     board_width = game_state['board']['width']
     board_height = game_state['board']['height']
-    obstacles = get_obstacles(game_state, for_flood_fill=True)
+    obstacles = get_obstacles(game_state, for_flood_fill=True, coord_to_ignore=my_head)
     
     if not is_coord_safe(start_coord, board_width, board_height, obstacles):
         return 0
@@ -210,6 +231,27 @@ def move(game_state: typing.Dict) -> typing.Dict:
     # Choose the move with the most available space
     if safe_moves_with_area:
         safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
+# Tail safety check to prevent self-trapping
+    tail_safe_moves = []
+    for move, area in safe_moves_with_area:
+        next_coord = get_next_move_coord(my_head, move)
+        # Create a hypothetical next game state
+        hypothetical_body = [next_coord] + game_state['you']['body'][:-1]
+        hypothetical_game_state = game_state.copy()
+        hypothetical_game_state['you'] = game_state['you'].copy()
+        hypothetical_game_state['you']['body'] = hypothetical_body
+        hypothetical_game_state['you']['head'] = next_coord
+
+        # Check if the tail can still reach the new head
+        if is_tail_safe(hypothetical_body[-1], hypothetical_game_state):
+            tail_safe_moves.append((move, area))
+
+    if tail_safe_moves:
+        print(f"Found {len(tail_safe_moves)} tail-safe moves.")
+        safe_moves_with_area = tail_safe_moves
+        next_move = safe_moves_with_area[0][0]
+    else:
+        print("No tail-safe moves found, falling back to all safe moves.")
         next_move = safe_moves_with_area[0][0]
 
     # Aggressive mode
