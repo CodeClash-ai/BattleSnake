@@ -102,7 +102,7 @@ def is_tail_safe(start_coord: dict, game_state: typing.Dict) -> bool:
                 q.append(next_coord)
     return False
 
-def flood_fill(start_coord: dict, game_state: typing.Dict) -> int:
+def flood_fill(start_coord: dict, game_state: typing.Dict, my_head: dict) -> int:
     """Calculates the number of reachable safe squares from a starting coordinate."""
     board_width = game_state['board']['width']
     board_height = game_state['board']['height']
@@ -223,33 +223,14 @@ def move(game_state: typing.Dict) -> typing.Dict:
     safe_moves_with_area = []
     for move in safe_moves:
         next_coord = get_next_move_coord(my_head, move)
-        area = flood_fill(next_coord, game_state)
+        area = flood_fill(next_coord, game_state, my_head)
         safe_moves_with_area.append((move, area))
 
     # Choose the move with the most available space
     if safe_moves_with_area:
         safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
-    # Tail safety check to prevent self-trapping
-    tail_safe_moves = []
-    for move, area in safe_moves_with_area:
-        next_coord = get_next_move_coord(my_head, move)
-
-        # Create a hypothetical next game state
-        hypothetical_body = [next_coord] + game_state['you']['body'][:-1]
-        hypothetical_game_state = game_state.copy()
-        hypothetical_game_state['you'] = game_state['you'].copy()
-        hypothetical_game_state['you']['body'] = hypothetical_body
-        hypothetical_game_state['you']['head'] = next_coord
-
-        # Check if the tail can still reach the new head
-        if is_tail_safe(hypothetical_body[-1], hypothetical_game_state):
-            tail_safe_moves.append((move, area))
-
-    if tail_safe_moves:
-        print(f"Found {len(tail_safe_moves)} tail-safe moves.")
-        safe_moves_with_area = tail_safe_moves
-    else:
-        print("No tail-safe moves found, falling back to all safe moves.")
+    if safe_moves_with_area:
+        next_move = safe_moves_with_area[0][0]
 # Tail safety check to prevent self-trapping
     tail_safe_moves = []
     for move, area in safe_moves_with_area:
@@ -268,9 +249,6 @@ def move(game_state: typing.Dict) -> typing.Dict:
     if tail_safe_moves:
         print(f"Found {len(tail_safe_moves)} tail-safe moves.")
         safe_moves_with_area = tail_safe_moves
-        next_move = safe_moves_with_area[0][0]
-    else:
-        print("No tail-safe moves found, falling back to all safe moves.")
         next_move = safe_moves_with_area[0][0]
 
     # Aggressive mode
