@@ -99,14 +99,15 @@ def flood_fill_count(start_pos: typing.Dict, game_state: typing.Dict, max_depth:
             if i < len(snake['body']) - 1:
                 occupied.add((segment['x'], segment['y']))
     
-    # BFS to count reachable spaces
+    # BFS to count reachable spaces (limited depth)
     visited = set()
     queue = deque([(start_pos, 0)])  # (position, depth)
     visited.add((start_pos['x'], start_pos['y']))
-    count = 1
+    count = 0
     
     while queue:
         pos, depth = queue.popleft()
+        count += 1
         
         # Stop expanding if we've reached max depth
         if depth >= max_depth:
@@ -127,7 +128,6 @@ def flood_fill_count(start_pos: typing.Dict, game_state: typing.Dict, max_depth:
             
             visited.add(next_tuple)
             queue.append((next_pos, depth + 1))
-            count += 1
     
     return count
 
@@ -143,7 +143,6 @@ def move(game_state: typing.Dict) -> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
     my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
     my_length = game_state["you"]["length"]
-    my_health = game_state["you"]["health"]
 
     if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
         is_move_safe["left"] = False
@@ -226,12 +225,8 @@ def move(game_state: typing.Dict) -> typing.Dict:
     if len(spacious_moves) == 0:
         spacious_moves = safe_moves
 
-    # Step 5 - Move towards food with health awareness
+    # Step 5 - Move towards food, but prefer moves with more space
     food = game_state['board']['food']
-    
-    # Determine if we're in urgent need of food
-    is_hungry = my_health < 30
-    is_very_hungry = my_health < 15
     
     if len(food) > 0:
         # Find the closest food
@@ -244,16 +239,9 @@ def move(game_state: typing.Dict) -> typing.Dict:
             distance = manhattan_distance(next_pos, closest_food)
             space = move_space[move_dir]
             
-            # Adjust scoring based on health
-            if is_very_hungry:
-                # When very hungry, prioritize food heavily
-                move_scores[move_dir] = -distance * 10 + (space * 0.01)
-            elif is_hungry:
-                # When hungry, prioritize food more
-                move_scores[move_dir] = -distance * 2 + (space * 0.01)
-            else:
-                # Normal: prioritize food, but space is important too
-                move_scores[move_dir] = -distance + (space * 0.01)
+            # Prioritize moves toward food, but add space as a tiebreaker
+            # Negative distance (closer is better), plus small space bonus
+            move_scores[move_dir] = -distance + (space * 0.01)
         
         # Choose the move with the best score
         next_move = max(move_scores, key=move_scores.get)
@@ -261,7 +249,7 @@ def move(game_state: typing.Dict) -> typing.Dict:
         # No food available, choose the move with the most space
         next_move = max(spacious_moves, key=lambda m: move_space[m])
 
-    print(f"MOVE {game_state['turn']}: {next_move} (health: {my_health}, space: {move_space[next_move]})")
+    print(f"MOVE {game_state['turn']}: {next_move} (space: {move_space[next_move]})")
     return {"move": next_move}
 
 
