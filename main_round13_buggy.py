@@ -99,30 +99,27 @@ def flood_fill_count(start_pos: typing.Dict, game_state: typing.Dict, max_depth:
             if i < len(snake['body']) - 1:
                 occupied.add((segment['x'], segment['y']))
     
-    # BFS with depth limit
+    # BFS to count reachable spaces
     visited = set()
-    queue = deque([(start_pos, 0)])
+    queue = deque([(start_pos, 0)])  # (position, depth)
     visited.add((start_pos['x'], start_pos['y']))
     count = 1
     
     while queue:
         pos, depth = queue.popleft()
         
+        # Stop expanding if we've reached max depth
         if depth >= max_depth:
             continue
         
         # Check all four directions
-        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-            next_pos = {"x": pos['x'] + dx, "y": pos['y'] + dy}
+        for move in ["up", "down", "left", "right"]:
+            next_pos = get_next_position(pos, move)
             next_tuple = (next_pos['x'], next_pos['y'])
             
-            # Check bounds
-            if next_pos['x'] < 0 or next_pos['x'] >= board_width:
+            # Skip if out of bounds, occupied, or already visited
+            if is_out_of_bounds(next_pos, board_width, board_height):
                 continue
-            if next_pos['y'] < 0 or next_pos['y'] >= board_height:
-                continue
-            
-            # Check if occupied or visited
             if next_tuple in occupied:
                 continue
             if next_tuple in visited:
@@ -141,7 +138,6 @@ def flood_fill_count(start_pos: typing.Dict, game_state: typing.Dict, max_depth:
 def move(game_state: typing.Dict) -> typing.Dict:
 
     is_move_safe = {"up": True, "down": True, "left": True, "right": True}
-    is_move_risky = {"up": False, "down": False, "left": False, "right": False}
 
     # We've included code to prevent your Battlesnake from moving backwards
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
@@ -187,23 +183,22 @@ def move(game_state: typing.Dict) -> typing.Dict:
         for opponent in opponents:
             if opponent["id"] == game_state["you"]["id"]:
                 continue  # Skip ourselves
-            
             # Check collision with opponent body (exclude tail)
             if is_collision_with_snake(next_pos, opponent["body"], exclude_tail=True):
                 is_move_safe[move_dir] = False
             
-            # Mark moves as risky (but not unsafe) if adjacent to larger opponent heads
-            # This allows us to take risky moves if they're our only option
+            # Avoid head-to-head collisions with larger or equal snakes
             opponent_head = opponent["body"][0]
             opponent_length = opponent["length"]
             
-            # Check if our next position is adjacent to opponent's head
-            dist_to_opp_head = manhattan_distance(next_pos, opponent_head)
-            
-            if dist_to_opp_head == 1 and opponent_length >= my_length:
-                # This move puts us adjacent to a larger/equal opponent
-                # Mark as risky but not necessarily unsafe
-                is_move_risky[move_dir] = True
+            # Check if opponent could move to a position adjacent to our next position
+            opponent_possible_moves = get_possible_moves(opponent_head)
+            for opp_next_pos in opponent_possible_moves:
+                if opp_next_pos["x"] == next_pos["x"] and opp_next_pos["y"] == next_pos["y"]:
+                    # Opponent could move to the same position
+                    if opponent_length >= my_length:
+                        # We would lose or tie, avoid this move
+                        is_move_safe[move_dir] = False
 
     # Are there any safe moves left?
     safe_moves = []
@@ -215,17 +210,9 @@ def move(game_state: typing.Dict) -> typing.Dict:
         print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
         return {"move": "down"}
 
-    # Prefer non-risky moves if available
-    non_risky_moves = [m for m in safe_moves if not is_move_risky[m]]
-    if len(non_risky_moves) > 0:
-        moves_to_consider = non_risky_moves
-    else:
-        # All safe moves are risky, but that's okay - take them anyway
-        moves_to_consider = safe_moves
-
     # Step 4 - Calculate space available for each move
     move_space = {}
-    for move_dir in moves_to_consider:
+    for move_dir in safe_moves:
         next_pos = get_next_position(my_head, move_dir)
         space = flood_fill_count(next_pos, game_state, max_depth=20)
         move_space[move_dir] = space
@@ -233,11 +220,11 @@ def move(game_state: typing.Dict) -> typing.Dict:
     # Filter out moves with very little space (less than half our length)
     # This prevents getting trapped in tight spaces
     min_space = max(my_length // 2, 5)
-    spacious_moves = [move_dir for move_dir in moves_to_consider if move_space[move_dir] >= min_space]
+    spacious_moves = [move_dir for move_dir in safe_moves if move_space[move_dir] >= min_space]
     
     # If all moves lead to tight spaces, keep all safe moves
     if len(spacious_moves) == 0:
-        spacious_moves = moves_to_consider
+        spacious_moves = safe_moves
 
     # Step 5 - Move towards food with health awareness
     food = game_state['board']['food']

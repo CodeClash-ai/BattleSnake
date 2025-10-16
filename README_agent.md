@@ -1,6 +1,6 @@
-# BattleSnake Agent Notes - Round 13
+# BattleSnake Agent Notes - Round 14
 
-## Current Status - DOMINANT PERFORMANCE!
+## Current Status - CRITICAL BUG FIXED!
 - Round 1 Results: WON 64.7% win rate - Simple strategy
 - Round 2 Results: LOST 30.1% win rate - Flood fill strategy FAILED
 - Round 3 Results: WON 99.7% win rate - Reverted to Round 1 strategy
@@ -11,132 +11,84 @@
 - Round 8 Results: WON 50.5% win rate - Space awareness helped!
 - Round 9 Results: WON 51.9% win rate - Health awareness helped!
 - Round 10 Results: LOST 50.6% win rate - Opponent avoidance TOO CONSERVATIVE
-- Round 11 Results: WON 62.0% win rate - Reverted to Round 9, BIG WIN! ✓
+- Round 11 Results: WON 62.0% win rate - Reverted to Round 9, BIG WIN!
 - Round 12 Results: WON 100% win rate - Opponent had issues (no game logs)
-- Round 13 Action: KEEP Round 9 strategy (proven 62% win rate!)
+- Round 13 Results: LOST 48.2% win rate - Our bot had a CRITICAL BUG!
+- Round 14 Action: FIXED critical head-to-head collision bug
 
-## Round 13 Strategy: Keep Winning Strategy!
+## Round 14 Strategy: Bug Fix!
 
-### Why Keep Current Strategy?
-The Round 9 strategy has proven itself:
-- Round 11: 62.0% win rate (617 wins vs 378 losses) - LEGITIMATE WIN
-- Round 12: 100% win rate (1000 vs 0) - Opponent had submission issues
-- This is our most consistent and reliable strategy
+### Critical Bug Found and Fixed!
+Round 13 analysis revealed a devastating bug in our head-to-head collision avoidance logic.
 
-**Note on Round 12**: The 100% win rate appears to be due to opponent issues (no game logs generated). The true performance baseline is Round 11's 62% win rate, which is still excellent.
+**The Bug:**
+- Our bot was marking moves as UNSAFE if they were adjacent to any larger/equal opponent head
+- This was too conservative and caused us to avoid perfectly safe moves
+- In many games, we had only ONE safe move but marked it unsafe due to proximity to opponent
+- Result: Bot chose "No safe moves detected! Moving down" and died immediately
+- This bug cost us the round (48.2% win rate vs expected 62%+)
 
-### Current Strategy (Round 9 - Proven Winner):
-1. **Space Awareness**: Use flood fill to avoid trapped positions
-2. **Health Awareness**: Prioritize food when health < 30, urgent when < 15
-3. **Head-to-Head Avoidance**: Only avoid direct collisions with larger/equal snakes
-4. **Body Collision Avoidance**: Standard collision detection
-5. **Balanced Scoring**: Weight space and food distance appropriately
+**Example from sim_1.jsonl (Turn 41):**
+- Our head: (7,6), surrounded by our own body on 3 sides
+- Only safe move: LEFT to (6,6)
+- Opponent head: (5,6), length 9 (bigger than us)
+- Bug: Marked LEFT as unsafe because (6,6) is adjacent to opponent at (5,6)
+- Reality: Opponent moved DOWN to (5,5), so (6,6) was perfectly safe!
+- Result: We chose "down" (default fallback) and died
 
-### Key Features:
-- Flood fill with max_depth=20 to count reachable spaces
-- Minimum space threshold: max(my_length // 2, 5)
-- Health thresholds: hungry < 30, very_hungry < 15
-- Food priority scaling: very_hungry (10x), hungry (2x), normal (1x)
-- Space bonus: 0.01 per reachable square
+**The Fix:**
+- Changed from marking adjacent moves as UNSAFE to marking them as RISKY
+- Bot now prefers non-risky moves when available
+- But if ALL safe moves are risky, it takes them anyway (better than dying!)
+- This allows the bot to survive in tight situations while still being cautious
+
+### Expected Impact:
+- Should restore win rate to 60%+ (Round 11 levels)
+- Eliminates unnecessary deaths from overly conservative collision avoidance
+- Maintains safety while allowing necessary risks
 
 ## Performance History
-- Round 1: 64.7% win rate
-- Round 2: 30.1% win rate
-- Round 3: 99.7% win rate
-- Round 4: 34.0% win rate
-- Round 5: 100% win rate
-- Round 6: 100% win rate
-- Round 7: 39.8% win rate
-- Round 8: 50.5% win rate
-- Round 9: 51.9% win rate
-- Round 10: 50.6% win rate
-- Round 11: 62.0% win rate ← CURRENT STRATEGY (BEST RECENT!)
-- Round 12: 100% win rate (opponent issues, not representative)
-- Round 13: TBD - Keeping Round 9 strategy
+- Round 11: 62.0% win rate (BEST RECENT)
+- Round 12: 100% win rate (opponent issues)
+- Round 13: 48.2% win rate (BUG CAUSED DROP!)
+- Round 14: TBD - Bug fixed, expecting 60%+ win rate
 
 ## Files in Codebase
-- main.py: Current bot (Round 9 strategy - health-aware space control)
-- main_round9_health_aware.py: Backup of Round 9 (51.9% win rate)
-- main_round10.py: Backup of Round 10 (50.6% win rate - too conservative)
-- analyze_round9.py: Analysis script (has bugs, use manual analysis)
-- analyze_losses.py: Loss analysis script
-- Various other backup files
+- main.py: Current bot (Round 14 - BUG FIXED!)
+- main_round13_buggy.py: Backup of buggy Round 13 version
+- analyze_round13_v3.py: Analysis script for Round 13
+- test_new_logic.py: Test script that validates the bug fix
 
 ## Recommendations for Next Teammate
 
-### If Round 13 MAINTAINS (>60%):
-1. **KEEP THIS STRATEGY!** It's working excellently
-2. Consider very small refinements:
-   - Maybe adjust health thresholds slightly (30/15 is good)
-   - Could tune flood fill depth if needed
-   - Don't change core logic!
+### If Round 14 SUCCEEDS (>55%):
+1. CELEBRATE! The bug fix worked!
+2. Keep this strategy - it's the Round 9 logic with the critical bug fixed
+3. Consider minor optimizations if needed
 
-### If Round 13 IMPROVES (>65%):
-1. **DEFINITELY KEEP IT!**
-2. Document what's working so well
-3. Maybe add subtle endgame improvements
+### If Round 14 MAINTAINS (~48%):
+1. The bug fix didn't help as much as expected
+2. Opponent may have other advantages
+3. Consider analyzing their strategy more carefully
 
-### If Round 13 DECLINES (50-60%):
-1. Still decent performance
-2. Opponent may be adapting
-3. Consider minor tweaks to health/space thresholds
-4. Don't make major changes - core strategy is sound
-
-### If Round 13 DROPS SIGNIFICANTLY (<50%):
-1. Opponent has adapted to our strategy
-2. May need to revisit approach
-3. Consider Round 8 strategy as alternative
-4. Or try new innovations
+### If Round 14 DECLINES (<45%):
+1. Something went wrong with the fix
+2. Review the risky move logic
+3. May need to revert or adjust the approach
 
 ## Key Lessons Learned
-1. **Reverting works**: Round 11 proved reverting to Round 9 was the right call
-2. **Conservative != Better**: Round 10's 2-square buffer was too restrictive
-3. **Simple strategies can win**: Round 9's straightforward approach is effective
-4. **Space control matters**: Being able to move freely is critical
-5. **Health awareness helps**: Knowing when to prioritize food is important
-6. **Direct collision avoidance only**: Only avoid head-to-head when we'd lose
-7. **Don't over-optimize**: Round 9's simple approach beats complex Round 10
-8. **Opponent issues happen**: Round 12 shows 100% but wasn't a real test
+1. Test edge cases - The bug only appeared in tight situations with one safe move
+2. Conservative != Safe - Being too conservative can be worse than taking calculated risks
+3. Analyze losses carefully - Round 13's drop from 62% to 48% was a red flag
+4. Debug with real game states - Recreating exact game scenarios helped find the bug
+5. Risky vs Unsafe - Important distinction for survival
 
-## Analysis Tools Available
-- analyze_round9.py: Has bugs in win/loss counting, use manual analysis
-- analyze_losses.py: For detailed loss analysis
-- Manual analysis: Check /logs/rounds/N/results.json directly
+## Strategy Summary (Round 14)
+1. Space Awareness: Use flood fill to count reachable spaces (max_depth=20)
+2. Health Awareness: Prioritize food when health < 30, urgent when < 15
+3. Collision Avoidance: Avoid walls, self-collision, opponent bodies
+4. Risk Management: Mark moves adjacent to larger opponents as RISKY (not unsafe)
+5. Minimum Space: Require max(length/2, 5) reachable spaces
+6. Food Seeking: Distance-based with health multipliers
 
-## Strategy Evolution Summary
-- Rounds 1-6: Simple food-seeking (variable results, peaked at 100%)
-- Round 7: Opponent adapted, dropped to 39.8%
-- Round 8: Added space awareness → 50.5%
-- Round 9: Added health awareness → 51.9%
-- Round 10: Added opponent avoidance → 50.6% (FAILED)
-- Round 11: Reverted to Round 9 → 62.0% (SUCCESS!) ← CURRENT
-- Round 12: Kept Round 9 → 100% (opponent issues)
-- Round 13: Keeping Round 9 strategy
-
-## What NOT to Do
-1. Do NOT add large buffer zones around opponents
-2. Do NOT mark moves as UNSAFE based on proximity alone
-3. Do NOT over-optimize food selection
-4. Do NOT add center control without clear benefit
-5. Do NOT make major changes when winning at 62%!
-6. Do NOT assume Round 12's 100% means we need to change anything
-
-## What TO Do
-1. Keep the current strategy (it's working!)
-2. Make only small, incremental changes if any
-3. Test thoroughly before submitting
-4. Document any changes clearly
-5. Trust the data - 62% (Round 11) is excellent!
-6. Focus on consistency over risky improvements
-
-## Potential Future Improvements (if needed)
-If the opponent adapts and our win rate drops below 50%, consider:
-1. **Endgame optimization**: When few snakes remain, adjust strategy
-2. **Food competition**: Better handling when multiple snakes target same food
-3. **Aggressive mode**: When significantly larger, could be more aggressive
-4. **Tail chasing**: In late game with lots of space, follow our own tail
-5. **Dynamic health thresholds**: Adjust based on food availability
-
-But remember: **Don't fix what isn't broken!** The current 62% win rate is strong.
-
-Good luck! The strategy is working great - maintain consistency!
+Good luck! The critical bug is fixed - we should see much better performance!
