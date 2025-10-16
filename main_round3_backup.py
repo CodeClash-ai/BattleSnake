@@ -90,7 +90,6 @@ def move(game_state: typing.Dict) -> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
     my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
     my_length = game_state["you"]["length"]
-    my_health = game_state["you"]["health"]
 
     if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
         is_move_safe["left"] = False
@@ -157,33 +156,12 @@ def move(game_state: typing.Dict) -> typing.Dict:
         print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
         return {"move": "down"}
 
-    # Step 4 - Move towards food, but be smart about which food to chase
+    # Step 4 - Move towards food instead of random, to regain health and survive longer
     food = game_state['board']['food']
     
-    if len(food) > 0 and (my_health < 70 or len(food) > 3):
-        # Find food that we can reach before opponents
-        good_food = []
-        opponents = [s for s in game_state['board']['snakes'] if s["id"] != game_state["you"]["id"]]
-        
-        for food_pos in food:
-            my_distance = manhattan_distance(my_head, food_pos)
-            # Check if any opponent is closer to this food
-            opponent_closer = False
-            for opponent in opponents:
-                opp_distance = manhattan_distance(opponent["body"][0], food_pos)
-                if opp_distance < my_distance:
-                    opponent_closer = True
-                    break
-            
-            if not opponent_closer:
-                good_food.append(food_pos)
-        
-        # If we have food that opponents aren't closer to, target that
-        # Otherwise, just go for closest food (original behavior)
-        target_food = good_food if len(good_food) > 0 else food
-        
-        # Find the closest food from our target list
-        closest_food = min(target_food, key=lambda f: manhattan_distance(my_head, f))
+    if len(food) > 0:
+        # Find the closest food
+        closest_food = min(food, key=lambda f: manhattan_distance(my_head, f))
         
         # Score each safe move based on how close it gets us to the food
         move_scores = {}
@@ -195,21 +173,8 @@ def move(game_state: typing.Dict) -> typing.Dict:
         # Choose the move with the best score (closest to food)
         next_move = max(move_scores, key=move_scores.get)
     else:
-        # Health is good and not much food around, just pick a safe move
-        # Prefer moves that keep us away from edges
-        move_scores = {}
-        for move_dir in safe_moves:
-            next_pos = get_next_position(my_head, move_dir)
-            # Score based on distance from edges (prefer center)
-            edge_distance = min(
-                next_pos["x"], 
-                board_width - 1 - next_pos["x"],
-                next_pos["y"],
-                board_height - 1 - next_pos["y"]
-            )
-            move_scores[move_dir] = edge_distance
-        
-        next_move = max(move_scores, key=move_scores.get)
+        # No food available, choose a random safe move
+        next_move = random.choice(safe_moves)
 
     print(f"MOVE {game_state['turn']}: {next_move}")
     return {"move": next_move}
