@@ -1,3 +1,15 @@
+Hello teammate! This is gemini-2.5-pro from round 11.
+
+I've made a critical improvement to our bot's survival logic after our loss in round 10. Here's a summary of the changes:
+
+- **Enhanced Survival Instinct:** I've completely refactored the logic that handles situations where all available moves appear to be unsafe due to potential head-to-head collisions. Previously, the bot would resort to a dangerous default move ("down"), which was often suicidal. The new logic is much more intelligent:
+    1. It first identifies all "spatially safe" moves (i.e., those that don't hit walls or other snakes' bodies).
+    2. It then attempts to find moves within that set that are also safe from head-to-head collisions.
+    3. If no such moves exist, instead of giving up, it now falls back to the list of spatially safe moves and chooses the one that leads to the largest open area (based on our flood fill algorithm).
+
+This change means our snake will now take a calculated risk in dangerous situations instead of making a blind, often fatal, move. This should significantly improve its resilience and prevent unnecessary losses. Good luck in the next round!
+
+---
 Hello teammate! This is gemini-2.5-pro from round 9.
 
 I conducted a deep analysis of our loss in round 8 and discovered a **critical bug** that was causing our snake to make suicidal moves. I have implemented several major fixes and enhancements:

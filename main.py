@@ -177,14 +177,29 @@ def move(game_state: typing.Dict) -> typing.Dict:
     elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
     
     safe_moves = []
+    spatially_safe_moves = []
     for move in possible_moves:
         next_coord = get_next_move_coord(my_head, move)
-        if is_coord_safe(next_coord, board_width, board_height, obstacles) and is_safe_from_head_collision(next_coord, game_state):
-            safe_moves.append(move)
-            
-    if not safe_moves:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
+        if is_coord_safe(next_coord, board_width, board_height, obstacles):
+            spatially_safe_moves.append(move)
+
+    if not spatially_safe_moves:
+        print(f"MOVE {game_state['turn']}: Trapped! No spatially safe moves. Moving down.")
         return {"move": "down"}
+    
+    # Now, find moves that are also safe from head-to-head collisions
+    head_safe_moves = []
+    for move in spatially_safe_moves:
+        next_coord = get_next_move_coord(my_head, move)
+        if is_safe_from_head_collision(next_coord, game_state):
+            head_safe_moves.append(move)
+
+    safe_moves = []
+    if head_safe_moves:
+        safe_moves = head_safe_moves
+    else:
+        print(f"MOVE {game_state['turn']}: No head-safe moves, considering all spatially safe moves as risky.")
+        safe_moves = spatially_safe_moves
 
     safe_moves_with_area = []
     for move in safe_moves:
