@@ -1,4 +1,4 @@
-# BattleSnake Agent Notes - Round 10
+# BattleSnake Agent Notes - Round 11
 
 ## Current Status
 - Round 1 Results: WON 647-340 (64.7% win rate) - Simple strategy
@@ -10,44 +10,41 @@
 - Round 7 Results: LOST 398-599 (39.8% win rate) - Opponent adapted!
 - Round 8 Results: WON 647-350 (50.5% actual win rate) - Space awareness helped!
 - Round 9 Results: WON 632-366 (51.9% actual win rate) - Health awareness helped!
-- Round 10 Action: ADDED OPPONENT AVOIDANCE & CENTER CONTROL
+- Round 10 Results: LOST 505-490 (50.6% win rate) - Opponent avoidance TOO CONSERVATIVE
+- Round 11 Action: REVERTED TO ROUND 9 (51.9% win rate strategy)
 
-## Round 10 Strategy: Enhanced Opponent Avoidance + Strategic Positioning
+## Round 11 Strategy: Revert to Round 9 (Health-Aware Space Control)
 
-### What Changed from Round 9:
-Added three key improvements to address collision losses:
+### Why Revert?
+Round 10's changes DECREASED win rate from 51.9% to 50.6% (-1.3%)
 
-1. Larger Opponent Buffer Zone:
-   - Avoid getting within 2 squares of larger opponents heads
-   - Prevents risky situations that lead to head-to-head collisions
-   - More conservative play when we are smaller
+Round 10 added three features that hurt performance:
+1. **2-square buffer from larger opponents** - TOO CONSERVATIVE
+   - Marked moves as UNSAFE, reducing options
+   - Trapped us in corners and bad positions
+   - Better to risk proximity than guarantee bad positioning
 
-2. Smart Food Selection:
-   - Avoid food that is closer to larger opponents
-   - Only go for food if we can reach it first
-   - Prevents food competition losses
+2. **Smart food selection** - Possibly too cautious
+   - Avoided food closer to larger opponents
+   - May have caused starvation in some games
 
-3. Center Control When Healthy:
-   - When not hungry, prefer moves toward board center
-   - Center control gives strategic advantage
-   - Better positioning for endgame
+3. **Center control when healthy** - Unclear benefit
+   - Moved toward center when not hungry
+   - May have led to unnecessary confrontations
 
-### Why This Should Help:
-1. Reduces Head-to-Head Losses: 2-square buffer prevents risky encounters
-2. Smarter Food Competition: Do not fight for food we cannot win
-3. Better Positioning: Center control improves late-game survival
-4. Maintains Strengths: Still has health awareness and space control
+### Current Strategy (Round 9 - Restored):
+1. **Space Awareness**: Use flood fill to avoid trapped positions
+2. **Health Awareness**: Prioritize food when health < 30, urgent when < 15
+3. **Head-to-Head Avoidance**: Only avoid direct collisions with larger/equal snakes
+4. **Body Collision Avoidance**: Standard collision detection
+5. **Balanced Scoring**: Weight space and food distance appropriately
 
-### Round 9 Analysis:
-- Actual win rate: 51.9% (518 wins, 480 losses, 1 tie out of 999 games)
-- Improvement from Round 8: +1.4% (from 50.5% to 51.9%)
-- Loss patterns identified:
-  - Head-to-head collisions with larger snakes
-  - Self-collisions (getting trapped)
-  - Hitting opponent bodies
-- All losses show our length = 0 (we died), opponent survived
-- Average loss turn: 139 (we survive longer but make fatal mistakes)
-- Average loss health: 86.9 (not starving, dying from collisions)
+### Key Features:
+- Flood fill with max_depth=20 to count reachable spaces
+- Minimum space threshold: max(my_length // 2, 5)
+- Health thresholds: hungry < 30, very_hungry < 15
+- Food priority scaling: very_hungry (10x), hungry (2x), normal (1x)
+- Space bonus: 0.01 per reachable square
 
 ## Performance History
 - Round 1: 64.7% win rate
@@ -58,47 +55,67 @@ Added three key improvements to address collision losses:
 - Round 6: 100% win rate
 - Round 7: 39.8% win rate
 - Round 8: 50.5% win rate
-- Round 9: 51.9% win rate
-- Round 10: TBD - Added opponent avoidance and center control
+- Round 9: 51.9% win rate ← CURRENT STRATEGY
+- Round 10: 50.6% win rate (reverted)
+- Round 11: TBD - Reverted to Round 9
 
 ## Files in Codebase
-- main.py: Current bot (Round 10 - opponent avoidance + center control)
+- main.py: Current bot (Round 9 strategy - health-aware space control)
+- main_round9_health_aware.py: Backup of Round 9 (51.9% win rate)
+- main_round10.py: Backup of Round 10 (50.6% win rate - too conservative)
 - analyze_round9.py: Analysis script for any round (pass round number as arg)
-- Various backup files and analysis scripts
+- Various other backup files
 
 ## Recommendations for Next Teammate
 
-### If Round 10 WINS (>53%):
-1. Keep the opponent avoidance strategy
-2. Consider tuning the buffer distance (currently 2 squares)
-3. Maybe add tail chasing or food denial strategies
+### If Round 11 MAINTAINS (~52%):
+1. Round 9 strategy is solid and consistent
+2. Consider SMALL tweaks:
+   - Adjust health thresholds (currently 30/15)
+   - Tune flood fill depth (currently 20)
+   - Adjust space/food weighting
+3. DO NOT add aggressive opponent avoidance (Round 10 proved it fails)
 
-### If Round 10 MAINTAINS (~52%):
-1. Strategy is competitive but hitting a plateau
-2. Consider increasing flood fill depth or adding opponent prediction
+### If Round 11 IMPROVES (>52%):
+1. Keep this strategy!
+2. Maybe add subtle improvements:
+   - Tail chasing when safe
+   - Better endgame strategy
+   - Opponent movement prediction
 
-### If Round 10 LOSES (<50%):
-1. Opponent avoidance might be too conservative
-2. Options: Revert to Round 9, reduce buffer distance, or remove center control
+### If Round 11 DECLINES (<51%):
+1. Opponent may have adapted again
+2. Options:
+   - Try Round 8 strategy (50.5% but different approach)
+   - Experiment with food priority thresholds
+   - Consider more aggressive play
 
 ## Key Lessons Learned
-1. Opponents adapt - 100% win rate does not last forever
-2. Space control matters - Being longer does not guarantee winning
-3. Balance is key - Too conservative or too aggressive both fail
-4. Incremental changes - Small improvements over complete rewrites
-5. Collision avoidance - Most losses are from collisions, not starvation
-6. Food competition - Do not fight for food against larger opponents
-7. Positioning matters - Center control can provide strategic advantage
+1. **Conservative != Better**: Round 10's 2-square buffer was too restrictive
+2. **Marking moves UNSAFE is dangerous**: Reduces options, can trap us
+3. **Incremental changes work best**: Round 9's small improvement over Round 8 was good
+4. **Revert when performance drops**: Don't be afraid to go back to what works
+5. **Space control matters**: Being able to move freely is critical
+6. **Health awareness helps**: Knowing when to prioritize food is important
+7. **Direct collision avoidance only**: Only avoid head-to-head when we'd lose
 
 ## Analysis Tools Available
 - analyze_round9.py: Analyzes any round (pass round number as argument)
-  Usage: python3 analyze_round9.py 10
+  Usage: python3 analyze_round9.py 11
 
 ## Strategy Evolution Summary
 - Rounds 1-6: Simple food-seeking (variable results, peaked at 100%)
 - Round 7: Opponent adapted, dropped to 39.8%
-- Round 8: Added space awareness to 50.5%
-- Round 9: Added health awareness to 51.9%
-- Round 10: Added opponent avoidance + center control
+- Round 8: Added space awareness → 50.5%
+- Round 9: Added health awareness → 51.9% ← CURRENT
+- Round 10: Added opponent avoidance → 50.6% (FAILED, reverted)
+- Round 11: Reverted to Round 9 strategy
 
-Good luck! Let's push above 52%!
+## What NOT to Do (Learned from Round 10)
+1. Do NOT add large buffer zones around opponents
+2. Do NOT mark moves as UNSAFE based on proximity alone
+3. Do NOT over-optimize food selection (can cause starvation)
+4. Do NOT add center control without clear benefit
+5. Do NOT make multiple changes at once (hard to debug)
+
+Good luck! Round 9 strategy is solid - small tweaks only!
