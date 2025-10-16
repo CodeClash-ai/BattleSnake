@@ -1,0 +1,364 @@
+     1	# Welcome to
+     2	# __________         __    __  .__                               __
+     3	# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
+     4	#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
+     5	#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
+     6	#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
+     7	#
+     8	# This file can be a nice home for your Battlesnake logic and helper functions.
+     9	#
+    10	# To get you started we've included code to prevent your Battlesnake from moving backwards.
+    11	# For more info see docs.battlesnake.com
+    12	
+    13	import random
+    14	import typing
+    15	from collections import deque
+    16	
+    17	# info is called when you create your Battlesnake on play.battlesnake.com
+    18	# and controls your Battlesnake's appearance
+    19	# TIP: If you open your Battlesnake URL in a browser you should see this data
+    20	def info() -> typing.Dict:
+    21	    print("INFO")
+    22	
+    23	    return {
+    24	        "apiversion": "1",
+    25	        "author": "",  # TODO: Your Battlesnake Username
+    26	        "color": "#888888",  # TODO: Choose color
+    27	        "head": "default",  # TODO: Choose head
+    28	        "tail": "default",  # TODO: Choose tail
+    29	    }
+    30	
+    31	
+    32	# start is called when your Battlesnake begins a game
+    33	def start(game_state: typing.Dict):
+    34	    print("GAME START")
+    35	
+    36	
+    37	# end is called when your Battlesnake finishes a game
+    38	def end(game_state: typing.Dict):
+    39	    print("GAME OVER\n")
+    40	
+    41	def get_next_move_coord(head: dict, move: str) -> dict:
+    42	    """Returns the coordinates for a given move."""
+    43	    moves = {
+    44	        "up": {"x": head["x"], "y": head["y"] + 1},
+    45	        "down": {"x": head["x"], "y": head["y"] - 1},
+    46	        "left": {"x": head["x"] - 1, "y": head["y"]},
+    47	        "right": {"x": head["x"] + 1, "y": head["y"]},
+    48	    }
+    49	    return moves.get(move, head)
+    50	
+    51	def is_coord_safe(coord: dict, board_width: int, board_height: int, obstacles: set) -> bool:
+    52	    """Checks if a given coordinate is safe."""
+    53	    x, y = coord['x'], coord['y']
+    54	    if not (0 <= x < board_width and 0 <= y < board_height):
+    55	        return False
+    56	    if (x, y) in obstacles:
+    57	        return False
+    58	    return True
+    59	
+    60	def get_obstacles(game_state: typing.Dict, for_flood_fill: bool = False, coord_to_ignore: dict = None) -> set:
+    61	    """Returns a set of all obstacle coordinates."""
+    62	    obstacles = set()
+    63	    my_id = game_state['you']['id']
+    64	    food_coords = { (food['x'], food['y']) for food in game_state['board']['food'] }
+    65	
+    66	    for snake in game_state['board']['snakes']:
+    67	        # Add the entire body of the snake to obstacles
+    68	        for part in snake['body']:
+    69	            obstacles.add((part['x'], part['y']))
+    70	        
+    71	        # If it's an opponent snake and it did not just eat, its tail is not an obstacle.
+    72	        if snake['id'] != my_id:
+    73	            if len(snake['body']) > 1:
+    74	                head = snake['body'][0]
+    75	                if (head['x'], head['y']) not in food_coords:
+    76	                    tail = snake['body'][-1]
+    77	                    obstacles.discard((tail['x'], tail['y']))
+    78	    
+    79	    # For our own snake, the tail is never an obstacle for the next move unless we're doing flood_fill.
+    80	    if not for_flood_fill and len(game_state['you']['body']) > 1:
+    81	        my_tail = game_state['you']['body'][-1]
+    82	        obstacles.discard((my_tail['x'], my_tail['y']))
+    83	def is_tail_safe(start_coord: dict, game_state: typing.Dict) -> bool:
+    84	    """Checks if the snake's tail can reach its head after a move."""
+    85	    board_width = game_state['board']['width']
+    86	    board_height = game_state['board']['height']
+    87	    my_head = game_state['you']['body'][0]
+    88	    obstacles = get_obstacles(game_state, for_flood_fill=True, coord_to_ignore=my_head)
+    89	    
+    90	    q = deque([start_coord])
+    91	    visited = { (start_coord['x'], start_coord['y']) }
+    92	
+    93	    while q:
+    94	        curr = q.popleft()
+    95	        if curr['x'] == my_head['x'] and curr['y'] == my_head['y']:
+    96	            return True
+    97	
+    98	        for move in ["up", "down", "left", "right"]:
+    99	            next_coord = get_next_move_coord(curr, move)
+   100	            if (next_coord['x'], next_coord['y']) not in visited and is_coord_safe(next_coord, board_width, board_height, obstacles):
+   101	                visited.add((next_coord['x'], next_coord['y']))
+   102	                q.append(next_coord)
+   103	    return False
+   104	
+   105	def flood_fill(start_coord: dict, game_state: typing.Dict) -> int:
+   106	    """Calculates the number of reachable safe squares from a starting coordinate."""
+   107	    board_width = game_state['board']['width']
+   108	    board_height = game_state['board']['height']
+   109	    obstacles = get_obstacles(game_state, for_flood_fill=True, coord_to_ignore=my_head)
+   110	    
+   111	    if not is_coord_safe(start_coord, board_width, board_height, obstacles):
+   112	        return 0
+   113	
+   114	    q = deque([start_coord])
+   115	    visited = { (start_coord['x'], start_coord['y']) }
+   116	    count = 0
+   117	    
+   118	    while q:
+   119	        curr = q.popleft()
+   120	        count += 1
+   121	
+   122	        for move in ["up", "down", "left", "right"]:
+   123	            next_coord = get_next_move_coord(curr, move)
+   124	            if (next_coord['x'], next_coord['y']) not in visited and is_coord_safe(next_coord, board_width, board_height, obstacles):
+   125	                visited.add((next_coord['x'], next_coord['y']))
+   126	                q.append(next_coord)
+   127	    
+   128	    return count
+   129	
+   130	def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bool:
+   131	    """Checks if a coordinate is at risk of a head-to-head collision."""
+   132	    my_len = len(game_state["you"]["body"])
+   133	    for snake in game_state["board"]["snakes"]:
+   134	        if snake["id"] == game_state["you"]["id"]:
+   135	            continue
+   136	        opp_head = snake["body"][0]
+   137	        opp_len = len(snake["body"])
+   138	        if my_len <= opp_len:
+   139	            # Check opponent's possible moves
+   140	            for opp_move in ["up", "down", "left", "right"]:
+   141	                opp_next_coord = get_next_move_coord(opp_head, opp_move)
+   142	                if opp_next_coord["x"] == next_coord["x"] and opp_next_coord["y"] == next_coord["y"]:
+   143	                    print(f"HEAD-TO-HEAD RISK at {next_coord} with snake {snake['id']}")
+   144	                    return False
+   145	    return True
+   146	
+   147	def is_move_safe_for_opponent(snake: dict, next_coord: dict, game_state: typing.Dict) -> bool:
+   148	    """Checks if a move is safe for a given opponent snake."""
+   149	    board_width = game_state['board']['width']
+   150	    board_height = game_state['board']['height']
+   151	    
+   152	    # We need a fresh obstacle set for this check
+   153	    obstacles = set()
+   154	    for s in game_state['board']['snakes']:
+   155	        for i, body_part in enumerate(s['body']):
+   156	            # The opponent's own tail is not an obstacle for their next move
+   157	            if i == len(s['body']) - 1:
+   158	                continue
+   159	            obstacles.add((body_part['x'], body_part['y']))
+   160	
+   161	    # 1. Check for body and wall collisions
+   162	    if not is_coord_safe(next_coord, board_width, board_height, obstacles):
+   163	        return False
+   164	
+   165	    # 2. Check for head-to-head collisions from the opponent's perspective
+   166	    opp_len = len(snake["body"])
+   167	    for other_snake in game_state["board"]["snakes"]:
+   168	        if other_snake["id"] == snake["id"]:
+   169	            continue
+   170	        
+   171	        other_head = other_snake["body"][0]
+   172	        other_len = len(other_snake["body"])
+   173	        
+   174	        if opp_len <= other_len:
+   175	            # Check other snake's possible moves
+   176	            for other_move in ["up", "down", "left", "right"]:
+   177	                other_next_coord = get_next_move_coord(other_head, other_move)
+   178	                if other_next_coord["x"] == next_coord["x"] and other_next_coord["y"] == next_coord["y"]:
+   179	                    return False
+   180	    
+   181	    return True
+   182	
+   183	def move(game_state: typing.Dict) -> typing.Dict:
+   184	    next_move = "up"  # Default move
+   185	    my_head = game_state["you"]["body"][0]
+   186	    my_neck = game_state["you"]["body"][1]
+   187	    board_width = game_state['board']['width']
+   188	    board_height = game_state['board']['height']
+   189	    obstacles = get_obstacles(game_state)
+   190	
+   191	    possible_moves = ["up", "down", "left", "right"]
+   192	
+   193	    if my_neck["x"] < my_head["x"]: possible_moves.remove("left")
+   194	    elif my_neck["x"] > my_head["x"]: possible_moves.remove("right")
+   195	    elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
+   196	    elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
+   197	    
+   198	    safe_moves = []
+   199	    spatially_safe_moves = []
+   200	    for move in possible_moves:
+   201	        next_coord = get_next_move_coord(my_head, move)
+   202	        if is_coord_safe(next_coord, board_width, board_height, obstacles):
+   203	            spatially_safe_moves.append(move)
+   204	
+   205	    if not spatially_safe_moves:
+   206	        print(f"MOVE {game_state['turn']}: Trapped! No spatially safe moves. Moving down.")
+   207	        return {"move": "down"}
+   208	    
+   209	    # Now, find moves that are also safe from head-to-head collisions
+   210	    head_safe_moves = []
+   211	    for move in spatially_safe_moves:
+   212	        next_coord = get_next_move_coord(my_head, move)
+   213	        if is_safe_from_head_collision(next_coord, game_state):
+   214	            head_safe_moves.append(move)
+   215	
+   216	    safe_moves = []
+   217	    if head_safe_moves:
+   218	        safe_moves = head_safe_moves
+   219	    else:
+   220	        print(f"MOVE {game_state['turn']}: No head-safe moves, considering all spatially safe moves as risky.")
+   221	        safe_moves = spatially_safe_moves
+   222	
+   223	    safe_moves_with_area = []
+   224	    for move in safe_moves:
+   225	        next_coord = get_next_move_coord(my_head, move)
+   226	        area = flood_fill(next_coord, game_state)
+   227	        safe_moves_with_area.append((move, area))
+   228	
+   229	    # Choose the move with the most available space
+   230	    if safe_moves_with_area:
+   231	        safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
+   232	# Tail safety check to prevent self-trapping
+   233	    tail_safe_moves = []
+   234	    for move, area in safe_moves_with_area:
+   235	        next_coord = get_next_move_coord(my_head, move)
+   236	        # Create a hypothetical next game state
+   237	        hypothetical_body = [next_coord] + game_state['you']['body'][:-1]
+   238	        hypothetical_game_state = game_state.copy()
+   239	        hypothetical_game_state['you'] = game_state['you'].copy()
+   240	        hypothetical_game_state['you']['body'] = hypothetical_body
+   241	        hypothetical_game_state['you']['head'] = next_coord
+   242	
+   243	        # Check if the tail can still reach the new head
+   244	        if is_tail_safe(hypothetical_body[-1], hypothetical_game_state):
+   245	            tail_safe_moves.append((move, area))
+   246	
+   247	    if tail_safe_moves:
+   248	        print(f"Found {len(tail_safe_moves)} tail-safe moves.")
+   249	        safe_moves_with_area = tail_safe_moves
+   250	        next_move = safe_moves_with_area[0][0]
+   251	    else:
+   252	        print("No tail-safe moves found, falling back to all safe moves.")
+   253	        next_move = safe_moves_with_area[0][0]
+   254	
+   255	    # Aggressive mode
+   256	    attack_move = None
+   257	    my_len = len(game_state["you"]["body"])
+   258	
+   259	    # Cut-off move logic
+   260	    potential_cutoff_moves = {}
+   261	    
+   262	    # Find all possible cut-off moves
+   263	    for move_option, area in safe_moves_with_area:
+   264	        next_coord = get_next_move_coord(my_head, move_option)
+   265	        for snake in game_state["board"]["snakes"]:
+   266	            if snake["id"] != game_state["you"]["id"] and my_len > len(snake["body"]):
+   267	                opp_head = snake["body"][0]
+   268	                
+   269	                # Predict opponent's possible moves
+   270	                opp_possible_moves = ["up", "down", "left", "right"]
+   271	                if len(snake["body"]) > 1:
+   272	                    opp_neck = snake["body"][1]
+   273	                    if opp_neck["x"] < opp_head["x"]: opp_possible_moves.remove("left")
+   274	                    elif opp_neck["x"] > opp_head["x"]: opp_possible_moves.remove("right")
+   275	                    elif opp_neck["y"] < opp_head["y"]: opp_possible_moves.remove("down")
+   276	                    elif opp_neck["y"] > opp_head["y"]: opp_possible_moves.remove("up")
+   277	
+   278	                for opp_move in opp_possible_moves:
+   279	                    opp_next_coord = get_next_move_coord(opp_head, opp_move)
+   280	                    # Check if our move intercepts one of their potential moves
+   281	                    if next_coord['x'] == opp_next_coord['x'] and next_coord['y'] == opp_next_coord['y']:
+   282	                         # Make sure the opponent's move would be "safe" for them, otherwise it's not a real path
+   283	                        if is_move_safe_for_opponent(snake, opp_next_coord, game_state):
+   284	                            if move_option not in potential_cutoff_moves:
+   285	                                potential_cutoff_moves[move_option] = []
+   286	                            potential_cutoff_moves[move_option].append(snake['id'])
+   287	
+   288	    # Choose the best cut-off move. The one that cuts off the most snakes,
+   289	    # and as a tie-breaker, the one that gives us more space.
+   290	    # `safe_moves_with_area` is already sorted by area.
+   291	    if potential_cutoff_moves:
+   292	        best_cutoff_move = None
+   293	        max_cutoff_count = 0
+   294	        for move_option, area in safe_moves_with_area:
+   295	            if move_option in potential_cutoff_moves:
+   296	                cutoff_count = len(potential_cutoff_moves[move_option])
+   297	                if cutoff_count > max_cutoff_count:
+   298	                    max_cutoff_count = cutoff_count
+   299	                    best_cutoff_move = move_option
+   300	        if best_cutoff_move:
+   301	            attack_move = best_cutoff_move
+   302	            print(f"Found cut-off move {attack_move}, cutting off {max_cutoff_count} snake(s)")
+   303	
+   304	
+   305	    if attack_move:
+   306	        next_move = attack_move
+   307	    else:
+   308	        # Fallback to original adjacent-based aggressive mode
+   309	        for move_option, area in safe_moves_with_area:
+   310	            next_coord = get_next_move_coord(my_head, move_option)
+   311	            for snake in game_state["board"]["snakes"]:
+   312	                if snake["id"] != game_state["you"]["id"] and my_len > len(snake["body"]):
+   313	                    opp_head = snake["body"][0]
+   314	                    if abs(next_coord['x'] - opp_head['x']) + abs(next_coord['y'] - opp_head['y']) == 1:
+   315	                        print(f"Found adjacent attack move {move_option} towards snake {snake['id']}")
+   316	                        attack_move = move_option
+   317	                        break 
+   318	            if attack_move:
+   319	                break
+   320	        
+   321	        if attack_move:
+   322	            next_move = attack_move
+   323	        else:
+   324	            # Determine if we are the longest snake
+   325	            my_len = len(game_state["you"]["body"])
+   326	            is_longest_snake = True
+   327	            for snake in game_state["board"]["snakes"]:
+   328	                if snake["id"] != game_state["you"]["id"]:
+   329	                    if len(snake["body"]) >= my_len:
+   330	                        is_longest_snake = False
+   331	                        break
+   332	    
+   333	            # Food-seeking logic, only if not attacking
+   334	            my_health = game_state['you']['health']
+   335	            food = game_state['board']['food']
+   336	            
+   337	            if food and (my_health < 80 or is_longest_snake):
+   338	                closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
+   339	                distance_to_food = abs(my_head['x'] - closest_food['x']) + abs(my_head['y'] - closest_food['y'])
+   340	
+   341	                # Only chase food if it's reasonably close, or if we are very hungry
+   342	                if distance_to_food < 7 or my_health < 25:
+   343	                    preferred_moves = []
+   344	                    if closest_food['x'] < my_head['x'] and 'left' in safe_moves: preferred_moves.append('left')
+   345	                    if closest_food['x'] > my_head['x'] and 'right' in safe_moves: preferred_moves.append('right')
+   346	                    if closest_food['y'] < my_head['y'] and 'down' in safe_moves: preferred_moves.append('down')
+   347	                    if closest_food['y'] > my_head['y'] and 'up' in safe_moves: preferred_moves.append('up')
+   348	                    
+   349	                    if preferred_moves:
+   350	                        best_food_move = preferred_moves[0]
+   351	                        max_area = -1
+   352	                        for p_move in preferred_moves:
+   353	                            for move, area in safe_moves_with_area:
+   354	                                if p_move == move and area > max_area:
+   355	                                    max_area = area
+   356	                                    best_food_move = p_move
+   357	                        next_move = best_food_move
+   358	
+   359	    print(f"MOVE {game_state['turn']}: {next_move}")
+   360	    return {"move": next_move}
+   361	
+   362	if __name__ == "__main__":
+   363	    from server import run_server
+   364	    run_server({"info": info, "start": start, "move": move, "end": end})
