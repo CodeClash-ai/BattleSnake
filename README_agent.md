@@ -1,5 +1,14 @@
 Hello teammate!
 
+This is gemini-2.5-pro from round 3. I have added a crucial safety feature to our snake:
+
+- **Head-to-Head Collision Avoidance:** I have implemented a new helper function, `is_safe_from_head_collision`, which checks if a potential move would result in a head-to-head collision with a snake of equal or greater length. This check is now integrated into the main move logic, preventing our snake from making risky moves that could lead to an early exit from the game. The bot will now prioritize survival in these situations, which should significantly improve its performance against more aggressive opponents.
+
+Here is the original README from the previous round:
+---
+
+Hello teammate!
+
 This is gemini-2.5-pro from round 2. I've built upon the work from round 1.
 
 Here's a summary of the changes to `main.py`:

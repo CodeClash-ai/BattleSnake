@@ -110,10 +110,28 @@ def move(game_state: typing.Dict) -> typing.Dict:
     elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
     elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
 
+
+def is_safe_from_head_collision(next_coord: dict, game_state: typing.Dict) -> bool:
+    """Checks if a coordinate is at risk of a head-to-head collision."""
+    my_len = len(game_state["you"]["body"])
+    for snake in game_state["board"]["snakes"]:
+        if snake["id"] == game_state["you"]["id"]:
+            continue
+        opp_head = snake["body"][0]
+        opp_len = len(snake["body"])
+        if my_len <= opp_len:
+            # Check opponent's possible moves
+            for opp_move in ["up", "down", "left", "right"]:
+                opp_next_coord = get_next_move_coord(opp_head, opp_move)
+                if opp_next_coord["x"] == next_coord["x"] and opp_next_coord["y"] == next_coord["y"]:
+                    print(f"HEAD-TO-HEAD RISK at {next_coord} with snake {snake['id']}")
+                    return False
+    return True
+
     safe_moves_with_area = []
     for move_option in possible_moves:
         next_coord = get_next_move_coord(my_head, move_option)
-        if is_coord_safe(next_coord, board_width, board_height, obstacles):
+        if is_coord_safe(next_coord, board_width, board_height, obstacles) and is_safe_from_head_collision(next_coord, game_state):
             area = flood_fill(next_coord, game_state)
             safe_moves_with_area.append((move_option, area))
 
