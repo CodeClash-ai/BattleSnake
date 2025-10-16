@@ -1,102 +1,130 @@
-# BattleSnake Agent Notes - Round 4
+# BattleSnake Agent Notes - Round 5
 
 ## Current Status
 - Round 1 Results: WON 647-340 (64.7% win rate) - Simple strategy
 - Round 2 Results: LOST 301-687 (30.1% win rate) - Flood fill strategy FAILED
 - Round 3 Results: WON 997-0 (99.7% win rate) - Reverted to Round 1 strategy ✨
-- Round 4 Action: **Enhanced Round 3 strategy with smarter food selection**
+- Round 4 Results: LOST 340-658 (34.0% win rate) - Enhanced strategy FAILED ❌
+- Round 5 Action: **REVERTED to Round 3 strategy** (99.7% win rate version)
 
-## Round 3 Performance Analysis
-Round 3 was EXTREMELY successful with 99.7% win rate!
-- 997 wins, 0 losses, 2 ties
-- The two ties were both from simultaneous wall collisions (very rare edge case)
-- Game 572: Both snakes hit walls on turn 2
-- Game 775: Both snakes hit walls on turn 10
+## Round 4 Post-Mortem
+Round 4 tried to enhance the winning Round 3 strategy but FAILED badly:
+- Win rate dropped from 99.7% to 34.0%
+- Lost 658 games vs 340 wins
 
-The simple strategy from Round 1/3 proved to be highly effective.
+### What Went Wrong in Round 4:
+1. **Health-based food seeking** (only chase food when health < 70 OR lots of food)
+   - This caused the bot to not eat aggressively enough
+   - Led to poor positioning and getting trapped
+2. **"Smart" food selection** (avoid food opponents are closer to)
+   - Overcomplicated the decision making
+   - The simple "chase closest food" was actually better
+3. **Edge avoidance when healthy**
+   - Didn't help, possibly hurt positioning
 
-## Round 4 Changes
-**Enhanced the winning strategy with conservative improvements:**
+### Key Lesson:
+**DO NOT MESS WITH A 99.7% WIN RATE STRATEGY!**
+The Round 3 simple strategy is nearly perfect. Any "improvements" need to be:
+- Extremely well tested
+- Very conservative
+- Backed by clear evidence from game analysis
 
-### New Features:
-1. **Smarter Food Selection**
-   - Avoids chasing food that opponents are closer to
-   - Reduces wasted moves and improves efficiency
-   - Falls back to closest food if no "safe" food available
+## Current Strategy (Round 5 = Round 3)
+1. **Safety First**: Avoid walls, self, opponents, dangerous head-to-heads
+2. **Always Chase Food**: When food exists, always move toward closest food
+3. **Simple & Fast**: No complex calculations, quick decisions
+4. **No Health Threshold**: Don't overthink when to eat - just eat!
 
-2. **Health-Based Strategy**
-   - When health > 70 and food is scarce, prioritizes staying away from edges
-   - Reduces risk of getting trapped near walls
-   - Should help prevent the rare simultaneous wall collision ties
-
-3. **Edge Avoidance When Healthy**
-   - When not actively seeking food, moves toward center of board
-   - Maximizes future movement options
-
-### Why These Changes Are Safe:
-- Core safety logic unchanged (walls, collisions, head-to-head)
-- Food-seeking behavior only modified, not removed
-- Falls back to original behavior when no better option exists
-- Changes are conservative and logical
-
-## Current Strategy (Round 4 Bot)
-1. **Safety First**: Avoid walls, self, opponents, dangerous head-to-heads (unchanged)
-2. **Smart Food Seeking**: Chase food we can reach before opponents
-3. **Health Awareness**: Only aggressive food-seeking when health < 70
-4. **Space Maximization**: Stay away from edges when healthy
-5. **Simple & Fast**: Still no complex calculations, quick decisions
+This strategy achieved 99.7% win rate in Round 3.
 
 ## Files in Codebase
-- `main.py`: Current bot (Round 4 enhanced strategy)
-- `main_round3_backup.py`: Backup of Round 3 bot (99.7% win rate)
+- `main.py`: Current bot (Round 3 strategy - 99.7% win rate)
+- `main_round3_backup.py`: Backup of Round 3 bot (same as main.py now)
+- `main_round4_failed.py`: Round 4 bot (34% win rate - kept for reference)
 - `main_backup.py`: Backup of Round 1 bot (64.7% win rate)
 - `main_round2_failed.py`: Round 2 flood fill version (30.1% - kept for reference)
 - `README_agent.md`: This file
 - `find_ties.py`: Script to analyze tie games
+- `analyze_round4_deaths.py`: Script to analyze Round 4 game outcomes
+- `find_losses.py`: Script to find loss games
+- `analyze_loss_game.py`: Script to analyze individual games in detail
 
 ## Analysis Tools
 - `analyze_games.py <round_num>`: Review game logs and statistics
 - `find_ties.py`: Find and analyze tie games
 - `test_simple.py`: Basic bot testing
 - `analyze_death_causes.py`: Analyze how we're dying
+- `analyze_round4_deaths.py`: Quick analysis of game outcomes
+- `find_losses.py`: Find games where we lost
+- `analyze_loss_game.py`: Detailed turn-by-turn game analysis
 
 ## Testing Notes
 - Round 1 bot: 64.7% win rate
 - Round 2 bot: 30.1% win rate (flood fill regression)
-- Round 3 bot: 99.7% win rate (simple strategy)
-- Round 4 bot: TBD (enhanced with smarter food selection)
+- Round 3 bot: 99.7% win rate (simple strategy) ⭐
+- Round 4 bot: 34.0% win rate (over-engineered)
+- Round 5 bot: Reverted to Round 3 (expecting ~99.7% again)
 
 ## Known Limitations
 1. No deep space awareness (no flood fill)
 2. No opponent movement prediction
 3. No endgame strategy optimization
 4. Doesn't consider cutting off opponents
+5. Can occasionally get trapped in late game with long body
 
 ## Recommendations for Next Teammate
 
-### If Round 4 Performance is Good (>95% win rate):
-1. **Keep the strategy!** It's working extremely well
-2. Consider minor tweaks like:
-   - Better space estimation (count immediate neighbors)
-   - Tail-following when very healthy
-   - More sophisticated edge avoidance
+### CRITICAL: The Round 3 Strategy is Nearly Perfect!
+- 99.7% win rate is exceptional
+- Only 2 ties out of 1000 games (both rare simultaneous wall collisions)
+- Simple, fast, reliable
 
-### If Round 4 Performance Drops (<90% win rate):
-1. **Revert to Round 3** (main_round3_backup.py)
-2. The 99.7% win rate is hard to beat
-3. Analyze what went wrong with Round 4 changes
+### If You Want to Improve (Proceed with EXTREME Caution):
+1. **Test extensively before submitting**
+2. **Only make ONE small change at a time**
+3. **Keep the Round 3 backup safe**
+4. **If win rate drops below 95%, REVERT IMMEDIATELY**
 
-### If You Want to Experiment:
-1. Test changes before submitting
-2. Always keep backups of working versions
-3. Add ONE feature at a time
-4. Remember: Round 3 achieved 99.7% - that's the bar to beat
+### Possible Safe Improvements (if you must try):
+1. **Space awareness**: Count available spaces in each direction (simple BFS to depth 3-5)
+   - Only use this as a tiebreaker between equally good food moves
+   - Don't let it override food-seeking behavior
+2. **Tail following**: When health > 90 and no food nearby, follow own tail
+   - Very conservative, only when very safe
+3. **Better tie prevention**: The 2 ties were wall collisions
+   - Could add slight preference away from walls when multiple moves are equal
+
+### What NOT to Do:
+1. ❌ Don't add health thresholds for food seeking
+2. ❌ Don't try to be "smart" about which food to chase
+3. ❌ Don't add complex opponent prediction
+4. ❌ Don't implement flood fill (Round 2 proved this fails)
+5. ❌ Don't change the core food-seeking behavior
+
+### If Round 5 Performance is Good (>95% win rate):
+- **KEEP IT!** Submit immediately
+- Document any observations for next round
+- Consider the strategy "solved" for this game
+
+### If Round 5 Performance Drops:
+- This shouldn't happen since we reverted to Round 3
+- If it does, check if game rules changed
+- Verify main.py matches main_round3_backup.py exactly
 
 ## Key Lessons Learned
 1. **Simple strategies can be highly effective** (Round 1 & 3)
-2. **Complexity can hurt performance** (Round 2 flood fill)
-3. **Conservative improvements are safer** (Round 4 approach)
+2. **Complexity can hurt performance** (Round 2 & 4)
+3. **99.7% win rate is hard to beat - don't try to fix what isn't broken**
 4. **Always keep backups of winning versions**
-5. **Analyze game logs to understand failures**
+5. **Test changes thoroughly before submitting**
+6. **One change at a time, measure impact**
+7. **When in doubt, revert to what works**
 
-Good luck! We have a strong foundation with the Round 3 strategy.
+## Round 5 Summary
+- Analyzed Round 4 failure (34% win rate)
+- Identified that "enhancements" broke the winning strategy
+- Reverted to Round 3 (99.7% win rate)
+- Documented lessons learned
+- Created analysis tools for future rounds
+
+Good luck! We have a proven winning strategy. Don't overthink it!
