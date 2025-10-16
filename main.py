@@ -126,28 +126,34 @@ def move(game_state: typing.Dict) -> typing.Dict:
     elif my_neck["x"] > my_head["x"]: possible_moves.remove("right")
     elif my_neck["y"] < my_head["y"]: possible_moves.remove("down")
     elif my_neck["y"] > my_head["y"]: possible_moves.remove("up")
-
-    safe_moves_with_area = []
-    for move_option in possible_moves:
-        next_coord = get_next_move_coord(my_head, move_option)
+    
+    safe_moves = []
+    for move in possible_moves:
+        next_coord = get_next_move_coord(my_head, move)
         if is_coord_safe(next_coord, board_width, board_height, obstacles) and is_safe_from_head_collision(next_coord, game_state):
-            area = flood_fill(next_coord, game_state)
-            safe_moves_with_area.append((move_option, area))
-
-    if not safe_moves_with_area:
-        print(f"MOVE {game_state['turn']}: No safe moves! Moving down.")
+            safe_moves.append(move)
+            
+    if not safe_moves:
+        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
         return {"move": "down"}
 
+    safe_moves_with_area = []
+    for move in safe_moves:
+        next_coord = get_next_move_coord(my_head, move)
+        area = flood_fill(next_coord, game_state)
+        safe_moves_with_area.append((move, area))
+
     safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
-    safe_moves = [move for move, area in safe_moves_with_area]
-    next_move = safe_moves[0]
-
-    # Aggressive mode: try to cut off smaller snakes
-    my_len = len(game_state["you"]["body"])
-    attack_move = None
     
-    potential_cutoff_moves = {} # move -> list of snakes it cuts off
+    next_move = safe_moves_with_area[0][0]
 
+    # Aggressive mode
+    attack_move = None
+    my_len = len(game_state["you"]["body"])
+
+    # Cut-off move logic
+    potential_cutoff_moves = {}
+    
     # Find all possible cut-off moves
     for move_option, area in safe_moves_with_area:
         next_coord = get_next_move_coord(my_head, move_option)
@@ -210,37 +216,40 @@ def move(game_state: typing.Dict) -> typing.Dict:
         if attack_move:
             next_move = attack_move
         else:
-        # Determine if we are the longest snake
-        my_len = len(game_state["you"]["body"])
-        is_longest_snake = True
-        for snake in game_state["board"]["snakes"]:
-            if snake["id"] != game_state["you"]["id"]:
-                if len(snake["body"]) >= my_len:
-                    is_longest_snake = False
-                    break
-
+            # Determine if we are the longest snake
+            my_len = len(game_state["you"]["body"])
+            is_longest_snake = True
+            for snake in game_state["board"]["snakes"]:
+                if snake["id"] != game_state["you"]["id"]:
+                    if len(snake["body"]) >= my_len:
+                        is_longest_snake = False
+                        break
+    
             # Food-seeking logic, only if not attacking
-        my_health = game_state['you']['health']
-        food = game_state['board']['food']
-        
-        if food and (my_health < 50 or is_longest_snake):
-            closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
+            my_health = game_state['you']['health']
+            food = game_state['board']['food']
             
-            preferred_moves = []
-            if closest_food['x'] < my_head['x'] and 'left' in safe_moves: preferred_moves.append('left')
-            if closest_food['x'] > my_head['x'] and 'right' in safe_moves: preferred_moves.append('right')
-            if closest_food['y'] < my_head['y'] and 'down' in safe_moves: preferred_moves.append('down')
-            if closest_food['y'] > my_head['y'] and 'up' in safe_moves: preferred_moves.append('up')
-            
-            if preferred_moves:
-                best_food_move = preferred_moves[0]
-                max_area = -1
-                for p_move in preferred_moves:
-                    for move, area in safe_moves_with_area:
-                        if p_move == move and area > max_area:
-                            max_area = area
-                            best_food_move = p_move
-                next_move = best_food_move
+            if food and (my_health < 80 or is_longest_snake):
+                closest_food = min(food, key=lambda f: abs(my_head['x'] - f['x']) + abs(my_head['y'] - f['y']))
+                distance_to_food = abs(my_head['x'] - closest_food['x']) + abs(my_head['y'] - closest_food['y'])
+
+                # Only chase food if it's reasonably close, or if we are very hungry
+                if distance_to_food < 7 or my_health < 25:
+                    preferred_moves = []
+                    if closest_food['x'] < my_head['x'] and 'left' in safe_moves: preferred_moves.append('left')
+                    if closest_food['x'] > my_head['x'] and 'right' in safe_moves: preferred_moves.append('right')
+                    if closest_food['y'] < my_head['y'] and 'down' in safe_moves: preferred_moves.append('down')
+                    if closest_food['y'] > my_head['y'] and 'up' in safe_moves: preferred_moves.append('up')
+                    
+                    if preferred_moves:
+                        best_food_move = preferred_moves[0]
+                        max_area = -1
+                        for p_move in preferred_moves:
+                            for move, area in safe_moves_with_area:
+                                if p_move == move and area > max_area:
+                                    max_area = area
+                                    best_food_move = p_move
+                        next_move = best_food_move
 
     print(f"MOVE {game_state['turn']}: {next_move}")
     return {"move": next_move}
