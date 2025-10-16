@@ -12,7 +12,6 @@
 
 import random
 import typing
-from collections import deque
 
 
 # info is called when you create your Battlesnake on play.battlesnake.com
@@ -80,55 +79,6 @@ def get_possible_moves(head: typing.Dict) -> typing.List[typing.Dict]:
     ]
 
 
-def flood_fill(start_pos: typing.Dict, game_state: typing.Dict) -> int:
-    """
-    Perform flood fill from start_pos to count reachable spaces.
-    Returns the number of reachable empty spaces.
-    """
-    board_width = game_state['board']['width']
-    board_height = game_state['board']['height']
-    my_body = game_state['you']['body']
-    my_length = game_state['you']['length']
-    
-    # Create a set of occupied positions
-    occupied = set()
-    
-    # Add all snake bodies (excluding tails that will move)
-    for snake in game_state['board']['snakes']:
-        for i, segment in enumerate(snake['body']):
-            # Exclude tail unless snake just ate (body length == segments)
-            if i < len(snake['body']) - 1:
-                occupied.add((segment['x'], segment['y']))
-    
-    # BFS to count reachable spaces
-    visited = set()
-    queue = deque([start_pos])
-    visited.add((start_pos['x'], start_pos['y']))
-    count = 0
-    
-    while queue:
-        pos = queue.popleft()
-        count += 1
-        
-        # Check all four directions
-        for move in ["up", "down", "left", "right"]:
-            next_pos = get_next_position(pos, move)
-            next_tuple = (next_pos['x'], next_pos['y'])
-            
-            # Skip if out of bounds, occupied, or already visited
-            if is_out_of_bounds(next_pos, board_width, board_height):
-                continue
-            if next_tuple in occupied:
-                continue
-            if next_tuple in visited:
-                continue
-            
-            visited.add(next_tuple)
-            queue.append(next_pos)
-    
-    return count
-
-
 # move is called on every turn and returns your next move
 # Valid moves are "up", "down", "left", or "right"
 # See https://docs.battlesnake.com/api/example-move for available data
@@ -140,7 +90,6 @@ def move(game_state: typing.Dict) -> typing.Dict:
     my_head = game_state["you"]["body"][0]  # Coordinates of your head
     my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
     my_length = game_state["you"]["length"]
-    my_health = game_state["you"]["health"]
 
     if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
         is_move_safe["left"] = False
@@ -207,61 +156,27 @@ def move(game_state: typing.Dict) -> typing.Dict:
         print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
         return {"move": "down"}
 
-    # Step 4 - Use flood fill to avoid moves that lead to dead ends
-    move_space = {}
-    for move_dir in safe_moves:
-        next_pos = get_next_position(my_head, move_dir)
-        space = flood_fill(next_pos, game_state)
-        move_space[move_dir] = space
-        print(f"Move {move_dir} has {space} reachable spaces")
-    
-    # Filter out moves with insufficient space (less than our body length)
-    # This helps avoid getting trapped
-    min_space_needed = my_length
-    spacious_moves = [move_dir for move_dir in safe_moves if move_space[move_dir] >= min_space_needed]
-    
-    # If all moves lead to tight spaces, just pick the one with most space
-    if len(spacious_moves) == 0:
-        spacious_moves = safe_moves
-    
-    # Step 5 - Move towards food when health is low, otherwise be more strategic
+    # Step 4 - Move towards food instead of random, to regain health and survive longer
     food = game_state['board']['food']
     
-    # Seek food aggressively when health is below 40, or moderately when below 70
-    should_seek_food = my_health < 70
-    
-    if should_seek_food and len(food) > 0:
+    if len(food) > 0:
         # Find the closest food
         closest_food = min(food, key=lambda f: manhattan_distance(my_head, f))
         
-        # Score each spacious move based on how close it gets us to the food
+        # Score each safe move based on how close it gets us to the food
         move_scores = {}
-        for move_dir in spacious_moves:
+        for move_dir in safe_moves:
             next_pos = get_next_position(my_head, move_dir)
             distance = manhattan_distance(next_pos, closest_food)
-            # Combine distance to food with available space
-            # Prioritize space more when health is higher
-            space_weight = 0.3 if my_health < 40 else 0.5
-            move_scores[move_dir] = space_weight * move_space[move_dir] - (1 - space_weight) * distance * 10
+            move_scores[move_dir] = -distance  # Negative because we want to minimize distance
         
-        # Choose the move with the best score
+        # Choose the move with the best score (closest to food)
         next_move = max(move_scores, key=move_scores.get)
     else:
-        # When healthy, prioritize space and follow tail if possible
-        # Try to follow our own tail to stay alive and control space
-        my_tail = my_body[-1]
-        
-        move_scores = {}
-        for move_dir in spacious_moves:
-            next_pos = get_next_position(my_head, move_dir)
-            # Score based on space available and distance to tail
-            tail_distance = manhattan_distance(next_pos, my_tail)
-            # Prefer moves with more space, and slightly prefer moves closer to tail
-            move_scores[move_dir] = move_space[move_dir] * 10 - tail_distance
-        
-        next_move = max(move_scores, key=move_scores.get)
+        # No food available, choose a random safe move
+        next_move = random.choice(safe_moves)
 
-    print(f"MOVE {game_state['turn']}: {next_move} (health: {my_health}, space: {move_space[next_move]})")
+    print(f"MOVE {game_state['turn']}: {next_move}")
     return {"move": next_move}
 
 
