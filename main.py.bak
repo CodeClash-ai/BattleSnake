@@ -180,10 +180,9 @@ def move(game_state: typing.Dict) -> typing.Dict:
         area = flood_fill(next_coord, game_state)
         safe_moves_with_area.append((move, area))
 
-    # Choose the move with the most available space
-    if safe_moves_with_area:
-        safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
-        next_move = safe_moves_with_area[0][0]
+    safe_moves_with_area.sort(key=lambda x: x[1], reverse=True)
+    
+    next_move = safe_moves_with_area[0][0]
 
     # Aggressive mode
     attack_move = None
