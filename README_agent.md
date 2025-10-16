@@ -1,4 +1,4 @@
-# BattleSnake Agent Notes - Round 7
+# BattleSnake Agent Notes - Round 8
 
 ## Current Status
 - Round 1 Results: WON 647-340 (64.7% win rate) - Simple strategy
@@ -7,121 +7,117 @@
 - Round 4 Results: LOST 340-658 (34.0% win rate) - Enhanced strategy FAILED ❌
 - Round 5 Results: WON 1000-0 (100% win rate) - Reverted to Round 3 strategy 🏆
 - Round 6 Results: WON 1000-0 (100% win rate) - KEPT Round 5 strategy 🏆
-- Round 7 Action: **KEEPING Round 6 strategy** (100% win rate - PERFECT!)
+- Round 7 Results: LOST 398-599 (39.8% win rate) - Opponent adapted! ⚠️
+- Round 8 Action: **ADDED SPACE AWARENESS** to counter opponent's trap strategy
 
-## 🎉 THREE CONSECUTIVE PERFECT ROUNDS! 🎉
+## 🚨 CRITICAL CHANGE: Opponent Adapted! 🚨
 
-Rounds 3, 5, and 6 all achieved **PERFECT 100% WIN RATES** (1000-0 each)!
-- Round 3: 997-0 (99.7% - 2 ties)
-- Round 5: 1000-0 (100% - PERFECT)
-- Round 6: 1000-0 (100% - PERFECT)
-- This is the optimal strategy for this game
+After THREE PERFECT ROUNDS (5, 6), the opponent (gemini-2.5-pro) adapted their strategy in Round 7:
+- We dropped from 100% win rate to 39.8%
+- Analysis shows we were getting TRAPPED by our own length
+- We were longer than opponent but still losing (e.g., 27 vs 10, 18 vs 7)
+- Opponent was using space control to force us into corners
 
-## Critical Lesson: DO NOT MODIFY THE CODE!
+## Round 8 Strategy: Space-Aware Food Seeking
 
-**The current strategy is PERFECT. Any changes risk breaking it.**
+### What Changed:
+Added lightweight flood fill to avoid getting trapped while maintaining aggressive food-seeking:
 
-### Why This Strategy Works So Well:
-1. **Safety First**: Comprehensive collision avoidance (walls, self, opponents)
-2. **Head-to-Head Awareness**: Avoids risky encounters with larger/equal snakes
-3. **Always Chase Food**: Simple, aggressive food-seeking behavior
-4. **No Overthinking**: Fast, deterministic decisions
-5. **Tail Exclusion**: Smart handling of tail movement
+1. **Flood Fill with Limited Depth**: Count reachable spaces (max depth 20 for performance)
+2. **Space Filtering**: Eliminate moves with very little space (< length/2 or < 5)
+3. **Smart Food Seeking**: Still move toward food, but use space as tiebreaker
+4. **Space Maximization**: When no food, choose move with most space
 
-### What Makes This Better Than "Improvements":
-- Round 4 tried to add "smart" features (health thresholds, food selection logic)
-- Those "improvements" dropped win rate from 99.7% to 34%
-- The simple strategy is actually optimal for this game
+### Key Implementation Details:
+- `flood_fill_count()`: BFS with depth limit to count reachable spaces
+- Minimum space threshold: `max(my_length // 2, 5)`
+- Scoring: `-distance_to_food + (space * 0.01)` (food priority, space tiebreaker)
+- Falls back to all safe moves if all lead to tight spaces
 
-## Strategy Details (DO NOT CHANGE!)
+### Why This Should Work:
+1. **Prevents Trapping**: Won't move into dead ends
+2. **Maintains Aggression**: Still prioritizes food when safe
+3. **Performance**: Limited depth (20) keeps it fast
+4. **Adaptive**: Adjusts space requirement based on our length
 
-Core algorithm:
-1. Mark all moves as safe initially
-2. Eliminate backwards move (neck position)
-3. Eliminate out-of-bounds moves
-4. Eliminate self-collision moves (exclude tail)
-5. Eliminate opponent body collision moves (exclude tail)
-6. Eliminate head-to-head moves with larger/equal opponents
-7. If food exists: move toward closest food (Manhattan distance)
-8. If no food: random safe move
+### Differences from Round 2 (Failed Flood Fill):
+- Round 2 required space >= full body length (too conservative)
+- Round 8 requires space >= half body length (more flexible)
+- Round 2 had no depth limit (potential performance issues)
+- Round 8 limits depth to 20 (fast execution)
+- Round 8 uses space as tiebreaker, not hard filter
 
 ## Files in Codebase
-- `main.py`: Current bot (Round 5/6 strategy - 100% win rate) 🏆
-- `main_round3_backup.py`: Backup of Round 3 bot (same as main.py)
-- `main_round4_failed.py`: Round 4 bot (34% win rate - kept for reference)
+- `main.py`: Current bot (Round 8 - space-aware strategy) 🆕
+- `main_round5_perfect.py`: Backup of Round 5/6 bot (100% win rate - simple strategy)
+- `main_round3_backup.py`: Backup of Round 3 bot (same as Round 5)
+- `main_round4_failed.py`: Round 4 bot (actually same as Round 5)
 - `main_backup.py`: Backup of Round 1 bot (64.7% win rate)
-- `main_round2_failed.py`: Round 2 flood fill version (30.1% - kept for reference)
-- `README_agent.md`: This file
-- Various analysis scripts for game logs
+- `main_round2_failed.py`: Round 2 flood fill version (30.1% - too conservative)
+- `test_flood_fill.py`: Test for flood fill functionality
+- `analyze_round7_detailed.py`: Analysis script for Round 7
+- `analyze_round7_results.py`: Results counter for Round 7
+- `analyze_losses.py`: Loss analysis script
+- `analyze_specific_loss.py`: Detailed game analysis
+- Various other analysis scripts
 
 ## Performance History
 - Round 1: 64.7% win rate (simple strategy)
-- Round 2: 30.1% win rate (flood fill - FAILED)
-- Round 3: 99.7% win rate (reverted to simple) ⭐
-- Round 4: 34.0% win rate (over-engineered - FAILED)
-- Round 5: 100% win rate (reverted to simple) 🏆
-- Round 6: 100% win rate (kept simple) 🏆
-- Round 7: Keeping 100% strategy
+- Round 2: 30.1% win rate (flood fill - too conservative)
+- Round 3: 99.7% win rate (simple strategy) ⭐
+- Round 4: 34.0% win rate (same as Round 3 - variance?)
+- Round 5: 100% win rate (simple strategy) 🏆
+- Round 6: 100% win rate (simple strategy) 🏆
+- Round 7: 39.8% win rate (opponent adapted) ⚠️
+- Round 8: TBD - Added space awareness
+
+## Analysis of Round 7 Losses
+
+Examined multiple losing games:
+- Game 1: Length 14 vs 6, died turn 83 - TRAPPED
+- Game 2: Length 18 vs 7, died turn 95 - TRAPPED
+- Game 3: Length 27 vs 10, died turn 194 - TRAPPED
+- Game 5: Length 25 vs 11, died turn 189 - TRAPPED
+- Game 8: Length 29 vs 7, died turn 147 - TRAPPED
+
+Pattern: We were consistently longer but got trapped by our own body in corners/edges.
 
 ## Recommendations for Next Teammate
 
-### PRIMARY RECOMMENDATION: DO NOT CHANGE ANYTHING!
+### If Round 8 WINS (>50%):
+1. ✅ Keep the space-aware strategy
+2. Consider tuning parameters (space threshold, depth limit)
+3. Maybe add more sophisticated space evaluation
 
-We have achieved **THREE CONSECUTIVE PERFECT 100% WIN RATES**. This is the best possible outcome.
+### If Round 8 LOSES (<50%):
+1. ⚠️ Analyze what went wrong
+2. Consider reverting to Round 5 simple strategy
+3. Or try different space awareness approach:
+   - Adjust minimum space threshold
+   - Change depth limit
+   - Try different scoring formula
 
-### If You Absolutely Must Do Something:
-1. **Just submit immediately** - Don't risk breaking perfection
-2. **Document observations** - Add notes but don't change code
-3. **Run analysis** - Study why we're winning, but don't modify strategy
-
-### What NOT to Do (CRITICAL):
-1. ❌ **DO NOT modify main.py** - It's perfect as-is
-2. ❌ Don't add "improvements" - Round 4 proved this fails
-3. ❌ Don't add complexity - Simple is optimal here
-4. ❌ Don't add flood fill - Round 2 proved this fails
-5. ❌ Don't add health thresholds - Round 4 proved this fails
-6. ❌ Don't add "smart" food selection - Round 4 proved this fails
+### If Round 8 TIES (~50%):
+1. 🤔 Strategy is competitive but not dominant
+2. Consider small tweaks to parameters
+3. Or try hybrid approach
 
 ## Key Lessons Learned
-1. **Simple strategies can be perfect** - Don't overcomplicate
-2. **100% win rate cannot be improved** - Stop when you reach perfection
-3. **Complexity hurts performance** - Rounds 2 & 4 proved this
-4. **Always keep backups** - We've reverted twice successfully
-5. **When in doubt, don't change** - Especially at 100% win rate
-6. **Consistency matters** - Three perfect rounds prove the strategy is robust
+1. **Opponents adapt** - 100% win rate doesn't last forever
+2. **Space control matters** - Being longer doesn't guarantee winning
+3. **Balance is key** - Too conservative (Round 2) or too aggressive (Round 7) both fail
+4. **Performance matters** - Depth-limited flood fill for speed
+5. **Incremental changes** - Small improvements over complete rewrites
 
-## Round 7 Summary
-- Verified Round 6 achieved 100% win rate (1000-0)
-- Confirmed main.py is still the winning strategy
-- **Decision: KEEP CURRENT STRATEGY - DO NOT MODIFY**
-- Updated documentation for future teammates
-- **Recommendation: Submit immediately to lock in perfect strategy**
+## Testing Done
+- Bot loads without errors ✓
+- Flood fill function tested and working ✓
+- Returns correct space counts ✓
 
-## Why We're Winning
+## Next Steps
+1. Run Round 8 and analyze results
+2. Compare win rate to Round 7 (39.8%)
+3. If improved, keep strategy
+4. If not, analyze failure modes and adjust
 
-The current strategy is optimal because:
-1. **Perfect safety**: Never makes unsafe moves
-2. **Aggressive food-seeking**: Always moves toward food when available
-3. **Smart head-to-head avoidance**: Never risks losing encounters
-4. **Fast execution**: Simple logic means quick decisions
-5. **No edge cases**: Handles all scenarios correctly
-
-The opponent (gemini-2.5-pro) has scored 0 in Rounds 3, 5, and 6 against this strategy.
-
-## Final Note
-
-**WE HAVE ACHIEVED PERFECTION THREE TIMES IN A ROW. DO NOT BREAK IT.**
-
-If you're reading this and considering changes, ask yourself:
-- Can I improve on 100% win rate? (No)
-- Is the risk worth it? (No)
-- Should I just submit and preserve the win? (YES!)
-
-Good luck! Keep the winning streak alive! 🏆
-
-## Statistics
-- Total Rounds Played: 7
-- Perfect Rounds (100%): 3 (Rounds 3, 5, 6)
-- Failed Rounds (<50%): 2 (Rounds 2, 4)
-- Win Rate Trend: Stable at 100% for last 2 rounds
-- Opponent Total Score (last 3 rounds): 0
+Good luck! Let's get back to winning! 🎯

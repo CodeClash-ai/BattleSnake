@@ -12,7 +12,6 @@
 
 import random
 import typing
-from collections import deque
 
 
 # info is called when you create your Battlesnake on play.battlesnake.com
@@ -78,58 +77,6 @@ def get_possible_moves(head: typing.Dict) -> typing.List[typing.Dict]:
         get_next_position(head, "left"),
         get_next_position(head, "right")
     ]
-
-
-def flood_fill_count(start_pos: typing.Dict, game_state: typing.Dict, max_depth: int = 20) -> int:
-    """
-    Perform limited flood fill from start_pos to count reachable spaces.
-    Limited to max_depth to avoid performance issues.
-    Returns the number of reachable empty spaces.
-    """
-    board_width = game_state['board']['width']
-    board_height = game_state['board']['height']
-    
-    # Create a set of occupied positions
-    occupied = set()
-    
-    # Add all snake bodies (excluding tails that will move)
-    for snake in game_state['board']['snakes']:
-        for i, segment in enumerate(snake['body']):
-            # Exclude tail since it will move away
-            if i < len(snake['body']) - 1:
-                occupied.add((segment['x'], segment['y']))
-    
-    # BFS to count reachable spaces (limited depth)
-    visited = set()
-    queue = deque([(start_pos, 0)])  # (position, depth)
-    visited.add((start_pos['x'], start_pos['y']))
-    count = 0
-    
-    while queue:
-        pos, depth = queue.popleft()
-        count += 1
-        
-        # Stop expanding if we've reached max depth
-        if depth >= max_depth:
-            continue
-        
-        # Check all four directions
-        for move in ["up", "down", "left", "right"]:
-            next_pos = get_next_position(pos, move)
-            next_tuple = (next_pos['x'], next_pos['y'])
-            
-            # Skip if out of bounds, occupied, or already visited
-            if is_out_of_bounds(next_pos, board_width, board_height):
-                continue
-            if next_tuple in occupied:
-                continue
-            if next_tuple in visited:
-                continue
-            
-            visited.add(next_tuple)
-            queue.append((next_pos, depth + 1))
-    
-    return count
 
 
 # move is called on every turn and returns your next move
@@ -209,47 +156,27 @@ def move(game_state: typing.Dict) -> typing.Dict:
         print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
         return {"move": "down"}
 
-    # Step 4 - Calculate space available for each move
-    move_space = {}
-    for move_dir in safe_moves:
-        next_pos = get_next_position(my_head, move_dir)
-        space = flood_fill_count(next_pos, game_state, max_depth=20)
-        move_space[move_dir] = space
-
-    # Filter out moves with very little space (less than half our length)
-    # This prevents getting trapped in tight spaces
-    min_space = max(my_length // 2, 5)
-    spacious_moves = [move_dir for move_dir in safe_moves if move_space[move_dir] >= min_space]
-    
-    # If all moves lead to tight spaces, keep all safe moves
-    if len(spacious_moves) == 0:
-        spacious_moves = safe_moves
-
-    # Step 5 - Move towards food, but prefer moves with more space
+    # Step 4 - Move towards food instead of random, to regain health and survive longer
     food = game_state['board']['food']
     
     if len(food) > 0:
         # Find the closest food
         closest_food = min(food, key=lambda f: manhattan_distance(my_head, f))
         
-        # Score each spacious move based on distance to food and available space
+        # Score each safe move based on how close it gets us to the food
         move_scores = {}
-        for move_dir in spacious_moves:
+        for move_dir in safe_moves:
             next_pos = get_next_position(my_head, move_dir)
             distance = manhattan_distance(next_pos, closest_food)
-            space = move_space[move_dir]
-            
-            # Prioritize moves toward food, but add space as a tiebreaker
-            # Negative distance (closer is better), plus small space bonus
-            move_scores[move_dir] = -distance + (space * 0.01)
+            move_scores[move_dir] = -distance  # Negative because we want to minimize distance
         
-        # Choose the move with the best score
+        # Choose the move with the best score (closest to food)
         next_move = max(move_scores, key=move_scores.get)
     else:
-        # No food available, choose the move with the most space
-        next_move = max(spacious_moves, key=lambda m: move_space[m])
+        # No food available, choose a random safe move
+        next_move = random.choice(safe_moves)
 
-    print(f"MOVE {game_state['turn']}: {next_move} (space: {move_space[next_move]})")
+    print(f"MOVE {game_state['turn']}: {next_move}")
     return {"move": next_move}
 
 
