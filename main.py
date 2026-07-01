@@ -1,98 +1,173 @@
-# Welcome to
-# __________         __    __  .__                               __
-# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
-#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
-#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
-#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
+# TR-8R — winner, Battlesnake Victoria 2016 Advanced Division
+# Ported to the CodeClash BattleSnake arena (current API v1) from the original
+# old-API bot: https://github.com/noahspriggs/battlesnake-python
 #
-# This file can be a nice home for your Battlesnake logic and helper functions.
+# Faithful port of the original strategy:
+#   - A* to the reachable food closest to the board centre
+#   - skip food that an enemy would reach first
+#   - self-trap avoidance: only commit to food if a path from the food back to
+#     our own tail still exists
+#   - head-to-head avoidance: block the cells around any nearby enemy head whose
+#     snake is at least as long as us
+#   - fall back to chasing our own tail, then to any safe neighbouring cell
 #
-# To get you started we've included code to prevent your Battlesnake from moving backwards.
-# For more info see docs.battlesnake.com
+# Coordinate note: the original used a top-left / y-down board; the v1 API uses a
+# bottom-left / y-up board, so all directions are remapped here.
 
-import random
+import heapq
 import typing
 
+AUTHOR = "noahspriggs"
+DIRS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 
-# info is called when you create your Battlesnake on play.battlesnake.com
-# and controls your Battlesnake's appearance
-# TIP: If you open your Battlesnake URL in a browser you should see this data
+
 def info() -> typing.Dict:
-    print("INFO")
-
     return {
         "apiversion": "1",
-        "author": "",  # TODO: Your Battlesnake Username
-        "color": "#888888",  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "author": AUTHOR,
+        "color": "#00cc44",
+        "head": "default",
+        "tail": "default",
     }
 
 
-# start is called when your Battlesnake begins a game
 def start(game_state: typing.Dict):
-    print("GAME START")
+    pass
 
 
-# end is called when your Battlesnake finishes a game
 def end(game_state: typing.Dict):
-    print("GAME OVER\n")
+    pass
 
 
-# move is called on every turn and returns your next move
-# Valid moves are "up", "down", "left", or "right"
-# See https://docs.battlesnake.com/api/example-move for available data
+def _cell(c: typing.Dict) -> tuple:
+    return (c["x"], c["y"])
+
+
+def _manhattan(a: tuple, b: tuple) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _dir(a: tuple, b: tuple) -> str:
+    delta = (b[0] - a[0], b[1] - a[1])
+    for name, vec in DIRS.items():
+        if vec == delta:
+            return name
+    return "up"
+
+
+def _make_passable(blocked, tails, danger, w, h, allow):
+    def passable(p):
+        if not (0 <= p[0] < w and 0 <= p[1] < h):
+            return False
+        if p in allow:
+            return True
+        if p in danger:
+            return False
+        if p in blocked and p not in tails:
+            return False
+        return True
+
+    return passable
+
+
+def _astar(start_pos, goal, passable, w, h):
+    open_heap = [(_manhattan(start_pos, goal), 0, start_pos)]
+    came_from = {start_pos: None}
+    best_g = {start_pos: 0}
+    while open_heap:
+        _, g, cur = heapq.heappop(open_heap)
+        if cur == goal:
+            path = [cur]
+            while came_from[cur] is not None:
+                cur = came_from[cur]
+                path.append(cur)
+            return list(reversed(path))
+        for vec in DIRS.values():
+            nb = (cur[0] + vec[0], cur[1] + vec[1])
+            if nb != goal and not passable(nb):
+                continue
+            if not (0 <= nb[0] < w and 0 <= nb[1] < h):
+                continue
+            ng = g + 1
+            if nb not in best_g or ng < best_g[nb]:
+                best_g[nb] = ng
+                came_from[nb] = cur
+                heapq.heappush(open_heap, (ng + _manhattan(nb, goal), ng, nb))
+    return None
+
+
+def _any_safe(game_state: typing.Dict) -> str:
+    board = game_state["board"]
+    w, h = board["width"], board["height"]
+    head = _cell(game_state["you"]["body"][0])
+    blocked = set()
+    for s in board["snakes"]:
+        for c in s["body"][:-1]:  # tails will move
+            blocked.add(_cell(c))
+    for name, vec in DIRS.items():
+        nb = (head[0] + vec[0], head[1] + vec[1])
+        if 0 <= nb[0] < w and 0 <= nb[1] < h and nb not in blocked:
+            return name
+    return "down"
+
+
+def _decide(game_state: typing.Dict) -> str:
+    board = game_state["board"]
+    w, h = board["width"], board["height"]
+    you = game_state["you"]
+    body = [_cell(c) for c in you["body"]]
+    head = body[0]
+    my_len = you["length"]
+
+    blocked = set()
+    tails = set()
+    for s in board["snakes"]:
+        sbody = [_cell(c) for c in s["body"]]
+        blocked.update(sbody)
+        if len(sbody) >= 2 and sbody[-1] != sbody[-2]:  # tail moves unless just ate
+            tails.add(sbody[-1])
+
+    danger = set()
+    enemies = [s for s in board["snakes"] if s["id"] != you["id"]]
+    for s in enemies:
+        eh = _cell(s["body"][0])
+        if _manhattan(eh, head) <= 3 and s["length"] >= my_len:
+            for vec in DIRS.values():
+                danger.add((eh[0] + vec[0], eh[1] + vec[1]))
+
+    foods = [_cell(f) for f in board["food"]]
+    center = (w // 2, h // 2)
+    foods.sort(key=lambda p: _manhattan(p, center))
+
+    my_tail = body[-1]
+    for food in foods:
+        passable = _make_passable(blocked, tails, danger, w, h, frozenset([food]))
+        path = _astar(head, food, passable, w, h)
+        if not path or len(path) < 2:
+            continue
+        steps = len(path) - 1
+        if any(_manhattan(_cell(e["body"][0]), food) < steps for e in enemies):
+            continue  # an enemy gets there first
+        passable_tail = _make_passable(blocked, tails, danger, w, h, frozenset([food, my_tail]))
+        if _astar(food, my_tail, passable_tail, w, h):  # still reach our tail afterwards
+            return _dir(head, path[1])
+
+    # no safe food: chase our own tail
+    passable_tail = _make_passable(blocked, tails, danger, w, h, frozenset([my_tail]))
+    path = _astar(head, my_tail, passable_tail, w, h)
+    if path and len(path) >= 2:
+        return _dir(head, path[1])
+
+    return _any_safe(game_state)
+
+
 def move(game_state: typing.Dict) -> typing.Dict:
-
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
-
-    # We've included code to prevent your Battlesnake from moving backwards
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
-
-    # TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    # board_width = game_state['board']['width']
-    # board_height = game_state['board']['height']
-
-    # TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    # my_body = game_state['you']['body']
-
-    # TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    # opponents = game_state['board']['snakes']
-
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    if len(safe_moves) == 0:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
-        return {"move": "down"}
-
-    # Choose a random move from the safe ones
-    next_move = random.choice(safe_moves)
-
-    # TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    # food = game_state['board']['food']
-
-    print(f"MOVE {game_state['turn']}: {next_move}")
-    return {"move": next_move}
+    try:
+        return {"move": _decide(game_state)}
+    except Exception:
+        return {"move": _any_safe(game_state)}
 
 
-# Start server when `python main.py` is run
 if __name__ == "__main__":
     from server import run_server
 
