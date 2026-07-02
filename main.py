@@ -614,8 +614,8 @@ def info():
         "apiversion": "1",
         "author": "nbw",
         "color": "#ff6666",
-        "head": "default",
-        "tail": "default",
+        "head": "pixel",
+        "tail": "pixel",
     }
 
 
