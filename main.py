@@ -645,8 +645,8 @@ def info():
         "apiversion": "1",
         "author": "tbgiles",
         "color": "#FF69B4",
-        "head": "default",
-        "tail": "default",
+        "head": "shades",
+        "tail": "freckled",
     }
 
 
