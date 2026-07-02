@@ -325,7 +325,7 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#FF4444",
-        "head": "default",
+        "head": "trans-rights-scarf",
         "tail": "default",
     }
 
