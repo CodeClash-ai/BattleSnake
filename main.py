@@ -31,6 +31,7 @@ Modern v1 API: bottom-left origin, y-up. up=y+1, down=y-1, left=x-1, right=x+1.
 """
 
 import heapq
+import time
 
 # ---- Move helpers -----------------------------------------------------------
 
@@ -174,14 +175,16 @@ def _safe_move(head, body_list, all_snake_bodies, width, height):
 # ---- Hamiltonian completion DFS (port of path_to_full_board) ----------------
 
 _DFS_NODE_LIMIT = 20000
+_DFS_WALL_CLOCK = 0.3  # seconds; bound the exponential DFS for arena time safety
 
 
 def _path_to_full_board(reversed_body, width, height, counter):
+    # counter = [node_count, deadline_monotonic]
     max_size = width * height
     if len(reversed_body) == max_size:
         return []
     counter[0] += 1
-    if counter[0] > _DFS_NODE_LIMIT:
+    if counter[0] > _DFS_NODE_LIMIT or time.monotonic() > counter[1]:
         return None
     body_set = set(reversed_body)
     last = reversed_body[-1]
@@ -338,7 +341,9 @@ def _gigantic_george_move(game_state):
         reversed_body = body[:-1]
         reversed_body.reverse()
         if reversed_body:
-            path = _path_to_full_board(reversed_body, width, height, [0])
+            deadline = time.monotonic() + _DFS_WALL_CLOCK
+            path = _path_to_full_board(reversed_body, width, height,
+                                       [0, deadline])
             if path is not None and path:
                 new = path.pop()  # first move to make
                 return new[0]
@@ -353,7 +358,7 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#FFBB33",
-        "head": "default",
+        "head": "trans-rights-scarf",
         "tail": "default",
     }
 
