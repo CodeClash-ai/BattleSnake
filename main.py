@@ -5,26 +5,34 @@ Original: Lua, Redbrick's 2017 bounty snake (42-3). Alpha-beta pruning minimax
 between "me" (maximizer) and the closest enemy (minimizer), with a heuristic
 built from flood-fill space, food proximity (weighted by hunger), and centrality.
 
-FIDELITY: faithful. The core alpha-beta search, the head-on-collision move
-filtering (drop my moves the enemy can also reach when I am <= its length),
-the flood-fill trap detection, and the heuristic (base 100, food weight =
-100-health, center pull, percent-accessible scaling) are all reproduced.
-Differences from the original:
-  - Gold ("$") does not exist in Battlesnake v1, so gold-related terms are
-    dropped (they were never triggered in a v1 game anyway).
+FIDELITY: faithful to algorithm.lua / robosnake.lua / util.lua.
+  - MAX_RECURSION_DEPTH = 8 (config/http.conf), RULES_VERSION = 2017.
+  - Head-on-collision move filtering: drop my moves the enemy can also reach when
+    I am <= its length (algorithm.lua n_complement).
+  - Flood-fill trap detection, heuristic (base 100, food weight = 100-health,
+    center pull *100, percent-accessible scaling) reproduced exactly.
+  - Failsafe #1 picks a RANDOM safe neighbour (original math.random).
+
+Differences forced by the v1 API:
+  - Gold ("$") does not exist in v1, so gold terms are dropped (never triggered
+    in a v1 game). isSafeSquare therefore only accepts '.' and 'O'.
   - Coordinate system remapped: the 2017 bot used the OLD API (top-left origin,
-    y-down). v1 is bottom-left origin, y-up. We work directly in v1 coordinates;
-    since the algorithm is symmetric the flood-fill / distances are unaffected.
-  - Added a ~0.3s wall-clock guard and iterative-deepening-ish depth cap so a
-    move is always returned well under the 1s limit on an 11x11 board.
+    y-down, 1-based). v1 is bottom-left origin, y-up, 0-based. We work directly in
+    v1 coords; the algorithm is symmetric so flood-fill / distances are unaffected.
+    Center is ceil(W/2)-1 (the true 0-based board middle), matching the original's
+    1-based ceil(W/2).
+  - Iterative deepening up to depth 8 with a ~0.3s wall-clock guard: we keep the
+    best move from the last fully-completed depth, so a good move is always
+    returned well under the 1s limit on an 11x11 board (the original relied on
+    raw speed with no guard).
 """
 
-import sys
+import random
 import time
 
 # Tunables (mirror the original config knobs)
-MAX_RECURSION_DEPTH = 6      # original default was configurable; kept modest for speed
-TIME_LIMIT = 0.30            # wall-clock guard in seconds
+MAX_RECURSION_DEPTH = 8      # config/http.conf: MAX_RECURSION_DEPTH = 8
+TIME_LIMIT = 0.30            # wall-clock guard in seconds (v1 has a 1s move limit)
 INT_MAX = 2147483647
 INT_MIN = -2147483648
 
@@ -137,8 +145,10 @@ def _heuristic(grid, state, my_moves, enemy_moves, width, height):
                 food.append((x, y))
 
     score = 100.0
-    center_x = -(-width // 2)   # math.ceil(width/2) using 1-based -> approximate center
-    center_y = -(-height // 2)
+    # Original (1-based): center = ceil(W/2). In 0-based v1 coords that is the
+    # same physical square at ceil(W/2)-1.
+    center_x = -(-width // 2) - 1    # ceil(width/2) - 1
+    center_y = -(-height // 2) - 1   # ceil(height/2) - 1
     center = (center_x, center_y)
 
     # Food: pull toward it proportional to hunger.
@@ -193,7 +203,8 @@ def _n_complement(set1, set2):
     return [m for m in set1 if m not in s2]
 
 
-def _alphabeta(grid, state, depth, alpha, beta, best_move, maximizing, width, height):
+def _alphabeta(grid, state, depth, alpha, beta, best_move, maximizing,
+               width, height, max_depth):
     _check_time()
 
     my_moves = _neighbours(state['me']['coords'][0], grid, width, height)
@@ -206,7 +217,7 @@ def _alphabeta(grid, state, depth, alpha, beta, best_move, maximizing, width, he
 
     moves = my_moves if maximizing else enemy_moves
 
-    if (depth == MAX_RECURSION_DEPTH or len(moves) == 0 or
+    if (depth == max_depth or len(moves) == 0 or
             state['me']['health'] <= 0 or state['enemy']['health'] <= 0):
         return _heuristic(grid, state, my_moves, enemy_moves, width, height), best_move
 
@@ -214,7 +225,8 @@ def _alphabeta(grid, state, depth, alpha, beta, best_move, maximizing, width, he
         chosen = best_move
         for m in moves:
             ng, ns = _advance(grid, state, 'me', m, width, height)
-            val, _ = _alphabeta(ng, ns, depth + 1, alpha, beta, best_move, False, width, height)
+            val, _ = _alphabeta(ng, ns, depth + 1, alpha, beta, best_move, False,
+                                width, height, max_depth)
             if val > alpha:
                 alpha = val
                 chosen = m
@@ -225,7 +237,8 @@ def _alphabeta(grid, state, depth, alpha, beta, best_move, maximizing, width, he
         chosen = best_move
         for m in moves:
             ng, ns = _advance(grid, state, 'enemy', m, width, height)
-            val, _ = _alphabeta(ng, ns, depth + 1, alpha, beta, best_move, True, width, height)
+            val, _ = _alphabeta(ng, ns, depth + 1, alpha, beta, best_move, True,
+                                width, height, max_depth)
             if val < beta:
                 beta = val
                 chosen = m
@@ -290,8 +303,6 @@ def move(game_state):
     try:
         board = game_state['board']
         you = game_state['you']
-        width = board['width']
-        height = board['height']
 
         grid, width, height = _build_grid(board)
         my_head = (you['head']['x'], you['head']['y'])
@@ -324,15 +335,21 @@ def move(game_state):
         if enemy is me:
             state['enemy'] = state['me']
 
+        # Iterative deepening up to MAX_RECURSION_DEPTH. Keep the best move from
+        # the deepest fully-completed search; the wall-clock guard stops us well
+        # under 1s. The original ran a single search to depth 8 with no guard.
         best_move = None
-        try:
-            _, best_move = _alphabeta(
-                grid, state, 0, float('-inf'), float('inf'),
-                None, True, width, height)
-        except _TimeUp:
-            best_move = None
+        for d in range(1, MAX_RECURSION_DEPTH + 1):
+            try:
+                _, mv = _alphabeta(
+                    grid, state, 0, float('-inf'), float('inf'),
+                    None, True, width, height, d)
+                if mv is not None:
+                    best_move = mv
+            except _TimeUp:
+                break
 
-        # FAILSAFE #1: pick a random-ish safe neighbour (complement of enemy).
+        # FAILSAFE #1: pick a RANDOM safe neighbour (complement of enemy).
         if best_move is None:
             my_moves = _neighbours(my_head, grid, width, height)
             enemy_head = (enemy['head']['x'], enemy['head']['y'])
@@ -341,14 +358,14 @@ def move(game_state):
             if len(state['me']['coords']) <= len(state['enemy']['coords']) and safe:
                 my_moves = safe
             if my_moves:
-                best_move = my_moves[0]
+                best_move = random.choice(my_moves)
 
         if best_move is not None:
             d = _direction(my_head, best_move)
             if d is not None:
                 return {"move": d}
 
-        # FAILSAFE #2: guaranteed in-bounds, non-body move.
+        # FAILSAFE #2: guaranteed in-bounds, non-body move (original moved left).
         return {"move": _fallback_move(my_head, grid, width, height)}
     except Exception:
         # Last-ditch: never crash.
@@ -366,9 +383,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "rdbrck",
-        "color": "#6699cc",
-        "head": "default",
-        "tail": "default",
+        "color": "#960000",
+        "head": "bendr",
+        "tail": "fat-rattle",
     }
 
 
