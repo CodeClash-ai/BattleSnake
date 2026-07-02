@@ -31,8 +31,8 @@ def info():
         "apiversion": "1",
         "author": "tim-hub",
         "color": "#800000",
-        "head": "default",
-        "tail": "default",
+        "head": "safe",
+        "tail": "skinny",
     }
 
 
