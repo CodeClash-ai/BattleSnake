@@ -1,37 +1,47 @@
 """
 Port of nessegrev-julia (Nettogrof) to Python for the Battlesnake v1 API.
 
-Faithful reimplementation of the ORIGINAL Julia bot's strategy:
-  - Tree search over combined moves of all snakes (minimax-flavoured).
-  - Leaf evaluation = "ground control" flood-fill (author's snack-a-tron scoring).
-  - Head-to-head resolution: longer snake wins, equal length both die.
-  - Score ratio = mine / (sum_others + 1); best move = the direction whose
-    WORST child ratio is highest (see chooseBestMove in the original).
+Faithful reimplementation of the ORIGINAL Julia bot ("snack-a-tron" branch):
+  - Tree search over combined moves of all snakes (Search.jl `multi`/`merge`/`clean`).
+  - Leaf evaluation = ground-control flood-fill (Node.jl adjustGroundControl):
+      * fixed 19x19 board grid, my head floods +35 (decreasing), opponents -35,
+        boards summed; score[i] += 2 * (count / (19+19)).
+  - Minimax aggregation (Node.jl updateScore): group children by our head,
+      within a group opponents minimise my score / maximise theirs, then across
+      groups pick the best score-ratio; plus mobility bonus 0.1*possibleMove.
+  - scoreRatio = score[1] / (sum(score) + 1 - score[1]).
+  - chooseBestMove: worst (min) ratio per direction, then best of those.
+  - Head-to-head (clean): longer wins, equal length both die.
 
-Notes on coordinate systems:
-  The Julia code works in a v0 "top-left origin" space with square = x*1000+y
-  and flips up/down at the very end for the v1 API. We work directly in the
-  standard v1 space ((0,0) bottom-left, up = y+1) so no flip is needed; the
-  strategy (flood control + ratio minimax) is orientation-independent.
+ORIGINAL quirks reproduced faithfully:
+  - `multi` calls createNewSnake with eat=true ALWAYS, so during search every
+    snake grows (tail never vacates, health resets to 100). This is the real
+    original behaviour, not real food logic.
+  - Ground-control grid + denominator are hardcoded 19x19, not the real board.
 
-Performance: iterative-deepening-style expansion with a ~0.3s wall-clock guard
-and a hard depth cap, per the port requirements.
+Coordinate note: the Julia code uses a v0 top-left origin (square = x*1000+y) and
+flips up/down for the v1 API. Ground control is orientation-symmetric, so we work
+directly in v1 space ((0,0) bottom-left) with no flip.
+
+Performance: iterative expansion with a ~0.3s wall-clock guard and depth cap.
 """
 
 import time
 
 TIME_LIMIT = 0.30      # wall-clock guard (seconds)
-MAX_DEPTH = 6          # hard cap on search plies
-FLOOD_START = 35       # matches the Julia flood seed value
+MAX_DEPTH = 6          # search plies
+FLOOD_START = 35       # Julia flood seed value
+GRID = 19              # Julia adjustGroundControl hardcoded h=w=19
+MOBILITY = 0.1         # Julia updateScore: score[1] += 0.1 * possibleMove
 
 
 def info():
     return {
         "apiversion": "1",
         "author": "Nettogrof",
-        "color": "#66ccff",
-        "head": "default",
-        "tail": "default",
+        "color": "#FFAAAA",
+        "head": "shac-gamer",
+        "tail": "shac-coffee",
     }
 
 
@@ -44,15 +54,14 @@ def end(game_state):
 
 
 # ---------------------------------------------------------------------------
-# Snake / board model
+# Snake model (SnakeInfo.jl)
 # ---------------------------------------------------------------------------
 
 class Snake:
     __slots__ = ("body", "health", "eat", "alive")
 
     def __init__(self, body, health, eat, alive):
-        # body is a list of (x, y) tuples, body[0] is the head
-        self.body = body
+        self.body = body            # list of (x, y), body[0] is head
         self.health = health
         self.eat = eat
         self.alive = alive
@@ -64,26 +73,28 @@ class Snake:
         return self.body[0]
 
 
-def _occupies(snake, sq):
-    """True if this snake occupies `sq` next turn (tail vacates unless eating)."""
+def _is_snake(snake, sq):
+    """isSnake: does this snake occupy sq next turn (tail enterable iff not eating)."""
     body = snake.body
-    if sq not in body:
-        return False
     if snake.eat:
-        return True
-    # not eating: tail moves off, so the last body cell is enterable
-    idx = body.index(sq)
+        return sq in body
+    # not eating: the tail cell (last index) is enterable
+    try:
+        idx = body.index(sq)
+    except ValueError:
+        return False
     return idx < len(body) - 1
 
 
 def _free_space(sq, snakes):
     for s in snakes:
-        if _occupies(s, sq):
+        if _is_snake(s, sq):
             return False
     return True
 
 
-def _new_snake(snake, new_head, eat):
+def _create_new_snake(snake, new_head, eat):
+    """createNewSnake (hazard always false in original `multi`)."""
     body = list(snake.body)
     health = snake.health
     alive = snake.alive
@@ -100,28 +111,26 @@ def _new_snake(snake, new_head, eat):
 
 
 # ---------------------------------------------------------------------------
-# Move generation (mirrors Search.jl `multi`)
+# Move generation (Search.jl multi / merge / clean)
 # ---------------------------------------------------------------------------
 
-def _snake_moves(snake, width, height, all_snakes, food_set):
-    """All legal next-states for one snake (in-bounds + not into a body)."""
+def _multi(snake, width, height, all_snakes):
+    """Legal next-states for one snake. NOTE: original always passes eat=True."""
     out = []
     if not snake.alive:
         return out
     hx, hy = snake.head()
-    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-        nx, ny = hx + dx, hy + dy
+    # order matches Julia: west(-x), east(+x), south(-y), north(+y)
+    for nx, ny in ((hx - 1, hy), (hx + 1, hy), (hx, hy - 1), (hx, hy + 1)):
         if nx < 0 or nx >= width or ny < 0 or ny >= height:
             continue
         nh = (nx, ny)
         if _free_space(nh, all_snakes):
-            eat = nh in food_set
-            out.append(_new_snake(snake, nh, eat))
+            out.append(_create_new_snake(snake, nh, True))  # eat=True, faithful
     return out
 
 
 def _merge(list_of_combos, snake_options):
-    """Cartesian merge of combined-move lists (mirrors Search.jl `merge`)."""
     if not snake_options:
         return list_of_combos
     if not list_of_combos:
@@ -136,7 +145,7 @@ def _merge(list_of_combos, snake_options):
 
 
 def _clean(combos):
-    """Resolve head-to-head collisions (mirrors Search.jl `clean`)."""
+    """Head-to-head resolution: longer wins, equal both die."""
     for combo in combos:
         n = len(combo)
         for i in range(n - 1):
@@ -154,170 +163,202 @@ def _clean(combos):
 
 
 # ---------------------------------------------------------------------------
-# Leaf evaluation: ground control flood fill (mirrors Node.jl adjustGroundControl)
+# Ground-control flood fill (Node.jl adjustGroundControl / floodpos / floodneg)
 # ---------------------------------------------------------------------------
 
-def _flood(seed, blocked, width, height, sign):
+def _flood(board, x, y, value, sign):
     """
-    BFS flood assigning decreasing magnitude values from FLOOD_START, matching
-    the recursive flood in the Julia code (distance-limited, blocked by bodies).
-    Returns a dict {(x,y): value}.  sign is +1 for us, -1 for opponents.
+    Recursive flood matching floodpos/floodneg on a fixed GRID x GRID board.
+    board maps (x,y)->int. Bodies pre-marked -99. sign=+1 positive, -1 negative.
+    Positive: write iff cell >= 0 and cell < value (value decreases from 35).
+    Negative: write iff cell > value (value increases from -35 toward -1).
+    Bounds: positive uses GRID-2, negative uses GRID-1 (as in the Julia code).
     """
-    field = {}
-    start_val = FLOOD_START
-    frontier = [(seed[0], seed[1], start_val)]
-    field[seed] = sign * start_val
-    while frontier:
-        x, y, val = frontier.pop()
-        if val <= 1:
-            continue
-        nval = val - 1
-        for dx, dy in ((0, 1), (1, 0), (0, -1), (-1, 0)):
-            nx, ny = x + dx, y + dy
-            if nx < 0 or nx >= width or ny < 0 or ny >= height:
+    stack = [(x, y, value)]
+    if sign > 0:
+        lim = GRID - 2
+        while stack:
+            cx, cy, v = stack.pop()
+            cur = board.get((cx, cy), 0)
+            if not (cur >= 0 and cur < v):
                 continue
-            cell = (nx, ny)
-            if cell in blocked:
+            board[(cx, cy)] = v
+            if v > 1:
+                nv = v - 1
+                if cy < lim:
+                    stack.append((cx, cy + 1, nv))
+                if cx < lim:
+                    stack.append((cx + 1, cy, nv))
+                if cy > 0:
+                    stack.append((cx, cy - 1, nv))
+                if cx > 0:
+                    stack.append((cx - 1, cy, nv))
+    else:
+        lim = GRID - 1
+        while stack:
+            cx, cy, v = stack.pop()
+            cur = board.get((cx, cy), 0)
+            if not (cur > v):
                 continue
-            cur = field.get(cell)
-            # only overwrite if strictly closer (higher magnitude), like the
-            # `< value` guard in the Julia flood functions
-            if cur is None or abs(cur) < nval:
-                field[cell] = sign * nval
-                frontier.append((nx, ny, nval))
-    return field
+            board[(cx, cy)] = v
+            if v < -1:
+                nv = v + 1
+                if cy < lim:
+                    stack.append((cx, cy + 1, nv))
+                if cx < lim:
+                    stack.append((cx + 1, cy, nv))
+                if cy > 0:
+                    stack.append((cx, cy - 1, nv))
+                if cx > 0:
+                    stack.append((cx - 1, cy, nv))
 
 
-def _evaluate(snakes, width, height):
-    """
-    Score vector. score[0] = us. Ground-control based, plus survival bonuses.
-    Mirrors setScore/adjustGroundControl (snack-a-tron branch).
-    """
-    n = len(snakes)
-    score = [0.0] * n
-
-    # all body cells block flood
-    blocked = set()
+def _adjust_ground_control(snakes, score):
+    # positive board and negative board, bodies = -99
+    pos = {}
+    neg = {}
     for s in snakes:
-        for cell in s.body:
-            blocked.add(cell)
+        for (bx, by) in s.body:
+            pos[(bx, by)] = -99
+            neg[(bx, by)] = -99
 
     me = snakes[0]
-    if me.alive:
-        my_field = _flood(me.head(), blocked - {me.head()}, width, height, +1)
-    else:
-        my_field = {}
+    mh = me.head()
+    pos[mh] = 0
+    _flood(pos, mh[0], mh[1], FLOOD_START, +1)
 
-    opp_field = {}
-    for i in range(1, n):
-        s = snakes[i]
-        if not s.alive:
-            continue
-        f = _flood(s.head(), blocked - {s.head()}, width, height, -1)
-        for cell, v in f.items():
-            cur = opp_field.get(cell)
-            if cur is None or v < cur:
-                opp_field[cell] = v
+    for i in range(1, len(snakes)):
+        oh = snakes[i].head()
+        neg[oh] = 0
+        _flood(neg, oh[0], oh[1], -FLOOD_START, -1)
 
     cp = 0
     cn = 0
-    cells = set(my_field) | set(opp_field)
+    cells = set(pos) | set(neg)
     for cell in cells:
-        final = my_field.get(cell, 0) + opp_field.get(cell, 0)
+        final = pos.get(cell, 0) + neg.get(cell, 0)
         if final > 0:
             cp += 1
-        elif final < 0:
+        elif final < 0 and final != -99:
             cn += 1
 
-    denom = float(height + width)
+    denom = float(GRID + GRID)   # hardcoded 38, per original
     score[0] += 2.0 * (cp / denom)
-    for i in range(1, n):
+    for i in range(1, len(snakes)):
         score[i] += 2.0 * (cn / denom)
 
-    # survival bonuses (setScore)
-    if n > 1:
-        alive = sum(1 for s in snakes if s.alive)
-        # (a node with < 2 alive is terminal; handled by not recursing further)
-    elif n == 1:
+
+def _set_score(snakes):
+    """setScore (snack-a-tron branch)."""
+    n = len(snakes)
+    score = [0.0] * n
+    _adjust_ground_control(snakes, score)
+    if n == 1:
         score[0] += 1000.0
-
-    if not me.alive:
-        score[0] = 0.0
-
+    # nbAlive < 2 -> terminal (handled by not recursing); no extra score change
     return score
 
 
 def _score_ratio(score):
-    others = sum(score) - score[0]
-    return score[0] / (others + 1.0)
+    return score[0] / (sum(score) + 1.0 - score[0])
 
 
 # ---------------------------------------------------------------------------
-# Search (mirrors run/generateChild + updateScore minimax)
+# Search (Search.jl generateChild + Node.jl updateScore)
 # ---------------------------------------------------------------------------
 
-def _search(snakes, width, height, food_set, depth, deadline):
+def _aggregate(children, n_snakes):
     """
-    Returns a score vector for the given position.
-    Recursively expands combined moves; minimax-style aggregation via
-    grouping children by our head (updateScore semantics).
+    updateScore aggregation over a node's children.
+      possibleMove == 1  -> single group: min my score, max others.
+      possibleMove  > 1  -> group by our head; within group min mine / max theirs;
+                            across groups pick best ratio (mine / sum others).
+    children: list of (our_head, score_vec, alive_flag) ... but original groups
+    on child.snakes[1].body[1] and uses child score directly.
+    Returns aggregated score vector for the parent.
     """
+    if not children:
+        return [0.0] * n_snakes
+
+    # group by our head
+    groups = {}
+    order = []
+    for head, vec in children:
+        if head not in groups:
+            groups[head] = list(vec)
+            order.append(head)
+        else:
+            g = groups[head]
+            g[0] = min(g[0], vec[0])
+            for i in range(1, len(g)):
+                g[i] = max(g[i], vec[i])
+
+    if len(groups) == 1:
+        # possibleMove == 1 style: single min/max group already computed
+        return groups[order[0]]
+
+    best_ratio = None
+    best_vec = None
+    for head in order:
+        g = groups[head]
+        other = sum(g[1:])
+        ratio = g[0] / other if other != 0 else (g[0] / 1e-9 if g[0] else 0.0)
+        if best_ratio is None or ratio > best_ratio:
+            best_ratio = ratio
+            best_vec = g
+    return best_vec if best_vec is not None else [0.0] * n_snakes
+
+
+def _search(snakes, width, height, depth, deadline):
+    n = len(snakes)
     me = snakes[0]
     if not me.alive:
-        return [0.0] * len(snakes)
+        return [0.0] * n
 
     if depth <= 0 or time.time() > deadline:
-        return _evaluate(snakes, width, height)
+        s = _set_score(snakes)
+        if s[0] != 0:
+            s[0] += MOBILITY * _count_moves(me, width, height, snakes)
+        return s
 
-    # generate my moves
-    my_moves = _snake_moves(me, width, height, snakes, food_set)
-    if not my_moves:
-        s = [0.0] * len(snakes)
-        return s  # trapped -> we die, score 0 for us
+    my_moves = _multi(me, width, height, snakes)
+    possible = len(my_moves)
+    if possible == 0:
+        return [0.0] * n  # trapped -> die, score 0
 
-    # generate combined moves for all snakes
     combos = _merge([], my_moves)
-    for i in range(1, len(snakes)):
-        opts = _snake_moves(snakes[i], width, height, snakes, food_set)
-        combos = _merge(combos, opts)
+    for i in range(1, n):
+        combos = _merge(combos, _multi(snakes[i], width, height, snakes))
     _clean(combos)
 
-    if not combos:
-        return _evaluate(snakes, width, height)
-
-    # group children by our head; for each group, opponents pick the response
-    # that MINIMISES our score (min over group[0]), we take MAX over groups.
-    groups = {}  # our_head -> list of child score vectors
+    still_alive = False
+    children = []
     for combo in combos:
-        child_snakes = combo
-        if child_snakes[0].alive:
-            cs = _search(child_snakes, width, height, food_set, depth - 1, deadline)
+        head = combo[0].head()
+        if combo[0].alive:
+            cs = _search(combo, width, height, depth - 1, deadline)
+            still_alive = True
         else:
-            cs = [0.0] * len(snakes)
-        head = child_snakes[0].head()
-        groups.setdefault(head, []).append(cs)
+            cs = [0.0] * n
+        children.append((head, cs))
         if time.time() > deadline:
             break
 
-    # aggregate: within a group opponents minimise our score[0] and maximise
-    # theirs; across groups we choose the best ratio.
-    best_ratio = None
-    best_vec = None
-    for head, vecs in groups.items():
-        agg = list(vecs[0])
-        agg[0] = min(v[0] for v in vecs)
-        for i in range(1, len(agg)):
-            agg[i] = max(v[i] for v in vecs)
-        r = _score_ratio(agg)
-        if best_ratio is None or r > best_ratio:
-            best_ratio = r
-            best_vec = agg
+    if not still_alive:
+        return [0.0] * n
 
-    return best_vec if best_vec is not None else _evaluate(snakes, width, height)
+    agg = _aggregate(children, n)
+    if agg[0] != 0:
+        agg[0] += MOBILITY * possible
+    return agg
+
+
+def _count_moves(snake, width, height, snakes):
+    return len(_multi(snake, width, height, snakes))
 
 
 # ---------------------------------------------------------------------------
-# Move entry point
+# Move entry point (MainSnake.jl move / chooseBestMove)
 # ---------------------------------------------------------------------------
 
 def _build_snakes(game_state):
@@ -327,7 +368,7 @@ def _build_snakes(game_state):
     def mk(s):
         body = [(p["x"], p["y"]) for p in s["body"]]
         health = s.get("health", 100)
-        return Snake(body, health, health == 100, True)
+        return Snake(body, health, health == 100, True)   # initSnake: eat = health==100
 
     snakes = [mk(game_state["you"])]
     for s in board["snakes"]:
@@ -337,7 +378,6 @@ def _build_snakes(game_state):
 
 
 def _safe_fallback(game_state):
-    """Any in-bounds move not into a snake body (tails enterable)."""
     board = game_state["board"]
     w, h = board["width"], board["height"]
     snakes = _build_snakes(game_state)
@@ -355,19 +395,17 @@ def move(game_state):
         deadline = time.time() + TIME_LIMIT
         board = game_state["board"]
         w, h = board["width"], board["height"]
-        food_set = {(f["x"], f["y"]) for f in board.get("food", [])}
         snakes = _build_snakes(game_state)
-
         me = snakes[0]
         hx, hy = me.head()
 
-        # top-level legal moves
-        my_moves = _snake_moves(me, w, h, snakes, food_set)
+        my_moves = _multi(me, w, h, snakes)
         if not my_moves:
             return {"move": _safe_fallback(game_state)}
 
-        # For each direction, gather child ratios; per chooseBestMove we take
-        # the WORST (min) ratio per direction, then the best of those.
+        # Per chooseBestMove: gather child ratios per direction, take the WORST
+        # (min) ratio per direction, then choose the direction with the best of
+        # those worst-case ratios. Iterative deepening under the time guard.
         dir_scores = {"up": [], "down": [], "left": [], "right": []}
 
         for depth in range(2, MAX_DEPTH + 1):
@@ -386,36 +424,38 @@ def move(game_state):
                 else:
                     d = "down"
 
-                # build combined children rooted at this first move
                 combos = _merge([], [opt])
                 for i in range(1, len(snakes)):
-                    opts = _snake_moves(snakes[i], w, h, snakes, food_set)
-                    combos = _merge(combos, opts)
+                    combos = _merge(combos, _multi(snakes[i], w, h, snakes))
                 _clean(combos)
 
                 if not combos:
-                    local[d].append(_score_ratio(_evaluate([opt] + snakes[1:], w, h)))
+                    s = _set_score([opt] + [x.clone() for x in snakes[1:]])
+                    local[d].append(_score_ratio(s))
                 else:
+                    children = []
                     for combo in combos:
+                        head = combo[0].head()
                         if combo[0].alive:
-                            cs = _search(combo, w, h, food_set, depth - 1, deadline)
+                            cs = _search(combo, w, h, depth - 1, deadline)
                         else:
                             cs = [0.0] * len(snakes)
-                        local[d].append(_score_ratio(cs))
+                        children.append((head, cs))
                         if time.time() > deadline:
                             aborted = True
                             break
+                    # ratio for this first-move child group
+                    for _, cs in children:
+                        local[d].append(_score_ratio(cs))
                 if aborted:
                     break
             if not aborted:
-                dir_scores = local  # committed a full depth
+                dir_scores = local
             else:
-                # partial: still use if we have nothing yet
                 if not any(dir_scores.values()):
                     dir_scores = local
                 break
 
-        # choose direction with best worst-case ratio
         best_dir = None
         best_val = None
         for d in ("up", "down", "left", "right"):
