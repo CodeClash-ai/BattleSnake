@@ -24,7 +24,7 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#AA66CC",
-        "head": "default",
+        "head": "trans-rights-scarf",
         "tail": "default",
     }
 
@@ -65,7 +65,7 @@ def _choose(game_state):
         game_state.get("game", {})
         .get("ruleset", {})
         .get("settings", {})
-        .get("hazardDamagePerTurn", 14)
+        .get("hazardDamagePerTurn", 15)
     )
     health = me["health"]
 
