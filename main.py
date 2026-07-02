@@ -1,6 +1,8 @@
 """Cornelius the Corn Snake -- Python port of ChaelCodes/CorneliusCodes (Rust).
 
 Faithful reimplementation of the original scoring logic against Battlesnake v1 API.
+The original picks argmax over up/down/left/right of value_of_move; there is no
+post-processing/safety override in the source, so this port does not add one.
 """
 
 DIRS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
@@ -29,6 +31,10 @@ def _neighbors(spot):
     return [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
 
 
+def me_length(me):
+    return me.get("length", len(me["body"]))
+
+
 def _spot_has_food(spot, food):
     return spot in food
 
@@ -48,6 +54,8 @@ def _in_bounds(spot, width, height):
 
 
 def _valid_move(spot, width, height, snake_cells):
+    # Matches Rust valid_move: out of bounds or occupied by a snake -> invalid.
+    # (Boards are square, so the original's width/height axis quirk is a no-op.)
     if not _in_bounds(spot, width, height):
         return False
     if _spot_has_snake(spot, snake_cells):
@@ -56,25 +64,24 @@ def _valid_move(spot, width, height, snake_cells):
 
 
 def _spot_might_have_snake(spot, snakes, me):
-    """A spot is dangerous if an equal-or-larger opponent head is adjacent."""
+    """True if an equal-or-larger opponent's head is adjacent to spot."""
     for snake in snakes:
-        if snake["id"] != me["id"] and snake.get("length", len(snake["body"])) >= me_length(me):
+        if snake["id"] != me["id"] and me_length(snake) >= me_length(me):
             head = (snake["head"]["x"], snake["head"]["y"])
             if spot in _neighbors(head):
                 return True
     return False
 
 
-def me_length(me):
-    return me.get("length", len(me["body"]))
-
-
 def _remaining_space(spot, width, height, snake_cells, length):
-    """Flood-fill capped at the snake's length, matching check_spot_for_space."""
+    """Flood-fill capped at the snake's length, matching check_spot_for_space.
+
+    The Rust version returns early as soon as the count reaches the snake's
+    length, so the exact number above the cap is irrelevant to scoring.
+    """
     available = []
     stack = [spot]
     seen = set()
-    # Emulate the recursive expansion: only expand from valid cells.
     while stack:
         if len(available) >= length:
             break
@@ -121,7 +128,9 @@ def _value_of_move(spot, width, height, food, hazards, snakes, snake_cells, me):
             base = 60  # superstitious of the zero edges
         else:
             base = 100
-    return base + _spot_modifier(spot, width, height, food, hazards, snakes, snake_cells, me)
+    return base + _spot_modifier(
+        spot, width, height, food, hazards, snakes, snake_cells, me
+    )
 
 
 def move(game_state):
@@ -150,46 +159,12 @@ def move(game_state):
                 spot, width, height, food, hazards, snakes, snake_cells, me
             )
 
+        # Original get_move: pick the highest-scoring of the four moves.
         best = max(scored, key=lambda k: scored[k])
-
-        # Safety net: if the best pick still walks into a wall or a snake body
-        # (tails are enterable), prefer any strictly-safe move.
-        def is_safe(d):
-            dx, dy = DIRS[d]
-            spot = (head[0] + dx, head[1] + dy)
-            if not _in_bounds(spot, width, height):
-                return False
-            # Tails are enterable: a body cell that is the last segment of a
-            # snake (and not about to grow) will move away.
-            return spot not in _occupied_next(snakes, me)
-
-        if not is_safe(best):
-            safe = [d for d in DIRS if is_safe(d)]
-            if safe:
-                best = max(safe, key=lambda k: scored[k])
-
         return {"move": best}
     except Exception:
+        # Arena legal fallback.
         return {"move": "up"}
-
-
-def _occupied_next(snakes, me):
-    """Cells that will still be occupied next turn (tails vacate unless the
-    snake just ate). Conservative: keep tail blocked if health==100."""
-    occupied = set()
-    for s in snakes:
-        body = s["body"]
-        head = (s["head"]["x"], s["head"]["y"])
-        occupied.add(head)
-        for i, part in enumerate(body):
-            cell = (part["x"], part["y"])
-            # The tail (last segment) will move away unless the snake ate.
-            if i == len(body) - 1:
-                if s.get("health", 0) == 100:
-                    occupied.add(cell)
-                continue
-            occupied.add(cell)
-    return occupied
 
 
 if __name__ == "__main__":
