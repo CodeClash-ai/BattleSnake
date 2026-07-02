@@ -575,14 +575,81 @@ class PrimaryMultiHeuristic:
         return score
 
 
+def _duel_total_fill_advantage(own_count, enemy_count):
+    """Port of TotalFillAdvantage.ScoreCached.
+    Basic-flood-fill tile counts from each head: (own/(own+enemy) - 0.5)*2."""
+    denom = own_count + enemy_count
+    if denom == 0:
+        return 0.0
+    return (own_count / float(denom) - 0.5) * 2.0
+
+
+def _duel_adversarial_fill_advantage(adv, own_index, enemy_index):
+    """Port of AdversarialFillAdvantage.ScoreCached.
+    Counts *all* adversarial-fill tiles owned by own vs enemy (including snake
+    body tiles that were assigned an owner), normalised over own+enemy."""
+    friendly = 0
+    enemy = 0
+    ts = adv.tile_snake
+    for row in ts:
+        for owner in row:
+            if owner == own_index:
+                friendly += 1
+            elif owner == enemy_index:
+                enemy += 1
+    denom = friendly + enemy
+    if denom == 0:
+        # matches C# division by zero producing NaN guarded implicitly; be safe
+        return 0.0
+    return (friendly / float(denom) - 0.5) * 2.0
+
+
+def _duel_hunger_pressure_advantage(world, adv, own_index, enemy_index,
+                                    satisfaction_threshold=75):
+    """Port of HungerPressureAdvantage.ScoreCached."""
+    best_own = math.inf
+    best_enemy = math.inf
+    for (fx, fy) in world.fruits:
+        owner = adv.tile_snake[fy][fx]
+        if owner == own_index:
+            best_own = min(best_own, adv.tile_dist[fy][fx])
+        elif owner == enemy_index:
+            best_enemy = min(best_enemy, adv.tile_dist[fy][fx])
+
+    own_s = world.snakes[own_index]
+    enemy_s = world.snakes[enemy_index]
+    own_pressure = min(own_s.health - best_own * 1.2 - 10.0, 0)
+    enemy_pressure = min(enemy_s.health - best_enemy * 1.2 - 10.0, 0)
+
+    if own_s.health > satisfaction_threshold:
+        own_pressure = 0.0
+    if enemy_s.health > satisfaction_threshold:
+        enemy_pressure = 0.0
+
+    if own_pressure == enemy_pressure:
+        return 0.0
+    return (enemy_pressure / (own_pressure + enemy_pressure) - 0.5) * 2.0
+
+
+def _duel_combined_delta_length(world, own_index, enemy_index, own_fill_dist,
+                                delta_x_scale=0.2):
+    """Port of (duel) CombinedDeltaLengthFoodMetric.ScoreCached.
+    Uses direct own-minus-enemy length delta and own basic-fill food distance;
+    fruit multiplier factor is implicitly 1 (deltaOnEat - delta)."""
+    delta_adv = world.snakes[own_index].length - world.snakes[enemy_index].length
+    delta_metric = _score_delta_advantage(delta_adv, delta_x_scale)
+    delta_on_eat = _score_delta_advantage(delta_adv + 1, delta_x_scale)
+    food_mult = delta_on_eat - delta_metric
+    return delta_metric + _food_distance_metric(world, own_index, own_fill_dist) * food_mult
+
+
 class PrimaryDuellingHeuristic:
     """Port of PrimaryDuellingHeuristic + BaseDuellingHeuristic.
 
-    Uses the same underlying flood-fill / length / hunger metrics as the multi
-    heuristic, weighted per the original (totalFill 0.7, hunger 10, adversarial
-    fill 4, combined length 4). TotalFillAdvantage and HungerPressureAdvantage /
-    AdversarialFillAdvantage are relative (own minus enemy) versions of the
-    absolute metrics; we reconstruct them from the shared cached fill.
+    Faithful reproduction of the four duel metrics (see original C# files
+    TotalFillAdvantage, HungerPressureAdvantage, AdversarialFillAdvantage and
+    the duel CombinedDeltaLengthFoodMetric) weighted totalFill 0.7, hunger 10,
+    adversarial fill 4, combined length 4.
     """
 
     def __init__(self, snake_index, enemy_index):
@@ -608,24 +675,21 @@ class PrimaryDuellingHeuristic:
         i = self.snake_index
         j = self.enemy_index
         state = CachedMultiMetricState(world)
+        adv = state.adversarial_fill
 
-        # total fill advantage: normalized reachable-empty-tile share (own - enemy)
-        adv = state.adversarial_fill.empty_counts
-        total = sum(adv)
-        if total == 0:
-            total_fill_adv = 0.0
-        else:
-            total_fill_adv = (adv[i] - adv[j]) / float(total)
+        # TotalFillAdvantage: basic flood fill from own and enemy heads
+        own_count, own_fill_dist = count_basic_flood_fill(world, world.snakes[i].head)
+        enemy_count, _ = count_basic_flood_fill(world, world.snakes[j].head)
+        total_fill_adv = _duel_total_fill_advantage(own_count, enemy_count)
 
-        # adversarial fill advantage: same control metric expressed as advantage
-        adversarial_fill_adv = metric_absolute_control(state, i)
+        # AdversarialFillAdvantage: count of owned tiles (own vs enemy)
+        adversarial_fill_adv = _duel_adversarial_fill_advantage(adv, i, j)
 
-        # hunger pressure advantage (own - enemy)
-        hunger_adv = metric_absolute_hunger(state, i) - metric_absolute_hunger(state, j)
+        # HungerPressureAdvantage
+        hunger_adv = _duel_hunger_pressure_advantage(world, adv, i, j)
 
-        # combined delta length advantage
-        fc, fd = count_basic_flood_fill(world, world.snakes[i].head)
-        combined_len_adv = metric_absolute_combined_delta_length_food(world, i, fc, fd)
+        # CombinedDeltaLengthFoodMetric (duel form): uses own basic-fill distances
+        combined_len_adv = _duel_combined_delta_length(world, i, j, own_fill_dist)
 
         return (0.7 * total_fill_adv
                 + 10.0 * hunger_adv
@@ -935,9 +999,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "m-schier",
-        "color": "#2b6b3a",
-        "head": "default",
-        "tail": "default",
+        "color": "#E3CE7A",
+        "head": "evil",
+        "tail": "curled",
     }
 
 
