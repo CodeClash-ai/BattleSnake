@@ -19,8 +19,8 @@ def info():
         "apiversion": "1",
         "author": "moxuz",
         "color": "#ffb6c1",
-        "head": "default",
-        "tail": "default",
+        "head": "safe",
+        "tail": "round-bum",
     }
 
 
