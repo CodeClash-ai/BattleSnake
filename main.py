@@ -1,98 +1,187 @@
-# Welcome to
-# __________         __    __  .__                               __
-# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
-#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
-#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
-#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
-#
-# This file can be a nice home for your Battlesnake logic and helper functions.
-#
-# To get you started we've included code to prevent your Battlesnake from moving backwards.
-# For more info see docs.battlesnake.com
+"""Port of Flipez/battlesnake (Crystal, 2018) to Battlesnake v1 API.
 
-import random
-import typing
+Original strategy (faithful reimplementation):
+  - look_around: the 4 orthogonal neighbors of the head.
+  - is_free_point?: a point is free if in-bounds, not on any snake's body,
+    and not on the predicted next point of any enemy whose length >= mine.
+    Enemy prediction: enemy moves toward its own nearest food.
+  - next_target: nearest food to me, UNLESS some enemy is closer to that food
+    than I am -> then target the board center instead.
+  - Choose the free neighbor closest (euclidean) to next_target; move there.
+
+Coordinate remap: original used top-left origin (y-down). v1 uses bottom-left
+(y-up). The neighbor-selection logic is coordinate-agnostic; only the direction
+label depends on convention, so directions are labeled with v1 semantics
+(up=y+1, down=y-1, left=x-1, right=x+1) so the snake physically moves toward
+the chosen neighbor point.
+"""
+
+import math
 
 
-# info is called when you create your Battlesnake on play.battlesnake.com
-# and controls your Battlesnake's appearance
-# TIP: If you open your Battlesnake URL in a browser you should see this data
-def info() -> typing.Dict:
-    print("INFO")
-
+def info():
     return {
         "apiversion": "1",
-        "author": "",  # TODO: Your Battlesnake Username
-        "color": "#888888",  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "author": "Flipez",
+        "color": "#FC5299",
+        "head": "default",
+        "tail": "default",
     }
 
 
-# start is called when your Battlesnake begins a game
-def start(game_state: typing.Dict):
-    print("GAME START")
+def start(game_state):
+    return
 
 
-# end is called when your Battlesnake finishes a game
-def end(game_state: typing.Dict):
-    print("GAME OVER\n")
+def end(game_state):
+    return
 
 
-# move is called on every turn and returns your next move
-# Valid moves are "up", "down", "left", or "right"
-# See https://docs.battlesnake.com/api/example-move for available data
-def move(game_state: typing.Dict) -> typing.Dict:
-
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
-
-    # We've included code to prevent your Battlesnake from moving backwards
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
-
-    # TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    # board_width = game_state['board']['width']
-    # board_height = game_state['board']['height']
-
-    # TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    # my_body = game_state['you']['body']
-
-    # TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    # opponents = game_state['board']['snakes']
-
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    if len(safe_moves) == 0:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
-        return {"move": "down"}
-
-    # Choose a random move from the safe ones
-    next_move = random.choice(safe_moves)
-
-    # TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    # food = game_state['board']['food']
-
-    print(f"MOVE {game_state['turn']}: {next_move}")
-    return {"move": next_move}
+def distance(a, b):
+    dx = a["x"] - b["x"]
+    dy = a["y"] - b["y"]
+    return math.sqrt(dx * dx + dy * dy)
 
 
-# Start server when `python main.py` is run
+def look_around(head):
+    return [
+        {"x": head["x"] + 1, "y": head["y"]},
+        {"x": head["x"] - 1, "y": head["y"]},
+        {"x": head["x"], "y": head["y"] + 1},
+        {"x": head["x"], "y": head["y"] - 1},
+    ]
+
+
+def nearest_food(head, foods):
+    if not foods:
+        return None
+    return min(foods, key=lambda f: distance(f, head))
+
+
+def next_move_label(head, point):
+    # v1 semantics: up=y+1, down=y-1, left=x-1, right=x+1
+    if head["x"] == point["x"]:
+        return "up" if head["y"] < point["y"] else "down"
+    else:
+        return "right" if head["x"] < point["x"] else "left"
+
+
+def next_point_toward(head, target):
+    # Predict a snake's next head position: it moves one step toward target
+    # (matches original next_move -> next_point pipeline for enemies).
+    label = next_move_label(head, target)
+    if label == "up":
+        return {"x": head["x"], "y": head["y"] + 1}
+    if label == "down":
+        return {"x": head["x"], "y": head["y"] - 1}
+    if label == "left":
+        return {"x": head["x"] - 1, "y": head["y"]}
+    return {"x": head["x"] + 1, "y": head["y"]}
+
+
+def is_free_point(target, board, snakes, me, foods):
+    w = board["width"]
+    h = board["height"]
+
+    if not (0 <= target["x"] <= w - 1):
+        return False
+    if not (0 <= target["y"] <= h - 1):
+        return False
+
+    occupied = []
+    for s in snakes:
+        occupied.extend(s["body"])
+
+    # Predict enemy movement toward their nearest food (only if >= my length)
+    my_len = me.get("length", len(me["body"]))
+    for enemy in snakes:
+        if enemy["id"] == me["id"]:
+            continue
+        e_len = enemy.get("length", len(enemy["body"]))
+        if e_len >= my_len:
+            e_head = enemy["body"][0]
+            e_food = nearest_food(e_head, foods)
+            if e_food is not None:
+                occupied.append(next_point_toward(e_head, e_food))
+
+    for p in occupied:
+        if p["x"] == target["x"] and p["y"] == target["y"]:
+            return False
+    return True
+
+
+def board_center(board):
+    # Original: x range 1..width, center = list[size/2] (integer div).
+    xs = list(range(1, board["width"] + 1))
+    ys = list(range(1, board["height"] + 1))
+    x_center = xs[len(xs) // 2]
+    y_center = ys[len(ys) // 2]
+    return {"x": x_center, "y": y_center}
+
+
+def next_target(me, snakes, foods, board):
+    head = me["body"][0]
+    nf = nearest_food(head, foods)
+    if nf is None:
+        return board_center(board)
+
+    my_dist = distance(head, nf)
+    enemy_closer = False
+    for s in snakes:
+        if s["id"] == me["id"]:
+            continue
+        if my_dist > distance(s["body"][0], nf):
+            enemy_closer = True
+            break
+
+    if enemy_closer:
+        return board_center(board)
+    return nf
+
+
+def move(game_state):
+    try:
+        board = game_state["board"]
+        me = game_state["you"]
+        snakes = board["snakes"]
+        foods = board.get("food", [])
+        head = me["body"][0]
+
+        candidates = look_around(head)
+        free = [p for p in candidates if is_free_point(p, board, snakes, me, foods)]
+
+        target = next_target(me, snakes, foods, board)
+
+        if free:
+            chosen = min(free, key=lambda p: distance(p, target))
+            return {"move": next_move_label(head, chosen)}
+
+        # Fallback: no "free" point per original filter. Pick any in-bounds
+        # neighbor that does not hit a snake body (tails are enterable).
+        w, h = board["width"], board["height"]
+        bodies = []
+        for s in snakes:
+            b = s["body"]
+            # tail is enterable unless the snake just ate (we can't be sure,
+            # so treat tail as enterable per prompt guidance)
+            bodies.extend(b[:-1] if len(b) > 1 else b)
+        for p in candidates:
+            if not (0 <= p["x"] <= w - 1 and 0 <= p["y"] <= h - 1):
+                continue
+            if any(bp["x"] == p["x"] and bp["y"] == p["y"] for bp in bodies):
+                continue
+            return {"move": next_move_label(head, p)}
+
+        # Last resort: any in-bounds neighbor.
+        for p in candidates:
+            if 0 <= p["x"] <= w - 1 and 0 <= p["y"] <= h - 1:
+                return {"move": next_move_label(head, p)}
+
+        return {"move": "up"}
+    except Exception:
+        return {"move": "up"}
+
+
 if __name__ == "__main__":
     from server import run_server
 
