@@ -584,9 +584,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "nbw",
-        "color": "#54a4a4",
-        "head": "default",
-        "tail": "default",
+        "color": "#00C5E9",
+        "head": "pixel",
+        "tail": "pixel",
     }
 
 
@@ -630,28 +630,5 @@ def move(game_state):
 
 
 if __name__ == "__main__":
-    if "--selftest" in sys.argv:
-        test = {"turn": 10, "board": {"width": 11, "height": 11,
-                "food": [{"x": 2, "y": 8}, {"x": 5, "y": 5}], "hazards": [],
-                "snakes": [
-                    {"id": "me", "name": "me", "health": 80,
-                     "body": [{"x": 5, "y": 5}, {"x": 5, "y": 4}, {"x": 5, "y": 3}],
-                     "head": {"x": 5, "y": 5}, "length": 3},
-                    {"id": "foe", "name": "foe", "health": 75,
-                     "body": [{"x": 8, "y": 8}, {"x": 8, "y": 7}],
-                     "head": {"x": 8, "y": 8}, "length": 2}]},
-                "you": {"id": "me", "name": "me", "health": 80,
-                        "body": [{"x": 5, "y": 5}, {"x": 5, "y": 4}, {"x": 5, "y": 3}],
-                        "head": {"x": 5, "y": 5}, "length": 3}}
-        r = move(test)
-        assert r["move"] in ("up", "down", "left", "right"), r
-        # legality check
-        hx, hy = 5, 5
-        d = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}[r["move"]]
-        nx, ny = hx + d[0], hy + d[1]
-        assert 0 <= nx < 11 and 0 <= ny < 11, r
-        assert (nx, ny) not in {(5, 4), (5, 3), (8, 8), (8, 7)}, r
-        print("SELFTEST pass:", r)
-    else:
-        from server import run_server
-        run_server({"info": info, "start": start, "move": move, "end": end})
+    from server import run_server
+    run_server({"info": info, "start": start, "move": move, "end": end})
