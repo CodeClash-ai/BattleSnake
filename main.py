@@ -398,9 +398,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "csauve",
-        "color": "#66aa33",
-        "head": "default",
-        "tail": "default",
+        "color": "#800080",
+        "head": "bendr",
+        "tail": "round-bum",
     }
 
 
