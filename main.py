@@ -38,8 +38,8 @@ def info():
         "apiversion": "1",
         "author": "TheApX",
         "color": "#2e8244",
-        "head": "default",
-        "tail": "default",
+        "head": "smart-caterpillar",
+        "tail": "rattle",
     }
 
 
