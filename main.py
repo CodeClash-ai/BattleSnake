@@ -608,8 +608,8 @@ def info():
         "apiversion": "1",
         "author": "tyrelh",
         "color": "#27cbf0",
-        "head": "default",
-        "tail": "default",
+        "head": "dead",
+        "tail": "round-bum",
     }
 
 
