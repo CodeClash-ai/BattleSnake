@@ -859,8 +859,8 @@ def info():
         "apiversion": "1",
         "author": "altersaddle",
         "color": "#306448",
-        "head": "default",
-        "tail": "default",
+        "head": "tongue",
+        "tail": "sharp",
     }
 
 
