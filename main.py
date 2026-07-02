@@ -58,8 +58,8 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#da8a1a",  # hovering-hobbs beach-puffin orange
-        "head": "default",
-        "tail": "default",
+        "head": "beach-puffin-special",
+        "tail": "beach-puffin-special",
     }
 
 
