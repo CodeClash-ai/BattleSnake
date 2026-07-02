@@ -1,99 +1,157 @@
-# Welcome to
-# __________         __    __  .__                               __
-# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
-#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
-#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
-#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
-#
-# This file can be a nice home for your Battlesnake logic and helper functions.
-#
-# To get you started we've included code to prevent your Battlesnake from moving backwards.
-# For more info see docs.battlesnake.com
+"""Port of amphibious_arthur (coreyja/battlesnake-rs) to CodeClash v1 API.
 
-import random
-import typing
+FIDELITY: approximate. The original recursively scores moves with a
+health-based heuristic (PREFERRED_HEALTH=80), returning 0 for moves into a
+snake body or that kill you, and otherwise `PREFERRED_HEALTH - |health - 80|`
+plus half the summed recursive neighbor scores (recursion limit 5). It also
+simulates you moving forward each ply ("opponent sprawl"). We reproduce the
+health-scoring recursion and body/bounds avoidance, but simplify the
+opponent-sprawl clone and cap recursion depth for the <1s time budget.
+"""
+
+PREFERRED_HEALTH = 80
+RECURSION_LIMIT = 4  # original default 5; capped for time budget
+
+DIRS = {
+    "up": (0, 1),
+    "down": (0, -1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
 
 
-# info is called when you create your Battlesnake on play.battlesnake.com
-# and controls your Battlesnake's appearance
-# TIP: If you open your Battlesnake URL in a browser you should see this data
-def info() -> typing.Dict:
-    print("INFO")
-
+def info():
     return {
         "apiversion": "1",
-        "author": "",  # TODO: Your Battlesnake Username
-        "color": "#888888",  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "author": "coreyja",
+        "color": "#AA66CC",
+        "head": "default",
+        "tail": "default",
     }
 
 
-# start is called when your Battlesnake begins a game
-def start(game_state: typing.Dict):
-    print("GAME START")
+def start(game_state):
+    return None
 
 
-# end is called when your Battlesnake finishes a game
-def end(game_state: typing.Dict):
-    print("GAME OVER\n")
+def end(game_state):
+    return None
 
 
-# move is called on every turn and returns your next move
-# Valid moves are "up", "down", "left", or "right"
-# See https://docs.battlesnake.com/api/example-move for available data
-def move(game_state: typing.Dict) -> typing.Dict:
-
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
-
-    # We've included code to prevent your Battlesnake from moving backwards
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
-
-    # TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    # board_width = game_state['board']['width']
-    # board_height = game_state['board']['height']
-
-    # TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    # my_body = game_state['you']['body']
-
-    # TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    # opponents = game_state['board']['snakes']
-
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    if len(safe_moves) == 0:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
-        return {"move": "down"}
-
-    # Choose a random move from the safe ones
-    next_move = random.choice(safe_moves)
-
-    # TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    # food = game_state['board']['food']
-
-    print(f"MOVE {game_state['turn']}: {next_move}")
-    return {"move": next_move}
+def _body_set(board, exclude_tails=True):
+    """Set of occupied cells. Tails are enterable (excluded) unless the snake
+    just ate (health==100 heuristic -> tail stays)."""
+    occ = set()
+    for s in board.get("snakes", []):
+        body = s.get("body", [])
+        n = len(body)
+        for i, c in enumerate(body):
+            if exclude_tails and i == n - 1 and n > 1:
+                # tail vacates next turn unless snake just ate
+                if s.get("health", 0) != 100:
+                    continue
+            occ.add((c["x"], c["y"]))
+    return occ
 
 
-# Start server when `python main.py` is run
+def _in_bounds(x, y, w, h):
+    return 0 <= x < w and 0 <= y < h
+
+
+def _neighbors(x, y, w, h):
+    out = []
+    for dx, dy in DIRS.values():
+        nx, ny = x + dx, y + dy
+        if _in_bounds(nx, ny, w, h):
+            out.append((nx, ny))
+    return out
+
+
+def _score(coor, health, occupied, w, h, depth):
+    """Faithful reimplementation of the Rust `score` function.
+
+    - coor into a snake body -> 0
+    - health<=0 (dead) -> 0
+    - current = PREFERRED_HEALTH - |health - PREFERRED_HEALTH|
+    - depth 0 -> current
+    - else current + (sum of neighbor scores) / 2
+    """
+    if coor in occupied:
+        return 0
+    if health <= 0:
+        return 0
+
+    current = PREFERRED_HEALTH - abs(health - PREFERRED_HEALTH)
+
+    if depth == 0:
+        return current
+
+    # moving costs 1 health (food handled loosely; keeps recursion bounded)
+    next_health = health - 1
+    recursed = 0
+    for nb in _neighbors(coor[0], coor[1], w, h):
+        recursed += _score(nb, next_health, occupied, w, h, depth - 1)
+
+    return current + recursed // 2
+
+
+def move(game_state):
+    try:
+        board = game_state["board"]
+        w = board["width"]
+        h = board["height"]
+        you = game_state["you"]
+        head = you["head"]
+        hx, hy = head["x"], head["y"]
+        health = you.get("health", PREFERRED_HEALTH)
+
+        occupied = _body_set(board, exclude_tails=True)
+
+        # possible moves: in-bounds neighbors of the head
+        candidates = []
+        for mv, (dx, dy) in DIRS.items():
+            nx, ny = hx + dx, hy + dy
+            if _in_bounds(nx, ny, w, h):
+                candidates.append((mv, (nx, ny)))
+
+        if not candidates:
+            return {"move": "up"}  # stuck_response
+
+        best_mv = None
+        best_score = None
+        for mv, coor in candidates:
+            s = _score(coor, health, occupied, w, h, RECURSION_LIMIT)
+            if best_score is None or s > best_score:
+                best_score = s
+                best_mv = mv
+
+        # If every real candidate scored 0 (all into bodies / death), still
+        # prefer one that at least isn't an occupied cell if possible.
+        if best_score == 0:
+            for mv, coor in candidates:
+                if coor not in occupied:
+                    best_mv = mv
+                    break
+
+        return {"move": best_mv or "up"}
+    except Exception:
+        # robust fallback: any in-bounds, non-body move
+        try:
+            board = game_state["board"]
+            w = board["width"]
+            h = board["height"]
+            you = game_state["you"]
+            hx, hy = you["head"]["x"], you["head"]["y"]
+            occupied = _body_set(board, exclude_tails=True)
+            for mv, (dx, dy) in DIRS.items():
+                nx, ny = hx + dx, hy + dy
+                if _in_bounds(nx, ny, w, h) and (nx, ny) not in occupied:
+                    return {"move": mv}
+        except Exception:
+            pass
+        return {"move": "up"}
+
+
 if __name__ == "__main__":
     from server import run_server
-
     run_server({"info": info, "start": start, "move": move, "end": end})
