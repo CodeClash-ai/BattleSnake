@@ -1,98 +1,107 @@
-# Welcome to
-# __________         __    __  .__                               __
-# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
-#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
-#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
-#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
-#
-# This file can be a nice home for your Battlesnake logic and helper functions.
-#
-# To get you started we've included code to prevent your Battlesnake from moving backwards.
-# For more info see docs.battlesnake.com
+"""BombasticBob - a faithful Python port of coreyja/battlesnake-rs bombastic_bob.
+
+Strategy: pick a RANDOM "reasonable" move. A move is reasonable if it does not
+go off the board, does not enter any snake's body, and does not step into a
+hazard cell that would kill the snake. If no reasonable move exists, fall back
+to any random move that does not immediately reverse into our own neck.
+This reproduces `random_reasonable_move_for_each_snake` from
+battlesnake-game-types (wire_representation), restricted to our snake.
+"""
 
 import random
-import typing
+
+# Move order matching Rust Move::all() == [Up, Down, Left, Right]
+MOVES = [
+    ("up", (0, 1)),
+    ("down", (0, -1)),
+    ("left", (-1, 0)),
+    ("right", (1, 0)),
+]
 
 
-# info is called when you create your Battlesnake on play.battlesnake.com
-# and controls your Battlesnake's appearance
-# TIP: If you open your Battlesnake URL in a browser you should see this data
-def info() -> typing.Dict:
-    print("INFO")
-
+def info():
     return {
         "apiversion": "1",
-        "author": "",  # TODO: Your Battlesnake Username
-        "color": "#888888",  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "author": "coreyja",
+        "color": "#AA66CC",
+        "head": "default",
+        "tail": "default",
     }
 
 
-# start is called when your Battlesnake begins a game
-def start(game_state: typing.Dict):
-    print("GAME START")
+def start(game_state):
+    pass
 
 
-# end is called when your Battlesnake finishes a game
-def end(game_state: typing.Dict):
-    print("GAME OVER\n")
+def end(game_state):
+    pass
 
 
-# move is called on every turn and returns your next move
-# Valid moves are "up", "down", "left", or "right"
-# See https://docs.battlesnake.com/api/example-move for available data
-def move(game_state: typing.Dict) -> typing.Dict:
-
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
-
-    # We've included code to prevent your Battlesnake from moving backwards
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
-
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
-
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
-
-    # TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    # board_width = game_state['board']['width']
-    # board_height = game_state['board']['height']
-
-    # TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    # my_body = game_state['you']['body']
-
-    # TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    # opponents = game_state['board']['snakes']
-
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    if len(safe_moves) == 0:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
-        return {"move": "down"}
-
-    # Choose a random move from the safe ones
-    next_move = random.choice(safe_moves)
-
-    # TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    # food = game_state['board']['food']
-
-    print(f"MOVE {game_state['turn']}: {next_move}")
-    return {"move": next_move}
+def move(game_state):
+    try:
+        return {"move": _choose(game_state)}
+    except Exception:
+        return {"move": "right"}
 
 
-# Start server when `python main.py` is run
+def _choose(game_state):
+    board = game_state["board"]
+    width = board["width"]
+    height = board["height"]
+    me = game_state["you"]
+    head = me["head"]
+    hx, hy = head["x"], head["y"]
+
+    is_wrapped = game_state.get("game", {}).get("ruleset", {}).get("name") == "wrapped"
+
+    # Collect every occupied body cell across all snakes.
+    body_cells = set()
+    for s in board["snakes"]:
+        for seg in s["body"]:
+            body_cells.add((seg["x"], seg["y"]))
+
+    hazard_cells = set((h["x"], h["y"]) for h in board.get("hazards", []))
+    hazard_damage = (
+        game_state.get("game", {})
+        .get("ruleset", {})
+        .get("settings", {})
+        .get("hazardDamagePerTurn", 14)
+    )
+    health = me["health"]
+
+    reasonable = []
+    for name, (dx, dy) in MOVES:
+        nx, ny = hx + dx, hy + dy
+        if is_wrapped:
+            nx %= width
+            ny %= height
+
+        off_board = nx < 0 or nx >= width or ny < 0 or ny >= height
+        in_body = (nx, ny) in body_cells
+        deadly_hazard = (nx, ny) in hazard_cells and hazard_damage >= health
+
+        if not (off_board or in_body or deadly_hazard):
+            reasonable.append(name)
+
+    if reasonable:
+        return random.choice(reasonable)
+
+    # Fallback: any move that does not reverse into our own neck (body[1]).
+    body = me["body"]
+    neck = body[1] if len(body) > 1 else None
+    fallback = []
+    for name, (dx, dy) in MOVES:
+        nx, ny = hx + dx, hy + dy
+        if neck is not None and nx == neck["x"] and ny == neck["y"]:
+            continue
+        fallback.append(name)
+
+    if fallback:
+        return random.choice(fallback)
+
+    return "right"
+
+
 if __name__ == "__main__":
     from server import run_server
 
