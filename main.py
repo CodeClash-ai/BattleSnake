@@ -2,31 +2,39 @@
 # Ported to the CodeClash BattleSnake arena (current API v1) from the original
 # old-API bot: https://github.com/kentmacdonald2/battle-snake-2017
 #
-# Faithful port of the original strategy:
-#   - rank food by squared-Euclidean distance to the head
-#   - A* (squared-Euclidean heuristic, ~500-node budget) to the nearest food
-#   - if no path to the nearest food, fall back to the second-nearest
+# Faithful port of the original strategy (app/main.py + app/a_star.py):
+#   - rank food by squared-Euclidean distance to the head (get_food_list)
+#   - A* (squared-Euclidean, accumulated heuristic; count>499 bailout) to nearest food
+#   - the original's second-food fallback control flow is reproduced verbatim,
+#     including its quirk that get_food_list(first_food) returns first_food itself
+#     as its nearest element (distance 0), so new_list[0] == first_food.
 #   - "desperation" fallback: first safe neighbour in fixed order up/down/left/right
-#   - safety = in bounds and not occupied by any snake body cell
+#   - if_safe = on the board AND not occupied by any snake body cell
 #
-# Coordinate note: original used top-left / y-down; v1 API is bottom-left / y-up.
+# Coordinate note: the original used a top-left / y-down board (up = y-1).
+# The v1 API is bottom-left / y-up, so the direction->delta table is remapped
+# accordingly (up = y+1) to preserve the visual meaning of each move name.
 
-import heapq
 import typing
 
 AUTHOR = "kentmacdonald2"
+
+# v1 (bottom-left, y-up) direction deltas.  Original was top-left/y-down.
 DIRS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
-# original desperation order was up, down, left, right
+# original move()/a_star successor + desperation order: up, down, left, right
 PRIORITY = ["up", "down", "left", "right"]
 
 
 def info() -> typing.Dict:
+    # Original /start returned color '#FF00FF', a custom head_url image (no named
+    # head), no tail, name 'beames.ai'.  v1 needs named head/tail; the original
+    # had none, so keep neutral defaults rather than invent cosmetic values.
     return {
         "apiversion": "1",
         "author": AUTHOR,
-        "color": "#ff00ff",
-        "head": "beluga",
-        "tail": "bolt",
+        "color": "#FF00FF",
+        "head": "default",
+        "tail": "default",
     }
 
 
@@ -42,52 +50,103 @@ def _cell(c: typing.Dict) -> tuple:
     return (c["x"], c["y"])
 
 
-def _dir(a: tuple, b: tuple) -> str:
-    delta = (b[0] - a[0], b[1] - a[1])
-    for name, vec in DIRS.items():
-        if vec == delta:
-            return name
-    return "up"
+# ---- board helpers (mirror original a_star up/down/left/right on [x, y]) ----
+# Directions here operate in v1 (y-up) space; names match the original.
+def _step(pos, name):
+    vec = DIRS[name]
+    return (pos[0] + vec[0], pos[1] + vec[1])
 
 
-def _search(start_pos, goal, blocked, w, h, cap=500):
-    """A* with a squared-Euclidean heuristic and a node budget (matches the
-    original's count>499 bailout)."""
+def _if_safe(pos, blocked, w, h) -> bool:
+    # original if_safe: not in any snake's coords, and on the board
+    if pos in blocked:
+        return False
+    if pos[0] < 0 or pos[0] > w - 1:
+        return False
+    if pos[1] < 0 or pos[1] > h - 1:
+        return False
+    return True
 
-    def heur(p):
-        return (p[0] - goal[0]) ** 2 + (p[1] - goal[1]) ** 2
 
-    open_heap = [(heur(start_pos), 0, start_pos)]
-    came_from = {start_pos: None}
-    best_g = {start_pos: 0}
+class _Node:
+    __slots__ = ("pos", "parent", "f", "g", "h")
+
+    def __init__(self, pos, parent=None, f=0, g=0, h=0):
+        self.pos = pos
+        self.parent = parent
+        self.f = f
+        self.g = g
+        self.h = h
+
+
+def _reconstruct(successor):
+    # original reconstruct: from goal-neighbour back to (but excluding) start
+    out = []
+    tmp = successor
+    while tmp.parent is not None:
+        out.append(tmp.pos)
+        tmp = tmp.parent
+    return out
+
+
+def _search(start_pos, blocked, w, h, goal):
+    """Faithful port of a_star.search: min-f open list, accumulated squared-
+    Euclidean h (h = parent.h + sld), count>499 bailout, returns the reversed
+    path list (goal-neighbour first, start excluded) or None."""
+    open_list = []
+    closed_list = []
+    open_list.append(_Node(start_pos, f=0))
     count = 0
-    while open_heap:
-        if count > cap:
+    while len(open_list) > 0:
+        if count > 499:
             return None
+        q = min(open_list, key=lambda n: n.f)
+        open_list.remove(q)
+
+        successors = []
+        for name in PRIORITY:  # up, down, left, right
+            nxt = _step(q.pos, name)
+            if _if_safe(nxt, blocked, w, h):
+                successors.append(_Node(nxt, parent=q))
+
         count += 1
-        _, g, cur = heapq.heappop(open_heap)
-        if cur == goal:
-            path = [cur]
-            while came_from[cur] is not None:
-                cur = came_from[cur]
-                path.append(cur)
-            return list(reversed(path))
-        for vec in DIRS.values():
-            nb = (cur[0] + vec[0], cur[1] + vec[1])
-            if not (0 <= nb[0] < w and 0 <= nb[1] < h):
-                continue
-            if nb in blocked and nb != goal:
-                continue
-            ng = g + 1
-            if nb not in best_g or ng < best_g[nb]:
-                best_g[nb] = ng
-                came_from[nb] = cur
-                heapq.heappush(open_heap, (ng + heur(nb), ng, nb))
+        for succ in successors:
+            if succ.pos == goal:
+                return _reconstruct(succ)
+            succ.g = q.g + 1
+            sld = (succ.pos[0] - goal[0]) ** 2 + (succ.pos[1] - goal[1]) ** 2
+            succ.h = q.h + sld
+            succ.f = succ.g + succ.h
+            add = True
+            for item in open_list:
+                if item.pos == succ.pos and item.f < succ.f:
+                    add = False
+            for item in closed_list:
+                if item.pos == succ.pos and item.f < succ.f:
+                    add = False
+            if add:
+                open_list.append(succ)
+        closed_list.append(q)
     return None
 
 
-def _safe(pos, blocked, w, h) -> bool:
-    return 0 <= pos[0] < w and 0 <= pos[1] < h and pos not in blocked
+def _food_list(origin, foods):
+    """Mirror get_food_list: every food scored by squared-Euclidean distance
+    from origin, sorted ascending.  Returns list of (score, loc)."""
+    scored = []
+    for f in foods:
+        dx = origin[0] - f[0]
+        dy = origin[1] - f[1]
+        scored.append((dx * dx + dy * dy, f))
+    scored.sort(key=lambda t: t[0])
+    return scored
+
+
+def _dir_of_step(head, first_move) -> str:
+    for name in PRIORITY:
+        if _step(head, name) == first_move:
+            return name
+    return "up"
 
 
 def _decide(game_state: typing.Dict) -> str:
@@ -101,19 +160,40 @@ def _decide(game_state: typing.Dict) -> str:
             blocked.add(_cell(c))
 
     foods = [_cell(f) for f in board["food"]]
-    if foods:
-        foods.sort(key=lambda p: (p[0] - head[0]) ** 2 + (p[1] - head[1]) ** 2)
-        path = _search(head, foods[0], blocked, w, h)
-        if not path and len(foods) > 1:
-            path = _search(head, foods[1], blocked, w, h)
-        if path and len(path) >= 2:
-            return _dir(head, path[1])
+    if not foods:
+        # original would crash (sorted_list[0]); fall straight to desperation.
+        return _desperation(head, blocked, w, h)
 
-    for name in PRIORITY:
-        vec = DIRS[name]
-        if _safe((head[0] + vec[0], head[1] + vec[1]), blocked, w, h):
+    sorted_list = _food_list(head, foods)
+    first_food = sorted_list[0][1]
+
+    primary_path = _search(head, blocked, w, h, first_food)
+    sec_path = None
+
+    if len(sorted_list) > 1:
+        sec_food = sorted_list[1][1]
+        new_list = _food_list(first_food, foods)      # nearest to first_food == first_food
+        sec_path = _search(first_food, blocked, w, h, new_list[0][1])
+        new_path = _search(head, blocked, w, h, new_list[0][1])
+
+        if not primary_path and sec_path:
+            primary_path = new_path
+
+        if not sec_path:
+            primary_path = _search(head, blocked, w, h, sec_food)
+
+    if not primary_path:
+        return _desperation(head, blocked, w, h)
+
+    first_move = primary_path[-1]  # step adjacent to head (original primary_path[-1])
+    return _dir_of_step(head, first_move)
+
+
+def _desperation(head, blocked, w, h) -> str:
+    for name in PRIORITY:  # up, down, left, right
+        if _if_safe(_step(head, name), blocked, w, h):
             return name
-    return "up"
+    return "up"  # original returns default 'up' if nothing safe
 
 
 def move(game_state: typing.Dict) -> typing.Dict:
