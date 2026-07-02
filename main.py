@@ -1,34 +1,51 @@
 """
-Port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into CodeClash v1.
+Faithful port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into
+CodeClash v1.
 
-Chosen example: SimpleSnake, the most advanced *reactive* snake in the
-pambrose Kotlin examples. It reacts to live game state every turn:
-  - If food is available, move toward a target food.
-  - Otherwise, move toward the board center.
+Original: io/battlesnake/examples/kotlin/SimpleSnake.kt (uses the
+battlesnake-quickstart "io.battlesnake.core" framework, which speaks the raw
+BattleSnake v1 API JSON directly -- board width/height, body/food x,y, and the
+standard y-up / bottom-left coordinate system where "up" = y+1, "down" = y-1).
 
-Faithful reproduction notes:
-  - Original moves "toward a target position" one axis at a time (x first,
-    then y), preferring horizontal correction when x differs, else vertical.
-  - Original nearestFood() uses maxByOrNull(Manhattan distance) -- i.e. it
-    actually selects the *farthest* food. We reproduce that quirk.
-  - The Kotlin framework uses a top-left / y-down coordinate system. CodeClash
-    v1 uses a bottom-left / y-up system. We express the "move toward target"
-    intent directly in v1 geometry (a move that reduces distance to target),
-    which is the faithful behavioral equivalent.
+Original strategy (reproduced exactly):
 
-Robustness (required by arena): we never return a move that is out of bounds
-or into an occupied snake body (tails are enterable). If the strategy's
-preferred move is unsafe, we fall back to any safe move.
+    fun moveTo(request, position): MoveResponse =
+        when {
+            head.x > position.x -> LEFT
+            head.x < position.x -> RIGHT
+            head.y > position.y -> DOWN
+            else                -> UP
+        }
+
+    fun nearestFood(head, foodList): Food =
+        foodList.maxByOrNull { head - it.position }!!   // Position.minus == Manhattan
+                                                        // -> picks the FARTHEST food
+
+    if (isFoodAvailable)
+        moveTo(head, nearestFood(head, foodList).position)
+    else
+        moveTo(head, boardCenter)
+
+Faithfulness notes:
+  - Position.minus is Manhattan distance; maxByOrNull selects the largest, i.e.
+    the *farthest* food (a genuine quirk of the original -- preserved).
+  - moveTo returns exactly ONE move by strict priority: x fully dominates y.
+    If x differs, y is never consulted. The final "else -> UP" also covers the
+    fully-aligned (head == target) case.
+  - The original has NO collision / out-of-bounds avoidance at all; it blindly
+    returns the moveTo direction. We do not add any. The only wrapper is the
+    arena-required try/except legal fallback.
 """
 
 
 def info():
+    # DescribeResponse("me", "#ff00ff", "beluga", "bolt")
     return {
         "apiversion": "1",
-        "author": "pambrose",
+        "author": "me",
         "color": "#ff00ff",
-        "head": "default",
-        "tail": "default",
+        "head": "beluga",
+        "tail": "bolt",
     }
 
 
@@ -40,92 +57,42 @@ def end(game_state):
     return None
 
 
-DIRS = {
-    "up": (0, 1),
-    "down": (0, -1),
-    "left": (-1, 0),
-    "right": (1, 0),
-}
-
-
 def _manhattan(a, b):
+    # Position.minus: abs(dx) + abs(dy)
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
 def _board_center(width, height):
-    # Matches Kotlin Board.center formula.
-    cx = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
-    cy = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
-    return (cx, cy)
+    # Board.center: ((w even ? w/2 : (w+1)/2) - 1, same for height)
+    center_x = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
+    center_y = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
+    return (center_x, center_y)
 
 
-def _move_toward(head, target):
-    """Reproduce SimpleSnake.moveTo intent in v1 geometry: correct x first,
-    then y. Returns an ordered preference list of directions."""
+def _move_to(head, target):
+    """Exact reproduction of SimpleSnake.moveTo (y-up API)."""
     hx, hy = head
     tx, ty = target
-    prefs = []
+    if hx > tx:
+        return "left"
     if hx < tx:
-        prefs.append("right")
-    elif hx > tx:
-        prefs.append("left")
-    if hy < ty:
-        prefs.append("up")
-    elif hy > ty:
-        prefs.append("down")
-    return prefs
-
-
-def _occupied_cells(game_state, allow_tails=True):
-    """Set of cells occupied by snake bodies. Tails are enterable (they move
-    on the next turn) unless that snake just ate (health == 100)."""
-    blocked = set()
-    for snake in game_state["board"]["snakes"]:
-        body = snake["body"]
-        n = len(body)
-        for i, seg in enumerate(body):
-            cell = (seg["x"], seg["y"])
-            is_tail = i == n - 1
-            if is_tail and allow_tails and n > 1:
-                # Tail vacates unless the snake ate this turn (full health).
-                if snake.get("health", 0) != 100:
-                    continue
-            blocked.add(cell)
-    return blocked
-
-
-def _safe_moves(game_state):
-    board = game_state["board"]
-    width, height = board["width"], board["height"]
-    you = game_state["you"]
-    head = you["body"][0]
-    hx, hy = head["x"], head["y"]
-
-    blocked = _occupied_cells(game_state, allow_tails=True)
-
-    safe = []
-    for move, (dx, dy) in DIRS.items():
-        nx, ny = hx + dx, hy + dy
-        if nx < 0 or nx >= width or ny < 0 or ny >= height:
-            continue
-        if (nx, ny) in blocked:
-            continue
-        safe.append(move)
-    return safe
+        return "right"
+    if hy > ty:
+        return "down"
+    return "up"
 
 
 def move(game_state):
     try:
         board = game_state["board"]
         width, height = board["width"], board["height"]
-        you = game_state["you"]
-        head_seg = you["body"][0]
+        head_seg = game_state["you"]["body"][0]
         head = (head_seg["x"], head_seg["y"])
 
-        # --- SimpleSnake strategy ---
         food = board.get("food", [])
         if food:
-            # nearestFood: maxByOrNull(Manhattan) -> farthest food (faithful quirk)
+            # nearestFood: maxByOrNull(Manhattan) -> farthest food.
+            # Kotlin maxByOrNull keeps the FIRST element attaining the max.
             target = None
             best = -1
             for f in food:
@@ -137,27 +104,9 @@ def move(game_state):
         else:
             target = _board_center(width, height)
 
-        prefs = _move_toward(head, target)
-
-        safe = _safe_moves(game_state)
-
-        # Prefer the strategy's move if it is safe.
-        for p in prefs:
-            if p in safe:
-                return {"move": p}
-
-        # Otherwise any safe move.
-        if safe:
-            return {"move": safe[0]}
-
-        # No safe move: still return something in-bounds if possible, else up.
-        hx, hy = head
-        for m, (dx, dy) in DIRS.items():
-            nx, ny = hx + dx, hy + dy
-            if 0 <= nx < width and 0 <= ny < height:
-                return {"move": m}
-        return {"move": "up"}
+        return {"move": _move_to(head, target)}
     except Exception:
+        # Arena-required legal fallback (original has none).
         return {"move": "up"}
 
 
