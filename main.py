@@ -291,8 +291,8 @@ def info():
         "apiversion": "1",
         "author": "jackisherwood",
         "color": "#FEFEFE",
-        "head": "default",
-        "tail": "default",
+        "head": "beluga",
+        "tail": "pixel",
     }
 
 
