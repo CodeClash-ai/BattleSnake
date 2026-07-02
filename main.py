@@ -293,10 +293,11 @@ def make_move(state, dname, idx):
 
     ate = new_head in state.food
 
-    # self / body collision (before adding). Tail may vacate this turn.
-    grow = ate or s.free_moves > 0
-    body_cells = s.body if grow else s.body[:-1]
-    if new_head in body_cells:
+    # self collision: the C++ GameState::makeMove checks isOccupantOf(head,idx)
+    # on the board BEFORE popping the tail, so stepping onto ANY of our own
+    # currently-occupied cells (including the tail) is death. Match that: test
+    # against the full old body.
+    if new_head in s.body:
         s.alive = False
         # still advance head so downstream sees the move
         s.body.insert(0, new_head)
@@ -446,8 +447,13 @@ class _Search:
             cur_min = POS_INF
             cur_move = None
             if opp_idx == idx:
-                # no opponent: just evaluate our position
-                return self.alphabeta(state, idx, alpha, beta, depth, max_depth, True)
+                # No reachable opponent. The C++ min branch still loops (over
+                # our own moves, none applied) and recurses at depth+1 as the
+                # max player, so this ply is consumed. Match that by advancing
+                # depth rather than staying at the same level.
+                return self.alphabeta(
+                    state, idx, alpha, beta, depth + 1, max_depth, True
+                )
             opp = state.snakes[opp_idx]
             for mv in legal_moves(state, opp):
                 ns = state.clone()
@@ -571,8 +577,8 @@ def info():
         "apiversion": "1",
         "author": "aleksiy325",
         "color": "#000F00",
-        "head": "default",
-        "tail": "default",
+        "head": "pixel",
+        "tail": "pixel",
     }
 
 
