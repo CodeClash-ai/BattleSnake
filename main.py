@@ -159,7 +159,9 @@ def heuristic(grid, state, my_moves, enemy_moves, width, height):
     # Head-on-head collision.
     if me_head['x'] == enemy_head['x'] and me_head['y'] == enemy_head['y']:
         if len(me_body) > len(enemy_body):
-            return INT_MAX
+            # Original does NOT early-return here: it adds INT_MAX to the
+            # score and falls through to the rest of the heuristic.
+            score += INT_MAX
         elif len(me_body) < len(enemy_body):
             return INT_MIN
         else:
@@ -217,8 +219,10 @@ def heuristic(grid, state, my_moves, enemy_moves, width, height):
     if food_weight > 0:
         for i, f in enumerate(food):
             dist = mdist(me_head, f)
-            # i (1-based in Lua) breaks ties between equidistant food
-            score -= (dist * food_weight) - (i + 1)
+            # Original: score = score - (dist * foodWeight) - i, where i is
+            # the 1-based loop index used to break ties between equidistant
+            # food. Both terms are SUBTRACTED.
+            score -= (dist * food_weight) + (i + 1)
 
     # Aggression: hang out near the enemy's head.
     aggressive_weight = 100
@@ -376,9 +380,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "rdbrck",
-        "color": "#B10DC9",
-        "head": "default",
-        "tail": "default",
+        "color": "#5DD284",
+        "head": "bendr",
+        "tail": "fat-rattle",
     }
 
 
