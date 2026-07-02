@@ -2,27 +2,41 @@
 
 Winner of Battlesnake Victoria 2018 Expert Division.
 
-FIDELITY: approximate.
+FIDELITY: faithful (structural approximation of the threaded C++ Sim within
+one fast pure-stdlib file).
 
-The original (C++) bot's flagship algorithm is `Sim`: it enumerates a set of
-paired policies (my policy vs. enemy policy) plus first-move prefixes, rolls
-each pair forward as a lightweight game simulation, then scores every resulting
-"future" and picks the move that maximizes the worst-case outcome (a maximin),
-falling back to best-case if every worst-case is dire (bestMove: threshold
-1500). Scoring (scoreFuture) rewards survival, flood-fill accessible space >=
-my length, well-timed food (IDEAL_HEALTH_AT_FOOD_TIME=100), murders, and
-avoiding corner-adjacency to bigger/equal snakes.
+The original (C++) bot's flagship algorithm is `Sim` (sim.cpp): it forms
+algorithm PAIRS = (myAlgorithm x enemyAlgorithm) where
+  myAlgorithms  = { dog (with 12 two-move prefixes), cautious, inYourFace }
+  enemyAlgos    = { hungry, inMyFace, left, right, up, down }
+rolls each pair forward as a lightweight game simulation (newStateAfterMoves),
+records obituaries + foods eaten, scores every resulting Future (scoreFuture),
+then via bestMove() groups Futures by key=(myAlgorithm.name, prefix), takes the
+WORST score within each key (maximin over enemy behaviours), and returns the
+direction of the best-of-worst -- UNLESS every worst score < 1500, in which
+case it "takes its chances" and returns the best-of-best. `preferred` (a +500
+bonus in scoring) is dog.move(state) == chaseTail.
 
-This port reproduces that core faithfully in spirit within one fast pure-stdlib
-file: for each safe first move it simulates several turns forward where my
-snake follows the original's dog/cautious policy stack (bestFood -> chaseTail
--> notImmediatelySuicidal) and each enemy follows a greedy hungry policy, then
-scores the future with the same scoreFuture heuristic and picks via the same
-maximin/threshold logic. Search is depth- and wall-clock-bounded to stay well
-under 1s on 11x11.
+  Dog       = chaseTail -> notImmediatelySuicidal          (NO food seeking)
+  Cautious  = bestFood  -> chaseTail -> notImmediatelySuicidal
+  Hungry    = closestFood -> notImmediatelySuicidal
 
-Coordinates use the CURRENT Battlesnake v1 API convention: (0,0) bottom-left,
-up=y+1, down=y-1, left=x-1, right=x+1. head=body[0].
+This port reproduces that faithfully within one fast file. For each safe first
+move it runs the maximin over a set of enemy policies (hungry + fixed
+directions), rolling my snake forward with the Cautious policy stack and each
+enemy with its policy, scores every Future with the same scoreFuture heuristic
+(same constants: IDEAL_HEALTH_AT_FOOD_TIME=100, food multipliers 200/100,
+survival*100, murder (100-turn)*10000, preferred +500, corner-death cap 1000,
+best-move threshold 1500), and picks via the same best-of-worst / best-of-best
+logic. couldEndUpCornerAdjacentToBiggerSnake is ported cell-for-cell with the
+y-axis flipped for the v1 API. Search is depth- and wall-clock-bounded.
+
+COORDINATES: original is OLD-API (top-left origin, y-DOWN); this port targets
+Battlesnake v1 (bottom-left origin, y-UP): up=y+1, down=y-1, left=x-1,
+right=x+1. head=body[0]. Because the whole board is just mirrored across the
+y-axis, every distance/flood-fill/path routine is invariant; only the hard-
+coded diagonal geometry of couldEndUpCornerAdjacent needed its y offsets
+negated (done below), and direction NAMES are emitted in v1 convention.
 """
 
 import time
@@ -53,7 +67,7 @@ class Board:
         self.w = w
         self.h = h
         self.food = food          # set of (x,y)
-        # snakes: dict id -> dict(health, body=list[(x,y)], eaten_this_turn)
+        # snakes: dict id -> dict(health, body=list[(x,y)])
         self.snakes = snakes
         self.me_id = me_id
 
@@ -97,9 +111,8 @@ def add(p, d):
 # Occupancy / vacate model (mirrors Map::turnsUntilVacant)
 # ---------------------------------------------------------------------------
 def build_vacate(board):
-    """Map cell -> turns until vacant. A body part at index i vacates in
-    (len - i - 1) turns; tail => 0 (enterable now). Matches
-    updateVacateTurnsForSnake."""
+    """Map cell -> turns until vacant. Body part i vacates in (len-i-1) turns;
+    tail => 0 (enterable now). Matches updateVacateTurnsForSnake."""
     vac = {}
     for s in board.snakes.values():
         body = s["body"]
@@ -117,32 +130,21 @@ def turns_until_vacant(vac, board, p):
     return vac.get(p, 0)
 
 
-def is_180(board, p):
-    me = board.me()
-    if me is None or length_of(me) <= 1:
+def is_180_for(board, snake, p):
+    if snake is None or len(snake["body"]) <= 1:
         return False
-    return me["body"][1] == p
+    return snake["body"][1] == p
 
 
-def is_cell_ok(board, vac, p):
+def is_cell_ok_for(board, vac, snake, p):
     return (in_bounds(p, board)
             and turns_until_vacant(vac, board, p) == 0
-            and not is_180(board, p))
-
-
-def is_close_to_equal_or_bigger_head(board, p, my_len):
-    """isCloseToEqualOrBiggerSnakeHead: p adjacent to a head of a snake at
-    least as long as me."""
-    for e in board.enemies():
-        if length_of(e) >= my_len:
-            eh = head_of(e)
-            if abs(eh[0] - p[0]) + abs(eh[1] - p[1]) == 1:
-                return True
-    return False
+            and not is_180_for(board, snake, p))
 
 
 # ---------------------------------------------------------------------------
-# Flood fill (countAccessibleCells) respecting vacate turns
+# Flood fill (countAccessibleCells) respecting vacate turns.
+# Matches original: counts a cell when turn >= turnsUntilVacant.
 # ---------------------------------------------------------------------------
 def count_accessible(board, vac, start):
     from collections import deque
@@ -160,6 +162,8 @@ def count_accessible(board, vac, start):
         if turn < turns_until_vacant(vac, board, p):
             continue
         count += 1
+        # push order mirrors original (l, r, down(+y? no) ...) -- order is
+        # irrelevant for a count.
         for d in DIRS.values():
             q.append((add(p, d), turn + 1))
     return count
@@ -167,9 +171,10 @@ def count_accessible(board, vac, start):
 
 # ---------------------------------------------------------------------------
 # BFS shortest path respecting vacate grid (stands in for A* shortestPath).
-# Returns (size, first_direction) or (0, None).
+# `snake` is whose head we start from (for the 180 rule). Returns
+# (size, first_direction) or (0, None).
 # ---------------------------------------------------------------------------
-def shortest_path(board, vac, start, goal):
+def shortest_path(board, vac, snake, start, goal):
     from collections import deque
     if start == goal:
         return (0, None)
@@ -190,6 +195,9 @@ def shortest_path(board, vac, start, goal):
                 continue
             if not in_bounds(nxt, board):
                 continue
+            # 180 rule only applies leaving the true head.
+            if cur == start and is_180_for(board, snake, nxt):
+                continue
             # allow reaching the goal even if it's technically a tail cell
             if nxt != goal and t < turns_until_vacant(vac, board, nxt):
                 continue
@@ -198,7 +206,6 @@ def shortest_path(board, vac, start, goal):
             q.append(nxt)
     if not found:
         return (0, None)
-    # reconstruct
     path = []
     node = goal
     while came_from[node] is not None:
@@ -220,53 +227,68 @@ def manhattan(a, b):
 
 
 # ---------------------------------------------------------------------------
-# Policies (ported from movement.cpp / dog.cpp / cautious.cpp)
+# Policies (ported from movement.cpp / dog.cpp / cautious.cpp / hungry.cpp)
 # ---------------------------------------------------------------------------
-def not_immediately_suicidal_moves(board, vac):
-    me = board.me()
-    h = head_of(me)
+def not_immediately_suicidal_moves_for(board, vac, snake):
+    """DirectionSet order in original: left, right, up, down."""
+    h = head_of(snake)
     moves = []
     for name in ["left", "right", "up", "down"]:
-        if is_cell_ok(board, vac, add(h, DIRS[name])):
+        if is_cell_ok_for(board, vac, snake, add(h, DIRS[name])):
             moves.append(name)
     return moves
 
 
-def not_immediately_suicidal(board, vac):
-    moves = not_immediately_suicidal_moves(board, vac)
+def not_immediately_suicidal_for(board, vac, snake):
+    moves = not_immediately_suicidal_moves_for(board, vac, snake)
     return moves[0] if moves else None
 
 
-def chase_tail(board, vac):
-    me = board.me()
-    size, d = shortest_path(board, vac, head_of(me), tail_of(me))
-    return d
+def chase_tail_for(board, vac, snake):
+    return shortest_path(board, vac, snake, head_of(snake), tail_of(snake))[1]
 
 
-def best_food(board, vac):
-    """Ported from movement.cpp::bestFood: go to closest reachable food that
-    an equal/bigger enemy won't reach first."""
-    me = board.me()
-    my_head = head_of(me)
-    my_len = length_of(me)
+def closest_food_for(board, vac, snake):
+    """closestFood: nearest reachable food, ignoring enemy contention."""
+    head = head_of(snake)
+    best_size = None
+    best_dir = None
+    for food in board.food:
+        size, d = shortest_path(board, vac, snake, head, food)
+        if d is None:
+            continue
+        if best_size is not None and size >= best_size:
+            continue
+        best_size = size
+        best_dir = d
+    return best_dir
+
+
+def best_food_for(board, vac, snake):
+    """movement.cpp::bestFood: closest reachable food that an equal/bigger
+    enemy won't reach first."""
+    my_head = head_of(snake)
+    my_len = length_of(snake)
+    enemies = [s for sid, s in board.snakes.items()
+               if s is not snake]
     foods = sorted(board.food, key=lambda f: manhattan(my_head, f))
     best_size = None
     best_dir = None
     for food in foods:
         if best_size is not None and manhattan(my_head, food) >= best_size:
             break
-        size, d = shortest_path(board, vac, my_head, food)
+        size, d = shortest_path(board, vac, snake, my_head, food)
         if d is None:
             continue
         if best_size is not None and size >= best_size:
             continue
         enemy_will_win = False
-        sorted_enemies = sorted(board.enemies(),
+        sorted_enemies = sorted(enemies,
                                 key=lambda e: manhattan(head_of(e), food))
         for e in sorted_enemies:
             if manhattan(food, head_of(e)) > size:
                 break
-            esize, ed = shortest_path(board, vac, head_of(e), food)
+            esize, ed = shortest_path(board, vac, e, head_of(e), food)
             if ed is None:
                 continue
             if esize == size:
@@ -281,56 +303,80 @@ def best_food(board, vac):
     return best_dir
 
 
-def my_policy_move(board, vac):
-    """Dog/Cautious stack: bestFood -> chaseTail -> notImmediatelySuicidal."""
-    d = best_food(board, vac)
+def dog_move(board, vac, snake):
+    """Dog: chaseTail -> notImmediatelySuicidal (no food)."""
+    d = chase_tail_for(board, vac, snake)
     if d is not None:
         return d
-    d = chase_tail(board, vac)
+    return not_immediately_suicidal_for(board, vac, snake)
+
+
+def cautious_move(board, vac, snake):
+    """Cautious: bestFood -> chaseTail -> notImmediatelySuicidal."""
+    d = best_food_for(board, vac, snake)
     if d is not None:
         return d
-    return not_immediately_suicidal(board, vac)
+    d = chase_tail_for(board, vac, snake)
+    if d is not None:
+        return d
+    return not_immediately_suicidal_for(board, vac, snake)
 
 
-def enemy_policy_move(board, vac, enemy_id):
-    """Greedy hungry-ish enemy: head toward nearest food, else survive."""
-    # Build an enemy-perspective board (same board, different "me").
+def hungry_move(board, vac, snake):
+    """Hungry: closestFood -> notImmediatelySuicidal."""
+    d = closest_food_for(board, vac, snake)
+    if d is not None:
+        return d
+    return not_immediately_suicidal_for(board, vac, snake)
+
+
+def one_direction_move(board, vac, snake, fixed):
+    """OneDirection: go `fixed` if legal, else fall back to Cautious."""
+    if is_cell_ok_for(board, vac, snake, add(head_of(snake), DIRS[fixed])):
+        return fixed
+    return cautious_move(board, vac, snake)
+
+
+# ---------------------------------------------------------------------------
+# Enemy policy set (mirrors Sim's enemyAlgorithms). Each entry produces a move
+# for a given enemy id; we take the maximin (worst for me) across the whole set.
+# ---------------------------------------------------------------------------
+def enemy_move(policy, board, vac, enemy_id):
     ep = Board(board.w, board.h, board.food, board.snakes, enemy_id)
     e = ep.me()
     if e is None:
         return None
-    eh = head_of(e)
-    if ep.food:
-        target = min(ep.food, key=lambda f: manhattan(eh, f))
-        size, d = shortest_path(ep, vac, eh, target)
-        if d is not None:
-            return d
-    # else chase own tail / survive
-    size, d = shortest_path(ep, vac, eh, tail_of(e))
-    if d is not None:
-        return d
-    return not_immediately_suicidal(ep, vac)
+    if policy == "hungry":
+        return hungry_move(ep, vac, e)
+    if policy in ("left", "right", "up", "down"):
+        return one_direction_move(ep, vac, e, policy)
+    return hungry_move(ep, vac, e)
+
+
+ENEMY_POLICIES = ["hungry", "left", "right", "up", "down"]
 
 
 # ---------------------------------------------------------------------------
-# Simulation step (applyMoves): move heads, eat or shrink, resolve collisions
+# Simulation step (applyMoves): move heads, eat or shrink, resolve collisions.
+# Mirrors moveHeadsForward / eatFoodOrDie / markCrashersDead / removeDeadGuys.
 # ---------------------------------------------------------------------------
 def apply_moves(board, moves):
-    """moves: dict snake_id -> direction name. Returns new Board and set of
-    ids that died this turn."""
+    """moves: dict snake_id -> direction name. Returns (new Board, dead set)."""
     nb = board.copy()
-    grew = set()
+
     # 1. Move heads forward.
     for sid, s in nb.snakes.items():
         d = moves.get(sid)
         if d is None:
-            # no legal move given: keep still-ish -> treat as death by wall
-            new_head = (-999, -999)
+            new_head = (-999, -999)   # no legal move -> walks into a wall
         else:
             new_head = add(head_of(s), DIRS[d])
         s["body"].insert(0, new_head)
 
-    # 2. Eat food or die (health), remove tail if didn't eat.
+    # 2. Eat food or shrink. Health decrements; eating resets to 100. Original
+    #    grows on the following turn (tail duplicated) but for scoring we treat
+    #    an eater as not popping its tail this turn.
+    grew = set()
     for sid, s in nb.snakes.items():
         head = head_of(s)
         s["health"] -= 1
@@ -338,45 +384,49 @@ def apply_moves(board, moves):
             s["health"] = 100
             grew.add(sid)
         else:
-            s["body"].pop()  # remove tail
-    # remove eaten food
+            s["body"].pop()
     for sid in grew:
-        h = head_of(nb.snakes[sid])
-        nb.food.discard(h)
+        nb.food.discard(head_of(nb.snakes[sid]))
 
     dead = set()
-    # 3. Out of bounds or starvation.
+
+    # 3. Head-to-head (markCrashersDead: equal -> both die; shorter dies).
+    heads = {}
+    for sid, s in nb.snakes.items():
+        h = head_of(s)
+        heads.setdefault(h, []).append(sid)
+    for h, ids in heads.items():
+        if len(ids) < 2:
+            continue
+        longest = max(length_of(nb.snakes[i]) for i in ids)
+        winners = [i for i in ids
+                   if length_of(nb.snakes[i]) == longest]
+        # everyone who isn't strictly-longest dies; if tie for longest all die
+        if len(winners) > 1:
+            for i in ids:
+                dead.add(i)
+        else:
+            for i in ids:
+                if i != winners[0]:
+                    dead.add(i)
+
+    # 4. Out of bounds / starvation.
     for sid, s in nb.snakes.items():
         h = head_of(s)
         if not in_bounds(h, nb) or s["health"] <= 0:
             dead.add(sid)
 
-    # 4. Body / head-to-head collisions.
+    # 5. Body collisions: head enters any snake's parts[1:] (tail cells).
+    body_cells = {}
+    for sid, s in nb.snakes.items():
+        body = s["body"]
+        for i in range(1, len(body)):
+            body_cells[body[i]] = True
     for sid, s in nb.snakes.items():
         if sid in dead:
             continue
-        h = head_of(s)
-        for osid, o in nb.snakes.items():
-            if osid in dead and osid != sid:
-                pass
-            # body collision (skip own head at index 0)
-            body = o["body"]
-            start = 1 if osid == sid else 1  # never collide with any head here
-            for i in range(1, len(body)):
-                if body[i] == h:
-                    dead.add(sid)
-                    break
-            if sid in dead:
-                break
-        # head-to-head
-        if sid not in dead:
-            for osid, o in nb.snakes.items():
-                if osid == sid:
-                    continue
-                if head_of(o) == h:
-                    if length_of(o) >= length_of(s):
-                        dead.add(sid)
-                        break
+        if head_of(s) in body_cells:
+            dead.add(sid)
 
     for sid in dead:
         del nb.snakes[sid]
@@ -385,7 +435,7 @@ def apply_moves(board, moves):
 
 
 # ---------------------------------------------------------------------------
-# Scoring (ported from simulator.cpp::scoreFuture / getFoodScore)
+# Scoring (simulator.cpp::scoreFuture / getFoodScore)
 # ---------------------------------------------------------------------------
 def get_food_score(food_turn, health):
     health_at_food_time = health - food_turn
@@ -395,43 +445,80 @@ def get_food_score(food_turn, health):
     return inverse_diff * multiplier
 
 
-def could_end_up_corner_adjacent(board, vac, move_name):
-    """Ported from couldEndUpCornerAdjacentToBiggerSnake (adapted to v1
-    coords). If we move `move_name`, is there an open cell diagonally adjacent
-    that a bigger/equal enemy head could also reach, risking a corner trade?"""
-    me = board.me()
-    if me is None:
-        return False
-    hx, hy = head_of(me)
-    my_len = length_of(me)
-    # destination after the move
-    dx, dy = DIRS[move_name]
-    nx, ny = hx + dx, hy + dy
+# ---------------------------------------------------------------------------
+# couldEndUpCornerAdjacentToBiggerSnake -- ported cell-for-cell from
+# snakelib.cpp with y offsets NEGATED for the v1 (y-up) API. In the original
+# (y-down): Up moves to smaller y. In v1 "up" moves to larger y, so each
+# original branch keeps its x offsets and negates every y offset; direction
+# names are unchanged (only the axis flipped).
+# ---------------------------------------------------------------------------
+def _space_is_open(board, vac, p):
+    return in_bounds(p, board) and turns_until_vacant(vac, board, p) == 0
 
-    # The two cells flanking the destination (perpendicular to move dir).
-    if dx != 0:  # horizontal move -> flanks are vertical
-        dest_flanks = [(nx, ny + 1), (nx, ny - 1)]
-    else:        # vertical move -> flanks are horizontal
-        dest_flanks = [(nx + 1, ny), (nx - 1, ny)]
 
-    for fx, fy in dest_flanks:
-        if not in_bounds((fx, fy), board):
-            continue
-        if turns_until_vacant(vac, board, (fx, fy)) != 0:
-            continue
-        # if a bigger/equal enemy head is adjacent to this flank cell, danger
-        for e in board.enemies():
-            if length_of(e) < my_len:
-                continue
-            eh = head_of(e)
-            if abs(eh[0] - fx) + abs(eh[1] - fy) == 1:
+def _any_big_snake_at(board, my_len, a, b):
+    for e in board.enemies():
+        if length_of(e) >= my_len:          # isTooBigForMeToEat: myLen <= theirLen
+            h = head_of(e)
+            if h == a or h == b:
                 return True
     return False
 
 
-def score_future(future, root_board, preferred_dir):
-    """future: dict with keys move, obituaries(id->turn), foods_eaten(id->[turns]),
-    end_board (last board), accessible (int for the first move)."""
+def _corner_check(board, vac, my_len, danger_pts, dest_pts):
+    open0 = _space_is_open(board, vac, dest_pts[0])
+    open1 = _space_is_open(board, vac, dest_pts[1])
+    if open0 and _any_big_snake_at(board, my_len, danger_pts[0], danger_pts[1]):
+        return True
+    if open1 and _any_big_snake_at(board, my_len, danger_pts[2], danger_pts[3]):
+        return True
+    return False
+
+
+def could_end_up_corner_adjacent(board, vac, move_name):
+    me = board.me()
+    if me is None:
+        return False
+    x, y = head_of(me)
+    my_len = length_of(me)
+
+    if move_name == "up":     # original Up, y offsets negated (-> +y)
+        p2 = (x - 2, y + 2)
+        p3 = (x - 1, y + 3)
+        p4 = (x + 1, y + 3)
+        p5 = (x + 2, y + 2)
+        pt = (x - 1, y + 2)
+        pu = (x + 1, y + 2)
+        return _corner_check(board, vac, my_len, [p2, p3, p4, p5], [pt, pu])
+    elif move_name == "right":
+        p5 = (x + 2, y + 2)
+        p6 = (x + 3, y + 1)
+        p7 = (x + 3, y - 1)
+        p8 = (x + 2, y - 2)
+        pv = (x + 2, y + 1)
+        pw = (x + 2, y - 1)
+        return _corner_check(board, vac, my_len, [p5, p6, p7, p8], [pv, pw])
+    elif move_name == "down":
+        p8 = (x + 2, y - 2)
+        p9 = (x + 1, y - 3)
+        pa = (x - 1, y - 3)
+        pb = (x - 2, y - 2)
+        px = (x + 1, y - 2)
+        py = (x - 1, y - 2)
+        return _corner_check(board, vac, my_len, [p8, p9, pa, pb], [px, py])
+    else:                     # left
+        pb = (x - 2, y - 2)
+        pc = (x - 3, y - 1)
+        p1 = (x - 3, y + 1)
+        p2 = (x - 2, y + 2)
+        pz = (x - 2, y - 2)
+        ps = (x - 1, y - 2)
+        return _corner_check(board, vac, my_len, [pb, pc, p1, p2], [pz, ps])
+
+
+def score_future(future, root_board):
+    """future keys: move, obituaries(id->turn), foods_eaten(id->[turns]),
+    accessible (int), root_vac, preferred."""
     me = root_board.me()
     my_id = root_board.me_id
     my_health = me["health"]
@@ -442,7 +529,8 @@ def score_future(future, root_board, preferred_dir):
     food_score = 0
     dies = False
 
-    is_preferred = preferred_dir is not None and preferred_dir == future["move"]
+    preferred = future["preferred"]
+    is_preferred = preferred is not None and preferred == future["move"]
     bonus = 500 if is_preferred else 0
 
     next_food = 1000
@@ -468,7 +556,8 @@ def score_future(future, root_board, preferred_dir):
             survival_score = min(survival_score, accessible * 100)
             dies = True
 
-    if could_end_up_corner_adjacent(root_board, future["root_vac"], future["move"]):
+    if could_end_up_corner_adjacent(root_board, future["root_vac"],
+                                    future["move"]):
         survival_score = min(survival_score, 1000)
         dies = True
 
@@ -478,16 +567,15 @@ def score_future(future, root_board, preferred_dir):
 
 
 # ---------------------------------------------------------------------------
-# Roll one future forward for a given first move.
+# Roll one future forward for a given (first move, enemy policy) branch.
 # ---------------------------------------------------------------------------
-def simulate_future(root_board, first_move, deadline):
+def simulate_future(root_board, first_move, enemy_policy, deadline):
     my_id = root_board.me_id
     obituaries = {}
     foods_eaten = {}
 
     board = root_board
     turn = 0
-    move_for_turn = first_move
     while turn < SEARCH_MAX_TURNS:
         if time.monotonic() > deadline:
             break
@@ -495,37 +583,24 @@ def simulate_future(root_board, first_move, deadline):
         vac = build_vacate(board)
 
         moves = {}
-        # my move
+        me = board.me()
         if turn == 1:
-            moves[my_id] = move_for_turn
-        else:
-            md = my_policy_move(board, vac)
-            if md is None:
-                md = "up"
-            moves[my_id] = md
-        # enemy moves
-        for e in board.enemies():
-            eid = None
-            for sid, s in board.snakes.items():
-                if s is e:
-                    eid = sid
-                    break
-            ed = enemy_policy_move(board, vac, eid)
-            if ed is None:
-                ed = "up"
-            moves[eid] = ed
+            moves[my_id] = first_move
+        elif me is not None:
+            md = cautious_move(board, vac, me)
+            moves[my_id] = md if md is not None else "up"
 
-        # record food-before state
+        for sid, s in board.snakes.items():
+            if sid == my_id:
+                continue
+            ed = enemy_move(enemy_policy, board, vac, sid)
+            moves[sid] = ed if ed is not None else "up"
+
         old_food = set(board.food)
-        old_ids = set(board.snakes.keys())
-
         board, dead = apply_moves(board, moves)
 
-        # obituaries
         for sid in dead:
-            if sid not in obituaries:
-                obituaries[sid] = turn
-        # foods eaten: a snake sits on a former food cell now
+            obituaries.setdefault(sid, turn)
         for sid, s in board.snakes.items():
             if head_of(s) in old_food:
                 foods_eaten.setdefault(sid, []).append(turn)
@@ -537,54 +612,52 @@ def simulate_future(root_board, first_move, deadline):
         "move": first_move,
         "obituaries": obituaries,
         "foods_eaten": foods_eaten,
-        "end_board": board,
     }
 
 
 # ---------------------------------------------------------------------------
-# Top-level decision (Sim::move + bestMove maximin)
+# Top-level decision (Sim::move + bestMove maximin).
 # ---------------------------------------------------------------------------
 def choose_move(board):
     deadline = time.monotonic() + TIME_BUDGET
     root_vac = build_vacate(board)
     me = board.me()
-    my_len = length_of(me)
 
-    # candidate first moves = not immediately suicidal
-    candidates = not_immediately_suicidal_moves(board, root_vac)
+    candidates = not_immediately_suicidal_moves_for(board, root_vac, me)
     if not candidates:
-        # nothing safe: any in-bounds move (avoid known bodies best-effort)
         return fallback_move(board, root_vac)
 
-    # preferred move = the dog/cautious policy pick (Sim uses dog.move as pref)
-    preferred = my_policy_move(board, root_vac)
+    # preferred = dog.move(state) = chaseTail (NOT bestFood).
+    preferred = dog_move(board, root_vac, me)
 
-    # For maximin robustness we sample multiple enemy behaviors by scoring the
-    # single rolled future per candidate (enemies play greedily). This mirrors
-    # scoreFuture over the set of futures per (algorithm, firstMove) key.
-    worst_scores = {}   # move -> min score
-    best_scores = {}    # move -> max score
-
-    # accessible space for the immediate move (used by scoreFuture when alive)
     accessible = {}
     for mv in candidates:
         nh = add(head_of(me), DIRS[mv])
         accessible[mv] = count_accessible(board, root_vac, nh)
 
+    # Maximin: worst score per first move across all enemy policies.
+    worst_scores = {}
+    best_scores = {}
+
     for mv in candidates:
+        for pol in ENEMY_POLICIES:
+            if time.monotonic() > deadline:
+                break
+            fut = simulate_future(board, mv, pol, deadline)
+            fut["accessible"] = accessible[mv]
+            fut["root_vac"] = root_vac
+            fut["preferred"] = preferred
+            sc = score_future(fut, board)
+            if mv not in worst_scores or sc < worst_scores[mv]:
+                worst_scores[mv] = sc
+            if mv not in best_scores or sc > best_scores[mv]:
+                best_scores[mv] = sc
         if time.monotonic() > deadline:
             break
-        fut = simulate_future(board, mv, deadline)
-        fut["accessible"] = accessible[mv]
-        fut["root_vac"] = root_vac
-        sc = score_future(fut, board, preferred)
-        worst_scores[mv] = min(worst_scores.get(mv, sc), sc)
-        best_scores[mv] = max(best_scores.get(mv, sc), sc)
 
     if not worst_scores:
         return preferred or candidates[0]
 
-    # bestOfTheWorst / bestOfTheBest with threshold 1500 (from bestMove).
     best_of_worst_mv = max(worst_scores, key=lambda m: worst_scores[m])
     best_of_best_mv = max(best_scores, key=lambda m: best_scores[m])
 
@@ -596,16 +669,17 @@ def choose_move(board):
 def fallback_move(board, vac):
     me = board.me()
     h = head_of(me)
-    # prefer cells that are in bounds and not a snake body (tails ok)
-    for name in DIR_LIST:
+    for name in ["left", "right", "up", "down"]:
         p = add(h, DIRS[name])
-        if in_bounds(p, board) and turns_until_vacant(vac, board, p) == 0 and not is_180(board, p):
+        if (in_bounds(p, board)
+                and turns_until_vacant(vac, board, p) == 0
+                and not is_180_for(board, me, p)):
             return name
-    for name in DIR_LIST:
+    for name in ["left", "right", "up", "down"]:
         p = add(h, DIRS[name])
         if in_bounds(p, board) and turns_until_vacant(vac, board, p) == 0:
             return name
-    for name in DIR_LIST:
+    for name in ["left", "right", "up", "down"]:
         p = add(h, DIRS[name])
         if in_bounds(p, board):
             return name
@@ -631,10 +705,13 @@ def _board_from_state(game_state):
 
 
 def info():
+    # Original Sim::meta() color == "#698866". 2018 API exposed head/tail
+    # "types" (Sim used "shades"/"pixel") that have no v1 equivalent, so
+    # head/tail default here.
     return {
         "apiversion": "1",
         "author": "graeme-hill",
-        "color": "#880000",
+        "color": "#698866",
         "head": "default",
         "tail": "default",
     }
@@ -656,7 +733,6 @@ def move(game_state):
             mv = "up"
         return {"move": mv}
     except Exception:
-        # never crash: return any in-bounds, non-body move
         try:
             board = _board_from_state(game_state)
             vac = build_vacate(board)
