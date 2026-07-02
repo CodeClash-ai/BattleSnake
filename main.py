@@ -54,9 +54,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "woofers",
-        "color": "#6b4226",
-        "head": "default",
-        "tail": "default",
+        "color": "#DEDBCC",
+        "head": "safe",
+        "tail": "small-rattle",
     }
 
 
@@ -246,14 +246,17 @@ class Board:
             cur, initial = q.popleft()
             if initial is not None and cur in dest_set:
                 # region check
+                accept = True
                 if check_box:
                     dx, dy = DIRS[initial]
                     new_point = (start[0] + dx, start[1] + dy)
                     if self.region_size(new_point) <= small_region:
-                        # reject this move: keep searching for another path
-                        # (mirrors Java returning false in shouldExit)
-                        continue
-                return initial
+                        # reject this move but keep expanding (mirrors Java
+                        # shouldExit returning false, which falls through to
+                        # getPossibleMoves and still enqueues neighbors)
+                        accept = False
+                if accept:
+                    return initial
             for name, nxt in self.adjacent(cur).items():
                 if nxt in seen:
                     continue
