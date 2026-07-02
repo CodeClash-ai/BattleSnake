@@ -142,22 +142,35 @@ class Board:
             for seg in snake.tail():
                 walls.add(seg)
 
-        for snake in living:
+        # Faithful replication of Ruby Board#simulate!: the death-resolution
+        # loop iterates over @living_snakes while deleting dead snakes from that
+        # SAME array. Ruby's Array#each advances a live cursor, so deleting the
+        # element at the current index shifts the next element into that slot and
+        # then the cursor skips it. That skipped snake never gets its death check
+        # and (buggily, but faithfully) survives the turn. We emulate this exact
+        # index/deletion behavior over a mutable list.
+        alive_list = list(living)
+        i = 0
+        while i < len(alive_list):
+            snake = alive_list[i]
+            died = False
             if self.out_of_bounds(snake.head):
                 snake.die()
-                continue
-            if snake.head in walls:
+                died = True
+            elif snake.head in walls:
                 snake.die()
-                continue
-            lost = False
-            for other in heads[snake.head]:
-                if other is snake:
-                    continue
-                if other.length >= snake.length:
-                    lost = True
-                    break
-            if lost:
-                snake.die()
+                died = True
+            else:
+                for other in heads[snake.head]:
+                    if other is snake:
+                        continue
+                    if other.length >= snake.length:
+                        snake.die()
+                        died = True
+                        break
+            if died:
+                del alive_list[i]
+            i += 1
 
 
 # ---------------------------------------------------------------------------
@@ -460,8 +473,8 @@ def info():
         "apiversion": "1",
         "author": "jhawthorn",
         "color": "#cc342d",
-        "head": "default",
-        "tail": "default",
+        "head": "caffeine",
+        "tail": "bolt",
     }
 
 
