@@ -20,8 +20,8 @@ def info():
         "apiversion": "1",
         "author": "MorganConrad",
         "color": "#269272",
-        "head": "default",
-        "tail": "default",
+        "head": "regular",
+        "tail": "regular",
     }
 
 
@@ -90,9 +90,8 @@ class Board:
         my_length = len(self.you["body"])
         edibles = []
         for snake in self.board.get("snakes", []):
-            # skip self; find snakes strictly shorter than us
-            if snake.get("id") == self.you.get("id"):
-                continue
+            # faithful: any snake strictly shorter than us (self excluded since
+            # its length equals ours, never strictly less)
             if len(snake.get("body", [])) < my_length:
                 edibles.append(snake)
         if len(edibles) > 1:
