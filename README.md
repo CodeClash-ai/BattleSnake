@@ -1,59 +1,106 @@
-# Battlesnake Python Starter Project
+# Rusty Snakes
 
-An official Battlesnake template written in Python. Get started at [play.battlesnake.com](https://play.battlesnake.com).
+Fast [Battlesnake](https://play.battlesnake.com) agents written in rust.
+This project has been developed as part of an AI games course at the Leibniz University Hannover.
 
-![Battlesnake Logo](https://media.battlesnake.com/social/StarterSnakeGitHubRepos_Python.png)
+Our `Tree` agent ("ich heisse marvin") reached second and first place in the global, dual, and royale arenas.
+In the Spring League 2021, we surpassed last year's best snake ([Kreuzotter](https://github.com/m-schier/battlesnake-2019)) from our university.
 
-This project is a great starting point for anyone wanting to program their first Battlesnake in Python. It can be run locally or easily deployed to a cloud provider of your choosing. See the [Battlesnake API Docs](https://docs.battlesnake.com/api) for more detail. 
+At the end of 2021, the new `Flood` agent reached second place in the Elite Division of the Winter Classic Invitational 2021.
 
-[![Run on Replit](https://repl.it/badge/github/BattlesnakeOfficial/starter-snake-python)](https://replit.com/@Battlesnake/starter-snake-python)
 
-## Technologies Used
+## Structure of this Repository
 
-This project uses [Python 3](https://www.python.org/) and [Flask](https://flask.palletsprojects.com/). It also comes with an optional [Dockerfile](https://docs.docker.com/engine/reference/builder/) to help with deployment.
+This repository contains a web server compatible with the Battlesnake API version 1 and abstractions for the data types ([src/env.rs](src/env.rs)).
 
-## Run Your Battlesnake
+We developed multiple different agents ([src/agents](src/agents)), from a simple random agent, a very fast area control agent, to a minimax tree search agent combining multiple heuristics to find the best possible moves.
+These heuristics are configurable, and the impact of specific variables and their influence over time can be specified on startup.
+This allows us to perform parameter optimization (Bayesian optimization) to improve the heuristic further.
 
-Install dependencies using pip
+We also developed a fast simulator to execute moves and analyze their outcomes.
+It is used to evaluate the heuristics and tune their parameters.
 
-```sh
-pip install -r requirements.txt
+The [hpo](hpo) directory contains the code for automatically optimizing the agent's hyperparameters.
+It utilizes the simulator to simulate the generated configs and find the best-performing parameters.
+The current default configurations of the `Flood`, `Tree`, and `Mobility` agents are the results of several optimization campaigns.
+
+
+## Usage
+
+### Running the Server
+
+First, the rust toolchain has to be installed (https://www.rust-lang.org/learn/get-started).
+
+Starting the server:
+
+```bash
+cargo run --release -- [-h] [--host <ip:port>] [--config <json>]
 ```
 
-Start your Battlesnake
+> There are additional options for `--runtime` and visual representation of the snake (`--head`, `--tail`, `--color`).
+> Run `cargo run --release -- -h` to see all the commandline options.
 
-```sh
-python main.py
-```
-
-You should see the following output once it is running
-
-```sh
-Running your Battlesnake at http://0.0.0.0:8000
- * Serving Flask app 'My Battlesnake'
- * Debug mode: off
-```
-
-Open [localhost:8000](http://localhost:8000) in your browser and you should see
+`config` defines the agent to be used (`Flood`, `Tree`, `Mobility`, `Random`) and configures the agent's heuristic.
+The default config for the `Flood` agent is, for example:
 
 ```json
-{"apiversion":"1","author":"","color":"#888888","head":"default","tail":"default"}
+{
+  "Flood": {
+    "health": 0.00044,
+    "food_distance": 0.173,
+    "space": 0.0026,
+    "space_adv": 0.108,
+    "size_adv": 7.049,
+    "size_adv_decay": 0.041,
+  }
+}
 ```
 
-## Play a Game Locally
+> If a config parameter (like `health`) is excluded the default value is used.
 
-Install the [Battlesnake CLI](https://github.com/BattlesnakeOfficial/rules/tree/main/cli)
-* You can [download compiled binaries here](https://github.com/BattlesnakeOfficial/rules/releases)
-* or [install as a go package](https://github.com/BattlesnakeOfficial/rules/tree/main/cli#installation) (requires Go 1.18 or higher)
+### Simulating Configs
 
-Command to run a local game
+This tool can be used to simulate different configurations.
+These configurations specify the agent and its hyperparameters.
+If no parameters are provided, the default values for the agent are used.
+The number of simulated games can be specified with `--game-count`.
+Use `-h` for more information about other arguments to define the board size and game rules.
 
-```sh
-battlesnake play -W 11 -H 11 --name 'Python Starter Project' --url http://localhost:8000 -g solo --browser
+The example below simulates the `Flood` and `Tree` agents for 10 games:
+
+```bash
+cargo run --release --bin simulate -- '{"Flood":{"space":8.0}}' '{"Tree":{"centrality":0}}' --game-count 10
 ```
 
-## Next Steps
+The last line of the standard output contains the number of wins of the first snake and the total number of games played:
 
-Continue with the [Battlesnake Quickstart Guide](https://docs.battlesnake.com/quickstart) to customize and improve your Battlesnake's behavior.
+```
+Result: 3/10
+```
 
-**Note:** To play games on [play.battlesnake.com](https://play.battlesnake.com) you'll need to deploy your Battlesnake to a live web server OR use a port forwarding tool like [ngrok](https://ngrok.com/) to access your server locally.
+### Testing moves
+
+The `move` program outputs the chosen move for a given game state and agent configuration.
+This can be useful for debugging situational bugs.
+The game input can be downloaded from the [battlesnake](https://play.battlesnake.com) with this [Firefox extension](https://addons.mozilla.org/firefox/addon/battlesnake-downloader/).
+
+```bash
+cargo run --release --bin move -- [--config <json>] [--runtime] <json>
+```
+
+### Running tests & benchmarks
+
+There are multiple tests for the different modules that can be run, as shown below.
+For more information on unit testing in Rust, see https://doc.rust-lang.org/book/ch11-01-writing-tests.html.
+
+```bash
+cargo test -- [--nocapture] [testname]
+```
+
+Besides the functional tests, there are several performance benchmarks.
+They are executed with the release config with compiler and linker optimizations.
+The criterion benchmark runner tracks the execution times from previous runs and reports any improvements or degradations.
+
+```bash
+cargo bench -- [testname]
+```
