@@ -313,9 +313,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "Spenca",
-        "color": "#2E2E2E",
-        "head": "default",
-        "tail": "default",
+        "color": "#000000",
+        "head": "smile",
+        "tail": "pixel",
     }
 
 
