@@ -372,8 +372,8 @@ def info():
         "apiversion": "1",
         "author": "hirethissnake",
         "color": "#FFEBD0",
-        "head": "default",
-        "tail": "default",
+        "head": "tongue",
+        "tail": "curled",
     }
 
 
