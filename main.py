@@ -1,14 +1,18 @@
 """FamishedFrank battlesnake ported from coreyja/battlesnake-rs (famished_frank.rs).
 
-Faithful reimplementation of the A* ("a-prime") based move logic:
+Faithful reimplementation of the A* ("a-prime") based move logic, mirroring the
+WIRE `Game` implementation in a_prime.rs (`APrimeCalculable for Game`), which is
+the correct reference for a v1 wire-JSON port:
  - Target length = height*2 + width.
  - If our body is shorter than target length, targets = all food.
    Otherwise targets = the four board corners (stall/survive by circling).
  - Filter out targets that are on our own body.
  - Run A* from head toward nearest target; take first step.
  - Fallback 1: A* toward our own tail.
- - Fallback 2: a random reasonable move (in-bounds, not into snake body).
-Hazard penalty = 100, food penalty = 1 (defaults), NEIGHBOR_DISTANCE = 1.
+ - Fallback 2: a random reasonable move; ultimate default "right".
+Hazard penalty = 100, food penalty = 1 (defaults), NEIGHBOR_DISTANCE = 1,
+HEURISTIC_MAX = 500. Neighbor traversal filter (wire impl): a neighbor `n` is
+traversable iff `n` is a target OR no snake body contains `n`.
 """
 
 import heapq
@@ -23,7 +27,7 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#FFBB33",
-        "head": "default",
+        "head": "trans-rights-scarf",
         "tail": "default",
     }
 
@@ -65,7 +69,8 @@ def _a_prime_next_direction(start_pos, targets, board, hazard_penalty=100, food_
     height = board["height"]
     hazards = set((h["x"], h["y"]) for h in board.get("hazards", []))
     food = set((f["x"], f["y"]) for f in board.get("food", []))
-    # All snake body cells (used to block passage, except when a cell is itself a target).
+    # All snake body cells; a neighbor in this set is blocked unless it's a target
+    # (mirrors the WIRE Game filter, which checks the *neighbor* `n`).
     body_cells = set()
     for s in board["snakes"]:
         for p in s["body"]:
@@ -96,10 +101,9 @@ def _a_prime_next_direction(start_pos, targets, board, hazard_penalty=100, food_
         tentative = known_score.get(coordinate, float("inf")) + neighbor_distance
 
         for neighbor in _neighbors(coordinate, width, height):
-            # A neighbor is traversable if it's a target OR the *current* cell is
-            # not a snake body cell (mirrors the Rust filter which checks the
-            # current coordinate, allowing us to start from our own head).
-            if not (neighbor in targets or coordinate not in body_cells):
+            # WIRE Game filter: neighbor `n` is traversable iff it's a target OR
+            # no snake body contains `n`.
+            if not (neighbor in targets or neighbor not in body_cells):
                 continue
             if tentative < known_score.get(neighbor, float("inf")):
                 known_score[neighbor] = tentative
@@ -169,7 +173,8 @@ def _safe_fallback(head, board):
             return _dir_from_step(head, n)
     if nbrs:
         return _dir_from_step(head, nbrs[0])
-    return "up"
+    # Original's ultimate default is Move::Right.
+    return "right"
 
 
 def move(game_state):
@@ -218,7 +223,7 @@ def move(game_state):
             head = (game_state["you"]["body"][0]["x"], game_state["you"]["body"][0]["y"])
             return {"move": _safe_fallback(head, board)}
         except Exception:
-            return {"move": "up"}
+            return {"move": "right"}
 
 
 if __name__ == "__main__":
