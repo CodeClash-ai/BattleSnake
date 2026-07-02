@@ -5,8 +5,13 @@ FIDELITY: approximate. Faithfully reimplements the paranoid minimax + the
 `ScoreEndState` board-evaluation ordering (Lose < Tie < ShorterThanOpponent
 < LongerThanOpponent < Win) and the A*-style shortest-path distances
 (closest-food distance, opponent-head distance) from the original Rust
-`score()` and `a_prime` modules. Search depth and total wall-clock are capped
-for speed, so the tree explored is smaller than the Rust engine's.
+`score()` and `a_prime` modules. The Rust engine wraps that score with a
+`WrappedScore` that additionally encodes, for terminal (Lose/Tie) states, the
+number of snakes left alive (prefer fewer) and, for wins, a preference to win
+sooner; those tie-breaks are reproduced here too. Search depth and total
+wall-clock are capped for speed, so the tree explored is smaller than the Rust
+engine's, and opponents are evaluated as a single paranoid layer per round
+rather than the Rust per-snake ply cycle.
 
 Pure stdlib. Modern Battlesnake v1 API (bottom-left origin, y-up).
 """
@@ -23,18 +28,20 @@ MOVES = {
 }
 
 # Search / time controls
-MAX_DEPTH = 6            # plies (each ply = one snake's move layer)
+MAX_DEPTH = 6            # plies (each ply = one full round of moves)
 TIME_LIMIT = 0.30        # wall-clock guard in seconds
 FOOD_PENALTY = 1         # matches APrimeOptions default (food_penalty=1)
 
 
 def info():
+    # Values taken verbatim from the original Rust `about()`:
+    #   color "#99cc00", head "trans-rights-scarf", tail "rbc-necktie".
     return {
         "apiversion": "1",
         "author": "coreyja",
         "color": "#99cc00",
-        "head": "default",
-        "tail": "default",
+        "head": "trans-rights-scarf",
+        "tail": "rbc-necktie",
     }
 
 
@@ -185,19 +192,25 @@ def score(b):
     return (3, _opt(neg_dist_to_opp), max(length_difference, 4), max(my_health, 50))
 
 
-# Terminal scores. In Rust: Win(depth) uses terminal_depth -> -d (prefer sooner
-# wins), Lose/Tie(depth) -> d (prefer later losses). We approximate with a
-# "remaining depth" bonus so nearer wins / farther losses are preferred.
-def win_score(depth_remaining):
-    return (4, depth_remaining)
+# Terminal scores. The Rust `WrappedScore` orders terminal states as
+#   Lose(Reverse(alive_count), depth) < Tie(Reverse(alive_count), depth)
+#   < Scored(..) < Win(Reverse(depth))
+# For Lose/Tie: prefer *fewer* snakes alive (Reverse) then *deeper* depth
+# (survive longer). For Win: prefer to win *sooner* (Reverse(depth)).
+# Our `score()` tuples above live in the "Scored" band (variant tags 2 and 3),
+# so terminal tags must bracket them: 0/1 below, 4 above.
+def win_score(depth):
+    # Prefer winning sooner: smaller depth is better -> negate so larger tuple wins.
+    return (4, -depth)
 
 
-def lose_score(depth_remaining):
-    return (0, -depth_remaining)
+def lose_score(depth, alive_count):
+    # Prefer fewer snakes alive (Reverse) then deeper depth (survive longer).
+    return (0, -alive_count, depth)
 
 
-def tie_score(depth_remaining):
-    return (1, -depth_remaining)
+def tie_score(depth, alive_count):
+    return (1, -alive_count, depth)
 
 
 # ---- simulation of one full turn (all snakes move) ---------------------------
@@ -297,39 +310,48 @@ def apply_moves(b, chosen):
     return nb
 
 
+def alive_count(b):
+    return sum(1 for s in b.snakes.values() if s["alive"])
+
+
 # ---- paranoid minimax --------------------------------------------------------
-def terminal_state(b, depth_remaining):
-    """Return a terminal score tuple if game is over from my perspective, else None."""
+def terminal_state(b, depth):
+    """Return a terminal score tuple if game is over from my perspective, else None.
+    `depth` is the ply count reached (larger = deeper). Matches the Rust
+    WrappedScore terminal encoding (fewer snakes alive preferred, deeper depth
+    preferred for Lose/Tie; sooner Win preferred)."""
     me_alive = b.snakes[b.me_id]["alive"]
     opps_alive = [sid for sid, s in b.snakes.items() if sid != b.me_id and s["alive"]]
+    n_alive = alive_count(b)
     if not me_alive and not opps_alive:
-        return tie_score(depth_remaining)
+        return tie_score(depth, n_alive)
     if not me_alive:
-        return lose_score(depth_remaining)
+        return lose_score(depth, n_alive)
     if not opps_alive:
-        return win_score(depth_remaining)
+        return win_score(depth)
     return None
 
 
-def minimax(b, depth_remaining, is_max, deadline):
+def minimax(b, depth, is_max, deadline):
     """Paranoid minimax. is_max=True -> my move layer; else opponents' layer.
-    We separate my move from opponents' combined move (one ply each)."""
-    term = terminal_state(b, depth_remaining)
+    `depth` counts remaining plies. We separate my move from opponents' combined
+    move (one ply each)."""
+    # depth here is "remaining"; terminal depth uses (MAX_DEPTH - remaining) so
+    # that sooner terminals get a smaller depth value.
+    term = terminal_state(b, MAX_DEPTH - depth)
     if term is not None:
         return term, None
-    if depth_remaining <= 0 or time.monotonic() > deadline:
+    if depth <= 0 or time.monotonic() > deadline:
         return score(b), None
 
     me_id = b.me_id
-    opponents = [sid for sid, s in b.snakes.items() if sid != me_id and s["alive"]]
 
     if is_max:
         my_moves = snake_moves(b, b.snakes[me_id])
         best = None
         best_move = my_moves[0][0]
         for name, head in my_moves:
-            # store my intended move on a shallow marker board via opponents layer
-            val, _ = minimax_opponents(b, {me_id: head}, depth_remaining, deadline)
+            val, _ = minimax_opponents(b, {me_id: head}, depth, deadline)
             if best is None or val > best:
                 best = val
                 best_move = name
@@ -337,17 +359,17 @@ def minimax(b, depth_remaining, is_max, deadline):
                 break
         return best, best_move
     else:
-        return minimax_opponents(b, {}, depth_remaining, deadline)
+        return minimax_opponents(b, {}, depth, deadline)
 
 
-def minimax_opponents(b, my_choice, depth_remaining, deadline):
+def minimax_opponents(b, my_choice, depth, deadline):
     """Opponents pick jointly the worst outcome for me (paranoid), given my_choice."""
     me_id = b.me_id
     opponents = [sid for sid, s in b.snakes.items() if sid != me_id and s["alive"]]
 
     if not opponents:
         nb = apply_moves(b, dict(my_choice))
-        return minimax(nb, depth_remaining - 1, True, deadline)
+        return minimax(nb, depth - 1, True, deadline)
 
     # Enumerate joint opponent moves. To bound cost, only enumerate the closest
     # opponent's moves fully and give others a greedy-toward-me heuristic move.
@@ -378,7 +400,7 @@ def minimax_opponents(b, my_choice, depth_remaining, deadline):
         chosen = dict(my_choice)
         chosen.update(oc)
         nb = apply_moves(b, chosen)
-        val, _ = minimax(nb, depth_remaining - 1, True, deadline)
+        val, _ = minimax(nb, depth - 1, True, deadline)
         if worst is None or val < worst:
             worst = val
         if time.monotonic() > deadline:
@@ -393,7 +415,6 @@ def safe_fallback(b):
     head = me["body"][0]
     neck = me["body"][1] if len(me["body"]) > 1 else None
     blocked = occupied_bodies(b)
-    best = None
     for name, (dx, dy) in MOVES.items():
         nx, ny = head[0] + dx, head[1] + dy
         if not in_bounds(b, nx, ny):
