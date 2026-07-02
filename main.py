@@ -17,7 +17,7 @@ Original strategy (ca.casualt.battlesnake.game.Board / SmartSnake):
   - goToAttack: BFS to any enemy head or a cell adjacent to an enemy head.
   - goToTail:   BFS to a cell adjacent to one of our own body segments,
                 scanning from tail inward.
-  - Fallback when no path found: Move.left.
+  - Fallback when no path found: Move.left (unconditionally).
 
 The 2018 code used a top-left origin with y increasing downward. The v1 API
 uses a bottom-left origin with y increasing upward. Since all pathfinding here
@@ -26,7 +26,6 @@ only place orientation matters is the literal "left" fallback, which is the
 same in both systems (x - 1).
 """
 
-import random
 from collections import deque
 
 
@@ -74,11 +73,8 @@ def move(game_state):
     try:
         return {"move": _decide(game_state)}
     except Exception:
-        # Absolute last resort: never crash.
-        try:
-            return {"move": _any_safe_move(game_state) or "up"}
-        except Exception:
-            return {"move": "up"}
+        # Arena legal fallback only (never crash). Mirrors Java Move.left.
+        return {"move": "left"}
 
 
 def _decide(game_state):
@@ -121,8 +117,6 @@ def _decide(game_state):
                 if _in_bounds(ax, ay, w, h):
                     blocked.add((ax, ay))
 
-    food_set = set(food)
-
     def is_filled(x, y):
         if not _in_bounds(x, y, w, h):
             return True
@@ -130,7 +124,11 @@ def _decide(game_state):
         return (x, y) in blocked
 
     # --- mode selection -----------------------------------------------------
-    # health <= 50 -> HUNGRY; longer than longest other -> ATTACK; else HUNGRY.
+    # Java: health<=50 -> HUNGRY; length > longestSnakeLength() -> ATTACK;
+    # else HUNGRY. When there is no other snake, longestSnakeLength() returns
+    # Integer.MIN_VALUE, so ATTACK is chosen; with no enemy heads goToAttack
+    # yields nothing, so the effective priority is identical to HUNGRY. We
+    # keep the observable behaviour by defaulting to HUNGRY in that case.
     HUNGER_ZONE = 50
     if my_health <= HUNGER_ZONE:
         mode = "HUNGRY"
@@ -203,56 +201,11 @@ def _decide(game_state):
         if chosen is None:
             chosen = go_to_tail()
 
+    # Java: if (move == null) move = Move.left;  (unconditional)
     if chosen is None:
-        # Java fallback is Move.left, but only accept it if survivable; else
-        # pick any safe move so we never suicide when an alternative exists.
-        left = (head[0] - 1, head[1])
-        if not is_filled(*left):
-            chosen = "left"
-        else:
-            chosen = _pick_safe(head, w, h, blocked, food_set) or "left"
+        chosen = "left"
 
-    # Safety net: never willingly step into a wall/body when a safe move exists.
-    dx, dy = _delta(chosen)
-    if is_filled(head[0] + dx, head[1] + dy):
-        safe = _pick_safe(head, w, h, blocked, food_set)
-        if safe is not None:
-            chosen = safe
     return chosen
-
-
-def _delta(name):
-    for n, dx, dy in _DIRS:
-        if n == name:
-            return dx, dy
-    return 0, 1
-
-
-def _pick_safe(head, w, h, blocked, food_set):
-    """Prefer a move that is in-bounds and not into a snake body."""
-    candidates = []
-    for name, dx, dy in _DIRS:
-        nx, ny = head[0] + dx, head[1] + dy
-        if not _in_bounds(nx, ny, w, h):
-            continue
-        if (nx, ny) in blocked:
-            continue
-        candidates.append(name)
-    if candidates:
-        return random.choice(candidates)
-    return None
-
-
-def _any_safe_move(game_state):
-    board = game_state["board"]
-    w, h = board["width"], board["height"]
-    you = game_state["you"]
-    head = (you["body"][0]["x"], you["body"][0]["y"])
-    occupied = set()
-    for snake in board["snakes"]:
-        for p in snake["body"]:
-            occupied.add((p["x"], p["y"]))
-    return _pick_safe(head, w, h, occupied, set())
 
 
 if __name__ == "__main__":
