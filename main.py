@@ -412,8 +412,8 @@ def info():
         "apiversion": "1",
         "author": "coreyja",
         "color": "#5a25a8",
-        "head": "default",
-        "tail": "default",
+        "head": "hydra",
+        "tail": "mystic-moon",
     }
 
 
