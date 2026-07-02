@@ -1065,8 +1065,8 @@ def info():
         "apiversion": "1",
         "author": "tyrelh",
         "color": "#9557E0",
-        "head": "default",
-        "tail": "default",
+        "head": "beluga",
+        "tail": "bolt",
     }
 
 
