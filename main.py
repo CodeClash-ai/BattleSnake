@@ -411,9 +411,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "smallsco",
-        "color": "#5a6f8c",
-        "head": "default",
-        "tail": "default",
+        "color": "#5D6D7E",
+        "head": "bendr",
+        "tail": "fat-rattle",
     }
 
 
