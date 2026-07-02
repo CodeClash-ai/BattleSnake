@@ -455,7 +455,7 @@ def info():
     return {
         "apiversion": "1",
         "author": "Petah",
-        "color": "#FF69B4",  # Color.PINK
+        "color": "#e91e63",  # Color.PINK
         "head": "beluga",
         "tail": "block-bum",
     }
