@@ -487,10 +487,13 @@ class Medusa:
 
     # Snake >> findRewardPaths / Medusa >> findRewardPaths
     def find_reward_paths(self):
+        # Snake >> findRewardPaths, but since `self` is a Medusa the path
+        # lookup dispatches to Medusa >> findPathTo:, which only accepts a
+        # path whose first step is one of my possible tiles.
         paths = []
         for reward in self.board.food:
-            p = find_path(self.board, self.head, reward)
-            if p is not None:
+            p = self.find_path_to(reward)
+            if p is not None and p:
                 paths.append((reward, p))
         paths.sort(key=lambda rp: len(rp[1]))
         # Medusa filters out risky reward paths.
@@ -517,7 +520,15 @@ class Medusa:
 
     # ---- behaviours -------------------------------------------------------
     def move_to(self, tile):
-        self.chosen = tile
+        # Medusa >> moveTo: -- if the requested tile is not one of my possible
+        # tiles, fall back to any possible tile (or, if none, any neighbour).
+        options = self.possible_tiles()
+        move_to = tile if tile in options else None
+        if not options:
+            options = self.board.neighbours(self.head)
+        if move_to is None:
+            move_to = options[0] if options else None
+        self.chosen = move_to
 
     def try_behavior(self, fn):
         if self.current_behavior is not None:
@@ -866,9 +877,9 @@ def info():
     return {
         "apiversion": "1",
         "author": "JerryKott",
-        "color": "#7B2D8E",   # Medusa
-        "head": "default",
-        "tail": "default",
+        "color": "#CFB53B",   # WormHole color (Medusa)
+        "head": "tongue",
+        "tail": "curled",
     }
 
 
