@@ -474,8 +474,8 @@ def info():
         "apiversion": "1",
         "author": "OliverMKing",
         "color": "#4584B6",
-        "head": "default",
-        "tail": "default",
+        "head": "safe",
+        "tail": "round-bum",
     }
 
 
