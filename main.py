@@ -1,99 +1,185 @@
-# Welcome to
-# __________         __    __  .__                               __
-# \______   \_____ _/  |__/  |_|  |   ____   ______ ____ _____  |  | __ ____
-#  |    |  _/\__  \\   __\   __\  | _/ __ \ /  ___//    \\__  \ |  |/ // __ \
-#  |    |   \ / __ \|  |  |  | |  |_\  ___/ \___ \|   |  \/ __ \|    <\  ___/
-#  |________/(______/__|  |__| |____/\_____>______>___|__(______/__|__\\_____>
-#
-# This file can be a nice home for your Battlesnake logic and helper functions.
-#
-# To get you started we've included code to prevent your Battlesnake from moving backwards.
-# For more info see docs.battlesnake.com
+"""
+Port of tim-hub/awesome-snake (Python/Flask) to CodeClash Battlesnake v1 arena format.
 
+Original strategy (bot.py -> make_a_decision / get_map / survive):
+  - Build a map of every cell on the board and flag it:
+        'b' = occupied by any snake body segment
+        'f' = food
+        ' ' = empty
+    Cells off the board are absent from the map (lookup returns False).
+  - Look only at the 4 tiles immediately around our head ("survive" strategy)
+    and score each candidate destination cell:
+        off-board  -> -100
+        food ('f') ->   +1
+        body ('b') ->   -1
+        empty (' ')->    0
+    Pick the direction with the highest score, using a random tiebreak
+    (max over key of score + random.random()).
+
+The original used the OLD Battlesnake API (top-left origin, y increasing
+downward). Its direction labels were chosen for that system. Here we
+reimplement the identical scoring logic against the CURRENT v1 API
+(bottom-left origin, y increasing upward): up=y+1, down=y-1,
+left=x-1, right=x+1. The scoring semantics are preserved faithfully;
+only the direction labeling is remapped to v1 so moves are correct.
+"""
 import random
-import typing
 
 
-# info is called when you create your Battlesnake on play.battlesnake.com
-# and controls your Battlesnake's appearance
-# TIP: If you open your Battlesnake URL in a browser you should see this data
-def info() -> typing.Dict:
-    print("INFO")
-
+def info():
     return {
         "apiversion": "1",
-        "author": "",  # TODO: Your Battlesnake Username
-        "color": "#888888",  # TODO: Choose color
-        "head": "default",  # TODO: Choose head
-        "tail": "default",  # TODO: Choose tail
+        "author": "tim-hub",
+        "color": "#800000",
+        "head": "default",
+        "tail": "default",
     }
 
 
-# start is called when your Battlesnake begins a game
-def start(game_state: typing.Dict):
-    print("GAME START")
+def start(game_state):
+    return
 
 
-# end is called when your Battlesnake finishes a game
-def end(game_state: typing.Dict):
-    print("GAME OVER\n")
+def end(game_state):
+    return
 
 
-# move is called on every turn and returns your next move
-# Valid moves are "up", "down", "left", or "right"
-# See https://docs.battlesnake.com/api/example-move for available data
-def move(game_state: typing.Dict) -> typing.Dict:
+def _build_map(board):
+    """Reproduce get_map(): flag every cell as body/food/empty.
 
-    is_move_safe = {"up": True, "down": True, "left": True, "right": True}
+    Returns a dict keyed by (x, y). Cells absent from the dict are
+    off-board (equivalent to the original's the_map_dict.get(..., False)).
+    """
+    width = board.get("width", 0)
+    height = board.get("height", 0)
+    snakes = board.get("snakes", [])
+    food = board.get("food", [])
 
-    # We've included code to prevent your Battlesnake from moving backwards
-    my_head = game_state["you"]["body"][0]  # Coordinates of your head
-    my_neck = game_state["you"]["body"][1]  # Coordinates of your "neck"
+    # All body segments across all snakes (matches reduce of all bodies).
+    body_cells = set()
+    for s in snakes:
+        for seg in s.get("body", []):
+            body_cells.add((seg.get("x"), seg.get("y")))
 
-    if my_neck["x"] < my_head["x"]:  # Neck is left of head, don't move left
-        is_move_safe["left"] = False
+    food_cells = set((f.get("x"), f.get("y")) for f in food)
 
-    elif my_neck["x"] > my_head["x"]:  # Neck is right of head, don't move right
-        is_move_safe["right"] = False
-
-    elif my_neck["y"] < my_head["y"]:  # Neck is below head, don't move down
-        is_move_safe["down"] = False
-
-    elif my_neck["y"] > my_head["y"]:  # Neck is above head, don't move up
-        is_move_safe["up"] = False
-
-    # TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    # board_width = game_state['board']['width']
-    # board_height = game_state['board']['height']
-
-    # TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    # my_body = game_state['you']['body']
-
-    # TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    # opponents = game_state['board']['snakes']
-
-    # Are there any safe moves left?
-    safe_moves = []
-    for move, isSafe in is_move_safe.items():
-        if isSafe:
-            safe_moves.append(move)
-
-    if len(safe_moves) == 0:
-        print(f"MOVE {game_state['turn']}: No safe moves detected! Moving down")
-        return {"move": "down"}
-
-    # Choose a random move from the safe ones
-    next_move = random.choice(safe_moves)
-
-    # TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    # food = game_state['board']['food']
-
-    print(f"MOVE {game_state['turn']}: {next_move}")
-    return {"move": next_move}
+    the_map = {}
+    for y in range(height):
+        for x in range(width):
+            if (x, y) in body_cells:
+                the_map[(x, y)] = "b"
+            elif (x, y) in food_cells:
+                the_map[(x, y)] = "f"
+            else:
+                the_map[(x, y)] = " "
+    return the_map
 
 
-# Start server when `python main.py` is run
+def _survive(head, the_map):
+    """Reproduce survive(): score the 4 neighbor cells and pick the best.
+
+    Remapped to v1 coordinates (bottom-left origin, y up):
+        up    -> (x, y + 1)
+        down  -> (x, y - 1)
+        left  -> (x - 1, y)
+        right -> (x + 1, y)
+    Scoring identical to the original.
+    """
+    x = head.get("x")
+    y = head.get("y")
+
+    candidates = {
+        "up": (x, y + 1),
+        "down": (x, y - 1),
+        "left": (x - 1, y),
+        "right": (x + 1, y),
+    }
+
+    scores = {}
+    for direction, cell in candidates.items():
+        flag = the_map.get(cell, False)
+        if flag is False:
+            scores[direction] = -100
+        elif flag == "f":
+            scores[direction] = 1
+        elif flag == "b":
+            scores[direction] = -1
+        else:
+            scores[direction] = 0
+
+    # max over score + random tiebreak, exactly as the original.
+    best = max(scores.keys(), key=lambda d: scores[d] + random.random())
+    return best
+
+
+def _safe_fallback(game_state):
+    """Guaranteed-legal fallback: in-bounds and not into a snake body
+    (tails are enterable)."""
+    board = game_state.get("board", {})
+    you = game_state.get("you", {})
+    width = board.get("width", 11)
+    height = board.get("height", 11)
+    head = you.get("body", [{}])[0]
+    hx = head.get("x", 0)
+    hy = head.get("y", 0)
+
+    # Occupied cells = all snake bodies except each snake's tail (tail moves).
+    blocked = set()
+    for s in board.get("snakes", []):
+        body = s.get("body", [])
+        for i, seg in enumerate(body):
+            # Tail (last segment) is enterable unless the snake just ate
+            # (health == 100 implies tail will not move). Be conservative
+            # only about the plain tail case; still block if health full.
+            if i == len(body) - 1 and s.get("health", 0) != 100 and len(body) > 1:
+                continue
+            blocked.add((seg.get("x"), seg.get("y")))
+
+    options = {
+        "up": (hx, hy + 1),
+        "down": (hx, hy - 1),
+        "left": (hx - 1, hy),
+        "right": (hx + 1, hy),
+    }
+    for direction, (nx, ny) in options.items():
+        if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in blocked:
+            return direction
+    return "up"
+
+
+def move(game_state):
+    try:
+        board = game_state["board"]
+        you = game_state["you"]
+        the_map = _build_map(board)
+        head = you["body"][0]
+        chosen = _survive(head, the_map)
+
+        # Safety net: the original scoring can still pick a wall (-100) or
+        # a body (-1) when all four options are bad. Guarantee the returned
+        # move is in-bounds and not into a body if any such move exists.
+        width = board.get("width", 11)
+        height = board.get("height", 11)
+        hx, hy = head.get("x"), head.get("y")
+        cell_of = {
+            "up": (hx, hy + 1),
+            "down": (hx, hy - 1),
+            "left": (hx - 1, hy),
+            "right": (hx + 1, hy),
+        }
+        nx, ny = cell_of[chosen]
+        in_bounds = 0 <= nx < width and 0 <= ny < height
+        into_body = the_map.get((nx, ny)) == "b"
+        if not in_bounds or into_body:
+            return {"move": _safe_fallback(game_state)}
+        return {"move": chosen}
+    except Exception:
+        try:
+            return {"move": _safe_fallback(game_state)}
+        except Exception:
+            return {"move": "up"}
+
+
 if __name__ == "__main__":
     from server import run_server
-
     run_server({"info": info, "start": start, "move": move, "end": end})
