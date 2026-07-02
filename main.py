@@ -66,9 +66,9 @@ MOVES = {
 def info():
     return {
         "apiversion": "1",
-        "author": "Nettogrof",
-        "color": "#3f5c8c",
-        "head": "default",
+        "author": "nettogrof",
+        "color": "#212161",
+        "head": "all-seeing",
         "tail": "default",
     }
 
