@@ -1,17 +1,18 @@
 import random
+from collections import deque
 
-# Port of moxuz / chrispouliot "Battlesnake-AI-2017" (pinky-snek).
-# Original strategy (old Battlesnake API, top-left/y-down board):
-#   - Danger coords = all walls (off-board edges), every snake body cell,
-#     plus any empty cell whose adjacent neighbors are dangerous >= 3 times
-#     (avoids dead-end pockets).
-#   - Safe coords = all board cells minus danger coords.
-#   - Move selection: adjacent cells that are safe. If health < 30, take an
-#     adjacent food cell if one exists; otherwise pick a random safe adjacent.
-# Remapped here to v1 API (bottom-left / y-up) and made robust.
-
-COORD_DANGER_LEVEL_MAX = 3
-MIN_FOOD_HEALTH_LEVEL = 30
+# Smart Battlesnake (v1 API, bottom-left origin / y-up).
+# Strategy overview (documented for teammates):
+#   1. Enumerate the 4 legal moves (in-bounds, not into a body segment that
+#      will still be there next turn).
+#   2. Score each candidate with a layered heuristic:
+#        - Hard-avoid: walls, occupied cells, and losing head-to-head squares
+#          (a cell an equal-or-longer enemy head can also reach next turn).
+#        - Flood-fill reachable free space from the resulting head position
+#          (avoid getting trapped in small pockets / dead ends).
+#        - Food attraction scaled by hunger (grow to win head-to-heads).
+#        - Prefer squares where we could win a head-to-head vs a shorter enemy.
+#   3. Pick the highest scoring move; fall back to any legal move.
 
 
 def info():
@@ -32,62 +33,184 @@ def end(game_state):
     return
 
 
-def _adjacent(coord):
-    x, y = coord
-    # v1 (bottom-left origin): up = y+1, down = y-1, right = x+1, left = x-1
-    return [
-        [x, y + 1],
-        [x, y - 1],
-        [x + 1, y],
-        [x - 1, y],
-    ]
+DIRS = {
+    "up": (0, 1),
+    "down": (0, -1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
 
 
-def _all_board_coords(width, height):
-    return [[x, y] for x in range(width) for y in range(height)]
+def _occupied_next_turn(board, exclude_tails=True):
+    """Return a set of cells occupied by snake bodies next turn.
+
+    Tails move away (so are free) *unless* the snake just ate (health==100,
+    body has a duplicated tail) meaning the tail stays. We approximate by
+    treating a tail as free only when the last two body segments differ.
+    """
+    occ = set()
+    for snake in board["snakes"]:
+        body = snake["body"]
+        n = len(body)
+        for i, seg in enumerate(body):
+            cell = (seg["x"], seg["y"])
+            if i == n - 1 and exclude_tails:
+                # Tail vacates unless the snake ate (tail stacked on prev seg).
+                if n >= 2:
+                    prev = body[n - 2]
+                    if (prev["x"], prev["y"]) == cell:
+                        occ.add(cell)  # stacked tail -> stays
+                    # else: tail moves away, treat as free
+                continue
+            occ.add(cell)
+    return occ
 
 
-def _get_dangerous_coords(width, height, snake_coords, max_danger_level):
-    danger_coords = []
-    # Walls (off-board edges) are dangerous
-    for x in range(width):
-        danger_coords.append([x, -1])
-        danger_coords.append([x, height])
-    for y in range(height):
-        danger_coords.append([-1, y])
-        danger_coords.append([width, y])
-
-    # Every snake body cell is dangerous (faithful to original)
-    danger_coords += snake_coords
-
-    # Empty cells surrounded by >= max_danger_level dangerous neighbors
-    for empty_coord in _all_board_coords(width, height):
-        num_dangerous = 0
-        for adj in _adjacent(empty_coord):
-            if adj in danger_coords:
-                num_dangerous += 1
-        if num_dangerous >= max_danger_level:
-            danger_coords.append(empty_coord)
-
-    return danger_coords
+def _all_body_cells(board):
+    occ = set()
+    for snake in board["snakes"]:
+        for seg in snake["body"]:
+            occ.add((seg["x"], seg["y"]))
+    return occ
 
 
-def _direction_from_coord(next_coord, curr_coord):
-    nx, ny = next_coord
-    cx, cy = curr_coord
-    if nx < cx:
-        return "left"
-    elif nx > cx:
-        return "right"
-    elif ny > cy:
-        return "up"      # v1: y+1 is up (original used "down" for y-down board)
-    else:
-        return "down"
+def _flood_fill(start, blocked, width, height, limit=None):
+    """Count reachable free cells from start via BFS."""
+    if start in blocked or not (0 <= start[0] < width and 0 <= start[1] < height):
+        return 0
+    seen = {start}
+    q = deque([start])
+    count = 0
+    while q:
+        x, y = q.popleft()
+        count += 1
+        if limit is not None and count >= limit:
+            break
+        for dx, dy in DIRS.values():
+            nx, ny = x + dx, y + dy
+            cell = (nx, ny)
+            if (0 <= nx < width and 0 <= ny < height
+                    and cell not in blocked and cell not in seen):
+                seen.add(cell)
+                q.append(cell)
+    return count
+
+
+def move(game_state):
+    try:
+        return _smart_move(game_state)
+    except Exception:
+        try:
+            return _safe_fallback(game_state)
+        except Exception:
+            return {"move": "up"}
+
+
+def _smart_move(game_state):
+    board = game_state["board"]
+    width = board["width"]
+    height = board["height"]
+    you = game_state["you"]
+
+    head = you["body"][0]
+    hx, hy = head["x"], head["y"]
+    my_len = you["length"]
+    health = you.get("health", 100)
+
+    occ_next = _occupied_next_turn(board)
+    all_bodies = _all_body_cells(board)
+
+    # Enemy heads and their lengths (for head-to-head reasoning).
+    enemies = []
+    for s in board["snakes"]:
+        if s["id"] == you["id"]:
+            continue
+        enemies.append((s["head"]["x"], s["head"]["y"], s["length"]))
+
+    # Cells an enemy head could move into next turn.
+    enemy_next = {}  # cell -> max enemy length that could go there
+    for ex, ey, elen in enemies:
+        for dx, dy in DIRS.values():
+            cell = (ex + dx, ey + dy)
+            if 0 <= cell[0] < width and 0 <= cell[1] < height:
+                enemy_next[cell] = max(enemy_next.get(cell, 0), elen)
+
+    food = set((f["x"], f["y"]) for f in board.get("food", []))
+
+    def nearest_food_dist(cell):
+        if not food:
+            return None
+        return min(abs(cell[0] - fx) + abs(cell[1] - fy) for fx, fy in food)
+
+    candidates = []
+    for mv, (dx, dy) in DIRS.items():
+        nx, ny = hx + dx, hy + dy
+        cell = (nx, ny)
+        # in bounds
+        if not (0 <= nx < width and 0 <= ny < height):
+            continue
+        # not into a body cell that persists
+        if cell in occ_next:
+            continue
+        candidates.append((mv, cell))
+
+    if not candidates:
+        return _safe_fallback(game_state)
+
+    best = None
+    best_score = None
+    for mv, cell in candidates:
+        score = 0.0
+
+        # Head-to-head danger: cell reachable by an enemy head.
+        if cell in enemy_next:
+            other_len = enemy_next[cell]
+            if other_len >= my_len:
+                score -= 1000.0  # would lose or tie -> avoid strongly
+            else:
+                score += 60.0    # we would win a head-to-head -> good
+
+        # Flood-fill free space after moving (avoid traps).
+        blocked = set(occ_next)
+        blocked.discard((hx, hy))
+        # our new head occupies the cell
+        blocked.add(cell)
+        space = _flood_fill(cell, blocked, width, height, limit=my_len * 3 + 10)
+        if space <= my_len:
+            score -= 500.0  # not enough room, likely trap
+        score += min(space, my_len * 3) * 4.0
+
+        # Food seeking: stronger when hungry, mild otherwise (grow to win).
+        d = nearest_food_dist(cell)
+        if d is not None:
+            if health < 35:
+                score += (100.0 - d * 5.0)
+            elif my_len < 8:
+                score += (30.0 - d * 2.0)
+            else:
+                score += (10.0 - d * 1.0)
+        if cell in food:
+            if health < 50 or my_len < 6:
+                score += 40.0
+
+        # Slight preference to stay away from walls (more escape routes).
+        edge_pen = 0
+        if nx == 0 or nx == width - 1:
+            edge_pen += 1
+        if ny == 0 or ny == height - 1:
+            edge_pen += 1
+        score -= edge_pen * 2.0
+
+        if best_score is None or score > best_score:
+            best_score = score
+            best = mv
+
+    if best is not None:
+        return {"move": best}
+    return _safe_fallback(game_state)
 
 
 def _safe_fallback(game_state):
-    """Guaranteed-legal move: in bounds and not into any snake body cell
-    (tails allowed since they move)."""
     board = game_state["board"]
     width = board["width"]
     height = board["height"]
@@ -95,80 +218,18 @@ def _safe_fallback(game_state):
     head = you["body"][0]
     hx, hy = head["x"], head["y"]
 
-    blocked = set()
-    for snake in board["snakes"]:
-        body = snake["body"]
-        for i, seg in enumerate(body):
-            # Allow the tail cell (it moves away) unless food may have grown it.
-            if i == len(body) - 1:
-                continue
-            blocked.add((seg["x"], seg["y"]))
-
-    options = {
-        "up": (hx, hy + 1),
-        "down": (hx, hy - 1),
-        "left": (hx - 1, hy),
-        "right": (hx + 1, hy),
-    }
-    for mv, (x, y) in options.items():
-        if 0 <= x < width and 0 <= y < height and (x, y) not in blocked:
+    occ = _occupied_next_turn(board)
+    # First: in-bounds and not into persistent body.
+    for mv, (dx, dy) in DIRS.items():
+        nx, ny = hx + dx, hy + dy
+        if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in occ:
             return {"move": mv}
-    # Last resort: any in-bounds move
-    for mv, (x, y) in options.items():
-        if 0 <= x < width and 0 <= y < height:
+    # Any in-bounds move.
+    for mv, (dx, dy) in DIRS.items():
+        nx, ny = hx + dx, hy + dy
+        if 0 <= nx < width and 0 <= ny < height:
             return {"move": mv}
     return {"move": "up"}
-
-
-def move(game_state):
-    try:
-        board = game_state["board"]
-        width = board["width"]
-        height = board["height"]
-        you = game_state["you"]
-
-        head = you["body"][0]
-        curr_coord = [head["x"], head["y"]]
-        health = you.get("health", 100)
-
-        # Flatten all snake body coords
-        snake_coords = []
-        for snake in board["snakes"]:
-            for seg in snake["body"]:
-                snake_coords.append([seg["x"], seg["y"]])
-
-        food_coords = [[f["x"], f["y"]] for f in board.get("food", [])]
-
-        dangerous = _get_dangerous_coords(width, height, snake_coords, COORD_DANGER_LEVEL_MAX)
-        all_coords = _all_board_coords(width, height)
-        safe_coords = [c for c in all_coords if c not in dangerous]
-
-        adjacent_coords = _adjacent(curr_coord)
-        possible = [c for c in adjacent_coords if c in safe_coords]
-
-        next_coord = None
-        if health < MIN_FOOD_HEALTH_LEVEL:
-            for c in possible:
-                if c in food_coords:
-                    next_coord = c
-                    break
-        if next_coord is None and possible:
-            next_coord = random.choice(possible)
-
-        if next_coord is not None:
-            candidate = _direction_from_coord(next_coord, curr_coord)
-            # Validate against fallback safety (in bounds, not into body)
-            nx, ny = next_coord
-            if 0 <= nx < width and 0 <= ny < height:
-                return {"move": candidate}
-
-        # No safe adjacent cell found; fall back to any legal move.
-        return _safe_fallback(game_state)
-    except Exception:
-        try:
-            return _safe_fallback(game_state)
-        except Exception:
-            return {"move": "up"}
 
 
 if __name__ == "__main__":
