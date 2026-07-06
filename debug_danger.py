@@ -1,8 +1,18 @@
 import json
-with open("/logs/rounds/1/sim_5.jsonl") as f:
-    lines = [json.loads(line) for line in f if line.strip()]
+from main import move, flood_fill_size
 
-for line in lines[-4:-1]:
-    print(f"Turn {line.get('turn')}")
-    for s in line["board"]["snakes"]:
-        print(f"  {s['name']} (health: {s['health']}, head: {s['head']}, len: {s['length']})")
+filepath = "/logs/rounds/4/sim_219.jsonl"
+turns = []
+with open(filepath) as f:
+    for line in f:
+        if line.strip():
+            d = json.loads(line)
+            if "turn" in d:
+                turns.append(d)
+
+# Find last few turns
+for t in turns[-5:]:
+    print(f"Turn {t['turn']}")
+    snakes = t["board"]["snakes"]
+    for s in snakes:
+        print(f"  Snake {s['name']}: head ({s['body'][0]['x']},{s['body'][0]['y']}), len {len(s['body'])}, health {s['health']}")
