@@ -12,18 +12,29 @@ for round_name in sorted(os.listdir(rounds_dir)):
         if filename.startswith("sim_") and filename.endswith(".jsonl"):
             filepath = os.path.join(round_path, filename)
             total += 1
-            last_turn = None
+            is_won = False
+            last_board = None
+            winnerName = ""
+            isDraw = False
             with open(filepath) as f:
                 for line in f:
                     if line.strip():
                         data = json.loads(line)
-                        if "turn" in data and data["turn"] is not None:
-                            last_turn = data
-            if last_turn:
-                snakes = last_turn["board"]["snakes"]
-                alive_names = [s["name"] for s in snakes]
-                if "gemini-3-5-flash" not in alive_names:
-                    not_won.append((filename, last_turn["turn"], alive_names))
+                        if "winnerName" in data:
+                            winnerName = data["winnerName"]
+                            isDraw = data.get("isDraw", False)
+                        if "board" in data:
+                            last_board = data
+            if winnerName == "gemini-3-5-flash":
+                is_won = True
+            if not is_won:
+                # Find turn and survivors
+                alive = []
+                turn = 0
+                if last_board:
+                    turn = last_board["turn"]
+                    alive = [s["name"] for s in last_board["board"]["snakes"] if s["name"] != "gemini-3-5-flash"]
+                not_won.append((filename, turn, alive, winnerName, isDraw))
     print(f"Round {round_name}: Out of {total} games, {len(not_won)} games not won by gemini-3-5-flash:")
-    for fn, turn, alive in not_won:
-        print(f"  {fn} at turn {turn}, alive: {alive}")
+    for fn, t, alive, winnerName, isDraw in not_won[:10]: # show first 10
+        print(f"  {fn} at turn {t}, alive: {alive}, winner: {winnerName}, isDraw: {isDraw}")
