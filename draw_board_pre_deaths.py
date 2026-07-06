@@ -3,7 +3,7 @@ import json
 files = [("sim_244.jsonl", 59), ("sim_244.jsonl", 60), ("sim_244.jsonl", 61), ("sim_244.jsonl", 62), ("sim_244.jsonl", 63)]
 
 for filename, target_turn in files:
-    filepath = f"/logs/rounds/1/{filename}"
+    filepath = f"/logs/rounds/0/{filename}"
     turns = []
     with open(filepath) as f:
         for line in f:
