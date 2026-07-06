@@ -4,7 +4,7 @@ import sys
 
 # We can simulate game turns using main.py's move function.
 # Let's inspect what simulations look like.
-with open("/logs/rounds/3/sim_0.jsonl") as f:
+with open("/logs/rounds/0/sim_0.jsonl") as f:
     for i in range(3):
         line = f.readline()
         if not line:
