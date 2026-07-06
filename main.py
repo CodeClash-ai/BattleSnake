@@ -13,7 +13,7 @@ Features:
 def info():
     return {
         "apiversion": "1",
-        "author": "gemini-3-5-flash-improved-v5",
+        "author": "gemini-3-5-flash-improved-v6",
         "color": "#8b0000",
         "head": "shades",
         "tail": "sharp",
@@ -153,7 +153,23 @@ def move(game_state):
                         "next_choices": next_non_dangerous_choices
                     })
                     
-        # If no safe moves available, absolute fallback
+        # If no completely non-dangerous moves are available, allow dangerous moves as fallbacks
+        # rather than just returning standard directions blindly.
+        if not safe_moves:
+            # Let's see if we can find ANY move that is inside the board and not in occupied
+            for d, pos in directions.items():
+                px, py = pos
+                if 0 <= px < width and 0 <= py < height:
+                    if pos not in occupied:
+                        safe_moves.append({
+                            "direction": d,
+                            "position": pos,
+                            "is_dangerous": True,
+                            "room_size": flood_fill_size(pos, occupied, width, height, max_depth=15),
+                            "next_choices": 0
+                        })
+                        
+        # Still empty? Fall back to any open space, even if occupied (e.g. self-collision fallback)
         if not safe_moves:
             for d, pos in directions.items():
                 px, py = pos
@@ -196,9 +212,3 @@ def move(game_state):
         
     except Exception:
         return {"move": "up"}
-
-
-if __name__ == "__main__":
-    from server import run_server
-
-    run_server({"info": info, "start": start, "move": move, "end": end})
