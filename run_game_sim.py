@@ -65,4 +65,4 @@ def run_sim(filepath):
         else:
             print(f"Turn {turn_data['turn']}: gemini-3-5-flash died next turn. Bot chose {bot_move}")
 
-run_sim("/logs/rounds/4/sim_247.jsonl")
+run_sim("/logs/rounds/2/sim_226.jsonl")
