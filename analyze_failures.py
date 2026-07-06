@@ -1,36 +1,33 @@
 import json
-import os
 
-def analyze_file(filepath):
-    turns = []
-    with open(filepath) as f:
-        for line in f:
-            if line.strip():
-                data = json.loads(line)
-                if "board" in data:
-                    turns.append(data)
-    
-    # We find where gemini-3-5-flash disappeared
-    for idx, turn in enumerate(turns):
-        names = [s["name"] for s in turn["board"]["snakes"]]
-        if "gemini-3-5-flash" not in names:
-            # Died at this turn (idx). Let's see the previous turn.
-            if idx > 0:
-                prev = turns[idx-1]
-                my_snake = next(s for s in prev["board"]["snakes"] if s["name"] == "gemini-3-5-flash")
-                opp_snake = next((s for s in prev["board"]["snakes"] if s["name"] != "gemini-3-5-flash"), None)
-                
-                print(f"--- FAILURE IN {os.path.basename(filepath)} at Turn {prev['turn']} ---")
-                print(f"My head: {my_snake['head']}, length: {len(my_snake['body'])}, health: {my_snake['health']}")
-                if opp_snake:
-                    print(f"Opponent head: {opp_snake['head']}, length: {len(opp_snake['body'])}, health: {opp_snake['health']}")
-                
-                print("My body:", [(b['x'], b['y']) for b in my_snake['body']])
-                if opp_snake:
-                    print("Opponent body:", [(b['x'], b['y']) for b in opp_snake['body']])
-                print("Food:", [(f['x'], f['y']) for f in prev['board']['food']])
-            break
+filepath = "/logs/rounds/1/sim_246.jsonl"
+turns = []
+with open(filepath) as f:
+    for line in f:
+        if line.strip():
+            turns.append(json.loads(line))
 
-failures = ["sim_128.jsonl", "sim_131.jsonl", "sim_154.jsonl", "sim_195.jsonl", "sim_221.jsonl", "sim_223.jsonl", "sim_27.jsonl"]
-for f in failures:
-    analyze_file(os.path.join("/logs/rounds/0", f))
+print("Total turns:", len(turns))
+# turn 120 is index 120 (since we start at turn 0)
+for idx in range(118, 122):
+    if idx < len(turns):
+        t = turns[idx]
+        print(f"Turn {t.get('turn')}:")
+        if "board" in t:
+            for s in t["board"]["snakes"]:
+                print(f"  {s['name']}: head={s['head']}, health={s['health']}, body_len={len(s['body'])}")
+
+print("\nDetail of Turn 120 and 121:")
+t120 = turns[121] # index 121 corresponds to turn 120
+print("Turn 120 snakes:")
+for s in t120["board"]["snakes"]:
+    print(s["name"], s["body"])
+
+t121 = turns[122] # index 122 corresponds to turn 121 / or winner line
+print("Line 122 keys:", t121.keys())
+if "board" in t121:
+    print("Turn 121 snakes:")
+    for s in t121["board"]["snakes"]:
+        print(s["name"], s["body"])
+else:
+    print(t121)
