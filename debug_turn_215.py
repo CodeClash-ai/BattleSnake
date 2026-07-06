@@ -1,17 +1,16 @@
 import json
 from main import move, flood_fill_size, _manhattan
 
-filepath = "/logs/rounds/1/sim_219.jsonl"
+filepath = "/logs/rounds/1/sim_215.jsonl"
 turns = []
 with open(filepath) as f:
     for line in f:
         if line.strip():
             turns.append(json.loads(line))
 
-# Turn 35 is index 35 (usually turns start at 0)
 turn_data = None
 for t in turns:
-    if t.get("turn") == 35:
+    if t.get("turn") == 238:
         turn_data = t
         break
 
@@ -43,10 +42,8 @@ if turn_data:
     print("My Snake body:", my_body)
     print("All Snakes:")
     for s in snakes:
-        print(f"Name: {s['name']}, Length: {len(s['body'])}, Health: {s['health']}, Head: {s['head']}, Body: {s['body']}")
+        print(f"Name: {s['name']}, Length: {len(s['body'])}, Health: {s['health']}, Head: {s['head']}")
         
-    print("Food:", board.get("food"))
-    
     # Run the move decision manually with prints
     # Directions mapping
     directions = {
@@ -67,7 +64,7 @@ if turn_data:
                 continue
             occupied.add((seg["x"], seg["y"]))
             
-    print("Occupied:", occupied)
+    print("Occupied size:", len(occupied))
     
     safe_moves = []
     for d, pos in directions.items():
