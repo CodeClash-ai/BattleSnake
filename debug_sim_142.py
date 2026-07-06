@@ -1,6 +1,6 @@
 import json
 
-with open("/logs/rounds/2/sim_142.jsonl") as f:
+with open("/logs/rounds/1/sim_142.jsonl") as f:
     lines = [json.loads(line) for line in f if line.strip() and "board" in json.loads(line)]
 
 for idx in [-3, -2, -1]:
