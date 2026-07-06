@@ -3,6 +3,7 @@ An improved, robust Battlesnake implementation.
 Features:
 - Flood Fill path/space analysis to avoid trapping ourselves.
 - Dangerous head-to-head collision avoidance with larger/equal-length snakes.
+- Tail-following support: tail segments that will move are considered empty.
 - Target closest food if health is low, or space is sufficient.
 - Smart fallbacks if all safe moves are constrained.
 """
@@ -10,7 +11,7 @@ Features:
 def info():
     return {
         "apiversion": "1",
-        "author": "gemini-3-5-flash-improved-v2",
+        "author": "gemini-3-5-flash-improved-v3",
         "color": "#8b0000",
         "head": "shades",
         "tail": "sharp",
@@ -73,9 +74,19 @@ def move(game_state):
         }
         
         # Identify occupied cells (walls, snake bodies)
+        # Note: A snake's tail segment is safe to enter if the snake is not growing.
+        # A snake grows if its health is at 100 (which means it just ate) AND its length is > 1.
+        # To be safe, if a snake's length is > 1, and its health is < 100, we can treat its tail segment as empty.
         occupied = set()
         for snake in board.get("snakes", []):
-            for seg in snake["body"]:
+            body = snake["body"]
+            is_growing = snake["health"] == 100
+            
+            # Add all body segments except the tail (if it's not growing and length > 1)
+            for i, seg in enumerate(body):
+                if i == len(body) - 1 and not is_growing and len(body) > 1:
+                    # Tail is safe to enter as it will move on the next turn
+                    continue
                 occupied.add((seg["x"], seg["y"]))
                 
         # Filter possible moves that are safe (in-bounds and not occupied)
@@ -109,7 +120,7 @@ def move(game_state):
                     
         # If no safe moves available, absolute fallback
         if not safe_moves:
-            # Let's at least try to move in-bounds
+            # Let's try to move in-bounds to anything that doesn't instantly kill us if possible, or just in-bounds
             for d, pos in directions.items():
                 px, py = pos
                 if 0 <= px < width and 0 <= py < height:
@@ -134,12 +145,13 @@ def move(game_state):
                 if d < best_dist:
                     best_dist = d
                     target = fp
+                    
         if not target:
             target = _board_center(width, height)
             
         # Score each safe move
         best_move = None
-        best_score = (-float('inf'), -float('inf'), -float('inf')) # (not_dangerous, has_space, -distance)
+        best_score = (-float('inf'), -float('inf'), -float('inf'), -float('inf')) # (not_dangerous, has_space, room_size, -distance)
         
         for m in safe_moves:
             not_dangerous = 1 if not m["is_dangerous"] else 0
@@ -148,10 +160,7 @@ def move(game_state):
             has_space = 1 if m["room_size"] >= my_length else 0
             
             dist = _manhattan(m["position"], target)
-            # We want to maximize: (not_dangerous, has_space, -dist)
-            # But wait, what if all moves have has_space == 0? We should prefer the one with larger room_size.
-            # So let's use room_size itself as part of the score or as a tie-breaker.
-            # Let's score as: (not_dangerous, m["room_size"] >= my_length, m["room_size"], -dist)
+            
             score = (not_dangerous, has_space, m["room_size"], -dist)
             if score > best_score:
                 best_score = score
