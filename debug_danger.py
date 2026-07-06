@@ -5,7 +5,7 @@ from main import move
 # and see why it chose a dangerous option or got eliminated.
 # We will read Round 2, sim_111.jsonl or sim_10.jsonl or others.
 
-with open("/logs/rounds/2/sim_10.jsonl") as f:
+with open("/logs/rounds/0/sim_10.jsonl") as f:
     lines = [json.loads(line) for line in f if line.strip()]
 
 # Find last few turns
