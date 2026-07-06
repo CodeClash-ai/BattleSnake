@@ -1,51 +1,17 @@
 """
-Faithful port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into
-CodeClash v1.
-
-Original: io/battlesnake/examples/kotlin/SimpleSnake.kt (uses the
-battlesnake-quickstart "io.battlesnake.core" framework, which speaks the raw
-BattleSnake v1 API JSON directly -- board width/height, body/food x,y, and the
-standard y-up / bottom-left coordinate system where "up" = y+1, "down" = y-1).
-
-Original strategy (reproduced exactly):
-
-    fun moveTo(request, position): MoveResponse =
-        when {
-            head.x > position.x -> LEFT
-            head.x < position.x -> RIGHT
-            head.y > position.y -> DOWN
-            else                -> UP
-        }
-
-    fun nearestFood(head, foodList): Food =
-        foodList.maxByOrNull { head - it.position }!!   // Position.minus == Manhattan
-                                                        // -> picks the FARTHEST food
-
-    if (isFoodAvailable)
-        moveTo(head, nearestFood(head, foodList).position)
-    else
-        moveTo(head, boardCenter)
-
-Faithfulness notes:
-  - Position.minus is Manhattan distance; maxByOrNull selects the largest, i.e.
-    the *farthest* food (a genuine quirk of the original -- preserved).
-  - moveTo returns exactly ONE move by strict priority: x fully dominates y.
-    If x differs, y is never consulted. The final "else -> UP" also covers the
-    fully-aligned (head == target) case.
-  - The original has NO collision / out-of-bounds avoidance at all; it blindly
-    returns the moveTo direction. We do not add any. The only wrapper is the
-    arena-required try/except legal fallback.
+Simple but robust Battlesnake implementation.
+Avoids self-collision, wall-collision, and collision with other snakes.
+Prefers nearest food when health is low or there are no other constraints,
+otherwise navigates safely, potentially to the center or safely away from hazards.
 """
 
-
 def info():
-    # DescribeResponse("me", "#ff00ff", "beluga", "bolt")
     return {
         "apiversion": "1",
-        "author": "me",
-        "color": "#ff00ff",
-        "head": "beluga",
-        "tail": "bolt",
+        "author": "gemini-3-5-flash-improved",
+        "color": "#8b0000",
+        "head": "shades",
+        "tail": "sharp",
     }
 
 
@@ -58,55 +24,95 @@ def end(game_state):
 
 
 def _manhattan(a, b):
-    # Position.minus: abs(dx) + abs(dy)
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
 def _board_center(width, height):
-    # Board.center: ((w even ? w/2 : (w+1)/2) - 1, same for height)
     center_x = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
     center_y = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
     return (center_x, center_y)
-
-
-def _move_to(head, target):
-    """Exact reproduction of SimpleSnake.moveTo (y-up API)."""
-    hx, hy = head
-    tx, ty = target
-    if hx > tx:
-        return "left"
-    if hx < tx:
-        return "right"
-    if hy > ty:
-        return "down"
-    return "up"
 
 
 def move(game_state):
     try:
         board = game_state["board"]
         width, height = board["width"], board["height"]
-        head_seg = game_state["you"]["body"][0]
+        
+        my_body = game_state["you"]["body"]
+        head_seg = my_body[0]
         head = (head_seg["x"], head_seg["y"])
-
+        
+        # Directions mapping
+        directions = {
+            "up": (head[0], head[1] + 1),
+            "down": (head[0], head[1] - 1),
+            "left": (head[0] - 1, head[1]),
+            "right": (head[0] + 1, head[1])
+        }
+        
+        # Identify occupied cells (walls, snake bodies)
+        # Note: We can also avoid other snakes' bodies.
+        occupied = set()
+        
+        # Add walls to occupied or handle dynamically
+        # For simplicity, we just filter out directions out of bounds.
+        
+        # Add all snakes bodies to occupied
+        for snake in board.get("snakes", []):
+            for seg in snake["body"]:
+                occupied.add((seg["x"], seg["y"]))
+                
+        # Note: The tail of a snake might move out of the way in the next turn,
+        # but for absolute safety we treat it as occupied unless we really have to.
+        
+        # Filter possible moves that are safe (in-bounds and not occupied)
+        safe_moves = []
+        for d, pos in directions.items():
+            px, py = pos
+            if 0 <= px < width and 0 <= py < height:
+                if pos not in occupied:
+                    safe_moves.append((d, pos))
+                    
+        # If no safe moves available, just try any in-bounds move as fallback
+        if not safe_moves:
+            for d, pos in directions.items():
+                px, py = pos
+                if 0 <= px < width and 0 <= py < height:
+                    safe_moves.append((d, pos))
+                    
+        if not safe_moves:
+            # Absolute fallback
+            return {"move": "up"}
+            
+        # Strategy:
+        # Choose a target: Nearest food if health is relatively low (< 50) or if we want to grow.
+        # Otherwise, move towards the center or just target the closest food anyway (usually optimal).
         food = board.get("food", [])
         if food:
-            # nearestFood: maxByOrNull(Manhattan) -> farthest food.
-            # Kotlin maxByOrNull keeps the FIRST element attaining the max.
+            # Find closest food
             target = None
-            best = -1
+            best_dist = float('inf')
             for f in food:
                 fp = (f["x"], f["y"])
                 d = _manhattan(head, fp)
-                if d > best:
-                    best = d
+                if d < best_dist:
+                    best_dist = d
                     target = fp
         else:
             target = _board_center(width, height)
-
-        return {"move": _move_to(head, target)}
+            
+        # Select the safe move that gets us closest to the target
+        best_move = safe_moves[0][0]
+        best_move_dist = float('inf')
+        for d, pos in safe_moves:
+            dist = _manhattan(pos, target)
+            if dist < best_move_dist:
+                best_move_dist = dist
+                best_move = d
+                
+        return {"move": best_move}
+        
     except Exception:
-        # Arena-required legal fallback (original has none).
         return {"move": "up"}
 
 
