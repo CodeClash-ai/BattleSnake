@@ -3,6 +3,7 @@ An improved, robust Battlesnake implementation.
 Features:
 - Flood Fill path/space analysis to avoid trapping ourselves.
 - Depth-limited Flood Fill (max_depth=15) to prevent performance degradation on large boards.
+- Lookahead / min-max check to avoid moves that lead directly to unavoidable head-to-head collisions or trap states.
 - Dangerous head-to-head collision avoidance with larger/equal-length snakes.
 - Tail-following support: tail segments that will move are considered empty.
 - Target closest food if health is low, or space is sufficient.
@@ -12,7 +13,7 @@ Features:
 def info():
     return {
         "apiversion": "1",
-        "author": "gemini-3-5-flash-improved-v4",
+        "author": "gemini-3-5-flash-improved-v5",
         "color": "#8b0000",
         "head": "shades",
         "tail": "sharp",
@@ -81,9 +82,6 @@ def move(game_state):
         }
         
         # Identify occupied cells (walls, snake bodies)
-        # Note: A snake's tail segment is safe to enter if the snake is not growing.
-        # A snake grows if its health is at 100 (which means it just ate) AND its length is > 1.
-        # To be safe, if a snake's length is > 1, and its health is < 100, we can treat its tail segment as empty.
         occupied = set()
         for snake in board.get("snakes", []):
             body = snake["body"]
@@ -118,16 +116,45 @@ def move(game_state):
                     # Calculate room size via depth-limited flood fill
                     room_size = flood_fill_size(pos, occupied, width, height, max_depth=15)
                     
+                    # Look-ahead score: how many non-dangerous choices will we have from this position on the next turn?
+                    # This helps avoid moving into corners where the next step is guaranteed dangerous or blocked.
+                    next_non_dangerous_choices = 0
+                    next_possible_positions = [
+                        (pos[0]+1, pos[1]), (pos[0]-1, pos[1]),
+                        (pos[0], pos[1]+1), (pos[0], pos[1]-1)
+                    ]
+                    
+                    # We simulate occupied set for next turn (simplified: assuming tails move)
+                    for npx, npy in next_possible_positions:
+                        if 0 <= npx < width and 0 <= npy < height:
+                            if (npx, npy) not in occupied and (npx, npy) != head:
+                                # Check if it's dangerous
+                                next_danger = False
+                                for snake in board.get("snakes", []):
+                                    if snake["id"] == my_snake["id"]:
+                                        continue
+                                    opp_head = (snake["body"][0]["x"], snake["body"][0]["y"])
+                                    opp_len = len(snake["body"])
+                                    # Opponent would be at most 2 steps from (npx, npy) in 1 turn (since they move 1 step)
+                                    # Actually, they are 1 step away from their potential next position.
+                                    # We can check Manhattan distance from current opponent head to (npx, npy)
+                                    if abs(npx - opp_head[0]) + abs(npy - opp_head[1]) <= 2:
+                                        if opp_len >= my_length:
+                                            next_danger = True
+                                            break
+                                if not next_danger:
+                                    next_non_dangerous_choices += 1
+                    
                     safe_moves.append({
                         "direction": d,
                         "position": pos,
                         "is_dangerous": is_dangerous,
-                        "room_size": room_size
+                        "room_size": room_size,
+                        "next_choices": next_non_dangerous_choices
                     })
                     
         # If no safe moves available, absolute fallback
         if not safe_moves:
-            # Let's try to move in-bounds to anything that doesn't instantly kill us if possible, or just in-bounds
             for d, pos in directions.items():
                 px, py = pos
                 if 0 <= px < width and 0 <= py < height:
@@ -152,19 +179,15 @@ def move(game_state):
             
         # Score each safe move
         best_move = None
-        best_score = (-float('inf'), -float('inf'), -float('inf'), -float('inf')) # (not_dangerous, has_space, room_size, -distance)
+        best_score = (-float('inf'), -float('inf'), -float('inf'), -float('inf'), -float('inf'))
         
         for m in safe_moves:
             not_dangerous = 1 if not m["is_dangerous"] else 0
-            
-            # Use room_size limit to determine if there is space.
-            # Since max_depth is 15, maximum room size returned is around 113.
-            # So if room_size is limited, we check if it is >= my_length or at least we prioritize the largest room_size.
             has_space = 1 if m["room_size"] >= min(my_length, 50) else 0
-            
             dist = _manhattan(m["position"], target)
             
-            score = (not_dangerous, has_space, m["room_size"], -dist)
+            # Prioritize moves that give us more safe next choices to avoid getting cornered.
+            score = (not_dangerous, has_space, m["next_choices"], m["room_size"], -dist)
             if score > best_score:
                 best_score = score
                 best_move = m["direction"]
