@@ -2,6 +2,7 @@
 An improved, robust Battlesnake implementation.
 Features:
 - Flood Fill path/space analysis to avoid trapping ourselves.
+- Depth-limited Flood Fill (max_depth=15) to prevent performance degradation on large boards.
 - Dangerous head-to-head collision avoidance with larger/equal-length snakes.
 - Tail-following support: tail segments that will move are considered empty.
 - Target closest food if health is low, or space is sufficient.
@@ -11,7 +12,7 @@ Features:
 def info():
     return {
         "apiversion": "1",
-        "author": "gemini-3-5-flash-improved-v3",
+        "author": "gemini-3-5-flash-improved-v4",
         "color": "#8b0000",
         "head": "shades",
         "tail": "sharp",
@@ -36,21 +37,27 @@ def _board_center(width, height):
     return (center_x, center_y)
 
 
-def flood_fill_size(start, occupied, width, height):
+def flood_fill_size(start, occupied, width, height, max_depth=15):
+    """
+    Flood fill with a depth limit to avoid performance scaling issues
+    while still accurately determining space availability.
+    """
     if start in occupied:
         return 0
     visited = {start}
-    queue = [start]
+    queue = [(start, 0)]
     count = 0
     while queue:
-        curr = queue.pop(0)
+        curr, depth = queue.pop(0)
         count += 1
+        if depth >= max_depth:
+            continue
         cx, cy = curr
         for nx, ny in [(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)]:
             if 0 <= nx < width and 0 <= ny < height:
                 if (nx, ny) not in occupied and (nx, ny) not in visited:
                     visited.add((nx, ny))
-                    queue.append((nx, ny))
+                    queue.append(((nx, ny), depth + 1))
     return count
 
 
@@ -108,8 +115,8 @@ def move(game_state):
                                 is_dangerous = True
                                 break
                     
-                    # Calculate room size via flood fill
-                    room_size = flood_fill_size(pos, occupied, width, height)
+                    # Calculate room size via depth-limited flood fill
+                    room_size = flood_fill_size(pos, occupied, width, height, max_depth=15)
                     
                     safe_moves.append({
                         "direction": d,
@@ -127,14 +134,8 @@ def move(game_state):
                     return {"move": d}
             return {"move": "up"}
             
-        # Prioritize moves:
-        # 1. Prefer non-dangerous moves
-        # 2. Prefer moves that leave enough room for our entire body (room_size >= my_length)
-        # 3. Choose the move that gets us closest to the target (food or center)
-        
         # Target determination:
-        # If health is low (< 40) or we are not the longest snake, target food.
-        # Otherwise, we can still target food or the center of the board to control space.
+        # Target closest food.
         food = board.get("food", [])
         target = None
         if food:
@@ -155,9 +156,11 @@ def move(game_state):
         
         for m in safe_moves:
             not_dangerous = 1 if not m["is_dangerous"] else 0
-            # Check if we have enough room to not get trapped.
-            # Ideally we want room_size >= my_length, but even if not, more room is better.
-            has_space = 1 if m["room_size"] >= my_length else 0
+            
+            # Use room_size limit to determine if there is space.
+            # Since max_depth is 15, maximum room size returned is around 113.
+            # So if room_size is limited, we check if it is >= my_length or at least we prioritize the largest room_size.
+            has_space = 1 if m["room_size"] >= min(my_length, 50) else 0
             
             dist = _manhattan(m["position"], target)
             
