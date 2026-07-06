@@ -1,14 +1,16 @@
 """
-Simple but robust Battlesnake implementation.
-Avoids self-collision, wall-collision, and collision with other snakes.
-Prefers nearest food when health is low or there are no other constraints,
-otherwise navigates safely, potentially to the center or safely away from hazards.
+An improved, robust Battlesnake implementation.
+Features:
+- Flood Fill path/space analysis to avoid trapping ourselves.
+- Dangerous head-to-head collision avoidance with larger/equal-length snakes.
+- Target closest food if health is low, or space is sufficient.
+- Smart fallbacks if all safe moves are constrained.
 """
 
 def info():
     return {
         "apiversion": "1",
-        "author": "gemini-3-5-flash-improved",
+        "author": "gemini-3-5-flash-improved-v2",
         "color": "#8b0000",
         "head": "shades",
         "tail": "sharp",
@@ -33,12 +35,32 @@ def _board_center(width, height):
     return (center_x, center_y)
 
 
+def flood_fill_size(start, occupied, width, height):
+    if start in occupied:
+        return 0
+    visited = {start}
+    queue = [start]
+    count = 0
+    while queue:
+        curr = queue.pop(0)
+        count += 1
+        cx, cy = curr
+        for nx, ny in [(cx+1, cy), (cx-1, cy), (cx, cy+1), (cx, cy-1)]:
+            if 0 <= nx < width and 0 <= ny < height:
+                if (nx, ny) not in occupied and (nx, ny) not in visited:
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
+    return count
+
+
 def move(game_state):
     try:
         board = game_state["board"]
         width, height = board["width"], board["height"]
         
-        my_body = game_state["you"]["body"]
+        my_snake = game_state["you"]
+        my_body = my_snake["body"]
+        my_length = len(my_body)
         head_seg = my_body[0]
         head = (head_seg["x"], head_seg["y"])
         
@@ -51,46 +73,60 @@ def move(game_state):
         }
         
         # Identify occupied cells (walls, snake bodies)
-        # Note: We can also avoid other snakes' bodies.
         occupied = set()
-        
-        # Add walls to occupied or handle dynamically
-        # For simplicity, we just filter out directions out of bounds.
-        
-        # Add all snakes bodies to occupied
         for snake in board.get("snakes", []):
             for seg in snake["body"]:
                 occupied.add((seg["x"], seg["y"]))
                 
-        # Note: The tail of a snake might move out of the way in the next turn,
-        # but for absolute safety we treat it as occupied unless we really have to.
-        
         # Filter possible moves that are safe (in-bounds and not occupied)
         safe_moves = []
         for d, pos in directions.items():
             px, py = pos
             if 0 <= px < width and 0 <= py < height:
                 if pos not in occupied:
-                    safe_moves.append((d, pos))
+                    # Check for head-to-head danger from other snakes
+                    is_dangerous = False
+                    for snake in board.get("snakes", []):
+                        if snake["id"] == my_snake["id"]:
+                            continue
+                        opp_head = (snake["body"][0]["x"], snake["body"][0]["y"])
+                        opp_len = len(snake["body"])
+                        # If opponent can move to this position next turn (1 step away)
+                        if abs(pos[0] - opp_head[0]) + abs(pos[1] - opp_head[1]) == 1:
+                            if opp_len >= my_length:
+                                is_dangerous = True
+                                break
                     
-        # If no safe moves available, just try any in-bounds move as fallback
+                    # Calculate room size via flood fill
+                    room_size = flood_fill_size(pos, occupied, width, height)
+                    
+                    safe_moves.append({
+                        "direction": d,
+                        "position": pos,
+                        "is_dangerous": is_dangerous,
+                        "room_size": room_size
+                    })
+                    
+        # If no safe moves available, absolute fallback
         if not safe_moves:
+            # Let's at least try to move in-bounds
             for d, pos in directions.items():
                 px, py = pos
                 if 0 <= px < width and 0 <= py < height:
-                    safe_moves.append((d, pos))
-                    
-        if not safe_moves:
-            # Absolute fallback
+                    return {"move": d}
             return {"move": "up"}
             
-        # Strategy:
-        # Choose a target: Nearest food if health is relatively low (< 50) or if we want to grow.
-        # Otherwise, move towards the center or just target the closest food anyway (usually optimal).
+        # Prioritize moves:
+        # 1. Prefer non-dangerous moves
+        # 2. Prefer moves that leave enough room for our entire body (room_size >= my_length)
+        # 3. Choose the move that gets us closest to the target (food or center)
+        
+        # Target determination:
+        # If health is low (< 40) or we are not the longest snake, target food.
+        # Otherwise, we can still target food or the center of the board to control space.
         food = board.get("food", [])
+        target = None
         if food:
-            # Find closest food
-            target = None
             best_dist = float('inf')
             for f in food:
                 fp = (f["x"], f["y"])
@@ -98,17 +134,28 @@ def move(game_state):
                 if d < best_dist:
                     best_dist = d
                     target = fp
-        else:
+        if not target:
             target = _board_center(width, height)
             
-        # Select the safe move that gets us closest to the target
-        best_move = safe_moves[0][0]
-        best_move_dist = float('inf')
-        for d, pos in safe_moves:
-            dist = _manhattan(pos, target)
-            if dist < best_move_dist:
-                best_move_dist = dist
-                best_move = d
+        # Score each safe move
+        best_move = None
+        best_score = (-float('inf'), -float('inf'), -float('inf')) # (not_dangerous, has_space, -distance)
+        
+        for m in safe_moves:
+            not_dangerous = 1 if not m["is_dangerous"] else 0
+            # Check if we have enough room to not get trapped.
+            # Ideally we want room_size >= my_length, but even if not, more room is better.
+            has_space = 1 if m["room_size"] >= my_length else 0
+            
+            dist = _manhattan(m["position"], target)
+            # We want to maximize: (not_dangerous, has_space, -dist)
+            # But wait, what if all moves have has_space == 0? We should prefer the one with larger room_size.
+            # So let's use room_size itself as part of the score or as a tie-breaker.
+            # Let's score as: (not_dangerous, m["room_size"] >= my_length, m["room_size"], -dist)
+            score = (not_dangerous, has_space, m["room_size"], -dist)
+            if score > best_score:
+                best_score = score
+                best_move = m["direction"]
                 
         return {"move": best_move}
         
