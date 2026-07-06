@@ -2,6 +2,11 @@ import os
 import json
 
 rounds_dir = "/logs/rounds"
+only_dangerous = 0
+no_options = 0
+had_safe_but_died = 0
+total_deaths = 0
+
 for round_name in sorted(os.listdir(rounds_dir)):
     round_path = os.path.join(rounds_dir, round_name)
     if not os.path.isdir(round_path):
@@ -26,6 +31,7 @@ for round_name in sorted(os.listdir(rounds_dir)):
                     break
             
             if died_turn is not None:
+                total_deaths += 1
                 prev_turn_idx = None
                 for idx, turn in enumerate(turns):
                     if turn["turn"] == died_turn - 1:
@@ -67,5 +73,16 @@ for round_name in sorted(os.listdir(rounds_dir)):
                                         dangerous_options.append(f"{d} (room: {room})")
                                     else:
                                         safe_options.append(f"{d} (room: {room})")
-                        if not safe_options and dangerous_options:
-                            print(f"Collision death: Round {round_name} {filename} Turn {died_turn - 1}. Head: {head}, options count: {len(safe_options)+len(dangerous_options)}, only dangerous available: {dangerous_options}")
+                        
+                        if not safe_options and not dangerous_options:
+                            no_options += 1
+                        elif not safe_options and dangerous_options:
+                            only_dangerous += 1
+                        else:
+                            had_safe_but_died += 1
+                            print(f"Had safe move but died: Round {round_name} {filename} Turn {died_turn-1}. Options: {safe_options}, dangerous: {dangerous_options}")
+
+print(f"Total deaths: {total_deaths}")
+print(f"No options: {no_options}")
+print(f"Only dangerous: {only_dangerous}")
+print(f"Had safe moves but died: {had_safe_but_died}")
