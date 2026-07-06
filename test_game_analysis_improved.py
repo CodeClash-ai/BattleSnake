@@ -1,8 +1,18 @@
-# Let's write a simulation with different depth limits or search approaches
-# We want to see how we can avoid situations like Turn 31 where going to (10, 10) leaves only (10, 9) which is head-to-head collision.
-# Actually, the standard Battlesnake strategy is:
-# When moving to a cell, we should look-ahead at least 1 turn (or 2 turns) to see if we have non-dangerous or guaranteed survival paths.
-# If a move to (10, 10) results in only 1 next move (10, 9) which is dangerous, we should rank it lower than an alternative move if available.
-# Let's write an improved move selection algorithm in a new file, or modify main.py directly.
-# First, let's see how many ties and losses we can reduce.
-# Let's implement a 2-step look-ahead or path projection.
+import json
+import os
+
+def analyze():
+    # Let's inspect turn 110 of sim_128 in round 0
+    # Head at (0, 0), body [(0,0), (1,0), (1,1), (0,1), (0,2), (0,3), (0,4)]
+    # My snake length is 7. Opponent has length 16.
+    # What directions are possible from (0,0)?
+    # up: (0, 1) -> occupied by own body.
+    # down: (0, -1) -> out of bounds.
+    # left: (-1, 0) -> out of bounds.
+    # right: (1, 0) -> occupied by own body.
+    # Oh! My head is at (0,0), but the body is [(0,0), (1,0), (1,1), (0,1)...]
+    # Wait, how did our head get to (0,0) with (1,0) and (0,1) both occupied?
+    # Let's look at the actual game state or history.
+    pass
+
+analyze()
