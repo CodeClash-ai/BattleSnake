@@ -1,6 +1,6 @@
 import json
 
-files = [("sim_210.jsonl", 234), ("sim_215.jsonl", 238), ("sim_219.jsonl", 35)]
+files = [("sim_244.jsonl", 59), ("sim_244.jsonl", 60), ("sim_244.jsonl", 61), ("sim_244.jsonl", 62), ("sim_244.jsonl", 63)]
 
 for filename, target_turn in files:
     filepath = f"/logs/rounds/1/{filename}"
@@ -19,6 +19,10 @@ for filename, target_turn in files:
             turn_data = t
             break
             
+    if not turn_data:
+        print(f"Turn {target_turn} not found in {filename}")
+        continue
+        
     print(f"\n=================== {filename} Turn {target_turn} ===================")
     
     width, height = turn_data["board"]["width"], turn_data["board"]["height"]
@@ -28,13 +32,12 @@ for filename, target_turn in files:
     for s in turn_data["board"]["snakes"]:
         if s["name"] == "gemini-3-5-flash":
             my_snake = s
-        for seg in s["body"]:
-            grid[seg["y"]][seg["x"]] = "O" if s["name"] != "gemini-3-5-flash" else "S"
+        for idx, seg in enumerate(s["body"]):
+            char = "O" if s["name"] != "gemini-3-5-flash" else "S"
+            if idx == 0:
+                char = "H" if s["name"] == "gemini-3-5-flash" else "X"
+            grid[seg["y"]][seg["x"]] = char
             
-    if my_snake:
-        h = my_snake["head"]
-        grid[h["y"]][h["x"]] = "H"
-        
     for y in range(height-1, -1, -1):
         row = "".join(grid[y])
         print(f"{y:2d} | {row}")
