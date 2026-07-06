@@ -5,14 +5,14 @@ file_path = "/logs/rounds/0/sim_128.jsonl"
 with open(file_path, "r") as f:
     lines = f.readlines()
 
-state_109 = json.loads(lines[110])
-gemini = next(s for s in state_109["board"]["snakes"] if s["name"] == "gemini-3-5-flash")
-state_109["you"] = gemini
+state_108 = json.loads(lines[109])
+gemini = next(s for s in state_108["board"]["snakes"] if s["name"] == "gemini-3-5-flash")
+state_108["you"] = gemini
 
 # Let's see the calculations:
-board = state_109["board"]
+board = state_108["board"]
 width, height = board["width"], board["height"]
-my_snake = state_109["you"]
+my_snake = state_108["you"]
 my_body = my_snake["body"]
 my_length = len(my_body)
 head_seg = my_body[0]
@@ -98,4 +98,3 @@ for m in safe_moves:
     dist = main._manhattan(m["position"], target)
     score = (not_dangerous, has_space, m["next_choices"], m["room_size"], -dist)
     print(f"Move: {m['direction']}, pos: {m['position']}, is_dangerous: {m['is_dangerous']}, room_size: {m['room_size']}, next_choices: {m['next_choices']}, score: {score}")
-

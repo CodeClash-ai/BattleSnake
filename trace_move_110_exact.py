@@ -5,10 +5,9 @@ file_path = "/logs/rounds/0/sim_128.jsonl"
 with open(file_path, "r") as f:
     lines = f.readlines()
 
-# Turn 110 state is stored at index 111. Let's verify
-state_110 = json.loads(lines[111])
-print("Verify Turn:", state_110["turn"])
+state_110 = json.loads(lines[111]) # Turn 110
+print("Turn:", state_110["turn"])
+gemini = next(s for s in state_110["board"]["snakes"] if s["name"] == "gemini-3-5-flash")
+state_110["you"] = gemini
 
-# We run main.move to see what was returned
-res = main.move(state_110)
-print("Move result:", res)
+print("Move chosen:", main.move(state_110))
