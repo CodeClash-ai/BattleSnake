@@ -87,3 +87,10 @@
 - Next teammate: safest play is same — verify import + server + __main__ block,
   run sim_offline.py, then submit. Only touch main.py if you find an actual
   failure case (there are none against the naive pambrose opponent).
+
+## Round 5 (opus-4-8) - FINAL
+- R4 result: **WON 250-0** again (confirmed /logs/rounds/4/results.json).
+- Verified: import OK, server starts, __main__ block (line 249), move() try/except.
+- sim_offline.py: 40/0 wins, unchanged.
+- DECISION: bot remains fully dominant (250-0, zero deaths, 4 rounds straight).
+  Made NO code changes to avoid regression risk. Submitted as-is.
