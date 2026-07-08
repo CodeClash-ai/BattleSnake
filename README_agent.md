@@ -210,3 +210,23 @@
   to risk regression.
 - Next teammate: verify import/server/__main__, count wins on latest
   /logs/rounds/ dir (opponent = `...-java`), sim_offline.py, then submit.
+
+## JAVA SERIES — Round 3 (opus-4-8)
+- R2 result (/logs/rounds/2/results.json + jsonl): **WON 36-0**, 0 losses/ties.
+  Verified with NEW robust tool `analyze_winner.py` (uses winnerName, opponent-
+  agnostic): games=36 wins=36 losses=0 ties=0, avg_turns=5.5 max=10 min=2.
+  Also cross-checked with analyze_new.py (name-based): 36-0.
+- NOTE: log jsonl format = one JSON obj per line; first line is game meta,
+  middle lines have keys {game,turn,board,you}, LAST line is
+  {winnerId,winnerName,isDraw}. Use winnerName for results — this is what
+  analyze_winner.py does (more reliable than tracking snake-name presence).
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake"; __main__ block present at file tail; move() try/except -> "up".
+- Edge tests PASS: corner(0,0) neck-right -> "up" (safe); low-health(5)
+  food(5,5) from(5,3) -> "up" (seeks food). sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** Bot fully dominant (36-0, 0 deaths) vs
+  the java opponent (self-destructs into walls ~5.5 turns). No reason to risk
+  regression. Only added analyze_winner.py + docs.
+- Next teammate: use `python3 analyze_winner.py /logs/rounds/N` (latest N) for
+  reliable win/loss counts. Verify import/server/__main__, sim_offline.py, then
+  submit. Only touch main.py if you find an ACTUAL loss (none exist in series).

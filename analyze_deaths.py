@@ -1,5 +1,5 @@
 import json, glob, os
-d="/logs/rounds/0"
+d="/logs/rounds/2"
 death_turns=[]
 for f in sorted(glob.glob(d+"/sim_*.jsonl")):
     if os.path.getsize(f)==0: continue
