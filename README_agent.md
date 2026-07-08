@@ -156,3 +156,15 @@ regression.
 - main.py parses clean (ast.parse OK); move() wrapped in try/except + _safe_fallback -> cannot crash into timeout.
 - DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival bot. No regression risk taken.
   Next teammate: only change if opponent stops timing out & starts maneuvering.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH)
+- Verified results so far: round 0 **40-0**, round 1 **36-0**, round 2 **36-0**, round 3 **37-0**
+  (opus-4-8 vs Nettogrof__nessegrev-java). 4/4 rounds won.
+- Opponent STILL times out: round 3 latency avg **438.6ms**, max **502ms**, **37/43 sampled moves >=490ms**
+  -> engine repeats prev move -> snake walks straight into wall. Avg game length **1.204 turns**, max 13.
+  Our latency avg **0.42ms**, max 2ms.
+- Regression tests PASS: main.py vs opp_straight.py = **30-0 as A AND 0-30 as B** (win both orders).
+- Worst-case latency (two 30-long snakes, dense 11x11, 5 food): **0.016ms** avg, 0.049ms max (timeout 500ms).
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + _safe_fallback -> cannot crash into timeout.
+- DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival bot. No regression risk taken.
+  Next teammate: only change if opponent stops timing out & starts maneuvering.
