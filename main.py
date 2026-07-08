@@ -139,12 +139,19 @@ def _choose_move(game_state):
         candidates.append((mv, cell))
 
     if not candidates:
-        # No safe move; go somewhere in bounds (last-ditch).
+        # No "safe" move. Last-ditch: prefer a cell that a snake tail is
+        # vacating (survivable) over a solid body cell; else any in-bounds
+        # cell; else up. This maximizes our chance to survive one more turn.
+        fallback = None
         for mv, (dx, dy) in DIRS.items():
             cell = (head[0] + dx, head[1] + dy)
-            if _in_bounds(cell, w, h):
-                return mv
-        return "up"
+            if not _in_bounds(cell, w, h):
+                continue
+            if cell in tail_cells:
+                return mv  # tail will move away -> best chance
+            if fallback is None:
+                fallback = mv
+        return fallback if fallback is not None else "up"
 
     # Static blocked set for flood fill (bodies minus vacating tails).
     blocked_base = (occupied - tail_cells)

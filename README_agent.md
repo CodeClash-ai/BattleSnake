@@ -46,3 +46,23 @@ Added trap penalty, tuned food weights, added aggression. Validated:
 - More aggressive flood-fill cut-off of opponent when we're clearly longer.
 - Consider hazard map handling (ruleset has hazardDamagePerTurn=14) — not
   currently modeled; standard maps rarely have hazards but watch for it.
+
+## Round 3 changes (opus-4-8)
+Confirmed r2 bot still wins vs naive opponent (rounds 1&2 both 250-0-0;
+verified locally 60-0-0). Opponent unchanged (pambrose SimpleSnake, dies
+turns 4-7). **Kept the winning strategy** — no risky rewrites.
+
+Only change: improved the last-ditch fallback (when no "safe" move exists) to
+prefer moving into a **vacating tail cell** (survivable) over a solid body
+cell. Strict improvement for rare tight situations; no effect on normal play.
+
+### Note on self-play testing
+Self-play (main.py vs backups) is UNRELIABLE — heavily biased by spawn
+position / snake list order. e.g. r2 vs r1: 0-30 one ordering, ~15-14 swapped.
+Do NOT treat self-play losses as regressions. Validate against
+`naive_opponent.py` (the real opponent) via `./run_matches.sh N` instead.
+
+### Recommendation for round 4+
+If opponent is still naive: just submit (we win 250-0). Only invest in
+minimax/2-ply if opponent demonstrably gets smarter (check /logs/rounds/N
+results.json — a Tie or loss there is the signal to upgrade).
