@@ -1,21 +1,15 @@
 """
-CodeClash BattleSnake bot (v5).
+CodeClash BattleSnake bot.
 
-Strategy (see README_agent.md):
+Strategy (see README_agent.md for details):
   - Never move into walls, own body, or other snake bodies.
-  - Correct tail handling (tail vacates unless the snake just ate).
-  - Flood-fill each candidate move for reachable space AND a "survival" check:
-    the reachable space must comfortably exceed our body length or we treat it
-    as a trap. This prevents coiling ourselves into a dead pocket (the failure
-    mode that lost round-2 games vs csauve__bookworm).
-  - Tail-reachability as a strong secondary safety.
-  - Head-to-head: avoid squares an equal/longer enemy head can reach; win them
-    when strictly longer.
-  - Aggression: when longer, pressure the enemy toward walls / losing H2H.
-  - Seek food when it is safe and especially when health is low.
+  - Treat snake tails correctly (tail vacates unless the snake just ate).
+  - Flood-fill each candidate move to avoid trapping ourselves in small pockets.
+  - Head-to-head awareness: avoid squares an equal/longer enemy head could also
+    reach; actively try to win head-to-heads when we are strictly longer.
+  - Seek food when it is safe and especially when health is low; otherwise
+    prefer central, high-mobility squares.
 """
-
-from collections import deque
 
 DIRS = {
     "up": (0, 1),
@@ -52,18 +46,22 @@ def _in_bounds(p, w, h):
 
 
 def _neighbors(p):
-    x, y = p
-    return ((x, y + 1), (x, y - 1), (x - 1, y), (x + 1, y))
+    return [(p[0] + dx, p[1] + dy) for dx, dy in DIRS.values()]
 
 
 def _build_obstacles(board, exclude_tails=True):
-    """Occupied cells. Tails excluded when the snake will move (didn't just eat)."""
+    """Return set of occupied cells. Tails are excluded when the snake will
+    move (i.e. did not just eat -> tail moves away next turn)."""
     obstacles = set()
     for snake in board["snakes"]:
         body = snake["body"]
         n = len(body)
         for i, seg in enumerate(body):
             cell = (seg["x"], seg["y"])
+            # The tail (last segment) usually vacates next turn. But if the
+            # snake just ate (health==100 and body has duplicated tail) the
+            # tail stays. We approximate: exclude the tail unless the last two
+            # segments coincide (freshly grown / just ate).
             if exclude_tails and i == n - 1 and n >= 2:
                 tail = body[-1]
                 pre = body[-2]
@@ -74,6 +72,7 @@ def _build_obstacles(board, exclude_tails=True):
 
 
 def _flood_fill(start_cell, obstacles, w, h, limit=None):
+    """Count reachable free cells from start_cell (BFS)."""
     if start_cell in obstacles or not _in_bounds(start_cell, w, h):
         return 0
     seen = {start_cell}
@@ -84,12 +83,10 @@ def _flood_fill(start_cell, obstacles, w, h, limit=None):
         count += 1
         if limit is not None and count >= limit:
             return count
-        cx, cy = cur
-        for nb in ((cx, cy + 1), (cx, cy - 1), (cx - 1, cy), (cx + 1, cy)):
+        for nb in _neighbors(cur):
             if nb in seen:
                 continue
-            nx, ny = nb
-            if nx < 0 or nx >= w or ny < 0 or ny >= h:
+            if not _in_bounds(nb, w, h):
                 continue
             if nb in obstacles:
                 continue
@@ -99,6 +96,7 @@ def _flood_fill(start_cell, obstacles, w, h, limit=None):
 
 
 def _reachable(start_cell, target, obstacles, w, h):
+    """BFS: is target reachable from start_cell through free cells?"""
     if start_cell == target:
         return True
     if start_cell in obstacles or not _in_bounds(start_cell, w, h):
@@ -107,12 +105,10 @@ def _reachable(start_cell, target, obstacles, w, h):
     stack = [start_cell]
     while stack:
         cur = stack.pop()
-        cx, cy = cur
-        for nb in ((cx, cy + 1), (cx, cy - 1), (cx - 1, cy), (cx + 1, cy)):
+        for nb in _neighbors(cur):
             if nb == target:
                 return True
-            nx, ny = nb
-            if nb in seen or nx < 0 or nx >= w or ny < 0 or ny >= h or nb in obstacles:
+            if nb in seen or not _in_bounds(nb, w, h) or nb in obstacles:
                 continue
             seen.add(nb)
             stack.append(nb)
@@ -120,20 +116,19 @@ def _reachable(start_cell, target, obstacles, w, h):
 
 
 def _bfs_dist(start_cell, targets, obstacles, w, h):
+    """BFS shortest path distance from start_cell to nearest of targets
+    (a set), through free cells. Returns None if unreachable."""
     if not targets:
         return None
     if start_cell in targets:
         return 0
+    from collections import deque
     seen = {start_cell}
     q = deque([(start_cell, 0)])
     while q:
         cur, d = q.popleft()
-        cx, cy = cur
-        for nb in ((cx, cy + 1), (cx, cy - 1), (cx - 1, cy), (cx + 1, cy)):
-            if nb in seen:
-                continue
-            nx, ny = nb
-            if nx < 0 or nx >= w or ny < 0 or ny >= h:
+        for nb in _neighbors(cur):
+            if nb in seen or not _in_bounds(nb, w, h):
                 continue
             if nb in targets:
                 return d + 1
@@ -158,17 +153,10 @@ def _safe_fallback(game_state):
         head_seg = game_state["you"]["body"][0]
         head = (head_seg["x"], head_seg["y"])
         obstacles = _build_obstacles(board)
-        best = None
-        best_space = -1
         for name, (dx, dy) in DIRS.items():
             nxt = (head[0] + dx, head[1] + dy)
             if _in_bounds(nxt, w, h) and nxt not in obstacles:
-                sp = _flood_fill(nxt, obstacles, w, h, limit=w * h)
-                if sp > best_space:
-                    best_space = sp
-                    best = name
-        if best:
-            return best
+                return name
     except Exception:
         pass
     return "up"
@@ -185,7 +173,7 @@ def _choose_move(game_state):
 
     obstacles = _build_obstacles(board)
 
-    # Other snakes' heads for head-to-head handling.
+    # Info about other snakes' heads for head-to-head handling.
     enemies = []
     for snake in board["snakes"]:
         if snake["id"] == you["id"]:
@@ -194,11 +182,10 @@ def _choose_move(game_state):
         enemies.append({
             "head": (eh["x"], eh["y"]),
             "len": len(snake["body"]),
-            "body": [(s["x"], s["y"]) for s in snake["body"]],
         })
 
-    # Cells an enemy head could move into next turn -> max enemy length there.
-    enemy_next = {}
+    # Cells an enemy head could move into next turn.
+    enemy_next = {}  # cell -> max enemy length that can reach it
     for e in enemies:
         for nb in _neighbors(e["head"]):
             if not _in_bounds(nb, w, h):
@@ -209,7 +196,6 @@ def _choose_move(game_state):
     food_set = set(food)
 
     total_cells = w * h
-    my_tail = (body[-1]["x"], body[-1]["y"])
     candidates = []
     for name, (dx, dy) in DIRS.items():
         nxt = (head[0] + dx, head[1] + dy)
@@ -218,16 +204,28 @@ def _choose_move(game_state):
         if nxt in obstacles:
             continue
 
+        # Head-to-head risk assessment.
         h2h_len = enemy_next.get(nxt, 0)
+        # If an enemy of equal or greater length can also step here, it's
+        # dangerous (we'd tie or lose). Mark it but don't always forbid.
         loses_h2h = h2h_len >= my_len
         wins_h2h = h2h_len > 0 and h2h_len < my_len
 
+        # Simulate the board one step ahead: our head advances to nxt.
+        # Our tail vacates next turn -- UNLESS we are about to eat food this
+        # move (nxt is food), in which case the body grows and the tail stays.
+        my_tail = (body[-1]["x"], body[-1]["y"])
         sim_obstacles = set(obstacles)
         eating_now = nxt in food_set
         if not eating_now:
-            sim_obstacles.discard(my_tail)
+            sim_obstacles.discard(my_tail)   # our tail moves away
+        # NOTE: do NOT add nxt to obstacles; flood-fill starts FROM nxt and
+        # would otherwise immediately return 0. nxt occupancy is implicit.
 
         space = _flood_fill(nxt, sim_obstacles, w, h, limit=total_cells)
+
+        # Tail-reachability: if we can still reach our own tail after moving,
+        # we are almost never trapped (we can chase our tail indefinitely).
         tail_reachable = _reachable(nxt, my_tail, sim_obstacles, w, h)
 
         candidates.append({
@@ -242,26 +240,25 @@ def _choose_move(game_state):
     if not candidates:
         return _safe_fallback(game_state)
 
-    # Prefer moves that don't lose head-to-heads if any exist.
+    # Prefer moves that don't lose head-to-heads if any such moves exist.
     safe = [c for c in candidates if not c["loses_h2h"]]
     pool = safe if safe else candidates
 
-    # Survival: a move is "safe space" if we can reach our tail OR the reachable
-    # space is at least our length (we won't box ourselves in immediately).
-    # Require BOTH a decent tail loop or ample space to avoid coiling traps.
-    def survivable(c):
-        return c["tail_reachable"] or c["space"] >= my_len + 1
+    # Strongly prefer moves where we can still reach our own tail (safe loop),
+    # then moves with enough space to hold our whole body.
+    tail_ok = [c for c in pool if c["tail_reachable"]]
+    pool2 = tail_ok if tail_ok else pool
+    ample = [c for c in pool2 if c["space"] >= my_len]
+    working = ample if ample else pool2
 
-    surv = [c for c in pool if survivable(c)]
-    pool2 = surv if surv else pool
-
-    # Among survivable, prefer ones with the most space to keep options open.
-    max_space = max(c["space"] for c in pool2)
-
+    # Decide whether to chase food.
     want_food = health < 65 or my_len < 5
+    my_tail = (body[-1]["x"], body[-1]["y"])
     best = None
     best_key = None
-    for c in pool2:
+    for c in working:
+        # Obstacle-aware BFS distance to nearest food from this cell. This is
+        # crucial vs manhattan: food behind our own body is not "close".
         sim_obstacles = set(obstacles)
         sim_obstacles.discard(my_tail)
         sim_obstacles.discard(c["cell"])
@@ -271,19 +268,15 @@ def _choose_move(game_state):
         else:
             fdist = 0
 
+        # Center attraction (tie-breaker for control).
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
         cdist = abs(c["cell"][0] - cx) + abs(c["cell"][1] - cy)
 
+        # Scoring: prioritize space & not-trapping, then food/h2h, then center.
         score = 0.0
-        # Space is the primary survival driver.
         score += c["space"] * 3.0
-        # Extra reward for having the most space (avoid corridors).
-        if c["space"] == max_space:
-            score += 8.0
-        # Penalize tight spaces relative to our length (trap risk).
-        if c["space"] < my_len + 2:
-            score -= (my_len + 2 - c["space"]) * 6.0
-
+        # Tail-following bonus keeps us safe, but must not override the need to
+        # eat when starving (otherwise we loop in a corner and die).
         if health >= 40:
             tail_bonus = 50.0
         elif health >= 20:
@@ -292,19 +285,20 @@ def _choose_move(game_state):
             tail_bonus = 2.0
         if c["tail_reachable"]:
             score += tail_bonus
-
         if c["wins_h2h"]:
-            score += 30.0
-
-        # Aggression: when clearly longer, close on the enemy head to pressure
-        # it toward walls / losing head-to-heads. Only when we have room.
+            score += 25.0
+        # Aggression: when strictly longer than the nearest enemy, close the
+        # distance to its head to pressure it into a losing head-to-head or a
+        # wall. Only a mild bonus so survival/space always dominate.
         if enemies:
             nearest = min(enemies, key=lambda e: _manhattan(head, e["head"]))
-            if my_len > nearest["len"] + 1 and health >= 35 and c["space"] >= my_len + 2:
+            if my_len > nearest["len"] + 1 and health >= 40 and c["space"] >= my_len:
                 edist = _manhattan(c["cell"], nearest["head"])
-                score -= edist * 2.0
-
+                score -= edist * 1.5
         if food_set:
+            # Urgency ramps up sharply as health drops. When starving, food
+            # must dominate the space heuristic to survive. Using BFS distance
+            # guarantees we actually move toward reachable food.
             if health < 25:
                 score -= fdist * 100.0
             elif health < 40:
@@ -315,16 +309,16 @@ def _choose_move(game_state):
                 score -= fdist * 5.0
             elif my_len < 12:
                 score -= fdist * 1.0
-
         score -= cdist * 0.4
         if c["loses_h2h"]:
             score -= 100.0
 
-        if best is None or score > best_key:
+        key = score
+        if best is None or key > best_key:
             best = c
-            best_key = score
+            best_key = key
 
-    return best["name"] if best else pool2[0]["name"]
+    return best["name"] if best else working[0]["name"]
 
 
 if __name__ == "__main__":

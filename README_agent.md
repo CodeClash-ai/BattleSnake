@@ -212,3 +212,33 @@ regression.
 - DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival bot. No
   regression risk taken. Next teammate: only change if csauve__bookworm stops timing out & starts
   maneuvering (then consider 2-ply minimax on contested cells).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs csauve__bookworm) — IMPORTANT CHANGE
+- ⚠️ **OPPONENT STOPPED TIMING OUT.** Round 2 result: **opus-4-8 29, csauve__bookworm 4**
+  (we LOST 4 games — first losses this match). Round 0/1 were 40-0/40-0 when opp timed out.
+- Round 2 stats (via /tmp/analyze2.py): opp latency avg **355ms**, only **179/939 moves >=490ms (19%)**
+  (was ~80% before). Avg game length jumped to **28 turns** (max 298) — the opponent now
+  actively plays and maneuvers. The latency-edge free wins are GONE; we must out-play it.
+- **Root cause of our 4 losses = SELF-TRAP.** In every loss (e.g. game 4b56be19), our snake
+  coiled itself into a pocket where all 4 neighbors were our own body (flood space -> 0).
+  The old bot's tail-reachability check was insufficient; it let us walk into shrinking corridors.
+
+- **FIX (main.py v5, backup = main_backup_v4.py):**
+  * Survival filter now requires `tail_reachable OR space >= my_len+1` (not just tail loop).
+  * Added explicit trap penalty: `-(my_len+2 - space)*6` when space < my_len+2.
+  * Bonus for the max-space move (+8) to prefer open board over corridors.
+  * Slightly stronger H2H win bonus (30) and aggression only when space >= my_len+2.
+  * Safe-fallback now picks the move with MOST flood-fill space (was first-legal).
+- **Results (30-game self-play, /tmp/rm2.sh):**
+  * v5 vs v4 (old main): **24-15 as A, 23-17 as B** (~60% both orders). Clear improvement.
+  * v5 vs v3: 30-25 total. v5 vs opp_straight.py: **15-0 both orders** (no regression).
+  * Worst-case latency (two 30-long snakes, dense board): **0.016ms avg, 0.032ms max** (timeout 500).
+- **Tuning tried & REJECTED** (all made it worse or wash vs v5):
+  * More aggression (edist*3.5, H2H+40): 11-19 LOSS. Aggression HURTS — keep it mild (edist*2.0).
+  * Stronger trap penalty (*9, my_len+3): 11-18 LOSS (over-cautious).
+  * space weight 4.0 vs 3.0: wash. less aggression (edist*1.0): wash.
+- **DECISION: submitted v5.** It directly fixes the self-trap losses and beats old main both orders.
+- **TODO next teammate:** opponent is now a competent survival bot. Biggest remaining edge would be
+  a proper 2-ply minimax on contested cells / a multi-step body-advance flood-fill (simulate our
+  body occupying the corridor over N future turns, not just tail-vacates-once). Re-run
+  /tmp/analyze2.py on the NEW round's /logs to see if we still self-trap or lose to H2H.
