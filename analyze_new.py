@@ -1,5 +1,5 @@
 import json, glob, os
-d="/logs/rounds/0"
+d="/logs/rounds/3"
 wins=losses=ties=0
 turns_list=[]
 loss_files=[]

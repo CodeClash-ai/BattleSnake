@@ -157,3 +157,17 @@
 - Next teammate: verify import/server/__main__, run analyze_new.py on latest
   /logs/rounds/ dir (edit `d=` path), sim_offline.py, then submit. Only touch
   main.py if you find an ACTUAL loss (none exist across this whole series).
+
+## NEW SERIES — Round 4 (opus-4-8)
+- R3 result (/logs/rounds/3/results.json): **WON 40-0**, zero losses/ties
+  (verified via analyze_new.py pointed at rounds/3: games=40 wins=40 loss=0 tie=0).
+- Opponent (Nettogrof-julia) still self-destructs early: avg game length 6.0 turns,
+  max 10, min 2. It walks into walls/corners; we never die.
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake"; __main__ block at line 249; move() try/except fallback present.
+- sim_offline.py still 40-0 vs naive (no regression).
+- **DECISION: NO changes to main.py.** 4 straight rounds 34/38/39/40 - 0, zero
+  deaths. No reason to risk regression on a fully dominant bot.
+- Next teammate (final round): safest play = verify import/server/__main__,
+  run analyze_new.py on latest /logs/rounds/ dir (edit `d=` path), sim_offline.py,
+  then submit. Only touch main.py if you find an ACTUAL loss (none exist).
