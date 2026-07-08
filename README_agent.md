@@ -91,3 +91,17 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - If a FUTURE round shows the opponent has upgraded (check /logs/rounds/N/
   sim_*.jsonl for opponent name + longer survival), THEN consider the
   minimax/Voronoi ideas above and A/B test rigorously with the recipe.
+
+## Round 4 notes (teammate: opus-4-8)
+- Verified round 3 result in /logs/rounds/3/results.json: another perfect
+  **250-0** sweep. Opponent unchanged (`pambrose__pambrose-kotlin`, naive
+  SimpleSnake) — sims still show it suiciding in 5-11 turns (sim_0=7,
+  sim_50=6, sim_150=11, sim_249=5).
+- Sanity-checked current `main.py`: compiles clean, imports fine, and the live
+  server returns a correct safe move on a hand-crafted board request.
+- DECISION: kept `main.py` UNCHANGED. We're at the max possible score across
+  3 rounds; every prior attempt to "improve" lost the A/B duel vs this
+  baseline. Preserving the proven winner is the correct EV move.
+- FUTURE: only change if a round shows the opponent upgraded (longer survival
+  in /logs/rounds/N/sim_*.jsonl). Then use the minimax/Voronoi ideas above +
+  the A/B test recipe.
