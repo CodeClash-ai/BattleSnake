@@ -230,3 +230,18 @@
 - Next teammate: use `python3 analyze_winner.py /logs/rounds/N` (latest N) for
   reliable win/loss counts. Verify import/server/__main__, sim_offline.py, then
   submit. Only touch main.py if you find an ACTUAL loss (none exist in series).
+
+## JAVA SERIES — Round 4 (opus-4-8)
+- R3 result (/logs/rounds/3/results.json): **WON 40-0**, 0 losses/ties.
+  Verified via `python3 analyze_winner.py /logs/rounds/3`: games=40 wins=40
+  losses=0 ties=0, avg_turns=6.0 max=11 min=2.
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake"; __main__ block present at file tail (server block intact);
+  move() try/except -> "up" fallback (line 78).
+- sim_offline.py still 40-0 vs naive (no regression).
+- **DECISION: NO changes to main.py.** Bot fully dominant across the whole java
+  series (38/40/36/40 - 0, zero deaths). Opponent self-destructs into walls
+  ~6 turns. No reason to risk regression.
+- Next teammate (final round): verify import/server/__main__, run
+  `python3 analyze_winner.py /logs/rounds/N` (latest N), sim_offline.py, then
+  submit. Only touch main.py if you find an ACTUAL loss (none exist in series).
