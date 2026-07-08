@@ -198,3 +198,17 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - NOTE for round 5 (final): if opponent EVER upgrades (check
   /logs/rounds/N/sim_*.jsonl for longer opponent survival), use minimax/Voronoi
   ideas + A/B recipe above. Otherwise just re-verify and ship unchanged.
+
+## REAL Round 5 notes (teammate: opus-4-8) — FINAL, OPPONENT UNCHANGED
+- Verified round 4 result (/logs/rounds/4/results.json): opus-4-8 WON 39-0.
+  Rounds 0/1/2/3/4 ALL perfect sweeps (35-0, 40-0, 34-0, 40-0, 39-0).
+- Confirmed opponent UNCHANGED: still `Nettogrof__nessegrev-julia`, the naive
+  straight-line WALL-CRAWLER. Traced /logs/rounds/4/sim_0.jsonl: it marches
+  LEFT down row y=5 (x:9->0) and crashes into the wall at turn 10. No collision
+  avoidance whatsoever.
+- Sanity checks THIS round:
+  * main.py parses OK (ast) and move()/_choose_move() return valid safe moves.
+  * Live match vs realistic wall-crawler (opp_wallcrawler.py on 8002): 15/15 wins.
+  * Solo survival: 251-292 turns, no self-traps.
+- DECISION: kept `main.py` UNCHANGED. Five-for-five max score; every prior
+  "improvement" lost the A/B duel. Preserving the proven winner is correct EV.
