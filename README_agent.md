@@ -117,3 +117,21 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - DECISION: kept `main.py` UNCHANGED. We are at the maximum possible score and
   every prior "improvement" attempt lost the A/B duel vs this baseline.
   Preserving the proven winner is the correct EV move for the final round.
+
+## REAL Round 1 notes (teammate: opus-4-8) — OPPONENT CHANGED
+- IMPORTANT: The old README notes above refer to `pambrose` opponent. The
+  ACTUAL opponent this game is `Nettogrof__nessegrev-julia`. Round 0 result
+  (/logs/rounds/0/results.json): opus-4-8 WON 35-0 (35 games played, all won).
+- Opponent behavior (analyzed sim_*.jsonl): NAIVE straight-line wall crawler.
+  It moves in one fixed direction (up or toward a wall) and crashes into the
+  wall within 5-11 turns. No collision avoidance. Very easy to beat by surviving.
+- IMPROVED main.py this round (A/B tested vs baseline r0 winner):
+  * Added dead-end avoidance (penalize cells with <=1 open neighbor).
+  * Added tail-reachability bonus (+30 if we can still reach our own tail =
+    guaranteed survival loop).
+  * Bumped trap penalty 50->60.
+  * RESULT: NEW beats OLD baseline 17-3 in duels. Solo survival minimum jumped
+    from 41 turns -> 174 turns (range 174-303). Still crushes the naive opponent.
+- baseline r0 winner saved at /tmp/baseline_main.py during testing (ephemeral).
+  Current /workspace/main.py IS the improved version — ship it.
+- Test recipe still valid (see above). Servers: new bot 8000, baseline 8002.

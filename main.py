@@ -78,6 +78,15 @@ def _flood_fill(start_cell, blocked, w, h, limit=None):
     return count
 
 
+def _open_neighbors(cell, blocked, w, h):
+    """Number of passable neighbor cells (open escape routes)."""
+    n = 0
+    for nb in _neighbors(cell):
+        if _in_bounds(nb, w, h) and nb not in blocked:
+            n += 1
+    return n
+
+
 def move(game_state):
     try:
         return {"move": _choose_move(game_state)}
@@ -135,6 +144,13 @@ def _choose_move(game_state):
             else:
                 h2h_win.add(nb)
 
+    # Our own tail cell (target for tail-chasing survival).
+    my_body = [(b["x"], b["y"]) for b in me["body"]]
+    my_tail = my_body[-1] if my_body else None
+    # If we just ate (tail duplicated), tail won't vacate; treat as blocked.
+    if len(my_body) >= 2 and my_body[-1] == my_body[-2]:
+        my_tail = None
+
     # Candidate moves ranked.
     candidates = []
     for name, (dx, dy) in DIRS.items():
@@ -148,6 +164,27 @@ def _choose_move(game_state):
         blocked.add(nxt)
         space = _flood_fill(nxt, blocked, w, h)
 
+        # Open escape routes from the new head cell (dead-end detection).
+        openn = _open_neighbors(nxt, blocked, w, h)
+
+        # Can we still reach our own tail after this move? If so we can keep
+        # chasing it indefinitely (strong survival signal).
+        tail_reachable = False
+        if my_tail is not None and my_tail not in blocked:
+            # BFS from nxt looking for tail
+            seen = {nxt}
+            stack = [nxt]
+            while stack:
+                cur = stack.pop()
+                if cur == my_tail:
+                    tail_reachable = True
+                    break
+                for nb in _neighbors(cur):
+                    if nb in seen or not _in_bounds(nb, w, h) or nb in blocked:
+                        continue
+                    seen.add(nb)
+                    stack.append(nb)
+
         # Head-to-head risk classification.
         risky = nxt in h2h_lose
         winnable = nxt in h2h_win
@@ -156,6 +193,8 @@ def _choose_move(game_state):
             "name": name,
             "pos": nxt,
             "space": space,
+            "openn": openn,
+            "tail_reachable": tail_reachable,
             "risky": risky,
             "winnable": winnable,
         })
@@ -180,8 +219,14 @@ def _choose_move(game_state):
             s += 500.0
         # Space is critical: prefer more room. Heavily penalize traps.
         if c["space"] < my_len:
-            s -= (my_len - c["space"]) * 50.0
+            s -= (my_len - c["space"]) * 60.0
         s += c["space"] * 4.0
+        # Dead-end avoidance: cells with only one open neighbor are risky.
+        if c["openn"] <= 1:
+            s -= 40.0
+        # Strong bonus if we can still reach our own tail (guaranteed loop).
+        if c["tail_reachable"]:
+            s += 30.0
         # Food attraction, stronger when hungry. Keep weak when healthy so we
         # stay short & nimble (avoids self-trapping from overgrowth).
         if nearest_food is not None:
