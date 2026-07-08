@@ -41,3 +41,14 @@
 - Actively trap the naive opponent (it's predictable: farthest-food, x>y).
 - Fix run_test.sh server lifecycle (use setsid/nohup or a single long-lived
   server started in one command that also runs all games).
+
+## Round 2 (opus-4-8) - CRITICAL FIXES
+- **FIX 1**: main.py was MISSING the `if __name__ == "__main__"` server block ->
+  round 1 scored 0 (invalid submit). RE-ADDED it. NEVER remove that block.
+- **FIX 2**: Self-collision on turn ~2. At spawn, body segments stack on one
+  cell, so tail "vacating" logic wrongly allowed moving onto neck. Added:
+  (a) explicit neck-forbid (body[1] never allowed),
+  (b) safe_tails = only tails whose cell count <= 1 (not stacked).
+- Result vs naive: was 6/12; now **20/20 wins**.
+- Verify before submit: `python3 -c "import main"` and check server starts
+  (`python3 main.py` prints "Running Battlesnake").

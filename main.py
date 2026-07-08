@@ -116,6 +116,19 @@ def _choose_move(game_state):
         for nb in _neighbors(ohead, w, h):
             opp_next[nb] = max(opp_next.get(nb, 0), olen)
 
+    # Neck cell: we can never move backward onto our own neck.
+    my_body_pos = [(p["x"], p["y"]) for p in you["body"]]
+    neck = my_body_pos[1] if len(my_body_pos) >= 2 else None
+
+    # A tail is only truly safe to move into if that cell isn't ALSO occupied
+    # by another (non-tail) body segment (happens at spawn when body stacks).
+    from collections import Counter
+    cell_counts = Counter()
+    for s in snakes:
+        for p in s["body"]:
+            cell_counts[(p["x"], p["y"])] += 1
+    safe_tails = {t for t in tails if cell_counts[t] <= 1}
+
     # Candidate moves
     candidates = []
     for mv, (dx, dy) in MOVES.items():
@@ -123,8 +136,11 @@ def _choose_move(game_state):
         npos = (nx, ny)
         if not _in_bounds(nx, ny, w, h):
             continue
-        # blocked if occupied and not a vacating tail
-        if npos in occupied and npos not in tails:
+        # never reverse onto our own neck
+        if neck is not None and npos == neck:
+            continue
+        # blocked if occupied and not a genuinely-vacating tail
+        if npos in occupied and npos not in safe_tails:
             continue
         candidates.append((mv, npos))
 
@@ -209,3 +225,9 @@ def _choose_move(game_state):
             best_mv = mv
 
     return best_mv
+
+
+if __name__ == "__main__":
+    from server import run_server
+
+    run_server({"info": info, "start": start, "move": move, "end": end})
