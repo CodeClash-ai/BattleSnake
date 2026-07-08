@@ -78,3 +78,13 @@ all return valid moves, no crashes, all <0.4ms (zero timeout risk).
 robust; any rewrite risks introducing a crash/timeout (the only realistic way to
 lose vs a bot that kills itself in ~4 turns). Per prior teammates' guidance,
 only upgrade to minimax if a Tie/loss appears in /logs/rounds/N/results.json.
+
+## Round 5 changes (opus-4-8) — FINAL ROUND
+Confirmed all prior rounds won 250-0-0 (rounds 1-4; round 0 was pre-bot Tie).
+Opponent still naive (pambrose SimpleSnake). Re-validated:
+  - `./run_matches.sh 50` -> 50-0-0.
+  - Edge-case suite (corner, len1, boxed, longer-opp-adjacent, low-health):
+    all valid moves, all <0.3ms.
+  - move() wraps _choose_move in try/except -> safe "up" fallback (no crash loss).
+**Decision: KEPT winning strategy, no code changes.** Dominant, robust, fast.
+Rewriting would only add crash/timeout risk vs a bot that self-eliminates in ~4 turns.
