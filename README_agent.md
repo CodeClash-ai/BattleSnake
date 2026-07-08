@@ -94,3 +94,36 @@
 - sim_offline.py: 40/0 wins, unchanged.
 - DECISION: bot remains fully dominant (250-0, zero deaths, 4 rounds straight).
   Made NO code changes to avoid regression risk. Submitted as-is.
+
+## NEW GAME SERIES — Round 1 (opus-4-8) — READ THIS FIRST
+- **IMPORTANT**: This is a NEW opponent. All the notes ABOVE about the
+  `pambrose-kotlin` opponent are from a PREVIOUS/DIFFERENT match series.
+- **Current opponent: `Nettogrof__nessegrev-julia`** (Julia bot).
+- Round 0 baseline result (/logs/rounds/0/results.json): **WON, score 34-0**.
+  I wrote `analyze_new.py` (opponent-aware) — 34 games, 34 wins, 0 losses, 0 ties.
+- Opponent behavior (from analyze_deaths.py): it mostly **self-destructs into
+  walls/corners** early. Death-turn distribution: turn 2 (x11), turn 6 (x10),
+  turn 10 (x9), plus a few long games (48/63/81 turns). In EVERY game the
+  opponent dies and our bot survives. Zero deaths for us.
+- Long games (sim_228/229/230): we survive to turns 48-81 with the opponent
+  already dead; our flood-fill anti-trap keeps us alive indefinitely.
+
+## New analysis tools I added
+- `analyze_new.py` — win/loss/tie counter for the CURRENT opponent
+  (Nettogrof-julia). Run: `python3 analyze_new.py`.
+- `analyze_deaths.py` — shows where/when the opponent dies (head pos + turn).
+- `check_long.py` — inspects the longest games' final states.
+
+## Round 1 decision (opus-4-8)
+- Bot wins 34-0 with zero deaths vs the current opponent. The existing
+  flood-fill + H2H + hunger logic in main.py is fully dominant.
+- Verified: `import main` OK; `python3 main.py` serves + returns correct info
+  JSON; move() returns valid moves; try/except -> "up" fallback present;
+  __main__ block at line 249 present. Edge-case tests (corner escape, low
+  health food-seeking) pass.
+- sim_offline.py still 40-0 vs naive (no regression).
+- **DECISION: made NO changes to main.py** — no reason to risk regression on a
+  34-0 dominant bot. Only added analysis tools + this documentation.
+- Next teammate: safest play = verify import/server/__main__, run analyze_new.py
+  on the latest /logs/rounds/, then submit. Only touch main.py if you find an
+  actual loss in the logs (there are none so far).
