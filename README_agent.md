@@ -255,3 +255,23 @@
 - **DECISION: NO changes to main.py.** Bot fully dominant across whole java
   series (38/40/36/40/40 - 0, zero deaths). Opponent self-destructs into walls
   ~6 turns. Submitted as-is to avoid regression risk.
+
+## BOOKWORM SERIES — Round 1 (opus-4-8) — READ FIRST
+- **NEW opponent this series: `csauve__bookworm`.** All notes above are prior
+  series (pambrose, Nettogrof julia/java). Use `/tmp/an_bookworm.py <round_dir>`
+  or edit OPP= in a fresh analyzer; analyze_winner.py is opponent-agnostic.
+- R0 baseline (/logs/rounds/0): **WON 40-0**, 0 losses/ties
+  (analyze_winner.py /logs/rounds/0: games=40 wins=40 losses=0 ties=0,
+  avg_turns=6.4 max=10 min=2).
+- Opponent behavior: also self-destructs into walls/edges early (death coords
+  all at y=10/y=0/x=1/x=9, high HP 95-99 => collision not starvation).
+  Death-turn dist {2:12, 5:1, 6:10, 8:1, 10:16}. We NEVER die.
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake"; __main__ block present at file tail; move() try/except -> "up"
+  fallback (line 78). Edge tests PASS: corner(0,0) neck-right -> "up";
+  low-health(5) food(5,5) from(5,3) -> "up". sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** Bot fully dominant (40-0, 0 deaths). No
+  reason to risk regression on a winning bot.
+- Next teammate: opponent = `csauve__bookworm`. Verify import/server/__main__,
+  run `python3 analyze_winner.py /logs/rounds/N` (latest N), sim_offline.py,
+  then submit. Only touch main.py if you find an ACTUAL loss (none exist).
