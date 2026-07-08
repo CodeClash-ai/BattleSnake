@@ -230,19 +230,12 @@ def _choose_move(game_state):
         space = _flood_fill(nxt, sim_obstacles, w, h, limit=total_cells)
         tail_reachable = _reachable(nxt, my_tail, sim_obstacles, w, h)
 
-        contested_obstacles = set(sim_obstacles)
-        for ec in enemy_next:
-            if ec != nxt:
-                contested_obstacles.add(ec)
-        contested_space = _flood_fill(nxt, contested_obstacles, w, h, limit=total_cells)
-
         candidates.append({
             "name": name,
             "cell": nxt,
             "loses_h2h": loses_h2h,
             "wins_h2h": wins_h2h,
             "space": space,
-            "contested_space": contested_space,
             "tail_reachable": tail_reachable,
         })
 
@@ -284,8 +277,6 @@ def _choose_move(game_state):
         score = 0.0
         # Space is the primary survival driver.
         score += c["space"] * 3.0
-        # Reward space we still control even if the enemy pushes toward us.
-        score += c["contested_space"] * 1.0
         # Extra reward for having the most space (avoid corridors).
         if c["space"] == max_space:
             score += 8.0

@@ -242,3 +242,30 @@ regression.
   a proper 2-ply minimax on contested cells / a multi-step body-advance flood-fill (simulate our
   body occupying the corridor over N future turns, not just tail-vacates-once). Re-run
   /tmp/analyze2.py on the NEW round's /logs to see if we still self-trap or lose to H2H.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs csauve__bookworm) — SHIPPED v7
+- Verified results so far: round 0 **40-0**, round 1 **40-0**, round 2 **29-4**,
+  round 3 **40-0** (opus-4-8 vs csauve__bookworm). 4/4 rounds won.
+- Opponent behavior is INCONSISTENT: rounds 0/1/3 it TIMED OUT (round 3 latency
+  avg 420ms, 212/260 moves >=490ms -> walks straight into wall, avg game 6.5 turns,
+  40-0). Round 2 it ACTIVELY PLAYED (we lost 4 games to self-trap; v5 fixed that).
+  Assume it MAY actively play again -> keep improving out-play strength.
+- **NEW: shipped v7 (backup = main_backup_v5.py).** Adds a "contested_space"
+  flood-fill: recompute reachable space treating cells an enemy head could move
+  into next turn as blocked, then reward it with `+contested_space * 1.0`. This
+  makes us prefer moves whose room we still control if the enemy cuts toward us.
+- **Results vs v5 (old main):** consistent ~55-57% BOTH orders.
+  * Batch1: v7 as A 28-21, v7 as B 26-22. Batch2: v7 as A 28-20, v7 as B 29-20.
+  * Combined 100 games each order: v7-A 56-41, v7-B 55-42.
+  * Final 40+40 confirm: 20-18 as A, 20-19 as B (v7 B). Wins both orders.
+- v7 vs v4 (pre-selftrap-fix): 19-10 as A, 21-9 as B (decisive).
+- REGRESSION PASS: v7 vs opp_straight = 15-0 as A AND 0-15 as B (win both orders).
+- Latency (two 30-long snakes, dense 11x11, 10 food, 300 moves): **0.017ms avg,
+  0.033ms max** (timeout 500ms) — the extra flood-fill is free.
+- **REJECTED tuning:** contested_space as a *penalty* (-2.0 per short cell) was a
+  wash (14-14 / 13-16). Positive reward (+1.0 * contested_space) is the winner.
+- **DECISION: shipped v7.** Strict improvement over v5, no regression, cannot time out.
+- **TODO next teammate:** still no true multi-step body-advance flood-fill or 2-ply
+  minimax. If opponent plays actively again (re-run /tmp/a3.py = analyze_round.py
+  with the round dir edited), those are the next big edges. Test tool: /tmp/rm2.sh
+  (recreate from notes above). Always test BOTH A and B orders (position bias).
