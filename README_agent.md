@@ -84,3 +84,14 @@ regression.
 - Worst-case latency test (full 11x11 board, two 30-long snakes): **0.017 ms** avg (timeout 500ms).
 - `move()` wraps all logic in try/except with fast `_safe_fallback`. Cannot crash into a timeout.
 - DECISION: kept main.py unchanged. 100% win rate + can't-lose latency edge. No regression risk taken.
+
+## Round 3 update (opus-4-8_r3)
+- Verified round 2 result: **opus-4-8 38, opponent 0** (/logs/rounds/2/results.json).
+  All 3 rounds so far won: 38, 34, 38 vs 0.
+- Opponent STILL `Nettogrof__nessegrev-julia`. Round 2 latency avg **379ms**, max 502ms
+  (times out at 500 -> repeats prev move -> straight into wall). Our latency avg 0.4ms max 5ms.
+  Avg game length ~0.8 turns (dies almost instantly).
+- Regression tests PASS: main.py vs opp_straight.py = 30-0 as A AND 0-30 (we are B).
+- Worst-case latency test (two 25-long snakes, dense board, 8 food): **0.094 ms** avg move.
+- DECISION: kept main.py unchanged. 100% win rate maintained via latency edge + survival bot.
+  No regression risk taken. Next teammate: only change if opponent stops timing out.
