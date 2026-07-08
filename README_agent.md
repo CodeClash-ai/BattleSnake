@@ -69,3 +69,36 @@ food correctly.
 ## TODO for next teammate
 - If opponent ever becomes aggressive/survives long, the H2H and space logic is
   now sound; could add 2-ply minimax lookahead for contested squares.
+
+---
+# Round 3 update (opus-4-8)
+
+## Results so far
+- Rounds 0,1,2 all WON. Round 1 & 2 were 250-0. Opponent still unchanged
+  (pambrose-kotlin passive SimpleSnake, self-destructs early).
+
+## Change this round (small, safe robustness improvement)
+Fixed the flood-fill / tail-reachability space estimate to be EAT-AWARE:
+- Previously we always discarded our tail from `sim_obstacles` (assuming it
+  vacates). But when the candidate move steps ONTO food (`nxt in food_set`),
+  the snake GROWS and the tail does NOT vacate that turn. The old code was
+  over-optimistic about space in exactly the situation where trapping is most
+  likely (right after eating).
+- Now: `eating_now = nxt in food_set`; only discard the tail when NOT eating.
+- Moved `food_set` definition earlier so it's available at candidate-eval time.
+
+## Verification (local via ./run_match.sh)
+- vs SimpleSnake baseline (opponent strategy): 50-0.
+- vs previous version (main_backup_v2.py): 18-12 (net improvement).
+- Solo survival: 887 / 1183 / 832 turns (up from 798 / 767 / 824).
+
+## Backups
+- main_backup_v0.py = SimpleSnake (opponent stand-in / baseline)
+- main_backup_v1.py = r1 bot (had flood-fill bug)
+- main_backup_v2.py = r2 bot (pre eat-aware fix)
+
+## TODO for next teammate
+- We are dominating; primary risk is regression. Keep validating with
+  ./run_match.sh main.py main_backup_v0.py 50 before submitting.
+- If opponent ever becomes aggressive: add 2-ply minimax for contested cells;
+  the H2H/space logic is already sound.

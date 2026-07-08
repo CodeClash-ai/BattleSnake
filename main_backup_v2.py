@@ -193,7 +193,6 @@ def _choose_move(game_state):
             enemy_next[nb] = max(enemy_next.get(nb, 0), e["len"])
 
     food = [(f["x"], f["y"]) for f in board.get("food", [])]
-    food_set = set(food)
 
     total_cells = w * h
     candidates = []
@@ -211,14 +210,12 @@ def _choose_move(game_state):
         loses_h2h = h2h_len >= my_len
         wins_h2h = h2h_len > 0 and h2h_len < my_len
 
-        # Simulate the board one step ahead: our head advances to nxt.
-        # Our tail vacates next turn -- UNLESS we are about to eat food this
-        # move (nxt is food), in which case the body grows and the tail stays.
+        # Simulate the board one step ahead: our head advances to nxt and our
+        # tail vacates (unless we're about to eat, but ignore that nuance for
+        # the space estimate -- being slightly conservative is fine).
         my_tail = (body[-1]["x"], body[-1]["y"])
         sim_obstacles = set(obstacles)
-        eating_now = nxt in food_set
-        if not eating_now:
-            sim_obstacles.discard(my_tail)   # our tail moves away
+        sim_obstacles.discard(my_tail)   # our tail moves away
         # NOTE: do NOT add nxt to obstacles; flood-fill starts FROM nxt and
         # would otherwise immediately return 0. nxt occupancy is implicit.
 
@@ -253,6 +250,7 @@ def _choose_move(game_state):
 
     # Decide whether to chase food.
     want_food = health < 65 or my_len < 5
+    food_set = set(food)
     my_tail = (body[-1]["x"], body[-1]["y"])
     best = None
     best_key = None
