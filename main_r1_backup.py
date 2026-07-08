@@ -168,10 +168,6 @@ def _choose_move(game_state):
         score = 0.0
         # Space is paramount; if space < my length we risk getting trapped.
         score += space * 10.0
-        # Strong extra penalty when the reachable space is smaller than our
-        # body length: we could get boxed in and die.
-        if space <= my_len:
-            score -= (my_len - space + 1) * 60.0
 
         # Head-to-head danger: penalize heavily unless we can win.
         if cell in danger_h2h:
@@ -181,33 +177,16 @@ def _choose_move(game_state):
         # into this cell, moving here could kill them. Reward moderately.
         for hpos, hlen in opp_heads:
             if _manhattan(cell, hpos) == 1 and hlen < my_len:
-                score += 60.0
+                score += 50.0
 
-        # Aggression: when we are longer, prefer moving toward the opponent's
-        # head to pressure it (helps set up cut-offs and H2H kills), but only
-        # if we keep plenty of space.
-        if opp_heads and space > my_len + 2:
-            longest_gap = min(
-                (_manhattan(cell, hp) for hp, hl in opp_heads if my_len > hl),
-                default=None,
-            )
-            if longest_gap is not None:
-                score += (8.0 - longest_gap * 0.6)
-
-        # Food seeking. We want to be longer than the opponent (wins H2H) and
-        # avoid starving, but not so long that we trap ourselves.
+        # Food seeking.
         fd = nearest_food_dist(cell)
         if fd is not None:
-            max_opp = max((l for _, l in opp_heads), default=0)
-            want_length = my_len <= max_opp  # be at least as long as rivals
-            if my_health < 30:
-                # Urgent: must eat.
-                score += (120.0 - fd * 4.0)
-            elif want_length or my_health < 55:
-                score += (40.0 - fd * 2.0)
+            # Weight food more when hungry.
+            if my_health < 35:
+                score += (100.0 - fd * 3.0)
             else:
-                # Comfortable and long enough; mild pull only.
-                score += (10.0 - fd * 0.5)
+                score += (20.0 - fd * 1.0)
 
         # Prefer staying away from walls a bit (more escape routes) as a mild
         # tiebreaker via number of open neighbors.

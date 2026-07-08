@@ -1,35 +1,48 @@
 # Agent Notes (CodeClash Battlesnake)
 
-## Current status (after round 1 edits by opus-4-8)
+## Current status (after round 2 edits by opus-4-8)
 The opponent is **pambrose SimpleSnake** (naive Kotlin port): NO collision
 avoidance, walks straight toward the FARTHEST food. It self-eliminates in a
 handful of turns very often.
 
-Round 0 baseline (both bots were the naive port) was essentially a coin flip:
-WINS=84 LOSSES=81 TIES=85 out of 250. See /logs/rounds/0/.
+### Round 1 result: **WON 250-0** (perfect record, 250/250 games).
+Opponent dies avg ~6.7 turns in. We just need reliable survival.
 
-### What I changed
-Rewrote `main.py` into a real survival bot:
-  - Never moves into walls / bodies (treats vacating tails as passable).
-  - Flood-fill space evaluation per candidate move (avoids trapping itself).
-  - Head-to-head: heavily avoids ties/losses; rewards kills vs shorter snakes.
-  - Food seeking, weighted higher when health < 35.
-Backup of the old naive bot: `main_v0_backup.py`.
+## Bot architecture (main.py)
+Survival-first, space-aware, greedy bot (1-ply heuristic):
+  - Never moves into walls / bodies (treats vacating tails as passable;
+    accounts for snakes that just ate = duplicated tail).
+  - Flood-fill space evaluation per candidate move (weight * 10).
+  - **Trap penalty**: extra big penalty if reachable space <= our length
+    (avoids boxing ourselves in). [added r2]
+  - Head-to-head: -1000 for tie/loss cells; +60 for kill opportunities.
+  - **Food logic tuned** [r2]: urgent-eat when health<30; grow when we're not
+    longer than rival or health<55; only mild pull when long+healthy (avoids
+    over-eating and self-trapping).
+  - **Aggression** [r2]: when we have ample space, pull toward shorter
+    opponents' heads to set up cut-offs / H2H kills.
 
-### Results after change (local tests vs naive opponent)
-**90 wins, 0 losses, 0 ties** over 90 games. Self-play survives 130+ turns.
-Move computation ~0.1 microseconds — zero timeout risk.
+## Round 2 changes (this round)
+Added trap penalty, tuned food weights, added aggression. Validated:
+  - vs naive opponent: 80/80 wins.
+  - vs round-1 bot (self-play): **49-0-1** — clear improvement.
+  - move time 0.006 ms (zero timeout risk). Edge cases (corner, trapped,
+    single-cell, longer opponent adjacent) all handled without crash.
+
+## Backups
+- `main_r1_backup.py`  — round 1 version (before r2 tuning).
+- `main_v0_backup.py`  — original naive bot.
 
 ## Testing tools (in /workspace)
-- `naive_opponent.py`  — the pambrose SimpleSnake, as a runnable server (for tests).
-- `run_matches.sh N`   — runs N matches (main.py vs naive_opponent.py) via the
-  bundled `game/battlesnake` CLI, prints W/L/T. Usage: `./run_matches.sh 60`.
-- `game/battlesnake`   — prebuilt Battlesnake CLI (Go rules engine).
-
-Start a server manually: `PORT=8001 python3 main.py`
+- `naive_opponent.py`  — the pambrose SimpleSnake, runnable server for tests.
+- `run_matches.sh N`   — main.py vs naive_opponent.py via bundled
+  `game/battlesnake` CLI, prints W/L/T. Usage: `./run_matches.sh 60`.
+- Self-play test: start two servers on diff ports (PORT=8003 python3 main.py &
+  PORT=8004 python3 main_rX_backup.py &) then loop `game/battlesnake play`.
 
 ## Ideas for future rounds (if opponent gets smarter)
-- Add opponent move prediction / minimax lookahead (currently 1-ply heuristic).
+- Minimax / 2-ply opponent move prediction (currently 1-ply heuristic).
 - Longest-path / tail-chasing when space is tight.
-- Aggressively cut off the opponent's flood-fill area when we are longer.
-- Tune food weights; avoid over-eating (growing longer = easier to trap self).
+- More aggressive flood-fill cut-off of opponent when we're clearly longer.
+- Consider hazard map handling (ruleset has hazardDamagePerTurn=14) — not
+  currently modeled; standard maps rarely have hazards but watch for it.
