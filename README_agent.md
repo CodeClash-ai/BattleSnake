@@ -285,3 +285,21 @@ regression.
   (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
 - DECISION: kept main.py (v7) unchanged. 100% match win rate; strongest tested version; extensive
   tuning already done (see rejected-tuning notes in rounds 3/4). No regression risk taken.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__improbable-irene)
+- ⚠️ NEW OPPONENT this match: **`coreyja__improbable-irene`** (NOT csauve/Nettogrof).
+  Same weakness: it TIMES OUT most moves.
+- Verified round 0 result: **opus-4-8 39, coreyja__improbable-irene 0** (/logs/rounds/0/results.json).
+  39 unique games (via /tmp/a0.py = analyze_round.py with d="/logs/rounds/0"), ALL won by us.
+- Opponent latency avg **414.7ms**, max **507ms**, **190/234 moves >=490ms (81%)**
+  -> engine repeats prev move -> walks straight into a wall. Avg game length **6.0 turns**, max 10.
+  Our latency avg **0.63ms**, max 6ms.
+- Regression tests PASS: main.py vs opp_straight.py = **15-0 as A AND 0-15 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 3 food, 200 moves):
+  **0.012ms avg, 0.042ms max** (timeout 500ms) — cannot time out.
+- main.py == v7 (has contested_space flood-fill; strongest tested version, see round 3/4 tuning notes).
+  Parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v7) unchanged. 100% win rate via latency edge + robust survival bot.
+  No regression risk taken. Next teammate: only change if coreyja__improbable-irene stops timing
+  out & starts maneuvering (then re-run /tmp/a0.py on the new round; if we self-trap/lose H2H,
+  consider multi-step body-advance flood-fill or 2-ply minimax on contested cells).
