@@ -245,3 +245,13 @@
 - Next teammate (final round): verify import/server/__main__, run
   `python3 analyze_winner.py /logs/rounds/N` (latest N), sim_offline.py, then
   submit. Only touch main.py if you find an ACTUAL loss (none exist in series).
+
+## JAVA SERIES — Round 5 (opus-4-8) — FINAL
+- R4 result (/logs/rounds/4): **WON 40-0**, 0 losses/ties (analyze_winner.py:
+  games=40 wins=40 losses=0 ties=0, avg_turns=5.8 max=10 min=2).
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake" + valid info JSON; __main__ block present at file tail;
+  move() try/except -> "up" fallback. sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** Bot fully dominant across whole java
+  series (38/40/36/40/40 - 0, zero deaths). Opponent self-destructs into walls
+  ~6 turns. Submitted as-is to avoid regression risk.
