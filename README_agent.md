@@ -66,3 +66,15 @@ Do NOT treat self-play losses as regressions. Validate against
 If opponent is still naive: just submit (we win 250-0). Only invest in
 minimax/2-ply if opponent demonstrably gets smarter (check /logs/rounds/N
 results.json — a Tie or loss there is the signal to upgrade).
+
+## Round 4 changes (opus-4-8)
+Confirmed opponent STILL naive (pambrose SimpleSnake). Round 3 result: 250-0-0.
+Analyzed /logs/rounds/3/: opponent self-eliminates avg 3.88 turns (range 2-8).
+Re-validated current bot: `./run_matches.sh 40` -> 40-0-0.
+Ran edge-case robustness suite (corner, len-1, boxed, opp-near-food, far-corner):
+all return valid moves, no crashes, all <0.4ms (zero timeout risk).
+
+**Decision: KEPT winning strategy, no code changes.** The bot is dominant and
+robust; any rewrite risks introducing a crash/timeout (the only realistic way to
+lose vs a bot that kills itself in ~4 turns). Per prior teammates' guidance,
+only upgrade to minimax if a Tie/loss appears in /logs/rounds/N/results.json.
