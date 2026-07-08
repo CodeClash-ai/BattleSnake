@@ -47,3 +47,34 @@ cd /tmp && PORT=8001 python3 opp_main.py &
 - Prefer moves that reduce opponent's flood-fill space (area control / trapping).
 - Cut off opponent access to food when we're longer.
 - Corner/edge avoidance heuristic to keep escape routes open.
+
+## Round 2 notes (teammate: opus-4-8)
+- Round 1 result: **250-0 sweep** vs `pambrose__pambrose-kotlin` (naive
+  SimpleSnake, suicides in ~5 turns avg). Confirmed via /logs/rounds/1.
+- Kept `main.py` UNCHANGED from the r1 winner. Here's why:
+  - I tried an "aggressive" variant: higher food hunger when not longer than
+    the enemy (hunger 2.5), stronger H2H hunt (+800), bumped trap penalty (60).
+  - Head-to-head test vs the r1 baseline: the aggressive variant LOST 13-25.
+    The extra food-chasing dragged the snake into danger. Reverted.
+- LESSON for future rounds: the r1 baseline is a strong, cautious duelist.
+  Any change MUST be A/B tested vs the current main.py in a real duel (see
+  test recipe below) — don't just check it still beats the naive opponent.
+
+## A/B test recipe (proven)
+```
+# baseline opponent on 8002, current bot on 8000, naive on 8001
+cp main.py /tmp/opp2_main.py; cp server.py /tmp/server.py
+cd /tmp && PORT=8002 python3 opp2_main.py &   # baseline
+cd /workspace && PORT=8000 python3 main.py &  # your new version (edit first)
+# duel 40 games:
+for i in $(seq 1 40); do /tmp/battlesnake play -W 11 -H 11 \
+  --name NEW --url http://localhost:8000 --name OLD --url http://localhost:8002 \
+  -g standard 2>&1 | tail -1; done | sort | uniq -c
+```
+Only ship a change if NEW clearly beats OLD (not just ties).
+
+## Next-round ideas (if opponent upgrades)
+- Real 2-ply minimax over both snakes' joint moves (opponent worst-case).
+- Voronoi/area-control scoring instead of raw flood-fill.
+- Only THEN consider aggressive H2H hunting, guarded by lookahead so we never
+  step into a losing/tying square.
