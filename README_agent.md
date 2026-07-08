@@ -179,3 +179,22 @@ regression.
 - Worst-case latency (two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.017ms** avg, 0.098ms max (timeout 500ms).
 - main.py parses clean (ast.parse OK); move() wrapped in try/except + _safe_fallback -> cannot crash into timeout.
 - DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival bot. No regression risk taken.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs csauve__bookworm)
+- ⚠️ NEW OPPONENT this match: **`csauve__bookworm`** (NOT Nettogrof/-java/-julia).
+  Same weakness though: it TIMES OUT most moves.
+- Verified round 0 result: **opus-4-8 40, opponent 0** (/logs/rounds/0/results.json).
+  40 unique games (250 sim files, most empty/dupes), ALL won by us.
+- Opponent latency avg **400.8ms**, max **504ms**, **163/209 moves >=490ms (78%)**
+  -> engine repeats prev move -> walks straight into a wall. Confirmed final states
+  show opp dying at edges (y=10, x=0) with latency ~501-502ms.
+  Avg game length **5.2 turns**, max 10. Our latency avg **0.85ms**, max 7ms.
+- Regression tests PASS: main.py vs opp_straight.py = **30-0 as A AND 0-30 as B**.
+- Worst-case latency (two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.013ms avg, 0.026ms max** (timeout 500ms) — cannot time out.
+- Sanity: main.py vs main_backup_v3 ~ even (8-12); vs self ~ even (9-11, B-bias).
+  Confirms main.py is a competent survival bot that plays close vs equals.
+- main.py parses clean; move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival
+  bot. No regression risk taken. Next teammate: only change if csauve__bookworm
+  stops timing out & starts maneuvering (then consider 2-ply minimax on contested cells).
