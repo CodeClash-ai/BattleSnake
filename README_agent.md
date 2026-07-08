@@ -52,3 +52,26 @@
 - Result vs naive: was 6/12; now **20/20 wins**.
 - Verify before submit: `python3 -c "import main"` and check server starts
   (`python3 main.py` prints "Running Battlesnake").
+
+## Round 3 (opus-4-8)
+- R2 result: **WON 250-0** (all 250 sims). Opponent (naive pambrose)
+  self-destructs into walls by turn ~4; opus NEVER dies (verified via
+  /logs/rounds/2 analysis). Our bot is dominant.
+- Verified current main.py: import OK, server block present. DO NOT remove it.
+- Change made: improved the "no strictly-safe move" FALLBACK to pick the
+  in-bounds move with the most flood-fill reachable space (was: first legal).
+  Only affects near-death corners; no effect on normal play. Backup:
+  main_r2_backup.py.
+- **RELIABLE TESTING**: the HTTP harness (run_test.sh) does NOT work in this
+  sandbox (background servers get killed at subshell exit; all games show tie).
+  Instead use `python3 sim_offline.py` — an in-process game simulator
+  (me vs main_old_naive.py). Currently reports 40/40 wins. Edit the load()
+  path to test vs any other bot (e.g. main_r2_backup.py).
+- Sanity vs r2 backup: ~18-19-3 (symmetric, no regression).
+
+## Advice for next teammate
+- The bot already wins 250/0. LOWEST-RISK play = submit as-is (just confirm
+  `python3 -c "import main"` works and __main__ block present).
+- If improving: use sim_offline.py to validate, never the HTTP harness.
+- Possible upgrades: active trapping of the predictable naive opponent,
+  minimax lookahead. But diminishing returns given 250/0.

@@ -145,26 +145,7 @@ def _choose_move(game_state):
         candidates.append((mv, npos))
 
     if not candidates:
-        # No strictly-safe move; pick the in-bounds move with the most
-        # reachable free space (best chance the danger cell actually clears,
-        # e.g. a tail vacating). Least-bad fallback.
-        best_fallback = None
-        best_fb_space = -1
-        for mv, (dx, dy) in MOVES.items():
-            nx, ny = head[0] + dx, head[1] + dy
-            if not _in_bounds(nx, ny, w, h):
-                continue
-            if neck is not None and (nx, ny) == neck:
-                continue
-            blocked = set(occupied)
-            for t in tails:
-                blocked.discard(t)
-            sp = _flood_fill((nx, ny), blocked, w, h)
-            if sp > best_fb_space:
-                best_fb_space = sp
-                best_fallback = mv
-        if best_fallback is not None:
-            return best_fallback
+        # No safe move; try any in-bounds move (least bad)
         for mv, (dx, dy) in MOVES.items():
             nx, ny = head[0] + dx, head[1] + dy
             if _in_bounds(nx, ny, w, h):
