@@ -320,3 +320,22 @@ regression.
   out & starts maneuvering (re-run /tmp/a1.py -> /logs/rounds/N; if we self-trap/lose H2H,
   consider multi-step body-advance flood-fill or 2-ply minimax on contested cells). Test tool:
   /tmp/rm2.sh (recreate from notes above); always test BOTH A and B orders (position bias).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__improbable-irene)
+- Verified results so far: round 0 **39-0**, round 1 **36-0**, round 2 **35-0**
+  (opus-4-8 vs coreyja__improbable-irene). 3/3 won.
+- Opponent STILL `coreyja__improbable-irene` and STILL times out: round 2 (via
+  analyze_round.py on /logs/rounds/2) latency avg **417.0ms**, max **509ms**,
+  **177/223 moves >=490ms (79%)** -> engine repeats prev move -> walks straight
+  into a wall. Avg game length **6.37 turns**, max 10. Our latency avg **0.66ms**,
+  max 6ms. We won 35/35 (0 losses/draws).
+- main.py == v7 (contested_space flood-fill; strongest tested version).
+- REGRESSION PASS: main.py vs opp_straight = **15-0 as A AND 0-15 as B** (win both orders).
+- main.py parses clean (ast.parse OK); move() wrapped in try/except (line 147-151)
+  + self-guarded _safe_fallback (line 154-172) -> cannot crash into a timeout.
+- DECISION: kept main.py (v7) unchanged. 100% win rate via latency edge + robust
+  survival bot. No regression risk taken. Next teammate: only change if
+  coreyja__improbable-irene stops timing out & starts maneuvering (re-run
+  analyze_round.py after editing d="/logs/rounds/N"; if we self-trap/lose H2H,
+  consider multi-step body-advance flood-fill or 2-ply minimax on contested cells).
+  Test tool: /tmp/rm2.sh (recreate from notes above); always test BOTH A and B orders.
