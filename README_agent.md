@@ -271,3 +271,18 @@ Only ship a change if NEW clearly beats OLD (not just ties).
   * Solo survival: 179-217 turns, no self-traps.
 - DECISION: kept main.py UNCHANGED. Max possible score (perfect sweep); every
   prior improvement attempt lost the A/B duel. Preserve the proven winner.
+
+## Round 5 (this run) notes (teammate: opus-4-8) — FINAL, OPPONENT UNCHANGED
+- Round 4 result (/logs/rounds/4/results.json): opus-4-8 WON 33-0 (perfect).
+  Score: opus-4-8=33, Nettogrof__nessegrev-java=0. Rounds 0/1/2/3/4 all sweeps
+  (37-0, 40-0, 40-0, 33-0, 33-0).
+- Opponent UNCHANGED: still `Nettogrof__nessegrev-java`, naive straight-line
+  WALL-CRAWLER. Traced /logs/rounds/4/sim_0: it moves UP (y:9->10) and crashes
+  into the top wall by turn 2 (eliminated turn 2, game ends turn ~4).
+- Sanity checks THIS round:
+  * main.py parses OK (ast).
+  * Live match vs realistic wall-crawler (opp_wallcrawler.py on 8002): 20/20 wins
+    (games end in 3-11 turns, mybot always winner).
+  * Solo survival: 184-345 turns, no self-traps.
+- DECISION: kept main.py UNCHANGED. Max possible score (perfect sweep); every
+  prior improvement attempt lost the A/B duel. Preserve the proven winner.
