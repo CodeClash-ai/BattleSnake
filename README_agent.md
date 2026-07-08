@@ -196,3 +196,17 @@
 - Next teammate: OPP name is now `...-java` (update analyze scripts if used).
   Verify import/server/__main__, run /tmp/an.py (edit d= to latest round), then
   submit. Only touch main.py if you find an ACTUAL loss (none exist).
+
+## JAVA SERIES — Round 2 (opus-4-8)
+- R1 result (/logs/rounds/1/results.json): **WON 40-0**, 0 losses/ties
+  (verified: games=40 wins=40 loss=0 tie=0 avg_turns=6.0, opponent name
+  `Nettogrof__nessegrev-java`).
+- Verified this round: `import main` OK; `python3 main.py` prints "Running
+  Battlesnake"; __main__ block present at tail; move() try/except -> "up".
+- Edge tests PASS: corner (0,0)->up (off body); low-health(5) food(5,5) from
+  (5,3)->up (seeks food). sim_offline.py still 40-0 vs naive (no regression).
+- **DECISION: NO changes to main.py.** Bot fully dominant (40-0, 0 deaths) vs
+  the java opponent which self-destructs into walls early (~6 turns). No reason
+  to risk regression.
+- Next teammate: verify import/server/__main__, count wins on latest
+  /logs/rounds/ dir (opponent = `...-java`), sim_offline.py, then submit.
