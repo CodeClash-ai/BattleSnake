@@ -1,167 +1,77 @@
-# Agent Notes (round 1 by opus-4-8)
+# Agent Notes — CodeClash BattleSnake
 
-## Situation
-- Opponent is `pambrose-kotlin` == the original SimpleSnake (farthest-food, NO
-  collision avoidance). It self-destructs (wall/self) within ~4 turns.
-- Our old bot (`main_backup_v0.py`) was an identical SimpleSnake port -> 50/50
-  coin-flip matches. Round 0 result was 91-83 (barely won).
+## ⚠️ CORRECTION vs old notes (READ THIS)
+Older notes in git history claimed the opponent was "pambrose-kotlin SimpleSnake".
+That is WRONG for THIS match. Verified from /logs/rounds/0/:
 
-## What I did
-Rewrote `main.py` into a proper survival bot:
-- Avoids walls, own body, other snake bodies (tail handling included).
-- Flood-fill space check per candidate move (avoid self-trapping).
-- Tail-reachability bonus (can chase own tail = rarely trapped).
-- Head-to-head awareness: avoid losing H2H, seek winning H2H (we're longer).
-- Food urgency scales with health (eat harder when starving).
+- **Actual opponent name: `Nettogrof__nessegrev-julia`**
+- The opponent **TIMES OUT every move** (latency reported ~500–505 ms, timeout is
+  500 ms). When a snake times out, the engine repeats its previous move
+  direction. So the opponent effectively **walks in a straight line** from its
+  spawn and **dies by hitting a wall** in ~3–11 turns.
+- Confirmed: round 0 we won **38/38 games**, avg game length ~6 turns,
+  score 38 vs 0. Every opponent death was a wall collision after moving straight.
 
-## Results (local, `./run_match.sh`)
-- vs old SimpleSnake: **80-0** (crushes it). This is the real opponent's strategy.
+## Current status: WINNING 100%
+`main.py` is a robust survival bot (wall/body/tail-aware obstacles, per-move
+flood-fill for space, tail-reachability safety, obstacle-aware BFS food distance,
+health-scaled food urgency, H2H avoidance/seeking, mild aggression when longer).
+- Move latency ~0.3 ms (timeout 500 ms) — we NEVER time out. This is the crucial
+  edge: the opponent times out and dies; we don't.
+- Verified this round: main.py vs straight-line opponent stand-in
+  (`opp_straight.py`) = **50-0 as A, 30-0 as B**. Never loses/draws.
 
-## Tools for teammates
-- `./run_match.sh <botA.py> <botB.py> <N>` : runs N games, prints win counts.
-  Uses the compiled CLI at `/workspace/battlesnake_cli`.
-- Build CLI: `cd game && go build -o /workspace/battlesnake_cli ./cli/battlesnake`
-- Solo survival test: `battlesnake_cli play -W 11 -H 11 -n A -u http://localhost:8001 -g solo -r <seed>`
-- `main_backup_v0.py` = original SimpleSnake (baseline / stand-in for opponent).
+## Strategy decision this round
+Kept main.py unchanged. We already win every game against an opponent that
+self-destructs by turn ~10. The ONLY way to lose is if WE die first, which the
+survival bot + fast latency prevents. Changing a 100%-winning bot only risks
+regression.
 
-## Known weakness / TODO for next teammate
-- Solo survival caps at ~103 turns: bot starves in a corner loop at low health
-  because tail-following bonus and space heuristic fight food-seeking. This does
-  NOT matter vs the current passive opponent (it dies first), but if a future
-  opponent survives long, IMPROVE food-commit logic:
-  - Consider A* pathfinding to nearest SAFE food and commit to the path.
-  - Reduce/disable tail-following bonus when health < ~30 so we break the loop.
-  - Make sure flood-fill uses tail-move simulation for the *path* not just 1 step.
+## Testing tools (IMPORTANT: sandbox quirks)
+- Background server processes do NOT persist between separate bash commands
+  (each command is a fresh subshell). You must start servers AND run the CLI
+  **within a single bash command / script**.
+- `opp_straight.py` = stand-in for the real opponent (always moves "up", i.e.
+  straight line into a wall). NOTE: any test bot MUST include the
+  `if __name__ == "__main__": from server import run_server; run_server(...)`
+  bootstrap or its flask server won't start (port refused).
+- Working test script (self-contained, one command):
+  `bash /tmp/rm2.sh <botA.py> <botB.py> <N>`  (recreate below if missing)
+  ```bash
+  cat > /tmp/rm2.sh <<'SH'
+  #!/bin/bash
+  BOTA=$1; BOTB=$2; N=$3; CLI=/workspace/battlesnake_cli
+  mkdir -p /tmp/botA /tmp/botB
+  cp /workspace/server.py /tmp/botA/; cp /workspace/server.py /tmp/botB/
+  cp "/workspace/$BOTA" /tmp/botA/main.py; cp "/workspace/$BOTB" /tmp/botB/main.py
+  PORT=8001 python3 /tmp/botA/main.py >/tmp/botA.log 2>&1 & PA=$!
+  PORT=8002 python3 /tmp/botB/main.py >/tmp/botB.log 2>&1 & PB=$!
+  sleep 2; a=0;b=0;d=0
+  for i in $(seq 1 $N); do
+    o=$($CLI play -W 11 -H 11 -n A -u http://localhost:8001 -n B -u http://localhost:8002 -r $i 2>&1 | tail -1)
+    if echo "$o"|grep -q "A was the winner"; then a=$((a+1));
+    elif echo "$o"|grep -q "B was the winner"; then b=$((b+1)); else d=$((d+1)); fi
+  done
+  echo "A=$a B=$b draw=$d"; kill $PA $PB 2>/dev/null
+  SH
+  ```
+- Build CLI if missing: `cd game && go build -o /workspace/battlesnake_cli ./cli/battlesnake`
+- NOTE: the shipped `run_match.sh` gives false "draw" results if the test
+  opponent lacks the run_server bootstrap. Use /tmp/rm2.sh and check its logs.
 
----
-# Round 2 update (opus-4-8)
-
-## Results so far
-- Round 0: won 91-83. Round 1: won **250-0** (all games). Opponent unchanged
-  (pambrose-kotlin SimpleSnake, self-destructs in a few turns).
-
-## MAJOR BUG FIXED
-Found a real bug in the flood-fill space heuristic: `main.py` added `nxt` to
-`sim_obstacles` BEFORE calling `_flood_fill(nxt, ...)`. Since `_flood_fill`
-returns 0 when the start cell is in obstacles, **space was ALWAYS 0** for every
-candidate move. The bot was effectively blind to self-trapping the whole time
-(it only won because the opponent kills itself first).
-
-Fix: removed the `sim_obstacles.add(nxt)` line (flood-fill starts FROM nxt, so
-it must be free). See lines ~217-222.
-
-Impact: solo survival went from ~103 turns (starved/trapped in a corner) to
-**767-828 turns**. Now the bot genuinely avoids trapping itself and paths to
-food correctly.
-
-## Other improvements this round
-- Food distance now uses obstacle-aware BFS (`_bfs_dist`) instead of manhattan,
-  so food behind our own body isn't treated as "close".
-- Low-health food urgency tuned: penalties `-fdist*100` (<25hp), `-40` (<40),
-  `-12` (<65). Tail-following bonus tapers off as health drops so we break
-  corner loops and go eat.
-
-## Verification
-- vs SimpleSnake baseline (`main_backup_v0.py`): 40-0.
-- vs previous broken version (`main_backup_v1.py`): 30-0.
-- Backups: `main_backup_v0.py` (SimpleSnake), `main_backup_v1.py` (r1 bot w/ bug).
-
-## TODO for next teammate
-- If opponent ever becomes aggressive/survives long, the H2H and space logic is
-  now sound; could add 2-ply minimax lookahead for contested squares.
-
----
-# Round 3 update (opus-4-8)
-
-## Results so far
-- Rounds 0,1,2 all WON. Round 1 & 2 were 250-0. Opponent still unchanged
-  (pambrose-kotlin passive SimpleSnake, self-destructs early).
-
-## Change this round (small, safe robustness improvement)
-Fixed the flood-fill / tail-reachability space estimate to be EAT-AWARE:
-- Previously we always discarded our tail from `sim_obstacles` (assuming it
-  vacates). But when the candidate move steps ONTO food (`nxt in food_set`),
-  the snake GROWS and the tail does NOT vacate that turn. The old code was
-  over-optimistic about space in exactly the situation where trapping is most
-  likely (right after eating).
-- Now: `eating_now = nxt in food_set`; only discard the tail when NOT eating.
-- Moved `food_set` definition earlier so it's available at candidate-eval time.
-
-## Verification (local via ./run_match.sh)
-- vs SimpleSnake baseline (opponent strategy): 50-0.
-- vs previous version (main_backup_v2.py): 18-12 (net improvement).
-- Solo survival: 887 / 1183 / 832 turns (up from 798 / 767 / 824).
+## Analysis tool
+- `/tmp/analyze.py` and `/tmp/deaths.py` parse /logs/rounds/0/*.jsonl to compute
+  win counts, game lengths, opponent latency, and per-turn head positions.
+  (Recreate from git history if lost; they showed opp latency ~502ms & straight
+  line death.)
 
 ## Backups
-- main_backup_v0.py = SimpleSnake (opponent stand-in / baseline)
-- main_backup_v1.py = r1 bot (had flood-fill bug)
-- main_backup_v2.py = r2 bot (pre eat-aware fix)
+- main_backup_v0.py = original SimpleSnake port (baseline).
+- main_backup_v1/v2/v3.py = earlier iterations of the survival bot.
 
-## TODO for next teammate
-- We are dominating; primary risk is regression. Keep validating with
-  ./run_match.sh main.py main_backup_v0.py 50 before submitting.
-- If opponent ever becomes aggressive: add 2-ply minimax for contested cells;
-  the H2H/space logic is already sound.
-
----
-# Round 4 update (opus-4-8)
-
-## Results so far
-- Rounds 0,1,2,3 all WON (Round 1,2,3 were 250-0). Opponent still the passive
-  pambrose-kotlin SimpleSnake (self-destructs early). main.py beats it 50-0.
-
-## Change this round: mild AGGRESSION (safe, gated)
-Added a bonus to move TOWARD the nearest enemy head when:
-  - we are strictly longer than that enemy (my_len > nearest_len + 1), AND
-  - health >= 40, AND
-  - the candidate move has ample space (space >= my_len).
-Bonus is `-manhattan(cell, enemy_head) * 1.5` so it's a mild pull; survival,
-space, tail-safety and food-urgency always dominate. Purpose: if a FUTURE
-opponent survives long enough to be pressured, we push it into losing H2H / walls.
-
-## Verification (local ./run_match.sh, both position orders to cancel A-bias)
-- vs SimpleSnake baseline/opponent (main_backup_v0.py): 50-0 (unchanged).
-- vs pre-aggression version (main_backup_v3.py), 160 games both orders:
-  new main.py 89 wins vs v3 66 wins. Consistent edge in BOTH orders
-  (42-35 as A, 47-31 as B). NOTE: there is a strong player-A position bias in
-  these self-play matches, so ALWAYS test both orders before trusting a result.
-
-## Backups
-- main_backup_v0.py = SimpleSnake (opponent stand-in / baseline)
-- main_backup_v1.py = r1 bot (flood-fill bug)
-- main_backup_v2.py = r2 bot
-- main_backup_v3.py = r3 bot (pre-aggression, current-minus-aggression)
-
-## TODO for next teammate
-- We dominate the current opponent. Primary risk is regression; validate with
-  `./run_match.sh main.py main_backup_v0.py 50` (should stay 50-0) AND self-play
-  both orders before submitting.
-- If opponent becomes aggressive/survives long: consider 2-ply minimax on
-  contested cells; H2H/space/aggression logic is already sound.
-
----
-# Round 5 update (opus-4-8) — FINAL ROUND
-
-## Situation confirmed
-- Rounds 1-4 all 250-0. Round 0 was 91-83. Opponent UNCHANGED: passive
-  pambrose-kotlin SimpleSnake, self-destructs in ~5 turns (verified from
-  /logs/rounds/4: avg game length 4.95 turns, 250/250 wins for us).
-
-## Verification this round (no code changes — bot is already dominant)
-- vs opponent strategy (main_backup_v0.py): 50-0.
-- vs previous version (main_backup_v3.py) both orders: current wins
-  21-19 (as A) and 27-12 (as B). Current main.py is strictly stronger.
-- Move latency: ~0.26 ms/move (worst-case tested), timeout is 500ms. No risk.
-- Edge cases verified: no-food board, corner tail-chase, single snake — all OK.
-  (Corner "up into tail" is CORRECT: length-2 tail vacates simultaneously.)
-
-## Decision
-Kept main.py as-is. It wins 250-0 / 50-0 against the actual opponent, beats all
-prior versions, is fast, and has a try/except _safe_fallback. Changing a proven
-250-0 bot only risks regression. Submitted unchanged.
-
-## For any future teammate (if opponent ever changes)
-- The bot has: wall/body/tail-aware obstacles, per-move flood-fill (space),
-  tail-reachability safety, obstacle-aware BFS food distance, health-scaled food
-  urgency, H2H avoidance/seeking, and mild aggression when strictly longer.
-- Next step if pressured: add 2-ply minimax on contested cells.
+## TODO for next teammate (only if opponent CHANGES)
+- If the opponent stops timing out / starts surviving & maneuvering, add 2-ply
+  minimax on contested cells. H2H / space / aggression logic is already sound.
+- Always test BOTH position orders (A and B) before submitting — there is a
+  player-A position bias in self-play.
+- Do NOT regress: `bash /tmp/rm2.sh main.py opp_straight.py 50` must stay 50-0.
