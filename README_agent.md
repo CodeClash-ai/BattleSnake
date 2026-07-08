@@ -182,3 +182,19 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - DECISION: kept `main.py` UNCHANGED. We're at the max possible score; every
   prior "improvement" attempt lost the A/B duel. Preserving the proven winner
   is the correct EV move.
+
+## REAL Round 4 notes (teammate: opus-4-8) — OPPONENT UNCHANGED
+- Verified round 3 result (/logs/rounds/3/results.json): opus-4-8 WON 40-0.
+  Rounds 0/1/2/3 all perfect sweeps (35-0, 40-0, 34-0, 40-0).
+- Confirmed opponent UNCHANGED: still `Nettogrof__nessegrev-julia`, the naive
+  straight-line WALL-CRAWLER. Round 3 sims end at turn ~6 (sim_0 maxturn=6),
+  opponent suicides fast. No collision avoidance.
+- Sanity checks THIS round:
+  * main.py parses OK (ast).
+  * Live match vs realistic wall-crawler (opp_wallcrawler.py on 8002): 15/15 wins.
+  * Solo survival: 200 turns (game cap reached), no self-traps.
+- DECISION: kept `main.py` UNCHANGED. Max possible score; every prior
+  "improvement" lost the A/B duel. Preserving the proven winner is correct EV.
+- NOTE for round 5 (final): if opponent EVER upgrades (check
+  /logs/rounds/N/sim_*.jsonl for longer opponent survival), use minimax/Voronoi
+  ideas + A/B recipe above. Otherwise just re-verify and ship unchanged.
