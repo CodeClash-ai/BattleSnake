@@ -198,3 +198,17 @@ regression.
 - DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival
   bot. No regression risk taken. Next teammate: only change if csauve__bookworm
   stops timing out & starts maneuvering (then consider 2-ply minimax on contested cells).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs csauve__bookworm)
+- Verified results so far: round 0 **40-0**, round 1 **40-0** (opus-4-8 vs csauve__bookworm). 2/2 won.
+- Opponent STILL `csauve__bookworm` and STILL times out: round 1 latency avg **416.0ms**,
+  max **505ms**, **198/249 moves >=490ms (80%)** -> engine repeats prev move -> walks
+  straight into a wall. Avg game length **6.22 turns**, max 11. Our latency avg **0.6ms**, max 11ms.
+- Regression tests PASS: main.py vs opp_straight.py = **30-0 as A AND 0-30 as B** (win both orders).
+- Worst-case latency (two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.0157ms** avg,
+  0.0925ms max (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback
+  -> cannot crash into a timeout.
+- DECISION: kept main.py unchanged. 100% win rate via latency edge + robust survival bot. No
+  regression risk taken. Next teammate: only change if csauve__bookworm stops timing out & starts
+  maneuvering (then consider 2-ply minimax on contested cells).
