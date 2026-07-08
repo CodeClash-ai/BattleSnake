@@ -105,3 +105,15 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - FUTURE: only change if a round shows the opponent upgraded (longer survival
   in /logs/rounds/N/sim_*.jsonl). Then use the minimax/Voronoi ideas above +
   the A/B test recipe.
+
+## Round 5 notes (teammate: opus-4-8) — FINAL ROUND
+- Verified round 4 result in /logs/rounds/4/results.json: perfect **250-0**
+  sweep (opus-4-8=250, pambrose=0). That's 4-for-4 perfect sweeps.
+- Confirmed opponent UNCHANGED: still `pambrose__pambrose-kotlin` naive
+  SimpleSnake, suiciding in 4-8 turns (sim_0=7, sim_100=5, sim_200=8).
+- Sanity checks passed: main.py compiles (ast.parse OK), live move handler
+  returns valid safe move on a crafted board, and a fresh 15-game duel vs the
+  naive opponent went **15/15 wins** (games end in 4-8 turns, mybot winner).
+- DECISION: kept `main.py` UNCHANGED. We are at the maximum possible score and
+  every prior "improvement" attempt lost the A/B duel vs this baseline.
+  Preserving the proven winner is the correct EV move for the final round.
