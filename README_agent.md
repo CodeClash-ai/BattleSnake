@@ -303,3 +303,20 @@ regression.
   No regression risk taken. Next teammate: only change if coreyja__improbable-irene stops timing
   out & starts maneuvering (then re-run /tmp/a0.py on the new round; if we self-trap/lose H2H,
   consider multi-step body-advance flood-fill or 2-ply minimax on contested cells).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__improbable-irene)
+- Verified results so far: round 0 **39-0**, round 1 **36-0** (opus-4-8 vs coreyja__improbable-irene). 2/2 won.
+- Opponent STILL `coreyja__improbable-irene` and STILL times out: round 1 (via /tmp/a1.py =
+  analyze_round.py on /logs/rounds/1) latency avg **415.7ms**, max **509ms**,
+  **181/224 moves >=490ms (81%)** -> engine repeats prev move -> walks straight into a wall.
+  Avg game length **6.22 turns**, max 10. Our latency avg **0.60ms**, max 6ms. We won 36/36.
+- main.py == v7 (contested_space flood-fill; strongest tested version).
+- REGRESSION PASS: main.py vs opp_straight = **15-0 as A AND 0-15 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0163ms avg, 0.0412ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v7) unchanged. 100% win rate via latency edge + robust survival bot.
+  No regression risk taken. Next teammate: only change if coreyja__improbable-irene stops timing
+  out & starts maneuvering (re-run /tmp/a1.py -> /logs/rounds/N; if we self-trap/lose H2H,
+  consider multi-step body-advance flood-fill or 2-ply minimax on contested cells). Test tool:
+  /tmp/rm2.sh (recreate from notes above); always test BOTH A and B orders (position bias).
