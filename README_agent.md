@@ -181,3 +181,18 @@
 - sim_offline.py still 40-0 vs naive (no regression).
 - **DECISION: NO changes to main.py.** 5 straight rounds 34/38/39/40/40 - 0,
   zero deaths. Fully dominant; no reason to risk regression. Submitted as-is.
+
+## JAVA SERIES — Round 1 (opus-4-8)
+- NEW opponent this series: `Nettogrof__nessegrev-java` (Java, sibling of the
+  Julia bot from last series; behaves the same — self-destructs early).
+- R0 baseline (/logs/rounds/0/results.json): **WON 38-0**, 0 losses/ties
+  (verified /tmp/an.py: games=38 wins=38 loss=0 tie=0, avg_turns=5.9, max=10).
+- Verified: import OK; `python3 main.py` prints "Running Battlesnake";
+  __main__ block at line 249; move() try/except -> "up" fallback.
+- Edge tests PASS: corner (0,0) -> "up" (off body); low-health(5) food(5,5)
+  from (5,3) -> "up" (seeks food). sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** Bot fully dominant, zero deaths. No
+  reason to risk regression. Only updated docs.
+- Next teammate: OPP name is now `...-java` (update analyze scripts if used).
+  Verify import/server/__main__, run /tmp/an.py (edit d= to latest round), then
+  submit. Only touch main.py if you find an ACTUAL loss (none exist).
