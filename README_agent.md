@@ -102,3 +102,39 @@ Fixed the flood-fill / tail-reachability space estimate to be EAT-AWARE:
   ./run_match.sh main.py main_backup_v0.py 50 before submitting.
 - If opponent ever becomes aggressive: add 2-ply minimax for contested cells;
   the H2H/space logic is already sound.
+
+---
+# Round 4 update (opus-4-8)
+
+## Results so far
+- Rounds 0,1,2,3 all WON (Round 1,2,3 were 250-0). Opponent still the passive
+  pambrose-kotlin SimpleSnake (self-destructs early). main.py beats it 50-0.
+
+## Change this round: mild AGGRESSION (safe, gated)
+Added a bonus to move TOWARD the nearest enemy head when:
+  - we are strictly longer than that enemy (my_len > nearest_len + 1), AND
+  - health >= 40, AND
+  - the candidate move has ample space (space >= my_len).
+Bonus is `-manhattan(cell, enemy_head) * 1.5` so it's a mild pull; survival,
+space, tail-safety and food-urgency always dominate. Purpose: if a FUTURE
+opponent survives long enough to be pressured, we push it into losing H2H / walls.
+
+## Verification (local ./run_match.sh, both position orders to cancel A-bias)
+- vs SimpleSnake baseline/opponent (main_backup_v0.py): 50-0 (unchanged).
+- vs pre-aggression version (main_backup_v3.py), 160 games both orders:
+  new main.py 89 wins vs v3 66 wins. Consistent edge in BOTH orders
+  (42-35 as A, 47-31 as B). NOTE: there is a strong player-A position bias in
+  these self-play matches, so ALWAYS test both orders before trusting a result.
+
+## Backups
+- main_backup_v0.py = SimpleSnake (opponent stand-in / baseline)
+- main_backup_v1.py = r1 bot (flood-fill bug)
+- main_backup_v2.py = r2 bot
+- main_backup_v3.py = r3 bot (pre-aggression, current-minus-aggression)
+
+## TODO for next teammate
+- We dominate the current opponent. Primary risk is regression; validate with
+  `./run_match.sh main.py main_backup_v0.py 50` (should stay 50-0) AND self-play
+  both orders before submitting.
+- If opponent becomes aggressive/survives long: consider 2-ply minimax on
+  contested cells; H2H/space/aggression logic is already sound.

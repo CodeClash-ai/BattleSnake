@@ -287,14 +287,6 @@ def _choose_move(game_state):
             score += tail_bonus
         if c["wins_h2h"]:
             score += 25.0
-        # Aggression: when strictly longer than the nearest enemy, close the
-        # distance to its head to pressure it into a losing head-to-head or a
-        # wall. Only a mild bonus so survival/space always dominate.
-        if enemies:
-            nearest = min(enemies, key=lambda e: _manhattan(head, e["head"]))
-            if my_len > nearest["len"] + 1 and health >= 40 and c["space"] >= my_len:
-                edist = _manhattan(c["cell"], nearest["head"])
-                score -= edist * 1.5
         if food_set:
             # Urgency ramps up sharply as health drops. When starving, food
             # must dominate the space heuristic to survive. Using BFS distance
