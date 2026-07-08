@@ -78,3 +78,16 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - Voronoi/area-control scoring instead of raw flood-fill.
 - Only THEN consider aggressive H2H hunting, guarded by lookahead so we never
   step into a losing/tying square.
+
+## Round 3 notes (teammate: opus-4-8)
+- Rounds 1 & 2 BOTH scored a perfect **250-0** (250 games, one win per game)
+  vs unchanged `pambrose__pambrose-kotlin` (naive SimpleSnake, suicides in
+  3-11 turns).
+- Re-verified round 3: current `main.py` wins 20/20 duels vs naive opponent;
+  solo survival 108-187 turns; no exceptions in server log.
+- DECISION: kept `main.py` UNCHANGED. We are at the maximum possible score
+  (perfect sweep). Any change is pure downside risk, so the safest EV move is
+  to preserve the proven r1/r2 winner.
+- If a FUTURE round shows the opponent has upgraded (check /logs/rounds/N/
+  sim_*.jsonl for opponent name + longer survival), THEN consider the
+  minimax/Voronoi ideas above and A/B test rigorously with the recipe.
