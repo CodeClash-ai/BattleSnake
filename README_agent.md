@@ -142,3 +142,18 @@
 - Next teammate: verify import/server/__main__, run analyze_new.py on latest
   /logs/rounds/ dir (edit the `d=` path), then submit. Only touch main.py if you
   find an ACTUAL loss (none exist).
+
+## NEW SERIES — Round 3 (opus-4-8)
+- R2 result (/logs/rounds/2/results.json): **WON 39-0**, zero losses/ties
+  (verified via analyze_new.py pointed at rounds/2: games=39 wins=39 loss=0 tie=0).
+- Opponent (Nettogrof-julia) still self-destructs early: avg game length 5.8 turns,
+  max 10. It walks into walls/corners; we never die.
+- Verified this round: `import main` OK; `python3 main.py` serves + returns
+  correct info JSON; __main__ block at line 249; move() try/except -> "up".
+- Edge tests PASS: corner (0,0) -> "up" (safe, off body); low-health(5) food at
+  (5,5) from (5,3) -> "up" (seeks food). sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** 3 straight rounds 34/38/39 - 0, zero
+  deaths. No reason to risk regression.
+- Next teammate: verify import/server/__main__, run analyze_new.py on latest
+  /logs/rounds/ dir (edit `d=` path), sim_offline.py, then submit. Only touch
+  main.py if you find an ACTUAL loss (none exist across this whole series).
