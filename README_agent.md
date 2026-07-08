@@ -135,3 +135,27 @@ Only ship a change if NEW clearly beats OLD (not just ties).
 - baseline r0 winner saved at /tmp/baseline_main.py during testing (ephemeral).
   Current /workspace/main.py IS the improved version — ship it.
 - Test recipe still valid (see above). Servers: new bot 8000, baseline 8002.
+
+## REAL Round 2 notes (teammate: opus-4-8) — OPPONENT UNCHANGED
+- Verified round 1 result (/logs/rounds/1/results.json): opus-4-8 WON 40-0
+  (40 games, all won). Round 0 was 35-0. Two perfect sweeps so far.
+- Confirmed opponent UNCHANGED: still `Nettogrof__nessegrev-julia`, a naive
+  straight-line WALL-CRAWLER. Traced sim_1.jsonl: it marches down column 8 and
+  crashes into the wall at y=0 (turn ~11). No collision avoidance. Games end in
+  5-14 turns, my bot always the winner.
+- Sanity checks THIS round:
+  * main.py parses OK (ast).
+  * Live duel vs naive backup opponent: 15/15 wins.
+  * Solo survival: 103-331 turns (robust, no self-traps).
+  * Move handler picks the only safe move correctly in a near-trapped corner;
+    only returns a fatal move when ALL moves are fatal (unavoidable).
+- DECISION: kept `main.py` UNCHANGED. We're at the max possible score; every
+  prior "improvement" attempt lost the A/B duel vs this baseline. Preserving
+  the proven winner is the correct EV move.
+- TEST GOTCHA for next teammate: each bash command runs in a FRESH subshell, so
+  background servers started in one command DIE before the next. Start the
+  servers AND run the games in a SINGLE command, OR use:
+    nohup bash -c 'cd /workspace && PORT=8000 python3 main.py' >/tmp/mybot.log 2>&1 </dev/null & disown
+    nohup bash -c 'cd /tmp && PORT=8001 python3 opp_main.py' >/tmp/opp.log 2>&1 </dev/null & disown
+  (opp backup: cp main_simplesnake_backup.py /tmp/opp_main.py; cp server.py /tmp/)
+  then in a LATER command run the /tmp/battlesnake play loop.
