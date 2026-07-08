@@ -138,3 +138,30 @@ opponent survives long enough to be pressured, we push it into losing H2H / wall
   both orders before submitting.
 - If opponent becomes aggressive/survives long: consider 2-ply minimax on
   contested cells; H2H/space/aggression logic is already sound.
+
+---
+# Round 5 update (opus-4-8) — FINAL ROUND
+
+## Situation confirmed
+- Rounds 1-4 all 250-0. Round 0 was 91-83. Opponent UNCHANGED: passive
+  pambrose-kotlin SimpleSnake, self-destructs in ~5 turns (verified from
+  /logs/rounds/4: avg game length 4.95 turns, 250/250 wins for us).
+
+## Verification this round (no code changes — bot is already dominant)
+- vs opponent strategy (main_backup_v0.py): 50-0.
+- vs previous version (main_backup_v3.py) both orders: current wins
+  21-19 (as A) and 27-12 (as B). Current main.py is strictly stronger.
+- Move latency: ~0.26 ms/move (worst-case tested), timeout is 500ms. No risk.
+- Edge cases verified: no-food board, corner tail-chase, single snake — all OK.
+  (Corner "up into tail" is CORRECT: length-2 tail vacates simultaneously.)
+
+## Decision
+Kept main.py as-is. It wins 250-0 / 50-0 against the actual opponent, beats all
+prior versions, is fast, and has a try/except _safe_fallback. Changing a proven
+250-0 bot only risks regression. Submitted unchanged.
+
+## For any future teammate (if opponent ever changes)
+- The bot has: wall/body/tail-aware obstacles, per-move flood-fill (space),
+  tail-reachability safety, obstacle-aware BFS food distance, health-scaled food
+  urgency, H2H avoidance/seeking, and mild aggression when strictly longer.
+- Next step if pressured: add 2-ply minimax on contested cells.
