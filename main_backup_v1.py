@@ -115,30 +115,6 @@ def _reachable(start_cell, target, obstacles, w, h):
     return False
 
 
-def _bfs_dist(start_cell, targets, obstacles, w, h):
-    """BFS shortest path distance from start_cell to nearest of targets
-    (a set), through free cells. Returns None if unreachable."""
-    if not targets:
-        return None
-    if start_cell in targets:
-        return 0
-    from collections import deque
-    seen = {start_cell}
-    q = deque([(start_cell, 0)])
-    while q:
-        cur, d = q.popleft()
-        for nb in _neighbors(cur):
-            if nb in seen or not _in_bounds(nb, w, h):
-                continue
-            if nb in targets:
-                return d + 1
-            if nb in obstacles:
-                continue
-            seen.add(nb)
-            q.append((nb, d + 1))
-    return None
-
-
 def move(game_state):
     try:
         return {"move": _choose_move(game_state)}
@@ -216,9 +192,7 @@ def _choose_move(game_state):
         my_tail = (body[-1]["x"], body[-1]["y"])
         sim_obstacles = set(obstacles)
         sim_obstacles.discard(my_tail)   # our tail moves away
-        # NOTE: do NOT add nxt to obstacles; flood-fill starts FROM nxt and
-        # would otherwise immediately return 0. nxt occupancy is implicit.
-
+        sim_obstacles.add(nxt)
         space = _flood_fill(nxt, sim_obstacles, w, h, limit=total_cells)
 
         # Tail-reachability: if we can still reach our own tail after moving,
@@ -249,20 +223,13 @@ def _choose_move(game_state):
     working = ample if ample else pool2
 
     # Decide whether to chase food.
-    want_food = health < 65 or my_len < 5
-    food_set = set(food)
-    my_tail = (body[-1]["x"], body[-1]["y"])
+    want_food = health < 55 or my_len < 5
     best = None
     best_key = None
     for c in working:
-        # Obstacle-aware BFS distance to nearest food from this cell. This is
-        # crucial vs manhattan: food behind our own body is not "close".
-        sim_obstacles = set(obstacles)
-        sim_obstacles.discard(my_tail)
-        sim_obstacles.discard(c["cell"])
-        if food_set:
-            bd = _bfs_dist(c["cell"], food_set, sim_obstacles, w, h)
-            fdist = bd if bd is not None else (_manhattan(c["cell"], food[0]) + 100)
+        # distance to nearest food from this cell
+        if food:
+            fdist = min(_manhattan(c["cell"], f) for f in food)
         else:
             fdist = 0
 
@@ -275,30 +242,22 @@ def _choose_move(game_state):
         score += c["space"] * 3.0
         # Tail-following bonus keeps us safe, but must not override the need to
         # eat when starving (otherwise we loop in a corner and die).
-        if health >= 40:
-            tail_bonus = 50.0
-        elif health >= 20:
-            tail_bonus = 15.0
-        else:
-            tail_bonus = 2.0
+        tail_bonus = 50.0 if health >= 30 else 5.0
         if c["tail_reachable"]:
             score += tail_bonus
         if c["wins_h2h"]:
             score += 25.0
-        if food_set:
+        if food:
             # Urgency ramps up sharply as health drops. When starving, food
-            # must dominate the space heuristic to survive. Using BFS distance
-            # guarantees we actually move toward reachable food.
-            if health < 25:
-                score -= fdist * 100.0
-            elif health < 40:
-                score -= fdist * 40.0
-            elif health < 65:
-                score -= fdist * 12.0
+            # must dominate the space heuristic to survive.
+            if health < 30:
+                score -= fdist * 60.0
+            elif health < 50:
+                score -= fdist * 15.0
             elif want_food:
-                score -= fdist * 5.0
+                score += max(0.0, 30.0 - fdist * 3.0)
             elif my_len < 12:
-                score -= fdist * 1.0
+                score += max(0.0, 8.0 - fdist * 1.0)
         score -= cdist * 0.4
         if c["loses_h2h"]:
             score -= 100.0
