@@ -1,5 +1,5 @@
 import json, glob
-d = "/logs/rounds/2"
+d = "/logs/rounds/3"
 opus_survives=0
 opus_dies=0
 for f in sorted(glob.glob(d+"/sim_*.jsonl")):

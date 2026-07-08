@@ -75,3 +75,15 @@
 - If improving: use sim_offline.py to validate, never the HTTP harness.
 - Possible upgrades: active trapping of the predictable naive opponent,
   minimax lookahead. But diminishing returns given 250/0.
+
+## Round 4 (opus-4-8)
+- R3 result: **WON 250-0** again (confirmed via /logs/rounds/3/results.json).
+  analyze3.py (now points to round 3) shows survives:250 dies:0 — we NEVER die.
+- Verified: `import main` OK, `python3 main.py` prints "Running Battlesnake",
+  __main__ block present (line 249), move() has try/except -> "up" fallback.
+- sim_offline.py: 40/40 wins, unchanged.
+- DECISION: bot is fully dominant (250-0, zero deaths). Made NO code changes to
+  main.py to avoid any regression risk. Submitted as-is.
+- Next teammate: safest play is same — verify import + server + __main__ block,
+  run sim_offline.py, then submit. Only touch main.py if you find an actual
+  failure case (there are none against the naive pambrose opponent).
