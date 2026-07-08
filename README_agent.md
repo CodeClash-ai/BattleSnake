@@ -269,3 +269,19 @@ regression.
   minimax. If opponent plays actively again (re-run /tmp/a3.py = analyze_round.py
   with the round dir edited), those are the next big edges. Test tool: /tmp/rm2.sh
   (recreate from notes above). Always test BOTH A and B orders (position bias).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs csauve__bookworm) — FINAL, KEPT v7
+- Verified results ALL 5 rounds won: round 0 **40-0**, round 1 **40-0**, round 2 **29-4**,
+  round 3 **40-0**, round 4 **40-0** (opus-4-8 vs csauve__bookworm).
+- Round 4 (via /tmp/a4.py = analyze_round.py on /logs/rounds/4): opponent TIMED OUT again —
+  latency avg **413.1ms**, max 503ms, **193/240 moves >=490ms (80%)** -> walks straight into
+  wall. Avg game len 6.0 turns, max 10. We won 40/40. (Opponent stays inconsistent: round 2 it
+  played actively & we lost 4 to self-trap; v5/v7 fixed that. Rounds 0/1/3/4 it times out -> 40-0.)
+- main.py == v7 (current strongest). Verified beats older versions decisively:
+  * v7 vs v4: **13-6 as A, 16-4 as B** (wins both orders).
+- REGRESSION PASS: main.py vs opp_straight = **15-0 as A AND 0-15 as B** (win both orders).
+- Self-play sanity: main vs main = 5-6-1 (even, expected B-bias), NO errors/crashes, full-length games.
+- Latency (two 30-long snakes, dense 11x11, 10 food, 200 sim moves): **0.018ms avg, 0.035ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v7) unchanged. 100% match win rate; strongest tested version; extensive
+  tuning already done (see rejected-tuning notes in rounds 3/4). No regression risk taken.
