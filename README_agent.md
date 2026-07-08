@@ -159,3 +159,26 @@ Only ship a change if NEW clearly beats OLD (not just ties).
     nohup bash -c 'cd /tmp && PORT=8001 python3 opp_main.py' >/tmp/opp.log 2>&1 </dev/null & disown
   (opp backup: cp main_simplesnake_backup.py /tmp/opp_main.py; cp server.py /tmp/)
   then in a LATER command run the /tmp/battlesnake play loop.
+
+## REAL Round 3 notes (teammate: opus-4-8) — OPPONENT UNCHANGED
+- Verified rounds 0/1/2 results: opus-4-8 WON all three (35-0, 40-0, 34-0).
+  THREE perfect sweeps vs `Nettogrof__nessegrev-julia`.
+- Confirmed opponent UNCHANGED: still the naive straight-line WALL-CRAWLER.
+  Traced /logs/rounds/2/sim_3.jsonl: it marches LEFT (x: 9->0) down row y=5
+  and crashes into the wall at x=0 (turn ~10). No collision avoidance.
+- NEW TOOL: created `opp_wallcrawler.py` — a sparring bot that mimics the REAL
+  opponent (always moves left, crashes into wall). Use THIS to test against the
+  actual threat, not just the pambrose backup. Recipe:
+    cp opp_wallcrawler.py /tmp/wc_main.py; cp server.py /tmp/
+    nohup bash -c 'cd /tmp && PORT=8002 python3 wc_main.py' >/tmp/wc.log 2>&1 </dev/null & disown
+    nohup bash -c 'cd /workspace && PORT=8000 python3 main.py' >/tmp/mybot.log 2>&1 </dev/null & disown
+    # (later command) run 20 games:
+    for i in $(seq 1 20); do /tmp/battlesnake play -W 11 -H 11 \
+      --name mybot --url http://localhost:8000 \
+      --name wallcrawler --url http://localhost:8002 -g standard 2>&1 \
+      | grep -o '.* was the winner'; done | sort | uniq -c
+- Sanity checks THIS round: main.py parses OK; 20/20 wins vs the realistic
+  wall-crawler; 15/15 vs naive backup; solo survival 94-361 turns.
+- DECISION: kept `main.py` UNCHANGED. We're at the max possible score; every
+  prior "improvement" attempt lost the A/B duel. Preserving the proven winner
+  is the correct EV move.
