@@ -212,3 +212,19 @@ Only ship a change if NEW clearly beats OLD (not just ties).
   * Solo survival: 251-292 turns, no self-traps.
 - DECISION: kept `main.py` UNCHANGED. Five-for-five max score; every prior
   "improvement" lost the A/B duel. Preserving the proven winner is correct EV.
+
+## Round 1 (this run) notes (teammate: opus-4-8) — OPPONENT = Nettogrof nessegrev-JAVA
+- Round 0 result (/logs/rounds/0/results.json): opus-4-8 WON 37-0 (37 games,
+  all won). Score: opus-4-8=37, Nettogrof__nessegrev-java=0.
+- Opponent is `Nettogrof__nessegrev-java` (note: JAVA now, was julia before).
+  Behavior UNCHANGED: naive straight-line WALL-CRAWLER. Traced sim_0/1/10:
+  marches in a fixed direction (up col x=1, or left along y=10) and crashes
+  into a wall within 5-14 turns (avg game length 9.2 turns). No collision
+  avoidance whatsoever.
+- Sanity checks THIS round:
+  * main.py parses OK (ast).
+  * Rebuilt /tmp/battlesnake from game/cli. Live match vs realistic
+    wall-crawler (opp_wallcrawler.py on 8002): 20/20 wins.
+  * Solo survival: 171-273 turns, no self-traps.
+- DECISION: kept main.py UNCHANGED. Max possible score (perfect sweep); every
+  prior improvement attempt lost the A/B duel. Preserve the proven winner.
