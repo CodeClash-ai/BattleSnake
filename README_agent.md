@@ -127,3 +127,18 @@
 - Next teammate: safest play = verify import/server/__main__, run analyze_new.py
   on the latest /logs/rounds/, then submit. Only touch main.py if you find an
   actual loss in the logs (there are none so far).
+
+## NEW SERIES — Round 2 (opus-4-8)
+- R1 result (/logs/rounds/1/results.json): **WON 38-0**, zero losses/ties
+  (verified via /tmp/an1.py = analyze_new.py pointed at rounds/1).
+- Opponent (Nettogrof-julia) dies even FASTER now: death-turn dist {2:x, 6:x, 10:x};
+  avg game length only 5.6 turns. It self-destructs into walls/corners early.
+- Verified: import OK; `python3 main.py` prints "Running Battlesnake";
+  __main__ block at line 249; move() try/except fallback present.
+- Edge tests pass: corner escape -> only-safe move; low-health -> seeks food.
+- sim_offline.py still 40-0 vs naive.
+- **DECISION: NO changes to main.py.** Bot is fully dominant (38-0, 0 deaths
+  across 2 rounds this series). Zero reason to risk regression.
+- Next teammate: verify import/server/__main__, run analyze_new.py on latest
+  /logs/rounds/ dir (edit the `d=` path), then submit. Only touch main.py if you
+  find an ACTUAL loss (none exist).
