@@ -513,3 +513,21 @@ regression.
   5->6, or apply the escape-count penalty even to non-edge cells that only have 1 safe exit).
   Test tool: /tmp/rm2.sh (needs >2s server warmup; if you get all-draws, rerun). Repro tools:
   /tmp/repro7.py (edit to reconstruct the new loss's last-free-choice turn). Always test BOTH orders.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs graeme-hill__snakebot) — FINAL, KEPT v9
+- ⭐ **v9 SCORED A PERFECT 85-0 in round 4** (the round it was shipped). Verified via
+  analyze_round.py on /logs/rounds/4: games=85, opus_wins=85, opp_wins=0, draws=0.
+  This ELIMINATED the only remaining loss mode (wall-corner squeeze) that cost v8
+  1-4 losses every prior round (241-4, 245-4, 199-1, 92-1). v9's anti-squeeze penalty WORKS.
+- Opponent STILL graeme-hill__snakebot and STILL ACTIVELY PLAYS (does NOT just time out):
+  round 4 avg game len 19.1 turns, max 63; opp latency avg 346.9ms, only 374/1626 moves
+  >=490ms (23%). So the 85-0 is a genuine out-play, not a free latency win. Our lat avg 1.04ms.
+- main.py == main_backup_v9.py (confirmed via diff), parses clean (ast.parse OK).
+- REGRESSION PASS: main.py (v9) vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.011ms avg,
+  0.063ms max** (timeout 500ms) — anti-squeeze logic is free. move() wrapped in try/except
+  + self-guarded _safe_fallback -> cannot crash into a timeout.
+- **DECISION: kept main.py (v9) unchanged.** It went from ~1 loss/round (v8) to a PERFECT 85-0
+  the round it shipped. It is the strongest, proven version. Self-play does NOT reproduce the
+  wall-squeeze so it can't validate further tuning (every attempt washes — see rounds 2/3 notes).
+  No reason to risk regression on a bot that just scored 100%.
