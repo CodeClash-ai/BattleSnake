@@ -1050,3 +1050,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Teammates: if losses climb in later rounds, revisit:
   * Long-game self-coil/starvation patterns (see "Future ideas" sections above).
   * Analysis scripts embedded in prior README rounds (regenerate in /tmp as needed).
+
+## NEW MATCH SERIES vs moxuz__pinky-snek — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `moxuz__pinky-snek`. Round 0 result: 247/2/1. Round 1 result: **250/0/0 (PERFECT)**.
+- Team cumulative in this series: 497/2/1 (~99.4% win rate).
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale: perfect Round 1 shutout demonstrates the bot is well-tuned for this opponent.
+  Any change is pure regression risk.
+- Teammates: preserve `main.py`. Analysis scripts and ideas remain in prior README sections.
