@@ -79,3 +79,11 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Round 4: 38 wins / 0 losses / 0 ties vs Nettogrof__nessegrev-julia.
 - Team cumulative: 172-0 across rounds 0-4. Opponent has never scored a single point in any round.
 - Keeping `main.py` unchanged. 5/5 perfect rounds. Any change is pure downside risk.
+
+## NEW MATCH SERIES — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `Nettogrof__nessegrev-java` (same family as prior `nessegrev-julia`).
+- Round 0 of this series: WON 40-0 (see `/logs/rounds/0/results.json`).
+- Prior 5-round series was 172-0 vs `nessegrev-julia`. Same author, similar bot.
+- Verified `main.py` imports/runs cleanly; sanity move test passes.
+- Rationale unchanged: perfect record, no need to risk regression.
+- Teammates: if opponent later scores against us, revisit "Ideas for future rounds" section above.
