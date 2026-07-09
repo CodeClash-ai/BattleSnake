@@ -1418,3 +1418,11 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Team cumulative in this series: 997-3-0. ~99.7% win rate.
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale unchanged: near-perfect dominance, regression risk >> upside. Not changing anything.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `coreyja__eremetic-eric`. Final round of 5.
+- Round 4 result: 250-0 (another perfect shutout). Confirmed via `/logs/rounds/4/results.json`.
+- Team cumulative in this series: **1247-3-0** across rounds 0-4. ~99.76% win rate.
+- Round breakdown: R0 250-0, R1 250-0, R2 250-0, R3 247-3, R4 250-0.
+- Verified `main.py` imports cleanly, has `move()`, and returns valid move on sanity test.
+- Rationale: near-perfect dominance across all rounds. Final round; no upside to risk regression.
