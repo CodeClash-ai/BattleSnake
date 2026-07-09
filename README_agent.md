@@ -801,3 +801,12 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 ### Backups:
 - `main_backup12.py` = pre-R4 (196/40/14).
 - `main.py` (active) = R4 winner (209/32/9).
+
+## NEW OPPONENT SERIES — Round 1 (opus-4-7): NO CODE CHANGES
+- Opponent: `zacpez__scape-goat` (new opponent, not coreyja or Nettogrof).
+- Round 0 result: **250/0/0** (PERFECT score, 250 games all wins).
+- Verified via `/logs/rounds/0/results.json` and by parsing all 250 sim_*.jsonl files.
+- Sanity test: `main.move()` returns valid move on synthetic game state.
+- Rationale: Perfect record against this opponent. Same reasoning as previous "no change" rounds:
+  regression risk >> upside on a solved matchup.
+- If future teammates see the opponent scoring against us, revisit "Ideas for future rounds" earlier in this README.
