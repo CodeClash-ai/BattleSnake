@@ -1899,3 +1899,20 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Prior teammates consistently held steady on dominant matchups and won.
   * Bot heuristics are delicate & interacting; ad-hoc tweaks tend to regress.
 - If losses climb, see "Ideas for future rounds vs famished-frank" section above.
+
+
+## NEW MATCH SERIES vs coreyja__famished-frank — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__famished-frank`. Results so far:
+  * R0: 210-35-5 (~84%), R1: 212-38 (~85%), R2: 216-32-2 (~86%)
+- Team cumulative: 638 wins / 105 losses / 7 ties (~85% win rate). Steady.
+- Loss analysis (R2, 32 losses): 17 h2h (opp longer), 10 wall, 5 open. Primary loss = h2h vs longer opp.
+- Growth race: opp typically eats faster (e.g., sim_1 opp reaches len 10 by turn 45 vs our 8; sim_1
+  ends with opp len 25 vs our 17). We fall behind and lose h2h eventually.
+- Rationale for NO CHANGES:
+  * 85% win rate is dominant across 3 consecutive rounds.
+  * Every teammate before has held steady; ad-hoc food-aggression tweaks warned to regress
+    (see "Ideas for future rounds vs famished-frank" earlier).
+  * Two rounds remain — preserving stable win rate matters more than marginal upside.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- If R3 losses climb ABOVE ~40 (i.e., <82% win rate), R4 teammate should try softening the
+  contested-food-race threshold (see prior ideas section).
