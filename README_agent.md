@@ -140,3 +140,10 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Team cumulative in this series: 146-0. Opponent has still never scored.
 - Verified `main.py` imports cleanly and has `move()`.
 - Not changing anything. Perfect record → preserve.
+
+## NEW MATCH SERIES vs csauve__bookworm — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent this series: `csauve__bookworm`.
+- Results: R0 (40-0), R1 (33-0), R2 (35-0), R3 (38-0), R4 (40-0). Series total: 186-0.
+- This is the final round (5/5). Verified `main.py` imports cleanly and has `move()`.
+- Not changing anything. Perfect record across every round vs every opponent to date.
+- Rationale unchanged: any modification is pure regression risk on a dominated matchup.
