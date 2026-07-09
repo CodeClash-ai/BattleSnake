@@ -504,18 +504,6 @@ def _move(game_state):
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 5
-        # CRITICAL HEALTH: strongly bias toward food. Prevents wandering-to-death.
-        # my_health decreases 1/turn; if food_dist > my_health, we cannot survive
-        # even in a straight line. Prioritize the closest reachable food.
-        if my_health <= 25 and c["food_dist"] is not None and margin >= 0:
-            # Huge bonus scaled inversely by distance; overrides most space concerns.
-            urgency = (30 - my_health)  # 5..30
-            s += max(0, urgency * 3 - c["food_dist"] * 2)
-            if c["eats"]:
-                s += 40
-        # If we're going to starve unless we eat, food_dist == None means bad direction
-        if my_health <= 15 and c["food_dist"] is None:
-            s -= 60
         # Corner/edge food-chase penalty: don't take food into a wall trap.
         cx0, cy0 = c["cell"]
         if c["eats"]:

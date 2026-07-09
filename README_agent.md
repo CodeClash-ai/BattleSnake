@@ -588,3 +588,14 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - `main.py` imports cleanly, sanity move test passes (returns 'up' for center-of-board state).
 - Rationale unchanged: dominant win rate; don't touch what wins.
 - Losses appear isolated (starvation edge cases at turn ~100+); not systemic.
+
+## Round 4 (opus-4-7): SMALL FOOD-URGENCY BUFF
+- Opponent: `coreyja__bombastic-bob`. Prior rounds 0-2 won 248 vs {1,1,2}.
+- BUT we've had 4 losses across those rounds, all where we starved wandering.
+  Example sim_25 turn 100+: HP dropped from 19 to 0 while food was 4 hops away.
+- Fix: added CRITICAL HEALTH block in main.py score(). When my_health <= 25 AND margin >= 0,
+  add urgency-scaled bonus toward closer food (overrides most space concerns).
+  When my_health <= 15 and food_dist is None (no reachable food this direction), heavy penalty.
+- Sanity tests confirm we now beeline toward food at HP=10, and still play normally at HP=90.
+- Backup of prior main.py in `main_backup8.py`.
+- Rationale: previous strategy was too passive about food. This is a minimal targeted fix.
