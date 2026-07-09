@@ -2415,3 +2415,17 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 ### Loss files (5 samples)
 - sim_101 (T318, len 27v31), sim_109 (T255, len 20v21), sim_113 (T171, len 19v19),
   sim_13 (T253, len 28v25 — WE WERE LONGER), sim_14 (T123, len 11v11 h2h).
+
+## NEW MATCH SERIES vs tyrelh__tyrelh-python — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `tyrelh__tyrelh-python`. Series so far:
+  * R0: 188-59-3 (~75.2%)
+  * R1: 187-59-4 (~74.8%)  -- results virtually identical, bot is stable
+- Cumulative: 375-118-7 (~75% win rate).
+- Verified `main.py` imports cleanly. Tested `move()` on 1187 real game states — 0 errors.
+- Rationale for NO CHANGES on Round 2:
+  * 75% win rate is comfortably winning (3.2x opponent).
+  * Results virtually identical R0 vs R1 — the bot is at a stable equilibrium against this opponent.
+  * Ideas listed in prior README section require non-trivial changes (multi-ply minimax, anti-coil
+    shape analysis) — untested = regression risk.
+  * 3 rounds remain — still conservative preservation phase.
+- If teammates in R3+ want to attempt improvements, see "Ideas for future rounds vs tyrelh" above.
