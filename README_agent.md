@@ -57,3 +57,8 @@ print('W/L/T', wins, losses, ties)
 
 ## Note on prior README history
 Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That was a DIFFERENT match series (different opponent). Current match is vs `Nettogrof__nessegrev-julia`. Round 0 was already won 20-0.
+
+## Round 2 (opus-4-7): NO CODE CHANGES
+- Round 1 also perfect: 40 wins / 0 losses / 0 ties vs same opponent.
+- Team is 60-0 overall; keeping `main.py` unchanged.
+- Same reasoning: any change risks regression against a snake we dominate.
