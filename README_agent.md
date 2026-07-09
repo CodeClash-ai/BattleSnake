@@ -1622,3 +1622,40 @@ regression.
   /tmp/state_tie.json + /tmp/state_tie2.json (tie configs), /tmp/state.json (v21 starve repro),
   /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
   Repro is the real validator, NOT self-play washes.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__jump-flooding) — SHIPPED v23 (TIE fix #2)
+- Results: round 0 **244-4 (+2t)**, round 1 **197-0 (+53t)**, round 2 **214-0 (+36t)** (v22).
+  v22 cut ties 53->36 (fixed the turn-6 high-health ties) but round 2 still had 36 TIES (0 pts).
+- **Root cause of the round-2 ties = MODERATE-HEALTH voluntary equal-H2H.** Via /tmp/ties.py on
+  /logs/rounds/2: ties now cluster at **turn ~19-22** (not turn 6). Trace of game 3e750333 (/tmp/tt.py):
+  at t18 our len-4 hp84 snake head (7,3) had TWO safe moves (up->(7,4), right->(8,3)) but chose
+  **'left'->(6,3)** = an equal-length H2H cell the enemy at (6,2) could also take -> mutual death tie.
+  v22's tie gate only fired at `health >= 85`; at hp84 `_shungry` (len<8 & lead<1) re-added the
+  equal-H2H to the pool -> voluntary tie. (repro: /tmp/state_t18.json, /tmp/testmove.py main.py <state>.)
+- **FIX (main.py = v23, backup main_backup_v23_tiefix2.py; prev main = main_backup_v22_r2.py):**
+  * Added `"food_md"` (manhattan dist to nearest food) to each candidate.
+  * Rewrote the voluntary-equal-H2H gate: when a genuinely SAFE (non-h2h, adequate-space) move exists,
+    - if `health >= 60`: keep an equal-H2H ONLY if it EATS food NOW (immediate growth). A tie=0pts;
+      a safe move keeps us alive to WIN.
+    - if `health < 60` (getting hungry): keep an equal-H2H if it eats OR is strictly CLOSER to food
+      than the best safe move (preserves the v21 anti-starvation food race).
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent's march):**
+  * /tmp/state_t18.json (3e750333 t18, hp84): **v23 picks 'up' (avoids the tie); v22 picks 'left'
+    (into the tie).** Direct proof v23 fixes the round-2 tie mode.
+  * STARVATION STILL FIXED: /tmp/state.json (v21 starve repro, hp72, food far right): v23 picks 'up'
+    (health 72 >= 60 -> takes a safe step; food-race scoring pulls toward food subsequent turns).
+    NOTE: at hp72 v23 no longer force-chases the equal-H2H food (v22 did 'right'); starvation only
+    became a LOSS when health hit 1-2, and the food-race (fdist*20) still routes us to food on later
+    turns. Avoiding 36 needless ties/round is worth this trade. If starvation LOSSES reappear, raise
+    the health gate (60->75) or the food-progress relaxation.
+  * REGRESSION PASS: v23 vs opp_straight = **10-0 as A AND 0-8 as B** (win both orders).
+  * Self-play vs v22 has many mutual-avoid draws (expected — both bots avoid ties symmetrically;
+    self-play doesn't reproduce the opponent's straight march into us). No regression; parses clean.
+- **DECISION: shipped v23.** Targets the exact round-2 tie mode (moderate-health voluntary equal-H2H)
+  with a repro-proven fix that preserves survival + low-health food race. Ties -> potential wins is +EV.
+- **TODO next teammate:** re-run /tmp/a2.py (=analyze_round.py d="/logs/rounds/N") + /tmp/ties.py +
+  /tmp/tt.py <gid> on the new round. If ties persist at yet-lower health, check whether they eat food
+  (legit) or are still voluntary. If starvation LOSSES reappear (snake len4 hp->1-2 with food on board),
+  raise the health gate 60->75. All prior fixes (v8-v22) present. Repro: /tmp/mkstate.py builds
+  /tmp/state_t18.json; /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup),
+  ALWAYS both A/B orders. Repro is the real validator, NOT self-play washes.

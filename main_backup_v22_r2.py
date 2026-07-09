@@ -316,7 +316,6 @@ def _choose_move(game_state):
             "timed_space": timed_space,
             "tail_reachable": tail_reachable,
             "reaches_food": eating_now,
-            "food_md": (min((_manhattan(nxt,(fx,fy)) for fx,fy in food_set), default=999)),
         })
 
     if not candidates:
@@ -369,23 +368,8 @@ def _choose_move(game_state):
         # food (real growth benefit); otherwise avoid the voluntary tie. When there
         # is NO adequate safe move (would flee into a tiny pocket / starve later),
         # keep the equal-H2H moves (a possible tie beats a certain loss/starvation).
-        # A WIN >> a TIE: when a genuinely safe move exists, only accept a
-        # voluntary equal-H2H if it makes REAL food progress (reaches food, or
-        # gets strictly closer to food than the best safe move -> food-race /
-        # anti-starvation). Otherwise we would just walk into a needless tie
-        # (round-2 ties clustered at turn ~19: wandering len-4 snakes colliding).
-        if _safe_ok:
-            # When healthy, NEVER voluntarily take an equal-H2H unless it eats
-            # NOW (immediate growth). A tie is 0 pts; a safe move keeps us alive
-            # to WIN. Only when getting hungry (health < 50) do we allow an
-            # equal-H2H that makes real food progress (closer than any safe move)
-            # -> preserves the anti-starvation fix without needless ties.
-            if health >= 60:
-                eq_ok = [c for c in eq_ok if c.get("reaches_food")]
-            else:
-                best_safe_fmd = min((c.get("food_md", 999) for c in _safe_ok), default=999)
-                eq_ok = [c for c in eq_ok
-                         if c.get("reaches_food") or c.get("food_md", 999) < best_safe_fmd]
+        if _safe_ok and health >= 85:
+            eq_ok = [c for c in eq_ok if c.get("reaches_food")]
         if eq_ok:
             pool = safe + eq_ok if safe else (candidates if not eq_ok else eq_ok + candidates)
 
