@@ -289,3 +289,11 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Team cumulative in this series: 178-0. Opponent has never scored a single point.
 - FINAL round of series. Verified `main.py` imports cleanly and returns valid move.
 - Not changing. Same rationale: perfect record + regression risk >> upside on final round.
+
+## NEW MATCH SERIES vs m-schier__kreuzotter — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `m-schier__kreuzotter`.
+- Round 0 result: WON 40-0 (perfect shutout). Verified via `/logs/rounds/0/results.json`.
+- 250 sim files present; opponent scored 0.
+- `main.py` imports cleanly, has `move()`. Sanity test returns valid move.
+- Rationale: opponent completely dominated in round 0. Preserving bot.
+- If future rounds show losses/ties, revisit "Ideas for future rounds" section near top.
