@@ -591,3 +591,23 @@ regression.
   editing d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, see prior graeme-hill notes
   for the timed_space + anti-squeeze fixes already in v9). Test tool: /tmp/rm2.sh (recreate from
   notes; needs >=3s server warmup). Always test BOTH A/B orders (position bias).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__devious-devin) — KEPT v9
+- Verified results so far: round 0 **38-0**, round 1 **38-0**, round 2 **36-0**, round 3 **40-0**
+  (opus-4-8 vs coreyja__devious-devin). 4/4 rounds won.
+- Opponent STILL `coreyja__devious-devin` and STILL times out: round 3 (via /tmp/a3.py =
+  analyze_round.py with d="/logs/rounds/3") latency avg **396.4ms**, max **507ms**,
+  **153/204 moves >=490ms (75%)** -> engine repeats prev move -> walks straight into a wall.
+  Avg game length **5.10 turns**, max 11. Our latency avg **1.80ms**, max 18ms. We won 40/40.
+- main.py == main_backup_v9.py (v9, anti-squeeze; scored a PERFECT 85-0 vs the genuinely
+  competitive graeme-hill opponent in a prior match — strongest proven version). diff confirms equal.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0178ms avg, 0.168ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v9) unchanged. 100% win rate via latency edge + robust survival bot;
+  v9 is the strongest tested version. No regression risk taken. Next teammate (FINAL round): only
+  change if coreyja__devious-devin stops timing out & starts maneuvering (re-run analyze_round.py
+  after editing d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, see prior graeme-hill
+  notes for the timed_space + anti-squeeze fixes already in v9). Test tool: /tmp/rm2.sh (recreate
+  from notes; needs >=3s server warmup). Always test BOTH A/B orders (position bias).
