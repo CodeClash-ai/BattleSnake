@@ -3481,3 +3481,33 @@ regression.
   `bash /tmp/rmf.sh main.py passive.py N`). ALWAYS both A/B orders (STRONG position bias — A-side
   wins more; trust the AGGREGATE over both orders, not a single batch). Repro: /tmp/mk2.py <sim>
   <turn> <out.json>, /tmp/tm.py <bot> <state>. DON'T ship a self-play regression (v40/v41/v42 all did).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__eremetic-eric) — FINAL, KEPT v39
+- Verified ALL 5 rounds won: round 0 **218-32** (v36), round 1 **216-34** (v37), round 2 **226-24** (v38),
+  round 3 **233-17** (v39), round 4 **228-22** (v39). Opponent stays SMALL (len 5-16) & OUTLASTS us;
+  ALL our losses are giant-snake self-coil (via /tmp/cll.py + /tmp/ourlen.py: our snake grows to
+  len 50-69, hp 96-100 never hungry, opp len 8-16, self-coils on walls/mid over 300-878 turns).
+  Note: real match uses foodSpawnChance=15 (not 40) but board still floods (34-43 food) because our
+  giant snake leaves few free cells.
+- **Tried v40: a DIRECT anti-growth penalty (-40 for the actual eating move when _giant), reasoning
+  the fdist*30 gradient is useless on a flooded board (food everywhere).** RESULT: head-to-head
+  flooded self-play v40 vs v39 = WASH (7-6-1 A, 6-7-1 B = 13-13); vs passive.py flooded ~equal
+  (v40 26-2, v39 27-1). REPRO check: at giant states where food is directly adjacent (sim_240 t299),
+  v39's fdist*30 ALREADY avoids the eating cell -> the -40 penalty is redundant. The genuine problem
+  is regions where EVERY path leads through food (no non-food direction) — a per-move penalty can't
+  help. v40 is a WASH, not a clear improvement.
+- **DECISION: reverted to v39** (main.py == main_backup_v39_giantcap2.py, diff confirms; parses clean;
+  the round-5 start backup is main_backup_v39_r5start.py). Iron ship-rule: don't ship a wash/risk on
+  a proven bot. v39 is the best-scoring version (233-17 round 3) with the improving trend.
+  REGRESSION PASS: main.py vs opp_straight = **6-0** (no timeouts/crashes).
+- **TODO (future):** the giant-snake self-coil on a flooded board is NOT fixable with per-move fdist
+  or eating penalties (proven v40/v41/v42 all wash/regress). The REAL fix is either (a) a multi-step
+  self-sim using OUR OWN _choose_move scoring K=6-8 steps as a SOFT penalty (never successfully
+  shipped — greedy escapes so must use real scoring), or (b) REGION-level food avoidance: avoid
+  MOVING INTO board regions with high food DENSITY (not just the nearest food cell), so the giant
+  snake steers toward food-sparse corridors and stops incidental eating. Test proxies: /tmp/rmf.sh
+  (flooded fsc40) + /tmp/rmf15.sh <A> <B> <N> <fsc> (fsc15 = real match) vs passive.py (stay-small
+  mimic), ALWAYS both A/B orders (strong position bias — trust AGGREGATE). Repro: /tmp/mkg.py <sim>
+  <turn> <out.json> (round 4, "you"=opus), /tmp/tm.py <bot> <state>, /tmp/evalg.py <state> (per-dir
+  eats/OOB), /tmp/findeat.py (finds giant states with adjacent food). Loss class: /tmp/cll.py,
+  /tmp/ourlen.py. DON'T ship a wash/regression on v39 (the match's best version).
