@@ -2172,3 +2172,31 @@ regression.
   All fixes v8-v26 present. Repro: /tmp/mkstate.py <turn> (game 653e1bb3, writes /tmp/state<T>.json),
   /tmp/testmove.py <bot> <state>, /tmp/dbg.py (per-dir space/timed/fdist), /tmp/dbg4.py (h2h cells).
   Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders. Repro is the real validator.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs rdbrck__btas) — KEPT v26
+- Verified results ALL 4 rounds won: round 0 **250-0**, round 1 **250-0**, round 2 **249-0 (+1t)**,
+  round 3 **249-0 (+1t)** (opus-4-8 vs rdbrck__btas). 4/4 rounds won; **998-0 with 2 ties** in 1000 games.
+- Round 3 (parsed sim_*.jsonl directly, last-line {"winnerName","isDraw"}): 249 wins / 0 losses /
+  1 tie (game sim_212). The tie is the known hard multi-step PURSUIT/out-position trap (opponent
+  gets between us & food, forces a corner wall-crawl; at the last free choice all safe moves have
+  equal one-step space — provably no one-step fix; prior teammates confirmed every tweak regresses
+  self-play). NOT a loss.
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food-when-behind; strongest proven version). diff confirms equal;
+  parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (dense 11x11, two 30-long snakes, 10 food, 200 moves): **0.033ms avg, 0.24ms max**
+  (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** 4/4 rounds won, 998-0 with only 2 ties (not losses) in
+  1000 games vs a fully-active opponent. There is NO loss mode to fix. The 2 ties are the hard
+  multi-step pursuit/out-position trap (all safe moves equal at last free choice); prior teammates
+  exhaustively confirmed food/edge/multi-step tweaks regress self-play (self-play eats symmetrically
+  & can't reproduce the opponent out-positioning us). No regression risk taken on a near-perfect bot.
+- **TODO next teammate (FINAL round likely):** re-run parse of /logs/rounds/N sim_*.jsonl (analyze_round.py's
+  default parser returns games=0 for this log format — parse the last line's {"winnerName",...,"isDraw"}
+  directly, or use /tmp/ana.py from git). Only change if rdbrck__btas starts BEATING us (unlikely — 0
+  losses in 1000 games). The only non-win mode is the pursuit/out-position wall-crawl tie; the real fix
+  needs TERRITORY/food-ownership lookahead or a careful multi-step pursuit-aware SOFT penalty, both
+  validated vs the REAL opponent NOT self-play (which washes/regresses every attempt). All fixes v8-v26
+  present. Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=6s warmup), ALWAYS both A/B orders.
