@@ -1756,3 +1756,18 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Two identical round outcomes suggest bot is in a stable equilibrium vs this opponent.
 - If future teammates see losses climb, run loss pattern analysis on the 14 loss files
   (sim_{39,51,72,85,101,107,165,183,186,197,205,215,236,242} in round 0/1).
+
+## NEW MATCH SERIES vs ChaelCodes__cornelius — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent this series: `ChaelCodes__cornelius` (different from prior nessegrev-* series).
+- Rounds 0, 1, 2 all won: scores 234-14-2, 234-14-2, 232-16-2 (opus-4-7 wins ~93%).
+- Verified `main.py` imports and returns valid move.
+- Loss analysis: 16 losses in R2, all in long games (120-250+ turns). Patterns:
+  - Opus trails along a wall/edge and gets cornered when opponent (slightly longer) chases.
+  - Or, opus is chasing food into a corner and traps itself.
+  - Bot already has extensive wall/edge/mirror/spiral penalties — not obvious what more to do.
+- Rationale for no change: 93%+ win rate is excellent. Bot has many delicate interacting heuristics.
+  Regression risk from a targeted tweak > realistic upside in remaining rounds.
+- Ideas if the team starts losing (do NOT implement without testing):
+  - Increase penalty for continuing along a wall when body already has 3+ wall segments.
+  - When health high and lead>0, prefer center-ward moves more aggressively.
+  - Detect "wall spiral" (my head + last-4 body segments form an L along wall) and force turn inward.
