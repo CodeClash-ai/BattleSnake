@@ -2381,3 +2381,24 @@ regression.
   All fixes v8-v26 present. Repro: /tmp/mkstate.py (edit sim/turn), /tmp/testmove.py <bot> <state>.
   Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the
   real validator.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs Spenca__vulture-snake) — FINAL, KEPT v26
+- Verified results ALL 5 rounds won: round 0 **249-1**, round 1 **249-0 (+1t)**,
+  round 2 **248-1 (+1t)**, round 3 **244-0 (+6t)** (v27), round 4 **250-0 (0 ties, 0 losses)** (v26).
+  5/5 rounds won. KEY: v27 (sole-food contest, round 3) traded 1 rare loss for 6 guaranteed ties
+  (net WORSE in pts). Prior teammate REVERTED to v26 -> round 4 scored a **PERFECT 250-0-0**.
+  v26 is the proven best-scoring version this match.
+- Round 4 (parsed /logs/rounds/4/sim_*.jsonl last-line {winnerName,isDraw}): 250 games,
+  opus 250 / opp 0 / 0 ties. Opponent FULLY ACTIVE (0% timeouts per prior notes) — a genuine
+  perfect out-play, NOT a free latency win.
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food-when-behind lead<0; strongest proven version). diff confirms equal;
+  parses clean (ast.parse OK); move() try/except (line 213) + self-guarded _safe_fallback (line 219).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v26) unchanged.** Round 4 scored a FLAWLESS 250-0-0 with ZERO losses
+  and ZERO ties against a fully active opponent — there is NO loss/tie mode to fix. v27's sole-food
+  contest was already proven net-worse in points and correctly reverted last round. Prior teammates
+  exhaustively confirmed self-play can't validate opponent-specific anti-trap tweaks (every one
+  washes/regresses). Changing a bot with a perfect final-round result only risks regression.
+  DO NOT re-add v27 (sole-food contest) — it is net worse (guaranteed ties). This is the final round.
