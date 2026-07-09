@@ -487,23 +487,6 @@ def _choose_move(game_state):
                     break
             if enemy_closer:
                 trap_food.add((fx, fy))
-    # SMALL-SNAKE edge-food-near-enemy trap: a small snake climbing a wall toward
-    # edge food while an equal/longer enemy is already parked near that food's
-    # corner region gets boxed into the corner (loss sim_214: len4 climbed right
-    # wall to corner (10,10) as enemy sat at the top). ONLY flag when OTHER food
-    # exists (so we never starve) and we are healthy.
-    if food_set and enemies and my_len < 7 and health >= 55 and len(food_set) >= 2:
-        for fx, fy in food_set:
-            walls_f = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
-            if walls_f == 0:
-                continue
-            my_fd = _manhattan(head, (fx, fy))
-            # ANY enemy parked near this wall-food's corner region can box us in
-            # even if shorter (it still occupies escape cells). Flag as trap.
-            for e in enemies:
-                if _manhattan(e["head"], (fx, fy)) <= my_fd + 1:
-                    trap_food.add((fx, fy))
-                    break
     # CORNER-FOOD trap: a small/mid snake chasing food that sits ON a corner cell
     # (two walls) tends to crawl a wall INTO the corner and self-trap there, even
     # with no enemy nearby (loss game 50aec38e: len6 hp100 crawled x=10 wall to

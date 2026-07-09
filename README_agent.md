@@ -2430,3 +2430,44 @@ regression.
   self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT self-play
   (which washes/regresses every attempt). But with 250-0-0, DON'T fix what isn't broken. Test:
   /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=6s warmup), ALWAYS both A/B orders.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs moxuz__pinky-snek) — SHIPPED v27 (small-snake edge-food-near-enemy trap)
+- Verified results: round 0 **250-0**, round 1 **247-2 (+1t)** (opus-4-8 vs moxuz__pinky-snek). Both won.
+  Opponent FULLY ACTIVE (round 1: latency avg 4.6ms, 0/9985 moves >=490ms = 0% timeouts; avg game 42.9 turns). Pure out-play.
+- **Root cause of BOTH round-1 losses = TOP-RIGHT CORNER WALL-CRAWL SELF-TRAP** (via /tmp/tr.py + /tmp/body.py):
+  * sim_214: our SMALL len4-5 snake climbed the RIGHT wall (x=10) from t2 chasing edge food at (10,8),
+    reached corner (10,10) at t10 while the enemy (moxuz, len3) sat around the top -> boxed in, died t11.
+    Last free choice = t6 (head (10,6)): v26 chose 'up' (kept climbing); 'left'->(9,6) escaped.
+  * sim_219: our BIG len10-11 hp96-100 snake crawled the top wall chasing food (5,10)/(10,10)/(6,10),
+    coiled itself into the top-right region and self-trapped at t55. Multi-step coil (one-step metrics equal).
+- **FIX (main.py = v27, backup main_backup_v27_smalledgetrap.py; prev main = main_backup_v26_r1.py = v26):**
+  Added a SMALL-SNAKE wall-food-near-enemy trap flag (right before the corner-food trap block, ~line 490):
+  when `my_len<7 and health>=55 and len(food_set)>=2`, flag any WALL food (walls_f>=1) an enemy is
+  parked near (enemy manhattan to the food <= my_fd+1, ANY length — a shorter enemy still blocks
+  escape cells). This adds it to `trap_food` -> the food pull toward it is softened (safe_food excludes
+  it) so the small snake prefers safer/center food instead of climbing the wall into the corner.
+  Gated on `len(food_set)>=2` so we NEVER starve (always another food to pursue).
+- **VALIDATION:**
+  * REPRO PASS: /tmp/s214_6.json (sim_214 t6) + /tmp/s214_7.json (t7): **v27 picks 'left' (escapes off
+    the wall); v26 picks 'up' (climbs into the corner trap).** Direct fix of loss sim_214.
+    (Did NOT flip sim_219 — that's the hard multi-step big-snake coil; one-step metrics equal there.)
+  * SELF-PLAY WASH (no regression): v27 vs v26 = 15-13 as A / 12-16 as B (combined v27 27, v26 29 —
+    within position-bias noise; A-position bias visible both runs). Consistent with all prior notes that
+    self-play can't reproduce/validate opponent-specific corner traps.
+  * REGRESSION PASS: v27 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **REJECTED tuning this round:** (a) stronger/extended anti-wall-crawl (len>=8, weight 4.0) did NOT flip
+  either repro AND REGRESSED self-play (23 vs 33 combined). (b) a small-snake anti-squeeze escape-count
+  penalty did not flip sim_214 (the fdist*20 short-hungry food-eat pull dominates any -penalty). The
+  trap-FLAG (softening the food pull, diverting to center food) is the only lever that flips it without
+  the dominant food-eat term overriding.
+- **DECISION: shipped v27.** Narrow, repro-proven fix for the small-snake corner wall-crawl loss
+  (the more common of the two round-1 losses) with no self-play regression and no starvation risk.
+- **TODO next teammate:** re-run /tmp/ana.py /logs/rounds/N + /tmp/tr.py <lossgame> + /tmp/body.py
+  <game> <t0> <t1> on the new round. If small-snake corner losses persist, widen the trap window
+  (enemy manhattan <= my_fd+2) — but re-test self-play both orders (it's currently a wash; don't tip
+  it into regression). The BIG-snake multi-step coil (sim_219) remains UNFIXED — it's the documented
+  hard mode (last-free-choice ~3 turns before death, all one-step flood/timed/static equal); needs a
+  SOFT multi-step self-sim (main_backup_v15_multistep.py, as a soft penalty not a hard filter). Repro:
+  /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh
+  <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
