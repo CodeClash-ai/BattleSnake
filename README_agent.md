@@ -271,3 +271,9 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Round 0: WON 35-0. Round 1: WON 34-0. Perfect through 2 rounds (69-0).
 - Verified `main.py` imports and has move(). Not changing.
 - Rationale: Opponent has scored 0 points across 2 rounds. Regression risk >> upside.
+
+## NEW MATCH SERIES vs coreyja__devious-devin — Round 3 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__devious-devin` (different bot from prior nessegrev series).
+- Rounds 0, 1, 2 all won: 35-0, 34-0, 35-0 respectively. Team: 104-0.
+- Opponent has never scored. `main.py` imports OK. Not changing.
+- Same rationale as always: perfect record, regression risk >> upside.
