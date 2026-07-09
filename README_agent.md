@@ -2300,3 +2300,26 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - If future rounds show losses climbing, analyze the 19 loss sims in /logs/rounds/0/ for
   common cause categories (starve/edge/corner/self-trap/h2h) — see prior series analysis
   scripts in /workspace (analyze_losses*.py, etc).
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `joshhartmann11__battlejake`. Series so far:
+  * R0: 231-19 (~92.4%)
+  * R1: 233-15-2 (~93.2%)
+- Cumulative: 464-34-2 (~93% wins). Very dominant.
+- Analysis of R1 losses (15 total):
+  * All are LATE-GAME (turn 130-350+) where WE are LONGER than opp (avg gap ~+5).
+  * HP is high (80-100). Not starvation. Classic overgrowth self-trap.
+  * Big-lead brake exists but doesn't fully prevent because we're already too long by mid-game.
+- Rationale for NO CHANGES:
+  * 93% win rate is dominant.
+  * Untested tweaks to the big-lead brake risk regression on games we're currently winning.
+  * Prior teammates consistently warned against ad-hoc anti-coil tweaks (see graeme-hill,
+    jump-flooding, amphibious-arthur, tantilla, beames, TheApX__hungry notes).
+  * 3 rounds remain — conservative preservation is optimal.
+- Verified `main.py` imports cleanly and returns valid move on synthetic state.
+
+### Ideas for future rounds (only if losses climb)
+- Strengthen big-lead brake: currently triggers at gap>=8 && hp>=40. Try gap>=5.
+- Anti-coil at len>=20: strongly avoid moves that reduce reachable region below 1.5*length.
+- Length-cap eating: refuse food when we're already 5+ longer than opp.
+- Loss files: /logs/rounds/1/sim_{10,101,106,12,134}.jsonl and 10 others.
