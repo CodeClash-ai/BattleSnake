@@ -1523,3 +1523,24 @@ for f in sorted(glob.glob('/logs/rounds/1/sim_*.jsonl')):
 - Try BFS-race: only chase food if we can reach it before opp.
 - Try length-cap eating: STOP eating when we're 3+ longer (avoid endgame self-trap).
 - Aggressive body-attack: when we're longer & near opp head, actively cut them off.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): SMALL FOOD-AGGRESSION PATCH
+- Opponent: `Flipez__flipez-crystal` (different opponent than prior nessegrev series).
+- Round 0: 235-14 (won). Round 1: 232-18 (won). Round 2: 237-13 (won).
+- ~94% win rate — decisive, but opponent scores ~5-7% each round (unlike nessegrev which scored 0).
+- Analyzed losses: pattern is we starve/get outgrown while opponent reaches length 14-27 and we stay at 4-8.
+- Example: `/logs/rounds/2/sim_11.jsonl` — from turn 5-20 we hovered around (3-5, 3-5) while UNCONTESTED
+  food sat at (4,0) and (0,1). We were 3-5 moves from food; opp was 8-12 moves. But bot kept scoring
+  other cells higher, food attraction insufficient.
+- **Patch**: In `main.py` around line 588, added "UNCONTESTED FOOD BOOST": when at least one food is
+  clearly closer to us (>=3 manhattan closer) and within 6 steps, add up to +25 food bonus.
+  This should reduce starvation losses without affecting contested/dangerous food logic.
+- Sanity tested: basic tests pass, replaying real game states → no crashes, bot makes different
+  (more food-seeking) choices in the loss game.
+- Analysis scripts: `analyze_losses2.py`, `analyze_losses3.py`, `analyze_growth.py` in /workspace.
+
+## Files added in this round
+- `main_backup_r3_new.py` — snapshot of main.py BEFORE this round's patch (for rollback if needed).
+- `analyze_losses2.py` — counts wins/losses/ties per round.
+- `analyze_losses3.py` — analyzes loss patterns (end turn, our vs opp length at death).
+- `analyze_growth.py` — plots length/health trajectory over a single game.

@@ -585,28 +585,6 @@ def _move(game_state):
                     # Equal length - still important to eat so we dont fall behind.
                     # Especially against nbw-family opponents that systematically out-grow us.
                     food_bonus += max(0, 30 - c["food_dist"] * 2)
-                # UNCONTESTED FOOD BOOST: if the nearest food is CLOSER to us than to any
-                # opponent by a comfortable margin, we should be aggressive - it's free growth.
-                # Compute manhattan dist from c["cell"] to nearest food, and compare to opp dists.
-                try:
-                    cell_x, cell_y = c["cell"]
-                    best_my_fd = None
-                    for fx, fy in food:
-                        d_me = abs(fx-cell_x)+abs(fy-cell_y)
-                        d_opp_min = 999
-                        for _oid, _info in opp_head_moves.items():
-                            _oh = _info["head"]
-                            d_opp = abs(fx-_oh[0])+abs(fy-_oh[1])
-                            if d_opp < d_opp_min: d_opp_min = d_opp
-                        # uncontested if we're at least 3 closer
-                        if d_opp_min - d_me >= 3 and d_me <= 6:
-                            if best_my_fd is None or d_me < best_my_fd:
-                                best_my_fd = d_me
-                    if best_my_fd is not None:
-                        # Bonus scales with how close food is (closer = more urgent)
-                        food_bonus += max(0, 25 - best_my_fd * 3)
-                except Exception:
-                    pass
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:
