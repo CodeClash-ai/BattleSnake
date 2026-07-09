@@ -4119,3 +4119,39 @@ regression.
   ports 8001/8002, 7s warmup, grep "A/B is/was the winner"), /tmp/rmf15.sh <A> <B> <N> <fsc> vs
   passive.py (flooded proxy), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over
   >=3 batches). DON'T ship a self-play regression — v48 (241-8) is the proven best.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs jackisherwood__battlesnake-elon) — FINAL, KEPT v48
+- Verified results ALL 5 rounds won: round 0 **231-18 (+1t)** (v44), round 1 **233-17** (v47),
+  round 2 **235-13 (+2t)** (v47), round 3 **241-8 (+1t)** (v48), round 4 **243-7 (0t)** (v48).
+  ⭐ v48 (giant food-flee gated on `_flooded=len(food)>=10`, shipped round 3) is the proven best:
+  losses fell every round 18->17->13->8->**7**. Round 4 (243-7) is the BEST result of the match.
+- **Round-4 loss classification (7 losses, last-alive frame): ALL 7 = SELFCOIL** (legal=0). Our
+  snake was LONGER than opp in 6/7 (leads +2 to +8), HIGH health (78-99, NOT hungry), food counts
+  2-6 (NOT flooded -> the v48 giant food-flee is OFF, NOT the cause). Sizes len 16-28.
+  Files: sim_132/140/171/183/194/230/6.
+- **DEEP TRACE (sim_183, len28, biggest loss): genuine DEEP multi-step self-coil.** The last true
+  FREE choice (>=3 legal moves) was t288; death was t301 — **13 turns later**. By t290 the snake was
+  already in a 1-2-legal-move corridor. The trap forms over ~13 turns as the len-28 body seals its
+  own corridors on a 121-cell board. This is the documented residual hard mode: the last-free-choice
+  is FAR (13 turns) before death, so NO practical one-step OR short multi-step (K=6-8) metric catches
+  it (all one-step flood/timed/static equal at the free choice; greedy self-sim escapes).
+- **DECISION: kept main.py (v48) unchanged.** v48 just scored the BEST result of the match (243-7,
+  losses trending down every single round). All 7 losses are the genuine DEEP multi-step self-coil
+  (13-turn horizon) — NOT the giant-cap mis-fire (food<10 in all), NOT wall-crawl (v47's anti-wall-crawl
+  handles those). Prior teammates exhaustively confirmed EVERY fix attempt regresses self-play:
+  v49 (raise `_flooded` 10->13) net-negative, v50 (add len>=18 gate) regressed hard, stronger
+  anti-wall-crawl/tail-follow all washed/regressed, greedy multi-step self-sim escapes & hard-filter
+  versions regressed. The correct fix (SOFT multi-step self-sim using OUR OWN _choose_move scoring)
+  was never successfully shipped. No unvalidated regression risk taken on the match's best-scoring,
+  still-improving version on the FINAL round.
+- REGRESSION PASS: main.py (v48) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v48_giantboardgate.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot crash into a timeout.
+- **TODO (future):** the ONLY residual loss mode is the DEEP multi-step self-coil (big snake len 16-28,
+  last-free-choice ~13 turns before death, board not flooded). The correct fix = a SOFT multi-step
+  self-sim that advances OUR body using OUR OWN _choose_move scoring K>=10 steps (NOT greedy — greedy
+  escapes) as a soft penalty, OR a "compactness"/space-efficiency term that keeps a big snake's body
+  a tight unwind-able coil earlier. Validate ONLY if a loss repro flips AND self-play does NOT regress
+  both orders. Every simpler tweak (v49/v50/anti-wall-crawl/tail-follow) regressed — DON'T re-try them.
+  Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N>
+  (ports 8001/8002, 7s warmup), ALWAYS both A/B orders (position bias). v48 (243-7) is the proven best.
