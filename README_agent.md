@@ -474,3 +474,42 @@ regression.
   when we're small and an enemy is on the same wall-side. Re-run analyze_round.py (edit d="/logs/rounds/N")
   + /tmp/inspect.py (edit target gid) on the NEW round to see if losses stay wall-squeezes. Do NOT trust
   self-play washes as improvements. Always test BOTH A/B orders (/tmp/rm2.sh, position bias exists).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs graeme-hill__snakebot) — SHIPPED v9 (anti-squeeze)
+- Verified results ALL rounds won: round 0 **241-4 (+1 tie)**, round 1 **245-4**,
+  round 2 **199-1**, round 3 **92-1** (opus-4-8 vs graeme-hill__snakebot). 4/4 won.
+- Round 3 (via /tmp/a3.py = analyze_round.py on /logs/rounds/3): 93 games, opus 92 / opp 1.
+  Avg game len 23.6 turns, max 101. Opp latency avg 351.5ms, only 399/2199 moves >=490ms (18%)
+  -> it ACTIVELY PLAYS. Our latency avg 1.3ms, max 37ms.
+- **Analyzed the single round-3 loss (game 03265a7e):** SAME wall-corner squeeze as every
+  prior loss. Small snake (len 4->5) chased food at (8,10) STRAIGHT ALONG THE TOP WALL (y=10)
+  from x=2 to x=8, ATE it, then kept going right to (9,10),(10,10)=corner. Enemy body sat at
+  (10,9)/(9,9) sealing the perpendicular escape -> died turn 11. Turn-by-turn repro shows the
+  trap was FORCED by turn 8 (only legal move was 'right'); the LAST FREE CHOICE was **turn 7**
+  (head (7,10)): v8 chose 'right' (chase edge food -> into corridor), but 'down' to (7,9) was
+  open to escape the wall.
+- **FIX (main.py = v9, backup main_backup_v9.py; prev main = main_backup_v8_r4.py):**
+  Added an ANTI-SQUEEZE penalty in scoring (after the timed_space penalty). When a candidate
+  cell is on an edge/corner AND an enemy head is within manhattan 4:
+    * count "safe open escapes" from that cell (in-bounds, not obstacle, not a cell an enemy
+      of >= our len can take next turn);
+    * corner cell (2 walls): penalty -8*proximity (proximity=5-edist, 1..4), extra -4*prox if my_len<8;
+    * edge cell with <=1 safe escape: -6*proximity, extra -3*prox if my_len<8.
+  This steers us OFF the wall toward open space BEFORE the corner trap closes.
+- **VALIDATION (the key win — self-play canNOT reproduce this, so use the repro):**
+  * /tmp/repro7.py reconstructs turn 7 of the losing game: **v9 chooses 'down' (escapes!),
+    v8 chooses 'right' (walks into the trap).** Direct proof v9 fixes the exact loss.
+  * Sanity: with a FAR enemy, v9 still hugs the wall toward food (no over-avoidance).
+- **REGRESSION PASS:** v9 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- Self-play vs v8 is a WASH both orders (29-30 A / 16-13 B) — EXPECTED, self-play doesn't
+  reproduce the squeeze (consistent w/ all prior teammates' notes). The repro test is the
+  real validator, not self-play.
+- Latency (200 moves, two 30-long dense snakes): **0.012ms avg** — extra logic is free.
+- main.py parses clean; move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v9.** Directly and provably fixes the ONLY remaining loss mode
+  (wall-corner squeeze) with no regression and negligible latency cost.
+- **TODO next teammate:** re-run /tmp/a3.py (edit d="/logs/rounds/N") on the new round. If the
+  squeeze losses are GONE, keep v9. If they persist, the penalty may need tuning (edist window
+  5->6, or apply the escape-count penalty even to non-edge cells that only have 1 safe exit).
+  Test tool: /tmp/rm2.sh (needs >2s server warmup; if you get all-draws, rerun). Repro tools:
+  /tmp/repro7.py (edit to reconstruct the new loss's last-free-choice turn). Always test BOTH orders.

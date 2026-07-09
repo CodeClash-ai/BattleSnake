@@ -376,43 +376,6 @@ def _choose_move(game_state):
         if c["timed_space"] < my_len:
             score -= (my_len - c["timed_space"]) * 12.0
 
-        # ANTI-SQUEEZE: avoid walking onto a wall/corner cell whose perpendicular
-        # escape can be sealed by a nearby enemy. This is the exact failure mode
-        # of every match loss (small snake chases edge food into a corner, enemy
-        # walls off the exit). Count open, non-losing escape cells from `cell`
-        # (excluding where we came from); if few AND an enemy head is close,
-        # penalize. Scaled harder when we are small.
-        cxn, cyn = c["cell"]
-        on_edge = (cxn == 0 or cxn == w - 1 or cyn == 0 or cyn == h - 1)
-        if on_edge and enemies:
-            walls = (cxn == 0) + (cxn == w - 1) + (cyn == 0) + (cyn == h - 1)
-            # open escape cells from this cell (not obstacles, in bounds)
-            open_escapes = 0
-            for nb in _neighbors(c["cell"]):
-                if not _in_bounds(nb, w, h):
-                    continue
-                if nb == head:
-                    continue
-                if nb in obstacles and nb != my_tail:
-                    continue
-                # a cell an enemy of >= our len could take next turn is not a safe escape
-                if enemy_next.get(nb, 0) >= my_len:
-                    continue
-                open_escapes += 1
-            nearest_e = min(enemies, key=lambda e: _manhattan(c["cell"], e["head"]))
-            edist_e = _manhattan(c["cell"], nearest_e["head"])
-            # only worry when an enemy is close enough to seal us (within 4)
-            if edist_e <= 4:
-                proximity = (5 - edist_e)  # 1..4, bigger when closer
-                if walls >= 2:  # corner cell
-                    score -= proximity * 8.0
-                    if my_len < 8:
-                        score -= proximity * 4.0
-                elif open_escapes <= 1:  # edge cell with <=1 safe escape
-                    score -= proximity * 6.0
-                    if my_len < 8:
-                        score -= proximity * 3.0
-
         if health >= 40:
             tail_bonus = 50.0
         elif health >= 20:
