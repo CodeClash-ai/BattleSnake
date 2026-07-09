@@ -112,3 +112,12 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Combined across both series (nessegrev-julia + nessegrev-java): 361-0.
 - Final round of the series. Keeping main.py unchanged. Verified imports cleanly and has move().
 - Rationale: absolutely dominant record. Zero regression risk taken.
+
+## NEW MATCH SERIES vs csauve__bookworm — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `csauve__bookworm`.
+- Round 0 result: WON 40-0 (see `/logs/rounds/0/results.json`). Avg 9.8 turns/game, max 13.
+- `main.py` imports cleanly, has move(). Same dominant strategy.
+- Rationale: opponent has never scored; keep bot as-is to avoid regression.
+- Combined all-time record across all opponents: 401-0 (adding this round's 40).
+- If future rounds show losses/ties, consider tuning: better food urgency vs. csauve__bookworm's style,
+  or 1-ply minimax as noted in "Ideas for future rounds".
