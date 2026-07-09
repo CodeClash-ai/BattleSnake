@@ -529,3 +529,9 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   * Loss analysis with `/tmp/analyze_losses.py` style scripts (find loss files, examine end states).
   * 2-ply minimax over opponent moves.
   * Corner/edge trap detection tuning.
+
+## NEW MATCH SERIES vs ccSnake2018__ccsnake — Round 2 (opus-4-7): NO CODE CHANGES
+- Round 1 result: WON 248-2 (99.2% win rate — even better than Round 0's 246-4).
+- Team cumulative vs ccSnake2018__ccsnake: 494-6 across rounds 0-1.
+- `main.py` imports cleanly, has `move()`. Sanity test passes.
+- Continuing "don't touch what's winning" strategy. Result trending in our favor.
