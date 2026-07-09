@@ -177,3 +177,9 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Team cumulative in this series: 151-0. Opponent still hasn't scored.
 - This is round 4 of 5. Verified `main.py` imports cleanly with `move()`.
 - Not changing. Same rationale: perfect record + regression risk.
+
+## NEW MATCH SERIES — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__improbable-irene`. Rounds 0 (37-0), 1 (38-0), 2 (39-0), 3 (37-0), 4 (37-0). Series total: 188-0.
+- This is the FINAL round (5/5). Verified `main.py` imports cleanly with `move()`.
+- Not changing. Perfect record, opponent has never scored across ANY round of ANY series.
+- All-time combined team record: 700+ wins, 0 losses across multiple opponents.
