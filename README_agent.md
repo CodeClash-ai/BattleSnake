@@ -627,3 +627,34 @@ regression.
 - main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
 - DECISION: kept main.py (v9) unchanged. 100% win rate via latency edge + robust survival bot;
   v9 is the strongest tested version. No regression risk taken on a bot winning every round.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs m-schier__kreuzotter) — SHIPPED v10
+- ⚠️ NEW OPPONENT: **`m-schier__kreuzotter`** — GENUINELY COMPETITIVE (not the usual
+  straight-line timeout bot). Round 0 result: **opus-4-8 47, kreuzotter 2** (we LOST 2).
+  Only 27% of opp moves timed out; games ran long (avg 12 turns, MAX 207).
+- **Root cause of BOTH losses = LONG-GAME SELF-TRAP.** Analyzed games 2a08858c (207 turns,
+  we were len 20!) and aa87c94f (183 turns, len 16). In both, our LARGE snake wandered its
+  head around the open middle while its big body coiled below, sealing itself into a shrinking
+  pocket. Both plain flood-fill AND timed_space reported HIGH space (94/114) at the last free
+  turns — the trap forms several moves LATER, so neither one-step space metric catches it.
+  (See /tmp/inspect2.py, /tmp/dbg.py, /tmp/repro.py + /tmp/state_*.json for the repro.)
+- **FIX (main.py = v10, backup main_backup_v10.py; prev main = main_backup_v9_r0.py):**
+  Added a small TAIL-FOLLOW tie-breaker in scoring (before the food block): when
+  `my_len >= 15 and health >= 50 and not want_food`, `score -= manhattan(cell, my_tail)*0.35`.
+  This nudges a very large snake to stay near its own tail so the body stays a COMPACT,
+  unwind-able coil instead of wandering & sealing regions. Small weight = only breaks ties,
+  never overrides space/survival.
+- **REJECTED first attempt:** weight 1.2 for len>=12/health>=45 REGRESSED (34 new vs 46 old
+  combined both orders). Too strong / triggers too early. The gentle 0.35 @ len>=15 is the winner.
+- **Results (self-play, ./run_match.sh, BOTH orders):** v10 beats v9 both orders:
+  **23-17 as A AND 24-16 as B** (v10 47, v9 33 combined). Clear, symmetric improvement.
+- **REGRESSION PASS:** v10 vs opp_straight = **10-0** (win). main.py parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: shipped v10.** Targets the exact long-game self-trap loss mode vs the new
+  competitive opponent; beats v9 both orders in self-play with no regression.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") on the new round.
+  If self-trap losses persist, the deeper fix is a real 2-3 step SELF-simulation (advance our
+  own body greedily K steps and check the space doesn't collapse) — the one-step space metrics
+  provably miss multi-step coil traps here. Also consider tuning tail-follow weight (0.35) /
+  threshold (len>=15). Test tool: ./run_match.sh <A> <B> <N> (>=2s warmup); ALWAYS test BOTH
+  A/B orders (position bias). Repro tools in /tmp: state_*.json, repro.py, dbg.py, inspect2.py.

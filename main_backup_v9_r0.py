@@ -433,14 +433,6 @@ def _choose_move(game_state):
                 edist = _manhattan(c["cell"], nearest["head"])
                 score -= edist * 2.0
 
-        # TAIL-FOLLOW tie-breaker: for a very large, healthy snake, gently
-        # prefer staying near our own tail so the body stays a compact,
-        # unwind-able coil (mitigates long-game self-trap). Small weight so it
-        # only breaks ties, never overriding space/survival decisions.
-        if my_len >= 15 and health >= 50 and not want_food:
-            tdist = _manhattan(c["cell"], my_tail)
-            score -= tdist * 0.35
-
         if food_set:
             if health < 25:
                 score -= fdist * 100.0
