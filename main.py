@@ -771,8 +771,8 @@ def _choose_move(game_state):
         # 121-cell board). On a NORMAL board (few food) a lead-3 snake fleeing
         # food gets driven into corners & self-coils (jackisherwood loss mode:
         # len 13-26 LONGER than opp, coiling on walls). So require a flooded board.
-        _flooded = len(food_set) >= 8
-        _giant = _length_lead >= 3 and my_len >= 9 and _flooded
+        _flooded = len(food_set) >= 10
+        _giant = _length_lead >= 3 and my_len >= 10 and _flooded
         if food_set:
             if _giant:
                 # Cap growth: eat ONLY when about to starve; otherwise flee food HARD
@@ -792,15 +792,15 @@ def _choose_move(game_state):
                     # (gigantic-george/eremetic-eric loss mode). Heavily penalize
                     # the move that STEPS ONTO food, and steer toward food-SPARSE
                     # regions so the giant snake actively stops growing.
-                    if c["reaches_food"] and health >= 20:
-                        score -= 3000.0
+                    if c["reaches_food"] and health >= 25:
+                        score -= 1500.0
                     # Food-density avoidance: fewer nearby food cells = safer for a
                     # giant that must stop growing. Count food within radius 2 of
                     # the destination and push away from dense clusters.
                     _cxg, _cyg = c["cell"]
                     _fd_near = sum(1 for fx, fy in food_set
                                    if abs(fx - _cxg) + abs(fy - _cyg) <= 2)
-                    score -= _fd_near * 20.0
+                    score -= _fd_near * 12.0
             elif health < 25:
                 score -= fdist * 100.0
             elif health < 40:

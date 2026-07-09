@@ -4212,3 +4212,41 @@ regression.
   <B> <N> 15 vs passive.py (BOTH orders, N<=14, container gets slow — use timeout 25), NOT standard
   head-to-head self-play (misleading length race). Repro: /tmp/mk.py <sim> <turn> <out.json>,
   /tmp/tm.py <bot> <state>. The passive proxy IS the valid validator for this stay-small opponent.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs MorganConrad__tantilla) — REVERTED v49 -> v48
+- Verified results: round 0 **215-35** (v48), round 1 **212-38** (v49). ⚠️ **v49 (stronger/earlier
+  giant growth cap, shipped round 1) scored WORSE than v48: 212-38 vs v48's 215-35.** Per the prior
+  teammate's EXPLICIT CONTINGENCY note ("if v49 scores WORSE than v48's 215, REVERT to
+  main_backup_v49_r1start.py"), REVERTED main.py to v48 (`cp main_backup_v49_r1start.py main.py`).
+- **Round-1 loss analysis (v49, /tmp/cl.py d="/logs/rounds/1"): all 38 losses = balloon self-coil.**
+  v49's stronger cap barely reduced ballooning (loss-length avg 23.6->22.7, max 45->42 vs v48) yet
+  losses GREW 35->38. The earlier/harder cap (`_flooded` food>=8, `_giant` len>=9, anti-eat -3000,
+  density*20) did NOT help vs the REAL tantilla opponent — it over-caps and costs games without
+  preventing the late-game flood balloon. The passive.py proxy (24-0 for v49 vs 21-3 for v48) was
+  MISLEADING — it's saturated and doesn't match tantilla's real behavior.
+- **Tuning attempt this round — v50 (stronger anti-self-coil roominess bias) — REJECTED:**
+  Escalated line 613 `-(max_timed - timed_space)*1.0 @ len>=15` to `*3.0 @ len>=22 / *1.5 @ len>=15`.
+  * vs passive.py FLOODED (fsc15): **21-3** = SAME as v48 (proxy saturated, can't distinguish).
+  * vs v48 STANDARD self-play (/run_match.sh, BOTH orders, 16 each): v50-A **8-8**, v50-B **5-11**
+    -> aggregate v50 **13** vs v48 **19** = REGRESSES normal self-play (loses B-side badly). The
+    stronger roominess bias hurts normal play. Iron ship-rule violated -> NOT shipped.
+- **DECISION: kept v48 (reverted from v49).** v48 is the PROVEN best-scoring version this match
+  (215-35 vs v49's 212-38). The dominant loss mode is the balloon self-coil on a flooded board
+  (unavoidable food when big) — every cap tweak (v49 stronger cap, v50 roominess) either regresses
+  the real round or normal self-play, and the passive proxy is saturated (can't validate). No
+  unvalidated regression risk taken.
+- REGRESSION PASS: main.py (v48) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v48_giantboardgate.py == main_backup_v49_r1start.py (diff confirms equal);
+  parses clean (ast.parse OK); move() try/except (line 213) + self-guarded _safe_fallback (line 219).
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST — if v48 (this revert) is better
+  than 212, good; keep v48. The balloon-self-coil vs a stay-small flooded opponent is NOT fixable by
+  per-move food-avoidance/cap tweaks (v49/v50/v42/v40 all wash/regress; passive proxy saturated at
+  ~21-3). The REAL fix is STRUCTURAL: (a) a SOFT multi-step coil-survival self-sim using OUR OWN
+  _choose_move scoring K>=10 steps (NOT greedy — greedy escapes; never successfully shipped), or
+  (b) REGION-level food-density steering that keeps the snake OUT of food-dense quadrants BEFORE the
+  board floods (partial term at line 803). DON'T re-ship a stronger giant cap (v49 proved it regresses
+  the real round) or a stronger roominess bias (v50 regresses normal self-play). Test: /tmp/rmf.sh
+  <A> <B> <N> 15 vs passive.py (SATURATED proxy — real result is the true validator), ./run_match.sh
+  <A> <B> <N> (normal self-play regression check), ALWAYS both A/B orders (STRONG position bias).
+  Repro/loss-class: /tmp/cl.py <round_dir> (W/L/T + per-loss US len/hp/head vs OP len). v48 (215-35)
+  is the proven best.
