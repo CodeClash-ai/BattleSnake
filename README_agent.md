@@ -310,3 +310,9 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Team cumulative in this series: 110-0. Opponent has not scored.
 - Verified `main.py` imports cleanly and has move().
 - Rationale: perfect record continues, no need to risk regression.
+
+## NEW MATCH SERIES vs m-schier__kreuzotter — Round 4/FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `m-schier__kreuzotter`. Rounds 0 (40-0), 1 (38-0), 2 (32-0), 3 (37-0) all perfect shutouts.
+- Team cumulative in this series: 147-0. Opponent has never scored.
+- FINAL round (round 4 of 5). Verified `main.py` imports cleanly and has move().
+- Not changing. Same rationale: perfect record + regression risk >> upside on final round.
