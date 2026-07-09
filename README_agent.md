@@ -1271,3 +1271,49 @@ regression.
   one-step metrics look fine) — needs soft multi-step self-sim (main_backup_v15_multistep.py, make it
   a soft penalty not a hard filter). Test: /tmp/rm2.sh (>=4s warmup; all-draws=server not ready, rerun),
   ALWAYS both A/B orders (position bias dominates 40-game runs). Repro is the real validator.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs ccSnake2018__ccsnake) — FINAL, KEPT v19
+- Verified results ALL rounds won: round 0 **232-16 (+2t)**, round 1 **228-21 (+1t)**,
+  round 2 **228-20 (+2t)**, round 3 **230-19 (+1t)**, round 4 **234-16 (0 ties)**
+  (opus-4-8 vs ccSnake2018__ccsnake). 5/5 rounds won. Round 4 (v19, shipped round 4) was
+  the BEST result: 234-16 with ZERO ties (ties fell 2->1->2->1->0).
+- Round 4 (analyze_round.py, d="/logs/rounds/4"): 250 games, opus 234 / opp 16 / 0 ties.
+  Opponent FULLY ACTIVE (latency avg **38.4ms**, **0/18680 moves >=490ms = 0% timeouts**).
+  Avg game len 74.7 turns, max 182. Our latency avg 3.17ms, max 67. Pure out-play.
+- **KEY FINDING: v19's anti-wall-crawl (my_len>=10) helped BIG snakes — round-4 losses
+  SHIFTED to SHORTER snakes (len 4-9 now dominate: 5x len5, 5x len8, 5x len9, 2x len7,
+  1x len4, 2x len11).** Nearly all still die at corners/edges at HIGH health (89-100), e.g.
+  6905a300 (len5 crawls (9,10)->(10,10) corner), 0347aece (len8 same corner crawl).
+- **DEEP REPRO of 6905a300 (short-snake corner death), last-free-choice = turn 23, head (6,9),
+  len4, hp79:** legal moves up->(6,10)[wall], down->(6,8)[open], right->(7,9)[food but longer
+  enemy at (7,8) => H2H loss risk]. ALL THREE have flood=114 (board wide open) — the corner
+  trap forms MANY turns later. v19 picks 'up' (onto wall -> corner crawl -> death t28). This is
+  the classic HARD multi-step corner trap: NO one-step metric (flood/timed/static) distinguishes
+  the moves at the last free choice. (state: /tmp/state_6905a300_23.json; eval: /tmp/eval.py.)
+- **Tuning attempts this round — REJECTED (self-play regression):**
+  * v20: extend anti-wall-crawl to my_len>=4/health>=55 but gated `not want_food` -> DID NOT
+    fire (small snakes have want_food=True from my_len<7) -> did not flip repro. Ineffective.
+  * v21: TINY off-wall term (weight 0.5) for health>=50 (fires even when want_food, meant as a
+    tie-break among equal-flood moves) -> did NOT flip the repro AND **REGRESSED self-play BOTH
+    orders: v21 16-23 as A, and 16-23 as B (v19 wins 23-16 both ways).** The off-wall term
+    distorts small-snake food-racing (which NEEDS perimeter food). Matches ALL prior teammates:
+    touching food/edge scoring regresses self-play; self-play can't reproduce/validate the
+    multi-step corner trap.
+- REGRESSION PASS: main.py (v19) vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v19_wallcrawl.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v19) unchanged.** BEST result of the match (234-16, 0 ties) and the
+  first genuine self-play-validated improvement (v19 beats v18 both orders). The remaining losses
+  are HARD multi-step corner traps (short snakes now) where the last-free-choice has all moves at
+  equal flood=114 — provably no one-step fix, and every scoring tweak regresses self-play. No
+  regression risk taken on a bot winning every round with its best-ever result.
+- **TODO (future, if this opponent recurs):** the ONLY loss mode left is a multi-step corner/edge
+  crawl (last-free-choice ~4-5 turns before death, board still wide open, all one-step metrics
+  equal). The correct fix is a real multi-step SELF-simulation that advances OUR body using our
+  OWN scoring's move choice K steps and detects the corridor collapse — as a SOFT penalty, not a
+  hard filter (main_backup_v15_multistep.py's greedy hard-filter version regressed self-play).
+  Since round-4 losses skew SHORT now, could ALSO extend anti-wall-crawl below len 10 but ONLY
+  with multi-step validation, NOT a one-step off-wall term (v21 proved that regresses). Repro:
+  /tmp/gs4.py <gid> <turn> (saves /tmp/state_<gid>_<turn>.json from round 4), /tmp/eval.py <bot>
+  <state>. Test: /tmp/rm2.sh <A.py> <B.py> <N> (>=5s warmup), ALWAYS both A/B orders (position
+  bias). Analyze: analyze_round.py (edit d="/logs/rounds/N"). Repro is the real validator.
