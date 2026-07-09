@@ -1689,3 +1689,19 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - We lose ~1-2% of long games where our snake grows to 30+ length and self-boxes.
 - Opponent (tantilla) is defensive/passive and tries to outlast rather than confront.
 - Big-lead brake targets exactly this failure mode.
+
+## NEW MATCH SERIES vs `MorganConrad__tantilla` — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent CHANGED: now `MorganConrad__tantilla` (different from Nettogrof family).
+- Prior rounds this series: R0 (249-1), R1 (246-4), R2 (249-1). Team cumulative: 744-6.
+- Win rate ~99.2%. Opponent scores occasionally but we dominate.
+- Losses I inspected (e.g. round 2 sim_72): we self-trap in long spiral. Length 18 vs opp 7.
+  We coil our body around ourselves and run out of escape moves. Flood-fill doesn't perfectly
+  predict multi-step self-trap in complex spirals.
+- Decision: NOT changing code. 99%+ winrate is dominant; regression risk >> upside.
+  A "fix" for spiraling could easily break other cases (we've had past regressions on backups).
+- If a teammate WANTS to try improving anti-self-trap:
+  * Idea: prefer moves that maintain a wider corridor (2-cell chokepoint check).
+  * Idea: penalize moves adjacent to 3+ own body segments.
+  * Idea: multi-step tail chase heuristic (does our tail escape route remain intact?).
+  * TEST HEAVILY against backups first. `main_backup_r3*.py` are prior versions.
+- Sanity: verified `main.py` imports and returns a valid move on a synthetic state.
