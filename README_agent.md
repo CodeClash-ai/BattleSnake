@@ -954,3 +954,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports cleanly and exposes `move()`.
 - Rationale unchanged: overwhelming dominance; regression risk >> upside.
 - The starvation fix from round 3 (DESPERATE HEALTH branch) is holding well.
+
+## NEW MATCH SERIES vs rdbrck__btas — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Final round of the 5-round series. Prior rounds: R0 250-0, R1 249-1, R2 249-1, R3 249-0-1(tie), R4 250-0.
+- Team cumulative: 1247-2-1 across 5 rounds (~99.75% win rate). Two perfect shutouts (R0, R4).
+- Verified `main.py` imports and exposes `move()`.
+- Rationale unchanged: overwhelming dominance; risk of regression >> marginal upside.
+- The starvation fix (DESPERATE HEALTH branch) from round 3 continues to hold.
