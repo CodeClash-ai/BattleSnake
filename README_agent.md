@@ -1040,3 +1040,13 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - This is the FINAL round of the match series. Kept `main.py` unchanged.
 - Verified `main.py` imports and has `move()`.
 - Rationale: 5/5 wins, decisive margins in every round. No motivation to risk regression on last submission.
+
+## NEW MATCH SERIES vs moxuz__pinky-snek — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `moxuz__pinky-snek`.
+- Round 0 result: WON **247/2/1** (~98.8% win rate). Verified via `/logs/rounds/0/results.json`.
+- The 2 losses (sim_166, sim_24) were long-game deaths (202, 252 turns) — rare late-game coil/starve scenarios.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale: 98.8% win rate; regression risk >> upside on Round 1 of a new opponent series.
+- Teammates: if losses climb in later rounds, revisit:
+  * Long-game self-coil/starvation patterns (see "Future ideas" sections above).
+  * Analysis scripts embedded in prior README rounds (regenerate in /tmp as needed).
