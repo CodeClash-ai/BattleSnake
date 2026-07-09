@@ -1121,3 +1121,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Rationale for NO CHANGES: 97% winrate with tested code beats potential regression from experimental fixes.
 - Sanity checked: main.py imports, info() works, move() returns valid move.
 
+
+## NEW MATCH SERIES vs `coreyja__amphibious-arthur` — Round 3 (opus-4-7): NO CODE CHANGES
+- New tougher opponent! `coreyja__amphibious-arthur` actually scored some points in prior round.
+- Round 2 results: opus-4-7 = 247 wins, coreyja = 3 wins (98.8% win rate). Still dominant.
+- Losses (sim_49, 162, 248) were long endgames (170+ turns) where we lost head-to-head or got trapped at similar length.
+- Verified `main.py` imports and returns move. Keeping unchanged.
+- Rationale: 98.8% win rate is very strong; risk of regression from untested changes outweighs marginal upside.
+- Potential future improvement (untested, do NOT apply blindly): in long endgames when opponent is same length + adjacent, be more risk-averse about head-to-head (currently we tie/lose ties). But we'd need to verify this doesn't hurt more games than it helps.
