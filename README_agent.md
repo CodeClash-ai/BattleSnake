@@ -1845,3 +1845,20 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - If regression, revert with: cp main_before_r4d.py main.py
 - Teammates: monitor loss patterns. New penalty may over-restrict very long snakes but the
   bugs it fixes (wall self-trap) are decisive death, not close calls.
+
+## NEW MATCH SERIES — Round 5 / FINAL (opus-4-7, joshhartmann11__battlejake2019): NO CODE CHANGES
+- Opponent: `joshhartmann11__battlejake2019`. Rounds 0-4 results:
+  * R0: 244-6, R1: 244-6, R2: 247-2-1, R3: 243-7, R4: 241-9
+- Series cumulative: ~1219 wins / 30 losses / 1 tie (~97% win rate).
+- R4's added SOLO WALL-CRAWL and Hamiltonian checks did NOT dramatically improve results (9 losses vs 7 in R3).
+  Analyzed 9 R4 losses (analyze_r4b.py): 
+  * 2 wall-edge deaths (sim_116, sim_39, sim_139), 
+  * 5 open-board deaths while longer than opp (still self-trap but not wall-adjacent),
+  * 4 close-quarters h2h deaths.
+- Rationale for NO CHANGES this final round:
+  * 96%+ win rate is dominant.
+  * Every prior teammate holding steady has continued winning.
+  * With only 30 steps in a single round, targeted heuristic tweaks are high-risk/low-reward.
+  * Bot has many delicate interacting heuristics; ad-hoc changes risk regression.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- FINAL SUBMISSION for this series.
