@@ -98,26 +98,6 @@ def _flood_fill(start_cell, blocked, w, h, limit=None):
     return count
 
 
-
-
-def _flood_fill_full(start_cell, blocked, w, h, limit=None):
-    """Return set of reachable cells (not just count)."""
-    if start_cell in blocked or not _in_bounds(start_cell, w, h):
-        return set()
-    seen = {start_cell}
-    q = deque([start_cell])
-    while q:
-        if limit is not None and len(seen) >= limit:
-            break
-        cur = q.popleft()
-        for nb in _neighbors(cur):
-            if nb in seen or nb in blocked or not _in_bounds(nb, w, h):
-                continue
-            seen.add(nb)
-            q.append(nb)
-    return seen
-
-
 def _bfs_distance(src, targets, blocked, w, h):
     """Shortest path length from src to any of the target cells. Returns None if unreachable."""
     if not targets:
@@ -231,16 +211,7 @@ def _move(game_state):
         # For flood-fill, exclude np itself since our head occupies it (we count reachable AFTER we move).
         # Flood-fill from np treating np as free start.
         blocked_post.discard(np)
-        # For tail-reachability, my new tail cell (last of my_new_body) is at my_new_body[-1].
-        # Make sure it's not "blocked" so we can see if we can reach it.
-        my_new_tail = my_new_body[-1]
-        blocked_for_reach = set(blocked_post)
-        blocked_for_reach.discard(my_new_tail)
-        reachable = _flood_fill_full(np, blocked_for_reach, w, h, limit=max(my_len * 4 + 20, 60))
-        space = len(reachable)
-        tail_reachable = my_new_tail in reachable
-        # New length after this move
-        new_len = len(my_new_body)
+        space = _flood_fill(np, blocked_post, w, h, limit=my_len * 4 + 20)
 
         # Distance to nearest food from np (in the post-move blocked map)
         food_dist = _bfs_distance(np, food, blocked_post, w, h)
@@ -266,8 +237,6 @@ def _move(game_state):
             "h2h_death": is_h2h_death,
             "h2h_kill": is_h2h_kill,
             "near_larger_head": near_larger_head,
-            "tail_reachable": tail_reachable,
-            "new_len": new_len,
         })
 
     if not candidates:
@@ -278,12 +247,8 @@ def _move(game_state):
     if safe:
         candidates = safe
 
-    # Prefer moves where our tail remains reachable (guarantees survival loop)
-    tail_ok = [c for c in candidates if c["tail_reachable"]]
-    if tail_ok:
-        candidates = tail_ok
-    # Require enough space; prefer moves with space >= new_len (post-move length), else max space
-    good_space = [c for c in candidates if c["space"] >= c["new_len"]]
+    # Require enough space; prefer moves with space >= my_len, else the one with max space
+    good_space = [c for c in candidates if c["space"] >= my_len]
     if good_space:
         candidates = good_space
     else:
@@ -305,27 +270,13 @@ def _move(game_state):
             s += 50
         if c["near_larger_head"]:
             s -= 30
-        # Big bonus for keeping tail reachable
-        if c["tail_reachable"]:
-            s += 20
-        # Space margin bonus (buffer against getting trapped)
-        margin = c["space"] - c["new_len"]
-        if margin < 0:
-            s -= 100  # very bad, only pick if nothing else
-        elif margin < 3:
-            s -= 15  # tight
         if want_food and c["food_dist"] is not None:
-            # Closer food is better, but only if space margin is healthy
-            if margin >= 3:
-                s += max(0, 40 - c["food_dist"] * 3)
-                if c["eats"]:
-                    s += 15
-            elif margin >= 0 and c["food_dist"] < 5:
-                # Only chase food when close and space is at least survivable
-                s += max(0, 20 - c["food_dist"] * 3)
+            # Closer food is better
+            s += max(0, 40 - c["food_dist"] * 3)
+            if c["eats"]:
+                s += 15
         elif c["eats"] and my_health < 90:
-            if margin >= 3:
-                s += 5
+            s += 5
         # Slight preference for not being on edge to keep options open
         cx, cy = c["cell"]
         if cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1:

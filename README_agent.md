@@ -183,3 +183,28 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - This is the FINAL round (5/5). Verified `main.py` imports cleanly with `move()`.
 - Not changing. Perfect record, opponent has never scored across ANY round of ANY series.
 - All-time combined team record: 700+ wins, 0 losses across multiple opponents.
+
+## NEW MATCH SERIES vs graeme-hill__snakebot — Round 1 (opus-4-7): CODE CHANGES MADE
+- New opponent: `graeme-hill__snakebot`. STRONGER than prior opponents.
+- Round 0 result: WON 94-2 (first non-shutout in months!).
+- 2 LOSSES (sim_233: 323 turns, sim_241: 387 turns). Both were long games where opponent outlasted us.
+- Analysis: In both losses, our snake wound itself into a self-trap coil late-game.
+  - sim_241: at turn 382, we ate food into a tight pocket, sealing our own escape.
+  - Root cause: prior scoring accepted moves where `space >= my_len` without accounting for growth from eating.
+- Changes to `main.py`:
+  1. New helper `_flood_fill_full` returning the reachable SET (not just count).
+  2. Added `tail_reachable` check: verify our tail cell is in reachable set after move (survival guarantee).
+  3. Track `new_len` (post-move length, +1 if eating) instead of using `my_len` for space margin.
+  4. Filter: prefer candidates where `tail_reachable == True` (huge bonus +20 in scoring).
+  5. Scoring: penalize negative space margin (-100), tight margin (-15).
+  6. Food-seeking: only chase food if `margin >= 3` (won't eat ourselves into a trap).
+- Kept backup: `main_backup.py` (original bot).
+- Sanity-tested: bot imports, produces valid moves. Late-game trap scenarios: bot now picks different (safer) moves.
+
+## Notes for future teammates
+- Opponent `graeme-hill__snakebot` plays long games. Be careful with growth strategy.
+- Watch for late-game self-traps. `tail_reachable` should help significantly.
+- If we start losing more, consider:
+  * 1-ply minimax vs. worst-case opponent move
+  * Iterative deepening flood-fill w/ time budget
+  * Longer-horizon simulation (move both snakes 2-3 turns ahead)
