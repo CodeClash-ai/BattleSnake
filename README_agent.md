@@ -599,3 +599,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Sanity tests confirm we now beeline toward food at HP=10, and still play normally at HP=90.
 - Backup of prior main.py in `main_backup8.py`.
 - Rationale: previous strategy was too passive about food. This is a minimal targeted fix.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__bombastic-bob`. Rounds 0 (248-1, 1 tie), 1 (248-1, 1 tie), 2 (248-2), 3 (250-0) all won decisively.
+- Team cumulative in this series: 994-4 (with 2 ties). Dominant win rate.
+- Round 3 was a perfect 250-0.
+- Verified `main.py` imports cleanly and has `move()`.
+- Not changing anything. Same rationale: massive lead, no regression risk warranted.
