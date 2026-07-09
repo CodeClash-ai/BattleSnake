@@ -3686,3 +3686,49 @@ regression.
   structural food-density region steering or a multi-step coil-survival self-sim. Repro: /tmp/mkg.py
   <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/dbg2.py (per-move scores via DBG=1).
   Test: /tmp/rmf15.sh <A> <B> <N> 15 vs passive.py BOTH orders (>=8s warmup, N<=12).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__gigantic-george) — FINAL, REVERTED v42 -> v41
+- Verified results ALL 5 rounds won: round 0 **228-22** (v40), round 1 **226-24** (v40),
+  round 2 **240-10** (v41), round 3 **237-13** (v41), round 4 **232-18** (v42). 5/5 rounds won.
+- ⚠️ **v42 (interior-eat, shipped round 4) scored WORSE than v41: 232-18 vs v41's 240-10/237-13.**
+  Per prior teammate's explicit CONTINGENCY note ("if v42 scores WORSE than v41's 237, REVERT to
+  main_backup_v41_r4start.py"), REVERTED main.py to v41.
+- **Round-4 loss analysis (v42) confirms v42 made ballooning WORSE.** Per-frame our-max-length in
+  losses: round 2 (v41) avg 36.6 max 78, round 3 (v41) avg 43.2 max 71, round 4 (v42) avg **51.8
+  max 91** — v42's interior-eat let the snake grow LARGER (allowing interior food instead of forcing
+  it onto walls) so it self-coiled MORE (10/13 -> 18 losses). ALL 18 round-4 losses = our snake
+  ballooned to len 25-91, hp 96-100 (never hungry), opp stayed small (7-22), self-coiled (12/18 on walls).
+- **Growth trajectory (sim_167, ballooned to 91):** cap HOLDS well until ~t320 (len 18, board food
+  climbing to 21), then EXPLODES t400->480 len 26->44 as the board floods (26+ food on 121 cells +
+  our big body -> almost every move lands on food -> FORCED eating). The board floods BECAUSE our
+  snake is big. This is the documented fundamental problem: on a flooded board food is unavoidable
+  when large, so per-move scoring can't cap growth.
+- **Tuning attempt this round — candA (`_giant` lead>=2/len>=8, caps earlier) — NOT shipped:**
+  vs passive.py flooded (fsc15, the stay-small proxy): candA 10-2 A + 10-0 B = 20-2; v41 10-2 A +
+  8-2 B = 18-4. candA marginally better but the passive proxy is SATURATED/noisy (all variants ~20-2),
+  and prior teammate found earlier caps (v42-territory) REGRESS the real round (232 < 240/237). candA
+  is unvalidated beyond a saturated proxy -> too risky on the FINAL round of a bot at v41's proven best.
+- REGRESSION PASS: main.py (v41) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- vs passive.py FLOODED (fsc15): main(v41) 10-2 as A, 8-2 as B (dominant vs stay-small mimic).
+- main.py == main_backup_v41_r4start.py == main_backup_v41_giantcap4.py (diff confirms equal);
+  parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded _safe_fallback
+  (line 219, line 323) -> cannot crash into a timeout.
+- **DECISION: reverted to v41 (main.py == v41).** v41 is the PROVEN best-scoring version this match
+  (240-10, 237-13); v42's interior-eat regressed it (232-18) by allowing bigger balloons. The
+  residual losses are the FUNDAMENTAL flooded-board forced-eating self-coil that no per-move scoring
+  fixes (v42/candA/prior v40-v43 all wash/regress vs the real opponent). No unvalidated risk taken on
+  the FINAL round of the match's best version.
+- **TODO (future, if this opponent recurs):** the ONLY loss mode is the giant-snake self-coil from
+  FORCED eating on a food-flooded board (board floods because our snake is big; every move lands on
+  food; per-move anti-eat can't discriminate). The REAL fix is STRUCTURAL, not scoring:
+  (a) keep the snake COMPACT (~len 12-18) from the VERY START by capping growth EARLIER — but prior
+      earlier-cap attempts (v42 len>=8, v40 lead>=3/len>=10) regressed the real round vs the saturated
+      proxy that can't validate them; you'd need a smarter stay-small mimic OR trust the real result.
+  (b) REGION-level food-density steering: avoid ENTERING board quadrants dense with food BEFORE the
+      board floods (partial density term exists at line 749; make it dominate earlier).
+  (c) a multi-step coil-survival self-sim using OUR OWN _choose_move scoring K=6-8 steps as a SOFT
+      penalty (never successfully shipped — greedy escapes, must use real scoring recursively).
+  Test proxy: /tmp/rmf15.sh <A.py> <B.py> <N> 15 vs passive.py (stay-small mimic; SATURATED ~20-2 for
+  all variants — real-match result is the true validator), ALWAYS both A/B orders (strong position
+  bias). Loss class: parse /logs/rounds/N/sim_*.jsonl last-line {winnerName,isDraw}; per-frame
+  our-max-length scan shows ballooning. DON'T ship an unvalidated cap change — v41 (240-10) is best.
