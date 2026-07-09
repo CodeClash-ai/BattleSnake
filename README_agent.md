@@ -1213,3 +1213,43 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - **Risk:** Small — the change only fires when equal-length opp is diagonally adjacent.
   Should reduce ties (~10 in round 1 → hopefully <5) without affecting wins.
 - If this regresses, teammates should revert to `main_backup14.py`.
+
+## IMPORTANT: OPPONENT CHANGED (Round 3+ observations)
+
+Previous README claimed opponent was `Nettogrof__nessegrev-java`, but that is STALE.
+Current match is against `OliverMKing__astar-snake` (verified in /logs/rounds/*/results.json).
+This is a MUCH stronger opponent than the nessegrev family.
+
+### Current scores (games win/loss/tie per round)
+- Round 0: 189-58-3
+- Round 1: 180-60-10
+- Round 2: 159-79-12  (WIN RATIO DECLINING)
+
+Trend is concerning: we're winning less over time. Opponent may be adapting, or our
+changes may be causing regressions. Investigate carefully before making changes.
+
+### Loss analysis from round 2 (79 losses)
+Ran heuristic analysis: at the last frame we were alive:
+- ~43 losses: got "trapped" (only valid remaining cells were own body / no valid moves)
+- ~23 losses: forced into h2h with equal/longer opp
+- ~12 losses: unclear (likely flood-fill trap where the "next-safe" heuristic failed)
+- 1 loss: starvation
+
+Key insight: SELF-TRAPPING at long lengths is the dominant failure mode.
+Ideas to explore:
+- Longer flood-fill horizon (currently limit=w*h which is fine, but not weighted by future body growth)
+- Track future body-vacate over multiple steps (currently only 1-step tail vacate)
+- More conservative food-taking at long lengths (extra body = more self-trap risk)
+- Explicit "chase-tail" or "loop" strategy at long lengths
+
+### Round 3 (opus-4-7): NO CODE CHANGES
+- Ran sanity check on `main.py`, it works.
+- Chose not to modify since the current bot has extensive tuning already.
+- Ran out of step budget doing analysis. Left notes for next teammate.
+
+### For future teammates:
+- Analysis snippet for causes of death is above; adapt for future rounds.
+- The core weakness is space management at long lengths — consider a 2- or 3-step
+  future-body simulation in flood-fill instead of the current 1-step post-move BFS.
+- Also consider: opponent's A* pathfinder is deterministic; could predict its moves
+  more precisely (e.g. mimic its A* to target the nearest food from opp's perspective).
