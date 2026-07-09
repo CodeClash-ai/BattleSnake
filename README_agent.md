@@ -3977,3 +3977,39 @@ regression.
   Test: /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002, 7s warmup, N<=16, grep "A/B is the
   winner"), ALWAYS both A/B orders (position bias). Self-play IS valid for off-wall/survival edges
   (v47/v44/v46 won both orders); it WASHES for opponent-specific food-routing.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs jackisherwood__battlesnake-elon) — KEPT v47
+- Verified results: round 0 **231-18 (+1t)** (v44), round 1 **233-17** (v47). ⭐ v47 (mid-size
+  anti-wall-crawl, shipped round 1) IMPROVED r0's 231-18 -> r1 233-17. 2/2 rounds won. main.py == v47.
+- **Round-1 loss classification (/tmp/cl.py, last-alive frame): 17 losses, 0 ties.** DOMINANT mode =
+  our snake is LONGER than opp (leads of +2 to +5) but SELF-COILS on a WALL/CORNER. Heads dying at
+  (10,10),(0,10),(10,0),(0,6),(10,5), etc., mostly HIGH health (76-100 = not hungry, just wall-crawling
+  into a corner). Sizes span len 8-29. A few small (sim_174 L8, sim_85 L10, sim_51 L10), most mid/big
+  (L13-29). Same big/mid wall-crawl self-coil that v47 targets — v47 already cut losses 18->17.
+- **Tuning experiments this round — ALL REJECTED (self-play wash/regression over multiple batches,
+  /tmp/rm2.sh, BOTH orders — recreate: ports 8001/8002, 7s warmup, grep "A/B was the winner"):**
+  * cand (stronger _wcw: 10@25/7@15/5@12/3.5<12): 7-8 as A, 6-9 as B -> aggregate 13 vs main 17. REGRESS.
+  * cand2 (add len>=10 tier _wcw=3.5): 6-9 as A, 8-7 as B (batch1) + same batch2 -> aggregate 14 vs 16. WASH/neg.
+  * cand3 (stronger tail-follow: 2.0@lead>=4, add 1.0@lead>=2): 3 batches BOTH orders — cand3 wins the
+    A-side (25-20) but LOSES the B-side (19-26); combined cand3 44 vs main 46 = WASH dominated by
+    position bias (whoever is A wins more). Not robust. REJECTED.
+  CONFIRMS all prior teammates: the anti-wall-crawl (_wcw) and tail-follow terms are already well-tuned;
+  pushing them further washes/regresses. The residual losses are the documented genuine MULTI-STEP
+  wall self-coil (last-free-choice ~5-8 turns before death, all one-step flood/timed/static metrics
+  equal, greedy self-sim escapes — no one-step fix).
+- REGRESSION PASS: main.py (v47) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **1.04ms avg, 1.39ms max** (timeout 500ms)
+  — cannot time out. move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219).
+- main.py == main_backup_v47_midwallcrawl.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v47) unchanged.** v47 is the proven best-scoring version (233-17, improving
+  trend 18->17). Every tweak I tried (stronger/extended anti-wall-crawl, stronger tail-follow) washed
+  or regressed self-play over multiple batches (position bias dominated). Iron ship-rule: don't ship a
+  wash on a proven, improving bot. No regression risk taken.
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST. Re-run /tmp/cl.py <round_dir> (loss
+  class). The dominant loss mode is big/mid WALL-CRAWL self-coil while LONGER than opp. _wcw is tuned
+  (stronger regresses); the residual is the genuine multi-step coil (no one-step fix — needs a SOFT
+  multi-step self-sim using OUR OWN _choose_move scoring K=6-8 steps, NEVER successfully shipped;
+  greedy escapes). All fixes v8-v47 present. Test: /tmp/rm2.sh <A> <B> <N> (recreate; 7s warmup, N<=16),
+  ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over >=3 batches, single batches noisy).
+  Self-play IS valid for off-wall/survival edges; it WASHES for opponent-specific food-routing. DON'T
+  ship a self-play wash/regression — v47 is the proven best.
