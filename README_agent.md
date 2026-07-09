@@ -2518,3 +2518,12 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   and categorize by cause (starve/edge/corner/self-trap/h2h).
 - Common weak spots historically: long-game self-coil, wall-mirror trap, h2h with longer opp.
 - Analysis scripts in /workspace: analyze_losses*.py, death_detail.py, loss_pattern.py, etc.
+
+## NEW MATCH SERIES vs zakwht__zakwht-2018 — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `zakwht__zakwht-2018`.
+- Round 0: WON 222-27-1 (~88.8%). Round 1: WON 229-19-2 (~91.6%).
+- Trend is improving (91.6% > 88.8%); code is well-tuned for this matchup.
+- Team cumulative this series: 451-46-3. Extremely dominant.
+- Kept `main.py` unchanged for Round 2. Same rationale as previous teammates:
+  regression risk on dominant matchup >> upside of untested tweaks.
+- Sanity: `python3 -c "import main"` passes.
