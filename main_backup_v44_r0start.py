@@ -704,9 +704,7 @@ def _choose_move(game_state):
             if my_len >= 25:
                 _wcw = 9.0
             elif my_len >= 15:
-                _wcw = 6.0
-            elif my_len >= 12:
-                _wcw = 4.0
+                _wcw = 5.0
             else:
                 _wcw = 2.5
             score += dist_to_wall * _wcw

@@ -3935,3 +3935,45 @@ regression.
   parses board.snakes from frames + last-line winnerName), /tmp/tally.py <round_dir> (win/loss/tie),
   /tmp/rm2.sh <A> <B> <N> (self-play, >=6s warmup, ALWAYS both A/B orders, position bias — trust
   AGGREGATE), /tmp/lat.py (latency). The REAL match result is the true validator (v44 227 > v46 219).
+
+## Round 1 update (opus-4-8 — NEW MATCH vs jackisherwood__battlesnake-elon) — SHIPPED v47 (mid-size anti-wall-crawl)
+- ⚠️ NEW OPPONENT: **`jackisherwood__battlesnake-elon`** — GENUINELY COMPETITIVE / FULLY ACTIVE,
+  plays LONG survival games (losses at t21-324). NOT a giant-balloon opponent (our loss lengths
+  only 4-27). Round 0 result (v44): **opus-4-8 231, jackisherwood 18 (+1 tie)** (250 games).
+- **Loss classification (18 losses, /tmp/cl.py last-alive frame): 9 BIG (len>=15), 3 small (<10),
+  only 1 truly OUTGROWN.** DOMINANT mode = **big/mid-size snake WALL-CRAWL into a CORNER while
+  EQUAL-or-LONGER than opp, then self-coils.** Traced sim_133 (len13->14 crawled top-right into
+  corner (10,10)), sim_196 (bottom-right corner crawl), sim_63 (len20 crawled down right wall x=10
+  into corner), sim_222 (len24 crawled to corner (10,10) at t230, wall-death t231). In sim_133 the
+  losing snake was len 13-14 -- BELOW the anti-wall-crawl escalation threshold (which only bumped
+  _wcw to 5.0 at len>=15; at len 10-14 it was only 2.5).
+- **FIX (main.py = v47, backup main_backup_v47_midwallcrawl.py; prev = main_backup_v44_r0start.py = v44):**
+  Added a mid-size tier to the anti-wall-crawl weight (line ~704): `_wcw = 6.0 @ len>=15` (was 5.0),
+  NEW `_wcw = 4.0 @ len>=12`, `2.5` below. Nudges mid-size (len 12-14) healthy snakes OFF the
+  perimeter harder so they don't crawl into corners and self-coil (the dominant round-0 loss mode).
+- **VALIDATION (self-play IS a valid proxy — keeping a snake off the corner-trap wall is a general
+  survival edge both bots feel; unlike opponent-specific food-routing which washes):**
+  * SELF-PLAY WIN both orders, 3 batches (16 each, 96 games) via /tmp/rm2.sh:
+    v47-A 8,9,8 vs v44 7,6,7; v47-B 7,10,7 vs v44 8,5,8.
+    AGGREGATE v47-A **25-20**, v47-B **24-21** -> v47 **49** vs v44 **41** (~55% BOTH orders,
+    net-positive despite position-bias noise).
+  * REGRESSION PASS: v47 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded
+    _safe_fallback (line 219) -> cannot time out. No crashes/errors in server logs.
+- **DECISION: shipped v47.** Directly targets the dominant round-0 loss mode (mid-size snake
+  wall-crawl into corner self-coil) with a self-play-net-positive-both-orders fix and no regression.
+- **CONTINGENCY: if v47 scores WORSE than v44's 231 in the real round, REVERT to
+  main_backup_v44_r0start.py (== v44, proven 231-18).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v47 regressed, revert to
+  main_backup_v44_r0start.py. Re-run /tmp/tally.py <round_dir> (W/L/T + loss files) + /tmp/cl.py
+  (parse last-alive frame: US len/hp/head vs OP len; wall/corner deaths = self-coil). If wall/corner
+  self-coils PERSIST but DROP, could bump _wcw further (6.0->7.0 @ len>=15, 4.0->5.0 @ len>=12) but
+  RE-TEST self-play both orders in AGGREGATE over >=3 batches (position bias dominates single 16-game
+  batches). If OUTGROWN dominates instead, the owned-food routing (v43/v44) is the lever but is
+  tuned-out (widening lead<3->lead<4 or raising +40/-55 rewards REGRESSED per prior notes). The
+  residual HARD mode is the genuine big-snake multi-step coil (all one-step flood/timed/static
+  metrics equal at the true last-free-choice ~5-8 turns before death; greedy self-sim escapes; no
+  one-step fix — needs a SOFT multi-step self-sim using OUR OWN scoring, never successfully shipped).
+  Test: /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002, 7s warmup, N<=16, grep "A/B is the
+  winner"), ALWAYS both A/B orders (position bias). Self-play IS valid for off-wall/survival edges
+  (v47/v44/v46 won both orders); it WASHES for opponent-specific food-routing.
