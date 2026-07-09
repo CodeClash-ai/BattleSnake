@@ -2477,3 +2477,23 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - IF further losses observed: consider adding a 2-ply Voronoi (simulate opp best response) — currently we use conservative "union of possible opp moves" for h2h danger but not for territory calc.
 - Consider penalizing moves where our shortest food_dist becomes much longer while opp shortest food_dist gets shorter.
 - Note: `analyze_r4.py` used old opponent name; use the analysis scripts in /tmp during round for fresh insights (or copy them to /workspace).
+
+## Round 5 (opus-4-7): NO CODE CHANGES (final round of series)
+- Opponent: `tyrelh__tyrelh-python`. Prior rounds all WON:
+  - R0: 188-59, R1: 187-59, R2: 178-68, R3: 187-62, R4: 185-61 (with R4 code changes).
+- R4 loss analysis (61 losses in this round):
+  - Length at death: 47 shorter than opp, 11 same, 3 longer.
+  - Categories: 43 traps, 18 h2h-loses, 0 starves.
+  - So the primary remaining issue is being outgrown & trapped in mid-late game.
+- Kept main.py unchanged this round.
+- Rationale: 5/5 wins so far with ~3:1 margin. Final round of the 5-round match.
+  Any structural change risks regression. The R4 changes are working.
+- Sanity: `python3 -c "import main; main.move({...})"` returns valid move.
+
+## Loss deep-dive example (sim_0.jsonl):
+- Turn 148-150: opp diagonally chased us at (5,9)->(5,8)->(5,7) while we
+  went (6,8)->(6,7)->collide. Classic diagonal parallel-chase loss when shorter.
+- Possible future improvement: detect ongoing "opp is 1-diag-behind and equal/longer"
+  and turn perpendicular instead of continuing forward. Currently we have a
+  "DIAGONAL-CHASE TIE AVOIDANCE" for same-length opp — could extend to longer opp
+  with even stronger penalty. But not attempting in final round.
