@@ -3844,3 +3844,56 @@ regression.
   real round, REVERT: `cp main_backup_v44_r3start.py main.py`. All fixes v8-v44 present. Repro/test:
   /tmp/cl.py (loss class), ./run_match.sh <A> <B> <N> (>=2s warmup, N=16 ~2min each order), ALWAYS both
   A/B orders (position bias). Self-play IS a valid proxy for owned-food routing (it won both orders).
+
+## Round 4 update (opus-4-8 — CURRENT MATCH vs Flipez__flipez-crystal) — SHIPPED v46 (sole-wall-food trap for small snakes)
+- Verified results: round 0 **224-22 (+4t)** (v41), round 1 **215-33 (+2t)** (v42),
+  round 2 **222-25 (+3t)** (v43), round 3 **227-19 (+4t)** (v44). ⭐ v44's STRONGER owned-food
+  routing (shipped round 3) IMPROVED r2's 222-25 -> r3 227-19 (losses 25->19). Food-ownership works.
+  4/4 rounds won.
+- **Round-3 loss classification (/tmp/cl2.py, last-alive frame): 19 losses = 10 OUTGROWN + 9 SELFCOIL.**
+  * OUTGROWN (10): opp only 1-3 longer at death; the food-race is close (v44 already helps).
+  * SELFCOIL (9): mostly SMALL/mid snakes (len 6-21) dying at WALLS/CORNERS ((0,0),(0,10),(10,0),
+    (0,8),(7,0)). Notably sim_37 (len6 hp90) & sim_159 (len6 hp100) & sim_81 (len6) are the
+    small-snake WALL-CRAWL corner self-coil.
+- **DEEP TRACE of sim_37 (small-snake sole-wall-food corner crawl, CLEANEST repro):** at t15 head
+  (9,4) len6 hp95, the ONLY food was (9,0) [bottom wall] which the opp (at (9,2), len5) was CLOSER
+  to. v44 crawled DOWN the right wall (x=10) t16->t20 into corner (10,0) & died. The existing
+  small-snake wall-food trap (line 524) requires `len(food_set)>=2` (starvation guard) -> did NOT
+  fire on the SOLE wall food. And the `_length_lead<2` trap requires `_fed` (len>=7) -> also didn't
+  fire (we were len6). So a len<7 snake chasing SOLE contested wall food had NO avoidance.
+- **FIX (main.py = v46, backup main_backup_v46_solewalltrap.py; prev = main_backup_v44_r4start.py = v44):**
+  Relaxed the small-snake (my_len<7) wall-food trap to also fire on SOLE food when very healthy:
+  `_smallwall_ok = (len(food_set)>=2 and health>=55) or (len(food_set)==1 and health>=75)`.
+  When the sole wall food gets flagged as trap -> `chasing_trap=True` -> the EXISTING off-wall bias
+  (line ~711, `chasing_trap and health>=60: score += dist_to_wall*3.0`) nudges the small snake OFF
+  the wall toward open board instead of crawling into the corner. NO starvation risk: only fires at
+  health>=75 for sole food (a genuinely hungry snake at hp<75 still races the food).
+- **VALIDATION (self-play IS a valid proxy — keeping a small snake off the corner-trap wall is a
+  general survival edge both bots feel):**
+  * ✅ SELF-PLAY WIN BOTH ORDERS, 2 batches (16 each), via ./run_match.sh:
+    batch1 v46-A **10-6**, v46-B **9-6**; batch2 v46-A **8-8**, v46-B **10-5**.
+    AGGREGATE: v46-A **18-14**, v46-B **19-11** -> v46 **37** vs v44 **25**. Net win both orders.
+  * ✅ REPRO PASS: sim_37 t16 (head (10,4) on right wall): **v46 picks 'up' (off wall toward
+    interior); v44 picks 'down' (crawls toward corner (10,0) -> death).** Direct proof v46 escapes
+    the corner. (repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>.)
+  * ✅ REGRESSION PASS: v46 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded
+    _safe_fallback (line 219) -> cannot time out. Self-play sanity: v46 vs v46 no crashes.
+- **REJECTED this round (regressed self-play both orders — do NOT re-try):**
+  * v45 (owned-food routing extended to lead<4 + stronger rewards +55/-70): aggregate v45 13 vs
+    v44 17. REGRESSED. The lead<3 threshold & +40/-55 weights are well-tuned — don't widen.
+  * v45b (lead<4 only, same weights): as A 5-10 = clear regression. REJECTED.
+- **DECISION: shipped v46.** Targets the small-snake sole-wall-food corner self-coil (a chunk of
+  the round-3 SELFCOIL losses) with a repro-flipping fix that ALSO wins self-play both orders
+  (aggregate 37-25) with no regression and no starvation risk. Satisfies the iron ship-rule.
+- **CONTINGENCY: if v46 scores WORSE than v44's 227 in the real round, REVERT to
+  main_backup_v44_r4start.py (== v44, proven 227-19).**
+- **TODO next teammate (likely FINAL round):** check /logs/rounds/4/results.json FIRST. If v46
+  regressed, revert to main_backup_v44_r4start.py. If it helped, keep. Re-run /tmp/cl2.py (edit
+  d="/logs/rounds/N") to classify losses. Residual modes: OUTGROWN (opp out-eats us — owned-food
+  routing v43/v44 already the main lever; DON'T widen to lead<4, it regresses) + big/mid SELFCOIL
+  (documented hard multi-step coil, no one-step fix — greedy self-sim escapes, all metrics equal at
+  last-free-choice). Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/cl2.py
+  (loss class). Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N=16 ~2-4min each order), ALWAYS both
+  A/B orders (position bias — trust AGGREGATE over batches). Self-play IS valid for off-wall/survival
+  edges (v46, v44 won both orders); it WASHES for opponent-specific food-routing (contested-food avoidance).
