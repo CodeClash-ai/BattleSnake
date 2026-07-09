@@ -1800,3 +1800,48 @@ regression.
   center food) — both need multi-step/territory lookahead validated vs the REAL opponent, NOT
   self-play (which washes). But with 500-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B>
   <N> (>=6s warmup), ALWAYS both A/B orders (position bias).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs zacpez__scape-goat) — KEPT v24
+- Verified results: round 0 **250-0**, round 1 **250-0**, round 2 **249-1** (opus-4-8 vs
+  zacpez__scape-goat). 3/3 rounds won; 749-1 total. First loss = round 2 game e6236716.
+- Opponent FULLY ACTIVE (round 2 latency avg 0.2ms, 0/10073 moves >=490ms = 0% timeouts).
+  Avg game len 40.3 turns, max 137. Pure out-play, no free latency wins.
+- **Root cause of the single loss (game e6236716, sim_187, /tmp/tr2.py + /tmp/body.py):**
+  PURSUIT SELF-TRAP. We were len9 hp92 (much LONGER than the len4 opponent). The opponent
+  CHASED us: its head followed right behind us (e.g. t31 US(4,5) OP(4,3); t32 US(4,4) OP(5,3))
+  forming a moving wall below us (y=3) while our own coil sealed above (y=5). We walked 'down'
+  into the shrinking strip and coiled to death at t34 (head (6,4), ALL 4 neighbors blocked).
+- **Last-free-choice = turn 31, head (4,5).** Legal: up(4,6), down(4,4), left(3,5) — ALL show
+  space=110 AND contested_space=107-108 (board WIDE OPEN; trap forms 3 turns later). v24 picked
+  'down' (toward the pursuer) -> trap. 'up'/'left' (away from pursuer) were safe.
+  This is the classic MULTI-STEP corridor-collapse trap the README documents across EVERY
+  opponent: NO one-step metric (flood/timed/contested) distinguishes the moves at the last free
+  choice. (Repro: /tmp/state31.json; /tmp/testmove.py main.py /tmp/state31.json -> 'down';
+  /tmp/eval.py & /tmp/ctest.py show all moves equal 110/107.)
+- **Multi-step sim attempts this round — did NOT yield a usable fix:**
+  * /tmp/sim_test2.py (BFS enemy-reachability blocking) & /tmp/sim_self.py (greedy enemy pursuit
+    toward our head, K=6-8, then our greedy max-flood): BOTH flagged ALL THREE moves (up/down/left)
+    as trap_at=1 — i.e. modeling the pursuit makes EVERYTHING look trapped one step out (the space
+    between us and the pursuer always shrinks). A HARD filter on this would break normal play; it
+    can't distinguish the actually-fatal 'down' from the safe 'up'/'left'. The pursuit model is
+    too pessimistic (real game survived to t34). Would need a much more careful enemy-move model
+    (the enemy doesn't always chase optimally) + a SOFT penalty, not a filter. Consistent with
+    ALL prior teammates: multi-step sims regress; self-play can't reproduce/validate this trap.
+- REGRESSION PASS: main.py (v24) vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: two 28-long dense snakes, 10 food, 200 moves): **0.22ms avg, 0.42ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- main.py == main_backup_v24_tiefix3.py (diff confirms); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v24) unchanged.** 749-1 record; the single loss is a hard multi-step
+  PURSUIT trap where the last-free-choice has all moves at equal flood=110/contested=107 (provably
+  no one-step fix), and my pursuit-sim experiments flagged every move (too pessimistic for a hard
+  filter). Prior teammates exhaustively confirmed such sims regress self-play. No regression risk
+  taken on a near-perfect bot.
+- **TODO next teammate:** the ONLY loss mode is a pursuit self-trap: a LONGER snake gets its coil +
+  a chasing enemy body to form a collapsing corridor 3 turns after the last free choice. Repro:
+  /tmp/state31.json (game e6236716 t31, head (4,5), should pick 'up' or 'left', NOT 'down').
+  The correct fix = a SOFT penalty from a careful multi-step sim where (a) the enemy is modeled as
+  chasing but NOT teleporting (only blocks its ACTUAL next-cell path, and only when it's clearly
+  behind us on the corridor), and (b) the penalty is small (-15..-30) so it only breaks ties among
+  equal-flood moves — a bias to move AWAY from a close pursuing enemy when in a semi-enclosed area.
+  Validate ONLY via the repro flipping to 'up'/'left' AND self-play NOT regressing both orders
+  (/tmp/rm2.sh, >=6s warmup). Do NOT ship a hard filter (breaks normal play — verified this round).
