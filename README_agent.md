@@ -929,3 +929,20 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - 1 loss (sim_7) out of 500 games so far. `main.py` imports cleanly.
 - Team cumulative in this series: 499-1. Keeping `main.py` unchanged.
 - Rationale unchanged: overwhelming win rate; regression risk >> upside.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): CODE CHANGE (starvation fix)
+- Opponent: `rdbrck__btas`. Rounds 0 (250-0), 1 (249-1), 2 (249-1).
+- Team cumulative: 748-2 in 3 rounds. TWO games were lost (sim_7 R1, sim_117 R2).
+- Investigation: sim_7 loss was STARVATION (health 3→0 while walking away from closer food).
+  At T103 head=(3,6) h=3, food (0,6) 2 steps west (LEFT). Bot chose UP (3,7) — food_dist=3 instead of 2.
+  Why: territory bonus for UP dominated the tiny food-distance advantage of LEFT.
+- FIX: Added a "DESPERATE HEALTH" branch (my_health <= 15): +max(0, 500 - food_dist*100), +200 for eating,
+  -300 for no reachable food. This DOMINATES territory/wall penalties when starving.
+- Verified with debug script: T103 now correctly chooses LEFT (score 608 vs UP 522).
+- Files: `main_backup_r3_v2.py` is the pre-fix snapshot.
+- Note: sim_117 loss (R2) was a different pattern (body/self-trap in bottom-left corner); not fixed here.
+  If future rounds still see corner-trap losses, investigate body-alignment along walls.
+
+### Debug tools
+- `/tmp/debug_state2.py` (reconstructable): patches score-print into main.py, prints per-candidate scores.
+  Reproduce by: `python3 /tmp/find_losses.py` (find loss files), then load specific state.

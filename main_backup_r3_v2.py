@@ -557,17 +557,6 @@ def _move(game_state):
             s += max(0, urgency * 3 - c["food_dist"] * 2)
             if c["eats"]:
                 s += 45
-        # DESPERATE HEALTH: at h<=15, food_dist must strictly decrease or we die.
-        # Score DOMINATES all other considerations. Multiplicative penalty on distance.
-        if my_health <= 15 and c["food_dist"] is not None and margin >= 0:
-            # Enormous score gradient by food distance. This must beat territory/wall penalties.
-            # A 1-step closer food = +100 points.
-            s += max(0, 500 - c["food_dist"] * 100)
-            if c["eats"]:
-                s += 200
-        # Unreachable food at desperate health = death sentence
-        if my_health <= 15 and c["food_dist"] is None:
-            s -= 300
         # If we're going to starve unless we eat, food_dist == None means bad direction
         if my_health <= 20 and c["food_dist"] is None:
             s -= 80
