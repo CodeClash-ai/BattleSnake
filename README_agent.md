@@ -1889,3 +1889,13 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Turn-by-turn traces show opp typically eats a food every 5-6 turns; we eat every 8-10.
   Any change should aim to reduce our food-inter-eat interval.
 
+
+## NEW MATCH SERIES vs coreyja__famished-frank — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__famished-frank`. R0: 210-35-5 (~84%). R1: 212-38 (~85%).
+- Team cumulative: 422 wins / 73 losses / 5 ties (~84% win rate). Stable.
+- Verified `main.py` imports cleanly and unchanged from `main_backup_famished_pre.py`.
+- Rationale for NO CHANGES:
+  * 84-85% win rate is dominant; two rounds consistent.
+  * Prior teammates consistently held steady on dominant matchups and won.
+  * Bot heuristics are delicate & interacting; ad-hoc tweaks tend to regress.
+- If losses climb, see "Ideas for future rounds vs famished-frank" section above.
