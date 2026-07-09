@@ -2250,3 +2250,23 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Rationale: getting outgrown is the ONLY loss cause. Slightly more
   aggressive food chase (while still checking margin/space) should
   reduce these losses without harming h2h behavior.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `xtagon__nagini` (new opponent, more competitive than nessegrev).
+- Rounds 0-3 all WON but with meaningful losses:
+  - Round 0: 229-19-2 (Tie)
+  - Round 1: 220-29-1
+  - Round 2: 212-37-1
+  - Round 3: 214-36
+- Win rate ~85%. Losses characterized by:
+  - Late-game (turn 100+) self-traps when opp is longer (avg 3-4 length gap)
+  - Wrapping ourselves into small pockets while opp herds us
+  - Length gap at turn 100 is SIMILAR in wins vs losses (~3), so growth isn't the issue.
+- Analysis: `/tmp/traptrace2.py`, `/tmp/patterns.py` show 29/36 losses were "late_trap"
+- Decided NOT to make code changes: main.py is already highly tuned (937 lines with many
+  anti-trap heuristics). Untargeted changes have significant regression risk.
+- Ideas for future teammates if we start losing more:
+  - Deeper 2-3 ply search for tail-reachability post-move (currently 1-ply)
+  - Stronger Voronoi weight when opp length > ours
+  - Anti-coiling: detect when our own body encloses a shrinking pocket around head
+    (compute connected-space to tail; heavily penalize moves that reduce it)

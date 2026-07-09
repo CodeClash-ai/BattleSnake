@@ -433,7 +433,7 @@ def _move(game_state):
             unsafe = [c for c in candidates if c["h2h_death"]]
             best_safe_space = max(c["space"] for c in safe)
             # Only keep h2h_death options substantially better in space
-            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 3, c["new_len"])]
+            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 8, c["new_len"] + 3)]
             if good_unsafe:
                 candidates = safe + good_unsafe
             else:
@@ -441,27 +441,26 @@ def _move(game_state):
         else:
             candidates = safe
 
-    # If we have viable non-tie non-trap options, prefer them.
+    # If we have viable non-tie non-death non-trap options, prefer them.
     # A move is "viable" if space >= new_len (won't self-trap).
+    # CRITICAL: don't filter out h2h_death here in a way that ELIMINATES trap alternatives,
+    # since some opponents (like beames) aggressively h2h. We want to preserve at least
+    # one non-h2h-death option if one exists.
     non_tie_viable = [c for c in candidates
-                      if not c["h2h_tie"] and c["space"] >= c["new_len"]]
+                      if not c["h2h_tie"] and not c["h2h_death"] and c["space"] >= c["new_len"]]
     if non_tie_viable:
         candidates = non_tie_viable
     else:
-        # No fully viable non-tie option. Consider all remaining candidates.
-        # If a non-tie option exists at all, prefer max-space ones there;
-        # but if all non-tie options have far less space than a tie, tying might be OK.
-        non_tie = [c for c in candidates if not c["h2h_tie"]]
-        if non_tie:
-            # Best non-tie space
-            best_nontie_space = max(c["space"] for c in non_tie)
-            # Only include ties if non-tie space is drastically small (likely certain death)
-            # e.g. non-tie best space < new_len / 2 -> tying is at least a tie (0 pts) vs loss.
-            if best_nontie_space < max(3, my_len // 2):
-                # keep all candidates (including ties)
-                pass
-            else:
-                candidates = non_tie
+        # No fully viable non-tie non-death option. Prefer non-tie non-death even if trapped.
+        non_tie_alive = [c for c in candidates if not c["h2h_tie"] and not c["h2h_death"]]
+        if non_tie_alive:
+            candidates = non_tie_alive
+        else:
+            # All options are h2h_death or h2h_tie. Prefer ties over death.
+            non_death = [c for c in candidates if not c["h2h_death"]]
+            if non_death:
+                candidates = non_death
+            # else: all h2h_death, no choice
 
     # Prefer moves where our tail remains reachable (guarantees survival loop)
     tail_ok = [c for c in candidates if c["tail_reachable"]]
@@ -494,7 +493,7 @@ def _move(game_state):
         if c.get("my_terr", 999) < c["new_len"]:
             s -= 30
         if c["h2h_death"]:
-            s -= 150  # h2h loss; only pick if all safe options are traps
+            s -= 400  # h2h loss; only pick if all safe options are traps
 
         if c["h2h_kill"]:
             s += 50
@@ -569,22 +568,27 @@ def _move(game_state):
         nso = c.get("next_safe_options", 999)
         nto = c.get("next_options_total", 999)
         if nto > 0 and nso == 0:
-            s -= 200  # heavy penalty: next turn we'd have no safe move (near-certain death)
+            s -= 500  # heavy penalty: next turn we'd have no safe move (near-certain death)
         elif nto > 0 and nso == 1:
             s -= 20  # only one safe option, brittle
+        # EAT-TRAP: eating grows body, if a longer opp is adjacent and post-eat leaves 0-1 safe next moves, avoid.
+        if c.get("eats") and c.get("near_larger_head") and nso <= 1:
+            s -= 400
         if want_food and c["food_dist"] is not None:
             # Closer food is better, but only if space margin is healthy
-            if margin >= 3:
+            # When behind opponent in length, allow slightly tighter margin to chase food.
+            food_margin_thresh = 2 if (my_len < max_opp_len) else 3
+            if margin >= food_margin_thresh:
                 # Boost bonus significantly when we're shorter (need to catch up).
                 food_bonus = max(0, 45 - c["food_dist"] * 3)
                 if my_len < max_opp_len:
                     # BIGGER urgency: length gap matters
                     gap = max_opp_len - my_len
-                    food_bonus += max(0, 40 - c["food_dist"] * 2) + gap * 5
+                    food_bonus += max(0, 60 - c["food_dist"] * 2) + gap * 12
                 elif my_len == max_opp_len:
                     # Equal length - still important to eat so we dont fall behind.
-                    # Especially against nbw-family opponents that systematically out-grow us.
-                    food_bonus += max(0, 30 - c["food_dist"] * 2)
+                    # Especially against opponents that systematically out-grow us.
+                    food_bonus += max(0, 45 - c["food_dist"] * 2)
                 # UNCONTESTED FOOD BOOST: if the nearest food is CLOSER to us than to any
                 # opponent by a comfortable margin, we should be aggressive - it's free growth.
                 # Compute manhattan dist from c["cell"] to nearest food, and compare to opp dists.
@@ -599,21 +603,21 @@ def _move(game_state):
                             d_opp = abs(fx-_oh[0])+abs(fy-_oh[1])
                             if d_opp < d_opp_min: d_opp_min = d_opp
                         # uncontested if we're at least 3 closer
-                        if d_opp_min - d_me >= 3 and d_me <= 6:
+                        if d_opp_min - d_me >= 2 and d_me <= 8:
                             if best_my_fd is None or d_me < best_my_fd:
                                 best_my_fd = d_me
                     if best_my_fd is not None:
                         # Bonus scales with how close food is (closer = more urgent)
-                        food_bonus += max(0, 25 - best_my_fd * 3)
+                        food_bonus += max(0, 35 - best_my_fd * 3)
                 except Exception:
                     pass
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:
-                        s += 30 + (max_opp_len - my_len) * 3
+                        s += 55 + (max_opp_len - my_len) * 8
                     elif my_len == max_opp_len:
                         # Equal length: eat to stay ahead of opp growth
-                        s += 22
+                        s += 32
                     elif my_len <= 5:
                         # Early game: strongly reward eating to grow, even when tied in length.
                         # (Being small too long is the leading cause of starvation.)
@@ -879,6 +883,37 @@ def _move(game_state):
                 s -= 15
             elif margin_final < 10:
                 s -= 5
+
+
+        # SOLO WALL-CRAWL / SELF-COIL: even with no opp near, long snake spiraling
+        # into wall can self-trap (see sim_242: len=24 head at right wall, no opp nearby).
+        # If moving to edge cell and I already have 3+ recent body segments on SAME edge, penalize.
+        if my_len >= 14:
+            cxw, cyw = cxs, cys
+            on_edge_w = (cxw == 0 or cxw == w-1 or cyw == 0 or cyw == h-1)
+            if on_edge_w:
+                # Count how many of last 6 body segments are on THIS same edge
+                same_edge_count = 0
+                for seg in my_body[:6]:
+                    if cxw == 0 and seg[0] == 0: same_edge_count += 1
+                    elif cxw == w-1 and seg[0] == w-1: same_edge_count += 1
+                    elif cyw == 0 and seg[1] == 0: same_edge_count += 1
+                    elif cyw == h-1 and seg[1] == h-1: same_edge_count += 1
+                if same_edge_count >= 3:
+                    # We're already coiled along this edge - big penalty
+                    s -= 12 + same_edge_count * 4
+                elif same_edge_count >= 2:
+                    s -= 6
+
+        # HAMILTONIAN-STYLE space check: for very long snakes, prefer moves where
+        # the tail-reachable space is much larger than my length (long-term survival).
+        if my_len >= 15 and c["tail_reachable"]:
+            # Deep look: is our new space significantly larger than our length?
+            deep_margin = c["space"] - c["new_len"]
+            if deep_margin >= 12:
+                s += 6  # comfortable long-term survival
+            elif deep_margin < 4:
+                s -= 15  # even tail-reachable is not safe if tight
 
         # HARD CENTERING pressure when very long: prefer moves toward the geometric center
         # unless food is close and we need it. This breaks wall-crawl and spiral patterns.
