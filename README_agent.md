@@ -3027,3 +3027,53 @@ regression.
   <bot> <state>, /tmp/tr5.py <sim> <startturn> (per-turn head/len/hp/food). Test: /tmp/rmq.sh <A> <B>
   <N> (>=8s warmup, N<=20 to fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the
   real validator.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs nbw__nbw-ruby) — KEPT v35
+- ⚠️ NEW OPPONENT this match: **`nbw__nbw-ruby`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0 (parsed /logs/rounds/0/sim_*.jsonl last-line {winnerName,isDraw}): opponent latency avg
+  **39.7ms**, max 66ms, **0/4756 sampled moves >=490ms = 0% timeouts**. Avg game len **48.3 frames**,
+  max 282. NO latency free wins — this was PURE out-play.
+- Verified round 0 result: **opus-4-8 245, nbw__nbw-ruby 4, 1 tie** (250 games, /logs/rounds/0/results.json).
+  98.4% game win rate vs a fully active opponent.
+- **Loss classification (4 losses, last-alive frame):**
+  * sim_138 (SELFTRAP): our L20 hp99 snake coiled into a pocket, legal=[] (all 4 neighbors = OWN body).
+  * sim_172 (SELFTRAP): our L11 hp97 snake coiled, legal=[]. Both = documented big-snake multi-step
+    self-coil (last-free-choice ~5-8 turns before death, all one-step metrics equal — no one-step fix).
+  * sim_99 (OUTGROWN): opponent OUT-ATE us steadily — by t60 opp L13 vs our L8; we stayed L10 while
+    opp hit L14, lost H2H at t86. The opponent controls food & out-grows us.
+  * sim_115 (OUTGROWN/squeeze): our L7 vs opp L9, cornered down to 1 legal move (down).
+- main.py == main_backup_v35_bigwallfood.py (v35 = full fix stack v8-v35: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food lead<0, small-snake edge-food trap, big-snake tail-follow@len>=12,
+  lead-scaled aggression, huge-lead no-chase, big-snake food-race until +3, very-big anti-wall-crawl
+  _wcw=5.0@len>=15, big-snake wall/corner food trap@len>=13; strongest proven version). diff confirms
+  equal; parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py (v35) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Self-play sanity: v35 BEATS v34 (main_backup_v34_bigfoodrace.py) **6-4**, 0 draws, full-length
+  games, NO errors/crashes in server logs.
+- Worst-case compute latency (/tmp/lat.py: two 30-long dense snakes, 10 food, 200 moves):
+  **0.015ms avg, 0.026ms max** (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v35) unchanged.** 245-4 is a strong result vs a fully active opponent.
+  The 4 losses are the two documented HARD modes: (1) big-snake multi-step self-coil (all one-step
+  flood/timed/static/greedy-sim metrics equal at the true last-free-choice — provably no one-step
+  scoring fix), and (2) outgrown-while-short (opponent controls food; food-routing tweaks regress
+  self-play & need territory/Voronoi validated vs the REAL opponent, which self-play can't do). v35
+  is the strongest self-play-validated version; prior teammates exhaustively confirmed every scoring
+  tweak beyond v35 either fails the repro or regresses self-play. No regression risk taken on a bot
+  winning 98.4% of games.
+- **TODO next teammate:** re-run the round parser (parse each /logs/rounds/N/sim_*.jsonl LAST line's
+  {winnerName,isDraw}; analyze_round.py's default parser returns games=0 for this log format).
+  Classify losses via the last-alive frame (legal=[] = self-coil; shorter-than-opp = outgrown).
+  * If OUTGROWN losses dominate (opponent out-eats us early — nbw-ruby did: opp L13 vs our L8 by t60):
+    the food-race is already aggressive (v14/v34 push it hard); the real edge is TERRITORY/Voronoi
+    food-ownership routing (route to food WE reach first) — but it MUST be validated vs the REAL
+    opponent, NOT self-play (which eats symmetrically & washes/regresses per ALL prior notes).
+  * If SELFTRAP (big-snake coil) losses dominate: the "correct" but never-successfully-shipped fix
+    is a multi-step self-sim using OUR OWN _choose_move scoring K=6-8 steps (NOT greedy — greedy
+    escapes, confirmed repeatedly) as a SOFT penalty; OR the pursuit-aware flood-fill
+    (_enemy_reach/_pursuit_space in git history) narrowed so it doesn't regress self-play.
+  Repro/analysis: /tmp/lat.py (latency), ./run_match.sh <A> <B> <N> (self-play, >=2s warmup, N<=16
+  to fit 30s cmd limit; grep "A/B was the winner"), ALWAYS both A/B orders (position bias). Repro is
+  the real validator for opponent-specific traps; self-play IS valid for general survival/growth
+  edges (like anti-wall-crawl v19/v33 & food-race v34, which won both orders). DON'T ship a self-play
+  regression.
