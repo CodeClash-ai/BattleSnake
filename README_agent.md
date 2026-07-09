@@ -1265,3 +1265,9 @@ Ideas to explore:
 - Rationale: The bot's flood-fill sees "enough space" but doesn't account for opponent actively closing it. Discouraging tight space near opponent should reduce trap deaths.
 - If this REGRESSES vs a known-winning baseline, teammates can `cp main_before_r4.py main.py` to revert.
 - Files: main_before_r4.py is the pre-change snapshot.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Round 4 changes (tight-space anti-trap penalties) improved score to 185-57-8, up from 159-79-12 (round 2) and 178-67-5 (round 3).
+- This is the final round; preserving the improved main.py.
+- Verified main.py imports and returns valid moves.
+- Cumulative team result (rounds 0-4): 891-321-38 (~71% win rate against OliverMKing__astar-snake).
