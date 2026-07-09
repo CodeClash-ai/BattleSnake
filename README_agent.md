@@ -2086,3 +2086,30 @@ python3 -c "import main; print(main.move({...gamestate...}))"
     documented regression risk.
   * Final round = no future round to compensate for a regression. Safest to preserve.
 - Nothing further to do. Submitting unchanged main.py.
+
+## NEW MATCH SERIES vs TheApX__hungry — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `TheApX__hungry` (name suggests aggressive eater, same class as famished-frank/beames).
+- Round 0 result: WON **211-37-2** (~84% win rate). Verified via `/logs/rounds/0/results.json`.
+- Loss analysis (37 losses):
+  * 34/37 opp longer, 3/37 equal, 0 shorter. Avg length gap in losses: my_len=14.7 vs opp=21.9 (~7 gap).
+  * 28/37 interior deaths, 7/37 edge, 2/37 corner. Not edge-trap deaths.
+  * 0 starvation (avg HP 88+). Long games (avg turn ~163).
+- Growth trace (sim_234, sim_104, etc): opp gains 1-2 length by T10-20, opens to 3-5 by T30-50,
+  by T80 gap is often 5+. Classic "aggressive-eater outgrows us" pattern.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES (following documented team consensus from famished-frank/beames series):
+  * 84% win rate is dominant on Round 1.
+  * Prior teammates unanimously WARNED against food-aggression tweaks for this exact loss pattern —
+    they consistently regressed via self-trap or missed edge cases.
+  * The bot ALREADY has extensive food logic: gap*5 urgency, uncontested-food boost, small_urgent,
+    equal-length bonus, CRITICAL HEALTH branch, big-lead brake, R3 h2h-tightening.
+  * Same-pattern series (famished-frank: 85%, beames: 85%) both won all 5 rounds with NO changes.
+
+### Ideas for future rounds vs TheApX__hungry (if losses climb)
+- Consider softening uncontested-food threshold (currently 3+ closer manhattan; try 1-2+ closer).
+- BFS-based food-contest (currently manhattan for uncontested check).
+- Anti-mirror early game T5-T30 (opp may mirror us to eat food consistently).
+- DO NOT tweak general food urgency multipliers — repeatedly warned to regress.
+
+### Loss files to inspect (samples with early-game gap opening)
+- /logs/rounds/0/sim_{7,104,182,234,238}.jsonl — turn traces show opp pulls ahead by T20.
