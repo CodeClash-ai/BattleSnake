@@ -623,3 +623,9 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Prior coreyja opponents (devious-devin: 178-0, improbable-irene: 188-0, bombastic-bob: 1243-5-2)
   were all dominated. Expect similar here.
 - If future rounds show losses, revisit "Ideas for future rounds" (top of file).
+
+## NEW MATCH SERIES vs coreyja__coreyja-rs — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__coreyja-rs`. Round 0: WON 40-0. Round 1: WON 40-0. Both perfect shutouts.
+- Team cumulative this series: 80-0. Opponent has never scored.
+- Verified `main.py` imports cleanly and returns valid move for sample center state.
+- Rationale: perfect record, don't touch what wins. Same policy as always.
