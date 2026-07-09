@@ -797,3 +797,40 @@ regression.
   raise the weight back toward *3.0. There was also 1 TIE in round 0 — worth inspecting if it recurs.
   Repro tools: /tmp/repro.py (turn49), /tmp/repro2.py (turn46/47). Test tool: /tmp/rm2.sh (>=3s warmup),
   ALWAYS both A/B orders (position bias). Do NOT trust self-play washes as improvements per prior notes.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs nbw__nbw-crystal) — SHIPPED v12 (food-hungry)
+- Verified results: round 0 **244-1 (+1 tie)**, round 1 **244-5 (+1 tie)** (opus-4-8 vs
+  nbw__nbw-crystal). Both rounds won, but losses GREW 1 -> 5. Opponent ACTIVELY PLAYS now
+  (round 1 latency avg 165.9ms, only 10/4480 moves >=490ms = 0.2% timeouts! avg game 17.9
+  turns, max 95). The latency-edge free wins are essentially gone — must out-play it.
+- **Root cause of the 5 round-1 losses = OUR SNAKE STAYS TOO SMALL / gets OUTGROWN.**
+  Inspected game 311f2789 (56 turns, /tmp/inspect.py): our snake stayed **len 4 from turn 2
+  to turn 51** while refusing food (health stayed 90+), while the opponent grew to **len 6**.
+  A longer enemy wins head-to-heads and can corner a smaller snake. All 5 losses were small
+  snakes (len 5-7, high health) getting walled/cornered by a LONGER opponent.
+  Old v11 `want_food = health<65 or my_len<5` + food weight only `fdist*1.0` for len<12
+  (0 for len>=12) meant a healthy snake NEVER ate -> lost the length race.
+- **FIX (main.py = v12, backup main_backup_v12_foodhungry.py; prev main = main_backup_v11_r1.py):**
+  * `want_food = health<70 or my_len<6 or _length_lead < 2` where
+    `_length_lead = my_len - max(enemy len)`. I.e. keep eating until we are comfortably
+    (>=2) longer than the biggest enemy.
+  * Food scoring: added `_length_lead < 0` -> `fdist*8.0` (race hard when SHORTER),
+    `want_food` -> `fdist*6.0` (was 5.0), `my_len<12` -> `fdist*2.0` (was 1.0).
+- **RESULTS (self-play /tmp/rm2.sh, BOTH orders — decisive, symmetric win):**
+  * v12 as A vs v11: **25-5** and **29-11** (~73-83%). v12 as B vs v11: **24-6** and **15-5** (~75-80%).
+  * Clear improvement BOTH orders (unlike prior rounds' anti-trap tweaks which only washed).
+- **REGRESSION PASS:** v12 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (two 20-long snakes, dense 11x11): **0.014ms avg** — the length-lead calc is free.
+- **REJECTED tuning:** `_length_lead < 3` (eat until 3+ longer) was a wash/slight regression
+  vs `< 2` (13-10 as A but 11-13 as B). Kept `< 2`.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v12.** Fixes the exact round-1 loss mode (outgrown by opponent) and beats
+  the prior bot decisively in BOTH self-play orders with no regression. The opponent is now a
+  real competitor (barely times out) so length matters a lot.
+- **TODO next teammate:** re-run /tmp/a1.py (=analyze_round.py, edit d="/logs/rounds/N") on the
+  new round. If losses persist, check whether we're still being outgrown (inspect a loss game's
+  turn-by-turn lengths via /tmp/inspect.py, edit target gid) — if so consider raising want_food /
+  food weight further or adding aggression when longer. If losses are now wall-squeeze/self-trap
+  instead, the anti-squeeze (v9) / timed_space (v8) / tail-follow (v10) logic is already present.
+  Test tool: /tmp/rm2.sh (recreate from top notes; >=2s warmup; all-draws = server not ready, rerun).
+  ALWAYS test BOTH A/B orders (position bias exists). Don't trust self-play washes as improvements.
