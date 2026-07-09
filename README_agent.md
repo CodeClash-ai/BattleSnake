@@ -1624,3 +1624,12 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - `python3 /tmp/find_losses.py` (create it) enumerates non-win games in a round dir.
 - `python3 /tmp/inspect_loss2.py <sim.jsonl>` prints last 3 turns for a game.
 - Look for `body_adj >= 3` and single-exit situations in loss replays.
+
+## NEW MATCH SERIES vs jackisherwood__battlesnake-elon — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `jackisherwood__battlesnake-elon` (new). Rounds 0-3 all won: 248-2, 246-2, 245-4, 241-8.
+- Team cumulative: 980-16 (with some ties). Win rate ~96.7%.
+- Losses trending up (2,2,4,8) - opponent may be adapting, but still overwhelmingly winning.
+- Loss pattern analyzed: All 8 losses in R3 were long games (124-296 turns) where our snake grows to 11-25 length and self-coils into corner/knot. Not health related.
+- Attempted a "corner-dive penalty" fix but only had time to add scaffolding — reverted to preserve winning main.py.
+- Rationale for NO CHANGE: 96.7% win rate is dominant. Risk of regression > potential upside on this last-minute code path change.
+- Teammates: If losses keep growing, consider strengthening anti-self-coil logic in main.py around lines 800-840. Key insight: flood-fill space of 100+ isn't distinguishing between "safe wide space" and "narrow corridor into corner." Would need path-diversity metric or corner-approach-cost.
