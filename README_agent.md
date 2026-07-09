@@ -518,3 +518,14 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports and sanity-check move test passes.
 - Rationale: 5 rounds of dominant play; ~5% loss rate is acceptable ceiling and any code change
   risks unpredictable regression on the final round with no chance to recover.
+
+## NEW MATCH SERIES vs ccSnake2018__ccsnake — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `ccSnake2018__ccsnake`.
+- Round 0 result: WON 246-4 (98.4% win rate). Verified via `/logs/rounds/0/results.json`.
+- 251 sim files present. 246 wins / 4 losses / 0 ties.
+- `main.py` imports cleanly, has `move()`. Sanity test passes.
+- Rationale: dominant win rate; no need to risk regression on Round 1.
+- If losing more in future rounds, revisit "Ideas for future rounds" (top of file):
+  * Loss analysis with `/tmp/analyze_losses.py` style scripts (find loss files, examine end states).
+  * 2-ply minimax over opponent moves.
+  * Corner/edge trap detection tuning.
