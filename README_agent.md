@@ -2806,3 +2806,47 @@ regression.
   static-flood per move), /tmp/lfc.py <sim> (per-turn legal moves), /tmp/lens.py <sim> (final lengths).
   Test: /tmp/rm2.sh <A> <B> <N> (recreate — grep "A was the winner"; >=8s warmup, N<=16 to fit 30s
   cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play washes.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs OliverMKing__astar-snake) — KEPT v30
+- ⚠️ NEW OPPONENT: **`OliverMKing__astar-snake`** — the TOUGHEST opponent yet. FULLY ACTIVE,
+  LONG games (avg **146 frames**, max 466). Round 0 result: **opus-4-8 189, OliverMKing 57, 4 ties**
+  (250 games) — 57 LOSSES (23%), by far the most this codebase has seen.
+- **Loss breakdown (/tmp/ana.py + /tmp/lossall.py on /logs/rounds/0):**
+  * **40 SELFTRAP** (self-coil, last frame legal=[], all 4 neighbors = OUR OWN body): of these
+    23 on walls/corners, 17 mid-board. Big snakes (L10-29), HIGH health (76-100), OFTEN LONGER
+    than opp. This is the documented long-game self-coil trap, at high frequency.
+  * **17 OUTGROWN** (we were shorter, lost H2H/cornered).
+- **DEEP TRACE of a mid-board self-coil (sim_154, died (7,4) L13):** last-free-choice = **t122**,
+  head (9,3), 2 legal (left/right). v30 picks 'left'->(8,3) which spirals into its own coil ->
+  boxed at t127. 'right'->(10,3) was the open escape. (repro: /tmp/s154_122.json; /tmp/tm.py
+  /workspace/main.py /tmp/s154_122.json -> 'left'.)
+- **ATTEMPTED FIX (multi-step greedy-min-space self-coil detector) — REJECTED (repro fail + self-play
+  regression):** added `_greedy_minspace(first, body, enemy_bodies, food, w, h, K=12)`: advance our
+  body greedily (max-free-space neighbor each step, enemies static) and record the MINIMUM
+  head-reachable free space. Idea: a coil direction has lower min-space than an open-board move.
+  * ❌ At sim_154 t122 the gap was only 82 (left) vs 97 (right) — greedy sim ESCAPES the coil (plays
+    optimally afterward), so BOTH stay far above my_len; the penalty did NOT flip 'left'->'right'.
+    Confirms ALL prior teammates: **greedy self-sim cannot catch this mode** (it doesn't reproduce
+    the bot's own scoring walking into the coil).
+  * ❌ SELF-PLAY REGRESSED BOTH orders: new vs v30 = **6-8 as A AND (reverse) 6-8 as B** (new 12,
+    v30 16 combined) — the min-space penalty over-restricts normal play. Violates the iron ship-rule.
+  * REVERTED to v30 (main.py == main_backup_v30_hugeleadnochase.py; diff confirms; parses clean).
+- REGRESSION PASS: main.py (v30) vs opp_straight = **8-0 as A** (win).
+- **DECISION: kept v30.** The 57 losses are dominated by the genuinely-hard multi-step self-coil
+  where greedy-sim/flood/timed are ALL uninformative at the last free choice; my greedy-min-space
+  detector neither flipped the repro nor passed self-play. No unvalidated regression risk taken.
+- **TODO next teammate (HIGH VALUE — this opponent LOSES 23% so there's real upside):**
+  The correct fix (documented repeatedly) is a multi-step self-sim that advances OUR body using OUR
+  OWN _choose_move scoring K steps (NOT greedy — greedy escapes) and detects the corridor collapse,
+  as a SOFT penalty. This is the ONE thing not yet tried. Approach: factor the per-candidate SCORING
+  into a helper `_score_cell(state)` you can call recursively; simulate: from each first move, build
+  the resulting game_state (advance our body, keep enemies static or advance them toward nearest
+  food/us), call the bot's own move choice, repeat K=6-8 steps, and if the resulting space collapses
+  (< my_len) flag the FIRST move with a soft penalty (-20..-40). Validate ONLY if it flips
+  /tmp/s154_122.json ('left'->'right') AND self-play does NOT regress both orders (/tmp/rm.sh —
+  recreate: it's like run_match.sh but 6s warmup, N<=14 to fit 30s cmd limit; ALWAYS both A/B orders,
+  position bias). Also 17/57 losses are OUTGROWN (shorter) — the food-race is already aggressive;
+  a territory/Voronoi food-ownership routing (validated vs REAL opponent, not self-play) could help.
+  Repro tools: /tmp/mkstate.py <sim.jsonl> <turn> <out.json> (writes state, "you"=opus),
+  /tmp/tm.py <bot> <state>, /tmp/board.py <sim> <turn> (ascii), /tmp/lfc.py <sim> (per-turn legal),
+  /tmp/lossall.py (loss classification), /tmp/ana.py (win/loss/tie + game len). Repro is the real validator.
