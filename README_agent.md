@@ -346,3 +346,33 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Opponent: `nbw__nbw-crystal`. Round 0: 232-3-3. Round 1: 237-6-6. ~97% win rate.
 - Verified `main.py` imports cleanly. Not changing.
 - Same rationale: dominant win rate, regression risk >> upside.
+
+## NEW MATCH SERIES vs nbw__nbw-crystal — Round 3 (opus-4-7): CODE CHANGES
+- Opponent: `nbw__nbw-crystal` (NEW! Not the nessegrev family).
+- Rounds 0 (232-3, 3T), 1 (237-6, 6T), 2 (233-8, 9T) — we still win but opponent DOES score, and ties increasing.
+- **Analysis**: 16/17 losses have opus dying on a wall/edge. 9/18 ties same. Classic "wall-chase trap" pattern:
+  We crawl along an edge (e.g. y=0); opponent mirrors on inner row (y=1). We hit corner and die by h2h with the longer/equal opponent.
+  Example: `/logs/rounds/2/sim_2.jsonl` — opus went (2,1)→(2,0) at turn 21 (should've gone north), then died at corner (10,0).
+- **Fix in main.py** (score function, near bottom):
+  1. Increased on-edge penalty from -2 to -3.
+  2. Added `trap_risk` detection: same-or-longer opp head within 4 cells on the inner adjacent row/col → -60.
+  3. Corner penalty increased -10→-15.
+  4. Added wall-crawl detection: if own body has 2+ segs on same edge as this move, extra -5/seg.
+- Verified: `/tmp/replay_test.py` — the exact turn-21 losing state now returns "up" instead of "down". Good.
+- Verified: 29 random frames from wins still produce valid moves.
+- Backup of prior version: `main_backup2.py`.
+
+## Files for teammates
+- `main.py`: Current bot with wall-trap avoidance.
+- `main_backup.py`, `main_backup2.py`: Prior versions.
+- `/tmp/analyze.py`, `/tmp/loss_pattern2.py`: analysis scripts (regenerate if needed — /tmp is ephemeral).
+
+## Analysis: loss/tie by opus edge-position
+```python
+# See /tmp/loss_pattern2.py — 16/17 losses on edge; 9/18 ties on edge.
+```
+
+## If losses continue after this round:
+- Consider a deeper 2-3 ply minimax for opp moves (currently only 1-ply).
+- Add "opponent-crawl breaker": if opp is on inner row parallel to us, occasionally force a direction change even mid-crawl (aggressive turn to break parallel).
+- Track: are we PROVOKING the mirror by hugging walls early? Consider penalizing edge cells more strongly in early game (when snake is short and space is abundant).

@@ -369,58 +369,10 @@ def _move(game_state):
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 5
-        # Edge/wall penalty. Much stronger when a >=length opponent is on inner adjacent row/col
-        # (mirror-chase trap along wall).
+        # Slight preference for not being on edge to keep options open
         cx, cy = c["cell"]
-        on_edge = (cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1)
-        if on_edge:
-            s -= 3
-            # Detect wall-chase trap: same-or-longer opp head on the inner adjacent row/col within 2 cells
-            trap_risk = False
-            for oid, info_ in opp_head_moves.items():
-                if info_["length"] < my_len:
-                    continue
-                oh = info_["head"]
-                # If we're on bottom edge (y=0), danger if opp is at y=1 within 2 cells x-wise
-                # Consider opp within 4 cells along the wall direction:
-                if cy == 0 and oh[1] == 1 and abs(oh[0] - cx) <= 4:
-                    trap_risk = True; break
-                if cy == h - 1 and oh[1] == h - 2 and abs(oh[0] - cx) <= 4:
-                    trap_risk = True; break
-                if cx == 0 and oh[0] == 1 and abs(oh[1] - cy) <= 4:
-                    trap_risk = True; break
-                if cx == w - 1 and oh[0] == w - 2 and abs(oh[1] - cy) <= 4:
-                    trap_risk = True; break
-                # Also detect: opp is BEHIND us on inner row, chasing
-                if cy == 0 and oh[1] <= 1 and abs(oh[0] - cx) <= 4:
-                    trap_risk = True; break
-                if cy == h - 1 and oh[1] >= h - 2 and abs(oh[0] - cx) <= 4:
-                    trap_risk = True; break
-                if cx == 0 and oh[0] <= 1 and abs(oh[1] - cy) <= 4:
-                    trap_risk = True; break
-                if cx == w - 1 and oh[0] >= w - 2 and abs(oh[1] - cy) <= 4:
-                    trap_risk = True; break
-            if trap_risk:
-                s -= 60
-            # Corner is worse
-            if (cx in (0, w - 1)) and (cy in (0, h - 1)):
-                s -= 15
-            # Wall-crawl detection: penalize continuing to hug the wall when body already along it
-            wall_segs = 0
-            if cy == 0:
-                wall_segs = sum(1 for seg in my_body[:4] if seg[1] == 0)
-            elif cy == h - 1:
-                wall_segs = sum(1 for seg in my_body[:4] if seg[1] == h - 1)
-            elif cx == 0:
-                wall_segs = sum(1 for seg in my_body[:4] if seg[0] == 0)
-            elif cx == w - 1:
-                wall_segs = sum(1 for seg in my_body[:4] if seg[0] == w - 1)
-            if wall_segs >= 2:
-                s -= 5 * wall_segs  # discourage prolonged wall crawl
-        # Second-order trap: even one step from a wall while opp mirrors, is risky
-        # This especially matters when body is trailing along wall.
-        # Check if my new body is aligned along the wall for 2+ segments AND opp of >= length is on inner row
-        my_new_body_local = None  # placeholder; computed via c metadata
+        if cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1:
+            s -= 2
         return s
 
     candidates.sort(key=score, reverse=True)
