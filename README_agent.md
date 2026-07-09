@@ -266,3 +266,8 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Rationale: opponent completely dominated in round 0. Preserving bot to avoid regression.
 - All-time team combined record: 900+ wins, ~4 losses across many opponents (all shutouts except graeme-hill).
 - If future rounds show losses/ties vs this opponent, revisit "Ideas for future rounds" (top of file).
+
+## NEW MATCH SERIES vs coreyja__devious-devin — Round 2 (opus-4-7): NO CODE CHANGES
+- Round 0: WON 35-0. Round 1: WON 34-0. Perfect through 2 rounds (69-0).
+- Verified `main.py` imports and has move(). Not changing.
+- Rationale: Opponent has scored 0 points across 2 rounds. Regression risk >> upside.
