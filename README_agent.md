@@ -2471,3 +2471,50 @@ regression.
   SOFT multi-step self-sim (main_backup_v15_multistep.py, as a soft penalty not a hard filter). Repro:
   /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh
   <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs moxuz__pinky-snek) — KEPT v27 (pursuit_space experiment)
+- Verified results: round 0 **250-0**, round 1 **247-2 (+1t)**, round 2 **249-1** (v27, shipped r2).
+  v27 (small-snake edge-food trap) IMPROVED r1's 247-2 -> r2 249-1. 3/3 rounds won.
+  Opponent FULLY ACTIVE (0% timeouts). main.py == main_backup_v27_smalledgetrap.py (confirmed).
+- **Root cause of the single round-2 loss (game sim_156): MULTI-STEP PURSUIT SELF-TRAP.** Our
+  LONGER len9 hp80 snake was CHASED by the len5 enemy: the enemy head tracked right behind our
+  head along y=5-7 forming a moving wall while our own coil sealed the other sides. At t88
+  (head (7,7), the LAST FREE CHOICE, 2 legal moves U(7,8)/D(7,6)) v27 chose 'down' -> into a
+  pocket the pursuer sealed -> boxed in & died t92 (head (5,6) all 4 neighbors blocked).
+  One-step metrics IDENTICAL for both moves: flood=109, timed=116 (trap forms 3 turns later).
+- **KEY NEW FINDING — a PURSUIT-AWARE flood-fill DISTINGUISHES the trap!** (`/tmp/eval2.py`)
+  A flood-fill from the move cell that BLOCKS any cell an enemy head can reach strictly-before-
+  or-same-time as us (enemy BFS reachability, k=3) gives: **up->100, down->1** (and left/right
+  =101). The pursuit 'down' collapses to 1 cell because the chasing enemy contests the whole
+  corridor. This is the FIRST metric that catches this documented hard mode.
+- **IMPLEMENTED (in git-diff/removed from main.py) & TESTED:** added `_enemy_reach()` (BFS min
+  steps for any enemy head to each cell, k=3) + `_pursuit_space()` (flood blocking cells enemy
+  reaches <= our dist), computed per-candidate, with a SOFT scoring penalty
+  `if ps < my_len and ps*2 < c["space"]: score -= (my_len-ps)*3.0`.
+  * ✅ REPRO PASS: at t88 (/tmp/s156_88.json) the fix flips v27's 'down' -> **'up' (escapes!)**.
+    /tmp/testmove.py main.py /tmp/s156_88.json. /tmp/eval2.py shows the pursuit_space signal.
+  * ❌ SELF-PLAY LEANS NEGATIVE: v28(new) vs v27 = 17-20 as A (and earlier 4.0-weight version
+    34 vs 39 combined both orders). The pursuit penalty over-avoids contestable space in normal
+    play -> costs ~slightly more games than the rare (1/250) pursuit trap it saves.
+  * REVERTED to v27 per the README's documented criteria (ship ONLY if repro flips AND self-play
+    does NOT regress both orders — this fails the self-play test).
+- **DECISION: kept main.py (v27) unchanged.** 249-1 is strong; the pursuit fix flips the exact
+  loss repro (a real breakthrough — first metric to catch it) but regresses self-play. Not worth
+  risking a proven bot on a slight self-play negative for a 1/250 loss.
+- **TODO next teammate (HIGH VALUE — the pursuit_space metric WORKS, just needs tuning to not
+  regress self-play):** the `_enemy_reach`/`_pursuit_space` approach is directionally CORRECT and
+  is the first thing to distinguish the multi-step pursuit trap that beat every prior version.
+  To ship it: make the penalty even NARROWER so it fires ONLY in true pursuit collapse, not
+  normal contest. Ideas:
+   (a) require the nearest enemy to be CLOSE (manhattan <= 3) AND roughly BEHIND us (moving toward
+       it) before applying the penalty — the trap only happens when actively chased.
+   (b) use it as a pure TIE-BREAKER: only apply when the top-2 candidates have near-equal
+       flood/timed (within a few cells) — i.e. only when one-step metrics can't decide.
+   (c) require pursuit_space to be TINY (< 3 or < my_len/2), not just < my_len.
+  Recompute the pursuit metric: /tmp/eval2.py <state> (shows per-move pursuit_space at k=2,3).
+  Repro: /tmp/s156_88.json (game sim_156 t88, should pick 'up' not 'down'). testmove: /tmp/testmove.py
+  <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=8s warmup — server was slow this round, use 8-10s;
+  all-draws = server not ready, rerun with longer sleep), ALWAYS both A/B orders (position bias).
+  The pursuit code (helpers + candidate wiring + penalty) is preserved in git history of this round's
+  edits — reconstruct via `git log`/`git diff` or re-derive from /tmp/eval2.py which has the working
+  BFS. Repro is the real validator, NOT self-play washes.
