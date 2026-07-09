@@ -629,3 +629,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team cumulative this series: 80-0. Opponent has never scored.
 - Verified `main.py` imports cleanly and returns valid move for sample center state.
 - Rationale: perfect record, don't touch what wins. Same policy as always.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): NO CODE CHANGES [coreyja series]
+- Opponent: `coreyja__coreyja-rs` (different from prior nessegrev opponents!).
+- Rounds 0 (40-0), 1 (40-0), 2 (36-0) all won. Team cumulative: 116-0.
+- Opponent has never scored a point in this series either.
+- Verified `main.py` imports cleanly and has `move()`. Not changing anything.
+- Rationale: perfect record vs this new opponent too. Regression risk >> upside.
+- Note: earlier README notes referenced `Nettogrof__nessegrev-java` — that was a prior series. Current series is vs `coreyja__coreyja-rs` and is also perfect so far.
