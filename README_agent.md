@@ -1183,3 +1183,46 @@ regression.
   (per-dir flood/timed), /tmp/testmove.py <bot>, /tmp/dbg2.py, /tmp/trace.py & /tmp/trace2.py
   (board dumps). Test: /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders. analyze_round.py: edit
   d="/logs/rounds/N". Backup of this round's start: main_backup_v18_r1.py (== v18).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs ccSnake2018__ccsnake) — KEPT v18
+- Results ALL 3 rounds won: round 0 **232-16 (+2t)**, round 1 **228-21 (+1t)**, round 2 **228-20 (+2t)**.
+  Opponent FULLY ACTIVE (round 2 latency avg 42ms, 0/19165 >=490ms; avg game 76.6 turns, max 176).
+- **Root cause of losses (confirmed via /tmp/a2.py + /tmp/tr.py): HIGH-HEALTH SELF-TRAP.** Nearly
+  every loss = our LONGER snake (len 7-15, hp 93-100) wall-crawling into a corner/edge and coiling
+  itself to death (heads dying at (10,7),(2,10),(10,10),(0,9), etc). NOT outgrown.
+- **DEEP TRACE (games c0bdb4f7 & 5ac46ea2 via /tmp/getstate.py + /tmp/dbg.py):** These are GENUINE
+  MULTI-STEP corridor-collapse traps. At the last FREE-choice turn BOTH candidate moves show
+  IDENTICAL space=97/timed=110/**static=95** — i.e. static flood-fill (all bodies incl tails as
+  obstacles, the fix prior teammate proposed) does NOT distinguish them either. The board is still
+  wide open (95-100 cells); the trap forms 4-5 turns LATER as the snake's own body seals the corridor.
+  No one-step metric can catch it. (e.g. 5ac46ea2 t81 head(9,2): down/right both 97/110/95.)
+- **KEY FINDING — WHY it wall-crawls: `want_food` stays True.** `want_food = health<75 or my_len<7
+  or _length_lead<3`. When only slightly ahead (lead=2) a healthy len-13 snake STILL wants food, so
+  the food pull (fdist*7..10) drags it along the wall toward edge/corner food -> corner death. This
+  ALSO disables the existing `not want_food` anti-crawl/tail-follow terms.
+- **ATTEMPTED FIX (v19, in main_backup_v18_r2.py's git-diff / not shipped): ANTI-WALL-CRAWL term**
+  `if my_len>=10 and health>=55: score += dist_to_wall * W` (dist_to_wall = min dist to any wall,
+  0 on wall, up to 5 center). Nudges a big healthy snake OFF walls toward open board.
+  * ❌ FAILED to flip the repro (5ac46ea2 t81 still picks 'right'/into wall) even at W=5.0, because
+    the food pull toward edge food (10,8) beats it by ~7-14 pts. Needed W~15 to flip, which would
+    badly over-center normal play (prior teammates confirmed strong center-pull REGRESSES self-play).
+- **DECISION: REVERTED to v18** (main.py == main_backup_v18_pocketfix.py, proven 232-16/228-21/228-20
+  winner). Could not find a low-distortion fix that flips the repro; ran low on steps to run full
+  self-play validation. No unvalidated regression risk on a bot winning every round.
+  REGRESSION PASS: main.py vs opp_straight = 8-0. parses clean.
+- **TODO next teammate (HIGH VALUE, loss mode is clear & repro'd):**
+  1. The REAL fix is to STOP wall-crawling toward edge food. Two robust options that DON'T over-center:
+     (a) EXPAND trap_food: currently only flags edge food when a longer enemy is closer. Also flag
+         edge/corner food as "trap" when WE are large (len>=10) & healthy (hp>=55) even with no enemy
+         nearby — a big snake chasing wall food is self-trap risk. Soften _fw for it. This attacks the
+         food-pull root cause without a blanket center term.
+     (b) Tighten want_food: don't set want_food from `_length_lead<3` when we're already len>=10 AND
+         hp>=70 (a big healthy snake needn't race food). That re-enables the existing anti-crawl/
+         tail-follow (`not want_food`) terms.
+  2. The multi-step self-sim (main_backup_v15_multistep.py) is the "correct" detector but regressed
+     self-play as a hard filter — make it a SOFT penalty. It DID flip prior repros.
+  Repro tools: /tmp/getstate.py <gid> <turn> (saves /tmp/state_<gid>_<turn>.json), /tmp/dbg.py <bot>
+  <state> (per-dir space/timed/static), /tmp/score.py <bot> <state> (chosen move), /tmp/full.py,
+  /tmp/tr.py <gid> (per-turn legal moves). Analyze: /tmp/a2.py (=analyze_round.py d="/logs/rounds/N").
+  Test: /tmp/rm2.sh <A> <B> <N> (>=4s warmup), ALWAYS both A/B orders. Repro is the real validator.
+  Backup of this round's start: main_backup_v18_r2.py (== v18).
