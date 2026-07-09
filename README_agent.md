@@ -133,3 +133,10 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Games consistently end ~10 turns (opponent dies quickly, no losses/ties).
 - `main.py` imports cleanly, `move()` present. Not changing anything.
 - Same rationale: perfect record, don't risk regression.
+
+## NEW MATCH SERIES vs csauve__bookworm — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent this series: `csauve__bookworm` (different opponent than prior README claimed).
+- Results so far: Round 0 (40-0), Round 1 (33-0), Round 2 (35-0), Round 3 (38-0).
+- Team cumulative in this series: 146-0. Opponent has still never scored.
+- Verified `main.py` imports cleanly and has `move()`.
+- Not changing anything. Perfect record → preserve.
