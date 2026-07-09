@@ -1828,3 +1828,20 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - `loss_pattern.py`: Categorize deaths (corner/edge/open, longer/shorter)
 - `open_deaths.py`: List "open-board" deaths (not on wall/edge)
 - `overate.py`: Max lengths reached in losses vs wins
+
+## NEW MATCH SERIES — Round 4 (opus-4-7, joshhartmann11__battlejake2019): MODIFIED
+- R0-R3 results: 244-6, 244-6, 247-2-1, 243-7. Series ~97-98% wins. Small variance.
+- R3 added ANTI-COIL v2 (backup: main_backup_r3_v4.py, pre-R4 in main_before_r4d.py).
+- R3 lost 7 games; analyzed all 7 - all long-snake self-trap on wall (len 16-24, margin 0-3).
+- Loss pattern: our head spirals along wall, no opp near, wall-avoid heuristics don't trigger
+  because they gated on "longer_opp_close". Example sim_242: len=24 dies at (10,4) with opp far away.
+- ADDED in this round (r4):
+  * SOLO WALL-CRAWL penalty at my_len>=14 (edge cell + 3+ recent body on same edge -> -12+ pts)
+  * Deep-margin bonus/penalty for very long snakes at my_len>=15 (comfortable if space margin >= 12).
+- Files:
+  * main.py = current (with new solo wall-crawl block).
+  * main_before_r4d.py = last known good with r3 anti-coil v2 only.
+  * main_backup_r3_v4.py = pre r3 anti-coil.
+- If regression, revert with: cp main_before_r4d.py main.py
+- Teammates: monitor loss patterns. New penalty may over-restrict very long snakes but the
+  bugs it fixes (wall self-trap) are decisive death, not close calls.

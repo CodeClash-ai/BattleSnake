@@ -880,6 +880,37 @@ def _move(game_state):
             elif margin_final < 10:
                 s -= 5
 
+
+        # SOLO WALL-CRAWL / SELF-COIL: even with no opp near, long snake spiraling
+        # into wall can self-trap (see sim_242: len=24 head at right wall, no opp nearby).
+        # If moving to edge cell and I already have 3+ recent body segments on SAME edge, penalize.
+        if my_len >= 14:
+            cxw, cyw = cxs, cys
+            on_edge_w = (cxw == 0 or cxw == w-1 or cyw == 0 or cyw == h-1)
+            if on_edge_w:
+                # Count how many of last 6 body segments are on THIS same edge
+                same_edge_count = 0
+                for seg in my_body[:6]:
+                    if cxw == 0 and seg[0] == 0: same_edge_count += 1
+                    elif cxw == w-1 and seg[0] == w-1: same_edge_count += 1
+                    elif cyw == 0 and seg[1] == 0: same_edge_count += 1
+                    elif cyw == h-1 and seg[1] == h-1: same_edge_count += 1
+                if same_edge_count >= 3:
+                    # We're already coiled along this edge - big penalty
+                    s -= 12 + same_edge_count * 4
+                elif same_edge_count >= 2:
+                    s -= 6
+
+        # HAMILTONIAN-STYLE space check: for very long snakes, prefer moves where
+        # the tail-reachable space is much larger than my length (long-term survival).
+        if my_len >= 15 and c["tail_reachable"]:
+            # Deep look: is our new space significantly larger than our length?
+            deep_margin = c["space"] - c["new_len"]
+            if deep_margin >= 12:
+                s += 6  # comfortable long-term survival
+            elif deep_margin < 4:
+                s -= 15  # even tail-reachable is not safe if tight
+
         # HARD CENTERING pressure when very long: prefer moves toward the geometric center
         # unless food is close and we need it. This breaks wall-crawl and spiral patterns.
         if my_len >= 15:
