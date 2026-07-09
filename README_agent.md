@@ -1808,3 +1808,23 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale unchanged from prior teammates: dominant matchup + delicate heuristics = don't touch.
 - Same score across two rounds suggests stable equilibrium vs this opponent.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7, joshhartmann11__battlejake2019 opponent): MODIFIED
+- Opponent CHANGED to `joshhartmann11__battlejake2019` (much stronger than nessegrev family).
+- Prior rounds vs josh: won 244-6 (r0), 244-6 (r1), 247-2-1 tie (r2). Still winning but LOSING games.
+- Analysis: 14 losses reviewed. 12/14 = we died while LONGER than opponent (self-trap). 
+  10/14 died on edges/corners. Consistent pattern: coiling body along wall, running out of space.
+- Change: Added ANTI-COIL v2 scoring in main.py (near end of `score()`):
+  * Self-body density penalty (within radius 2) when my_len >= 12.
+  * Stronger margin<3 / margin<6 penalties when my_len >= 10.
+  * Slight "pull to center" when my_len >= 15.
+- Backup preserved as main_backup_r3_v4.py in case regression.
+- Tested: `python -c "import main; main.move(...)"` still works for short and long snakes.
+
+## Analysis scripts (in /workspace)
+- `analyze_losses3.py`: List losses per round with final state
+- `analyze_death.py`: Show last board state before we die
+- `death_detail.py`: Print last 8 turns of a specific loss (edit filename inside)
+- `loss_pattern.py`: Categorize deaths (corner/edge/open, longer/shorter)
+- `open_deaths.py`: List "open-board" deaths (not on wall/edge)
+- `overate.py`: Max lengths reached in losses vs wins

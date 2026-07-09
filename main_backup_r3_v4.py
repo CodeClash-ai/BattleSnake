@@ -850,47 +850,6 @@ def _move(game_state):
         # This especially matters when body is trailing along wall.
         # Check if my new body is aligned along the wall for 2+ segments AND opp of >= length is on inner row
         my_new_body_local = None  # placeholder; computed via c metadata
-
-        # ANTI-COIL v2: aggressive anti-self-trap penalties for long snakes.
-        # Losses show pattern: len>=13, edge/corner, body-coiled, then trapped.
-        # Compute self-body density around new cell within radius 2.
-        if my_len >= 12:
-            body_set_r2 = set(my_body[:-1])
-            close_body = 0
-            for dx_ in range(-2, 3):
-                for dy_ in range(-2, 3):
-                    if dx_ == 0 and dy_ == 0: continue
-                    if (cxs+dx_, cys+dy_) in body_set_r2:
-                        close_body += 1
-            # High density = coil risk
-            if close_body >= 6:
-                s -= 15 + (close_body - 6) * 3
-            elif close_body >= 4:
-                s -= 5
-
-        # Space-per-length ratio: on 11x11 board (121 cells), if we occupy a whole quadrant
-        # of space and it's smaller than our length, we WILL die. Penalize heavily.
-        margin_final = c["space"] - c["new_len"]
-        if my_len >= 10:
-            # Long snake: require comfortable margin
-            if margin_final < 3:
-                s -= 30 + (3 - margin_final) * 15  # extremely bad
-            elif margin_final < 6:
-                s -= 15
-            elif margin_final < 10:
-                s -= 5
-
-        # HARD CENTERING pressure when very long: prefer moves toward the geometric center
-        # unless food is close and we need it. This breaks wall-crawl and spiral patterns.
-        if my_len >= 15:
-            center_x, center_y = (w-1)/2, (h-1)/2
-            dist_center_before = abs(my_head[0]-center_x) + abs(my_head[1]-center_y)
-            dist_center_after = abs(cxs-center_x) + abs(cys-center_y)
-            if dist_center_after < dist_center_before:
-                s += 4  # slight pull toward center
-            elif dist_center_after > dist_center_before and dist_wall_this <= 2:
-                s -= 3  # pushing further out toward wall
-
         return s
 
     candidates.sort(key=score, reverse=True)
