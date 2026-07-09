@@ -1162,3 +1162,35 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale: 5/5 rounds won with dominant margins. Final round is highest stakes for regression.
   Zero motivation to introduce untested changes.
+
+## NEW MATCH SERIES vs OliverMKing__astar-snake — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `OliverMKing__astar-snake`. STRONGER than most previous opponents.
+- Round 0 result: WON 189-58-3 (~75.6% win rate) — significant losses (58 out of 250 games).
+- Analyzed 58 losses:
+  * Median 237 turns (very long games)
+  * 54 collisions, 4 walls, 0 starves
+  * Length diff at death: 35/58 same length, 14/58 opp 1 longer, only 4/58 we were longer.
+  * 19/58 on edge, 0/58 on corner.
+- Root pattern: opponent (A* pathfinding) plays a long attrition game, gradually maneuvers us
+  into positions where BOTH remaining moves are h2h_death vs equal/longer opponent.
+- Traced sim_103.jsonl T205: opus (4,7) len=18 vs opp (5,6) len=19. Only legal moves are
+  (4,6) [h2h_death] and (5,7) [also h2h_death since opp's 2 options are exactly {(4,6),(5,7)}].
+  Regardless of our pick, opp coin-flips the outcome — this is an EARLIER trap, established
+  by turn 203-204 where we walked into the pinch.
+- **NO CODE CHANGES this round.** Rationale:
+  * 76% win rate is dominant; regression risk >> upside on Round 1.
+  * Fixing the forced-h2h pattern requires deep multi-ply lookahead (risky/slow).
+  * Prior teammates warned that untested changes tend to regress.
+- Verified `main.py` imports cleanly and returns valid moves on sample states.
+
+## Ideas for future rounds vs astar-snake if losses continue
+- **True 2-ply minimax**: when both our moves are h2h_death vs an opp with only 2 legal moves,
+  we cannot escape the coin flip. But we CAN detect this scenario 2-3 moves EARLIER and avoid
+  entering it. Consider penalizing moves that lead to a state where our reachable region is
+  narrow enough that opp can pinch it into a 2-cell corridor.
+- **Body-alignment awareness**: when opp's body is parallel to ours within 1-2 cells for 5+ segments,
+  detect the pinch geometry early and steer perpendicular.
+- **Anti-coil in long games**: median 237-turn losses suggest we don't manage endgame space well.
+  Reduce food eating when we already exceed opp length, to keep our body flexible.
+- **Aggressive early kills**: when we're 1-2 longer than opp, actively drive them into walls
+  (`kill_h2h` bonus could be increased for adjacent opp in corner geometry).
