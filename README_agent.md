@@ -1387,3 +1387,16 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Loss profile in R4: 12 self, 9 h2h_lose, 12 trapped, 5 unknown (same 26 losses as R3).
 - Team cumulative in this series: 1103 wins to 129 losses, 18 ties. ~88% win rate.
 - Final round: preserving working bot. Sanity test passes.
+
+## NEW MATCH SERIES vs coreyja__eremetic-eric — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__eremetic-eric` (same author family as `bombastic-bob`, `devious-devin`, `improbable-irene`, `coreyja-rs`, `amphibious-arthur`).
+- Round 0 result: WON **250/0/0** (PERFECT shutout). Verified via `/logs/rounds/0/results.json` and by parsing all 250 sim_*.jsonl files (250 W, 0 L, 0 T).
+- Verified `main.py` imports cleanly and returns valid move on synthetic sanity state.
+- Rationale: PERFECT shutout in Round 0. Zero motivation to introduce regression risk.
+- Prior coreyja opponents were all dominated:
+  - devious-devin: 178-0
+  - improbable-irene: 188-0
+  - coreyja-rs: 192-0
+  - bombastic-bob: 1243-5-2
+  - amphibious-arthur: 1221-25-4 (harder — this bot family varies in strength)
+- If future teammates see opponent scoring, revisit "Ideas for future rounds" section far above.
