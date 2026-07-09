@@ -2582,3 +2582,53 @@ regression.
   'down'->'up') but regresses self-play as-is; needs narrowing (see round 3/4 TODO: gate on
   nearest_enemy<=3, pursuit_space<3, tie-break only). Validate ONLY if repro flips AND self-play
   does NOT regress both orders. But with 250-0 two rounds running, DON'T fix what isn't broken.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__amphibious-arthur) — KEPT v27
+- ⚠️ NEW OPPONENT: **`coreyja__amphibious-arthur`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0: **opus-4-8 247, coreyja__amphibious-arthur 3** (250 games). Won, 3 losses, 0 ties.
+  Avg game len **95.5 turns** (LONG games — big snakes, board fills up). Pure out-play.
+- **Root cause of ALL 3 losses (sim_142/60/86, /tmp/tr.py + /tmp/death.py + /tmp/freechoice.py):
+  LONG-GAME SELF-COIL TRAP while LONGER than the opponent.** In every loss our snake was L13-15,
+  high health (94-95), MUCH longer than the opp (L6-11), and coiled itself into a pocket where all
+  4 neighbors were blocked (by OUR OWN body). Deaths at (5,2)/(8,6)/(8,6). NOT outgrown, NOT
+  pursuit — pure self-coil in the middle/region of the board.
+- **Last-free-choice (sim_60 t119, head (5,4) L14): ALL 3 legal moves (D/L/R) have IDENTICAL
+  flood=103, timed=115** (board wide open; trap forms ~6 turns later). Classic documented hard
+  mode: NO one-step metric distinguishes them. Greedy self-sim (/tmp/selfsim.py) AND real-move
+  self-sim (/tmp/realsim.py) BOTH survive all 3 moves (they play optimally / static enemy) — so
+  static self-simulation can't reproduce the trap either (the trap emerges from the MOVING enemy +
+  food spawns changing the board).
+- **KEY NEW FINDING: the AGGRESSION pull is complicit.** Line 655 `score -= edist*2.0` pulls a
+  LONGER snake TOWARD the (far) enemy head. In sim_60 the enemy was at (9,2); the aggression lured
+  our big snake into the bottom-right region where it coiled. **Disabling aggression flips sim_60
+  t119 from 'right' -> 'left' (toward the open board/tail).**
+- **TESTED FIX (v28, /tmp/main_v28.py): gate aggression on `my_len < 12`** (don't chase when large
+  -> stay compact). ✅ **Flips ALL 3 loss repros** to a different (open-board) move (sim60->'left',
+  sim142->'up', sim86->'left'). ✅ REGRESSION PASS vs opp_straight = 8-0 / 0-8.
+  ❌ **SELF-PLAY TRENDS NEGATIVE:** v28 vs v27 (main), BOTH orders, 3 batches (14+14+16):
+  v28-A 8-6, v27-A 9-5, v28-A 6-9-1 -> combined v28 **19** vs v27 **24**. The aggression pressure
+  wins games vs an equal opponent; removing it for large snakes costs more normal games than the
+  rare (3/250) self-coil it saves. Violates the iron ship-rule (repro flips AND self-play must NOT
+  regress).
+- **Softer variant (v29, edist*0.5 when my_len>=13) only flips 1/3 repros** — not enough.
+- **DECISION: KEPT v27** (main.py == main_backup_v27_smalledgetrap.py, the proven 247-3 winner;
+  diff confirms equal, parses clean, move() try/except + _safe_fallback). Did not ship v28 because
+  it regresses self-play (the only validation proxy for this active opponent) to save 3/250 losses.
+  No unvalidated regression risk on a 98.8% bot.
+- **TODO next teammate (HIGH VALUE — the aggression-gate direction is CORRECT & flips all 3 repros,
+  just needs to NOT regress self-play):** re-run /tmp/ana.py /logs/rounds/N (win/loss/tie + loss
+  files) + /tmp/tr.py <lossgame> + /tmp/death.py <game> + /tmp/freechoice.py <game> on the new
+  round. If long-game self-coil losses PERSIST (big snake L13+ high health coiling into a pocket):
+  * The v28 aggression-gate (`my_len < 12`, in /tmp/main_v28.py) flips ALL 3 repros. To ship it,
+    make it NOT regress: try gating aggression off ONLY when even LARGER (my_len>=15), OR only
+    when the board is >60% full (few free cells left), OR combine with a stronger tail-follow so
+    the pressure loss is offset. Run self-play in SMALL batches (N<=16 fits the 30s cmd limit):
+    `bash /tmp/rm2.sh <A.py> <B.py> 16` (needs >=7s server warmup, recreate /tmp/rm2.sh from top
+    notes — mine uses "A/B is the winner" grep). ALWAYS both A/B orders (position bias dominates).
+  * The tail-follow term (line 663) only fires at my_len>=15 & !want_food — at L14 it's off. Try
+    lowering to >=12 AND raising weight so a big snake stays a compact unwind-able coil (tested
+    0.6 at L12 — did NOT flip sim_60, want_food likely True; check want_food state first).
+  Repro tools: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm2.py <bot.py> <state> (loads
+  bot by path, calls move). Repros: /tmp/s60_119.json (should pick L/D not R), /tmp/s142_183.json
+  (should pick U/L not D), /tmp/s86_118.json (should pick L not U). Repro is the real validator,
+  NOT self-play washes. But do NOT ship a self-play regression — v28 as-is is net negative.
