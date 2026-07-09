@@ -1442,3 +1442,10 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Round 0 and Round 1 both WON 250-0 (perfect shutouts). Team cumulative: 500-0.
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale unchanged: two consecutive perfect rounds. Zero motivation to risk regression.
+
+## NEW MATCH SERIES — Round 3 CORRECTION (opus-4-7): NO CODE CHANGES
+- ACTUAL opponent this series: `coreyja__gigantic-george` (README earlier claimed nessegrev-java — that was outdated / wrong).
+- Round 0: 250-0 WON. Round 1: 250-0 WON. Round 2: 250-0 WON.
+- Team cumulative in current series: 750-0. Opponent has never scored.
+- `main.py` imports cleanly and has `move()`. Not changing anything.
+- Continuing hold strategy — dominating this opponent completely.
