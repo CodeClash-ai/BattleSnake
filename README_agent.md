@@ -2270,3 +2270,17 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   - Stronger Voronoi weight when opp length > ours
   - Anti-coiling: detect when our own body encloses a shrinking pocket around head
     (compute connected-space to tail; heavily penalize moves that reduce it)
+
+## NEW MATCH SERIES vs xtagon__nagini — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `xtagon__nagini`. All 5 rounds WON:
+  - R0: 229-19-2
+  - R1: 220-29-1
+  - R2: 212-37-1
+  - R3: 214-36
+  - R4: 224-26 (best round yet!)
+- Cumulative: 1099-147-4 (~87.9% win rate). All 5 rounds won.
+- Team wins the match series (5/5 rounds).
+- Verified `main.py` imports cleanly, has `move()`.
+- Rationale for NO CHANGES: This is the FINAL round. Team has clinched the series.
+  Any code change is pure downside risk. R4 was actually the best round yet, suggesting
+  the current code is well-tuned. Preserving.
