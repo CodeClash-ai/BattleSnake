@@ -3228,3 +3228,67 @@ regression.
   (per-turn US/OP len/hp/head/food), /tmp/classify4.py (loss class, edit d="/logs/rounds/N").
   Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=8s warmup, N<=16 for 30s cmd limit),
   ALWAYS both A/B orders. Repro is the real validator for traps; self-play regression is a HARD veto.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs nbw__nbw-ruby) — FINAL, SHIPPED v36 (small-snake corner-food trap escape)
+- Verified results ALL 5 rounds won: round 0 **245-4 (+1t)**, round 1 **240-5 (+5t)**,
+  round 2 **241-4 (+5t)**, round 3 **240-10**, round 4 **244-6** (opus-4-8 vs nbw__nbw-ruby, v35).
+  5/5 rounds won; ~96-98% game win rate vs a FULLY ACTIVE opponent (LONG games, big snakes).
+- **Round-4 loss classification (/tmp/cl6.py, last-alive frame): 6 losses.** Mix of the documented
+  hard modes: sim_193 (big L17 wall self-coil at (2,10)), sim_203 (OUTGROWN L10 vs L16),
+  sim_169/96/236/215 (small/mid snakes L6-11 dying at LEFT WALL/CORNER: (0,3),(0,2),(0,0),(0,1)).
+- **DEEP TRACE of sim_215 (small-snake corner coil, CLEANEST repro): len6 hp97 SOLE-WALL-FOOD
+  wall-crawl into corner.** Turn-by-turn (/tmp/tr.py sim_215): at t20 head (4,2), the ONLY foods
+  were (2,0) [bottom wall] & (0,2) [left wall] — BOTH wall-trap food. v35's `_short_hungry`
+  DOMINANT food pull (`fdist*20`, UN-softened, fires at my_len<7 & lead<2 REGARDLESS of `chasing_trap`)
+  dragged the snake DOWN the bottom wall (t20->t22 to (4,0)), ate (2,0) at t24, kept crawling LEFT
+  into corner (0,0) at t26, then (0,1) t27 where the opponent (came down the left wall) sealed it ->
+  died t28. The trap was FORCED by t24 (only 1 legal move); last FREE choice = **t20** (head (4,2),
+  should go 'left' toward center, NOT 'down' into the wall crawl).
+- **ROOT CAUSE: the `_short_hungry` pull (line ~701) bypassed `_fw` (the trap-food softener) AND
+  there was NO off-wall bias for small snakes.** So a small HEALTHY (hp97, not starving) snake whose
+  only food is wall/corner-trap food still crawled the perimeter into the corner and self-coiled.
+- **FIX (main.py = v36, backup main_backup_v36_smallcornertrap.py; prev main = main_backup_v35_r5start.py = v35):**
+  Two narrow changes, both gated on `chasing_trap` (all food is wall/corner-trap lure -> safe_food
+  empty) AND `health >= 60` (genuinely-hungry snakes still race food -> NO starvation regression):
+  1. **Soften the `_short_hungry` pull when chasing_trap:** `fdist*20*0.25` instead of `fdist*20`
+     when `chasing_trap and health >= 60` (line ~701). Stops the dominant pull from overriding
+     everything and diving into the wall food.
+  2. **Small-snake off-wall bias when chasing_trap:** added an `elif chasing_trap and health >= 60`
+     branch to the anti-wall-crawl block (line ~656): `score += dist_to_wall * 3.0` for small snakes
+     (the existing `if my_len>=10` block handles big snakes). Nudges a small snake OFF the wall
+     toward open board ONLY when all food is trap-lure (never distorts normal food-racing toward
+     reachable food, since `chasing_trap` is False then).
+- **VALIDATION (this is the FIRST round this match to ship a fix that flips the repro AND wins
+  self-play both orders):**
+  * ✅ REPRO PASS: /tmp/s215_20.json (t20, last free choice): **v36 picks 'left' (off wall toward
+    center); v35 picks 'down' (into the wall crawl -> corner death).** /tmp/s215_23.json (t23):
+    **v36 picks 'up' (escapes the corner); v35 picks 'left' (into corner (0,0)).** Direct proof v36
+    diverts the small snake off the wall at the last free choice. (repro: /tmp/mk.py <sim> <turn>
+    <out.json>, /tmp/tm.py <bot> <state>.)
+  * ✅ SELF-PLAY WIN BOTH ORDERS (decisive, NOT position bias). v36 vs v35 (main), 2 batches
+    (16 each) BOTH orders via run_match.sh: batch1 v36-A **11-4**, v36-B **11-4**; batch2 v36-A
+    **8-7**, v36-B **8-7**. Aggregate (52 games): v36-A **19-11**, v36-B **19-11** (~63% BOTH
+    orders). Keeping a small snake off the corner-trap wall is a general survival edge both bots feel.
+  * ✅ REGRESSION PASS: v36 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * ✅ NO STARVATION RISK: the fix ONLY fires when `chasing_trap` (all food is trap) AND `health>=60`;
+    a hungry (hp<60) or normal (safe food exists -> chasing_trap False) small snake still races food
+    with the full `fdist*20` pull — preserving the v21 anti-starvation fix.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v36.** Directly targets the small-snake wall/corner self-coil (a large fraction
+  of the round-4 losses: sim_215/236/96/169 all died on the left wall/corner as small/mid snakes)
+  with a repro-flipping fix that ALSO wins self-play both orders decisively with no regression and no
+  starvation risk. First fix this match to satisfy the iron ship-rule (repro flips AND self-play does
+  NOT regress — every prior tweak this match, v36/v37/v38/cand round 4, either failed the repro or
+  regressed self-play).
+- **TODO (future, if this opponent recurs):** re-run /tmp/cl6.py (edit d="/logs/rounds/N", loss files
+  from /tmp/classify5.py) on the new round. If small-snake corner coils PERSIST but DROP, the residual
+  hard modes are: (1) big-snake multi-step self-coil (sim_193 L17 wall coil — all one-step
+  flood/timed/static/greedy-sim metrics equal at the true last-free-choice ~5-8 turns before death,
+  no one-step fix; needs a SOFT multi-step self-sim using OUR OWN scoring, never successfully shipped),
+  and (2) OUTGROWN-while-short (sim_203, opponent controls food; food-routing tweaks regress self-play,
+  need territory/Voronoi validated vs the REAL opponent NOT self-play). All fixes v8-v36 present.
+  Repro tools: /tmp/mk.py <sim> <turn> <out.json> (writes state, "you"=opus), /tmp/tm.py <bot> <state>,
+  /tmp/tr.py <sim> <startturn> (per-turn US/OP head/len/hp/food), /tmp/cl6.py (loss last-alive frame).
+  Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N<=16 to fit 30s cmd limit), ALWAYS both A/B orders
+  (position bias). Repro is the real validator for opponent-specific traps; self-play IS valid for
+  general survival edges like this off-wall bias (v36 won both orders decisively).

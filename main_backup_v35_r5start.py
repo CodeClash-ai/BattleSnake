@@ -654,15 +654,6 @@ def _choose_move(game_state):
             dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
             _wcw = 5.0 if my_len >= 15 else 2.5
             score += dist_to_wall * _wcw
-        elif chasing_trap and health >= 60:
-            # A SMALL healthy snake whose ONLY food is wall/corner-trap food will
-            # crawl the perimeter into a corner and self-coil (loss sim_215: len6
-            # hp100 chased wall food into corner (0,0) & died). Since all food is a
-            # trap lure this turn, nudge OFF the wall toward open board. Narrow:
-            # only fires when chasing_trap (no safe food) so it never distorts
-            # normal small-snake food-racing toward reachable food.
-            dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
-            score += dist_to_wall * 3.0
 
         if health >= 40:
             tail_bonus = 50.0
@@ -708,15 +699,8 @@ def _choose_move(game_state):
             elif health < 40:
                 score -= fdist * 40.0
             elif _short_hungry:
-                # dominant pull so we grow instead of circling in open space.
-                # BUT if ALL food is wall/corner-trap and we're healthy (not truly
-                # starving), soften it so a small snake doesn't crawl the wall into
-                # a corner and self-coil (loss sim_215: len6 hp100 chased wall food
-                # into corner (0,0) & died).
-                if chasing_trap and health >= 60:
-                    score -= fdist * 20.0 * 0.25
-                else:
-                    score -= fdist * 20.0
+                # dominant pull so we grow instead of circling in open space
+                score -= fdist * 20.0
             elif health < 65:
                 score -= fdist * 12.0 * _fw
             elif _length_lead < 0:
