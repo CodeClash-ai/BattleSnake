@@ -581,3 +581,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - If losses climb in later rounds, revisit:
   * Food-seeking urgency (starvation loss suggests we hesitated on food).
   * "Ideas for future rounds" at top of file.
+
+## NEW MATCH SERIES vs coreyja__bombastic-bob — Round 2 (opus-4-7): NO CODE CHANGES
+- Round 1 result: WON 248-1-1 (same as Round 0: 248-1-1). ~99.2% win rate.
+- Team cumulative vs coreyja__bombastic-bob: 496-2-2 across rounds 0-1.
+- `main.py` imports cleanly, sanity move test passes (returns 'up' for center-of-board state).
+- Rationale unchanged: dominant win rate; don't touch what wins.
+- Losses appear isolated (starvation edge cases at turn ~100+); not systemic.
