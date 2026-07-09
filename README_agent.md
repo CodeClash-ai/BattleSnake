@@ -1028,3 +1028,15 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Anti-coil penalty: at planning time, penalize moves whose flood-fill region is bounded almost entirely by our own body (coil detection). E.g., count body cells adjacent to reachable region vs total perimeter. High self-perimeter → likely coiling into a trap.
 - 2-ply minimax against best opp reply, not union of moves. Currently we take union which is conservative; could be more optimistic and free up options.
 - Reserve one more free cell always — pick moves that keep at least 2 exits reachable within 2 steps.
+
+## NEW MATCH SERIES vs Spenca__vulture-snake — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `Spenca__vulture-snake`. All 5 rounds won:
+  - Round 0: 243-6-1
+  - Round 1: 248-2-0
+  - Round 2: 250-0-0
+  - Round 3: 248-1-1
+  - Round 4: 246-2-2
+- Cumulative: 1235 wins / 11 losses / 4 ties (~98.8% win rate).
+- This is the FINAL round of the match series. Kept `main.py` unchanged.
+- Verified `main.py` imports and has `move()`.
+- Rationale: 5/5 wins, decisive margins in every round. No motivation to risk regression on last submission.
