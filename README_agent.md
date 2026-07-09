@@ -3337,3 +3337,59 @@ regression.
   /tmp/classify.py (loss class last-alive frame). Test: /tmp/rm2.sh <A> <B> <N> (recreate from top
   notes; >=8s warmup, N<=16 for 30s cmd limit), ALWAYS both A/B orders (position bias). This opponent's
   key trait: it stays SMALL and outlasts a bloated snake — keeping OUR snake compact is the whole game.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__eremetic-eric) — SHIPPED v38 (giant-snake growth cap)
+- Verified results: round 0 **218-32** (v36), round 1 **216-34** (v37). ⚠️ v37 (huge-lead food
+  avoidance, weight 3.0 @ lead>=8/len>=15) did NOT improve — round 1 was 216-34, marginally WORSE
+  than round 0's 218-32. Opponent `coreyja__eremetic-eric` is GENUINELY COMPETITIVE and plays
+  VERY LONG survival games (t400-800!) on a FOOD-FLOODED board (foodSpawnChance high -> 15-40 food
+  cells on a 121-cell board).
+- **Root cause of ALL 34 round-1 losses (via /tmp/classify.py, last-alive frame): OUR SNAKE GROWS
+  ENORMOUS (len 26-95!) & SELF-COILS.** Every loss our snake was len 26-95, hp 97-100 (never
+  hungry), MUCH longer than opp (opp len 7-18), self-coiling (legal=0, all 4 neighbors = OWN body),
+  mostly on walls/corners. The opponent STAYS SMALL (~7-14) and just SURVIVES/outlasts while our
+  giant snake inevitably traps itself. Trace (/tmp/tr.py sim_183): we grew len 3->95 over 760 turns
+  while opp stayed len 14. v37's fdist*3.0 avoidance was FAR too weak — food is so dense (fdist tiny
+  everywhere) that the snake ate incidentally on every path and still ballooned to 95.
+- **FIX (main.py = v38, backup main_backup_v38_giantcap.py; prev main = main_backup_v37_r1start.py = v37):**
+  Added a `_giant = _length_lead >= 6 and my_len >= 14` GROWTH CAP at the TOP of the food block
+  (line ~720, BEFORE the normal food pulls so it fully overrides them). When `_giant`:
+    * `health < 18` -> `score -= fdist*60.0` (eat HARD to avoid true starvation — no starvation risk),
+    * `health < 35` -> `score -= fdist*8.0` (mild pull),
+    * else -> `score += fdist*12.0` (FLEE food strongly -> stop growing, cap at survivable size).
+  The old v37 fdist*3.0 avoidance is kept but gated `not _giant` so it doesn't double-apply.
+- **VALIDATION:**
+  * ✅ UNIT/REPRO: at a real eremetic-eric giant state (/tmp/g280.json = sim_74 t280, us len25 hp90
+    lead huge, 26 food): **v38 picks 'right' (nearest_food_dist=4, the FARTHEST from food = fleeing);
+    v37 picks 'left' (dist=3, toward food).** Confirms the giant-cap steers away from food.
+    (repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>.)
+  * ✅ NO STARVATION: synthetic low-hp (15) giant correctly moves TOWARD food ('right' to (8,5)).
+    The `health<18 -> fdist*60` branch preserves survival eating.
+  * ✅ FOOD-FLOODED SELF-PLAY NET-POSITIVE (the actual eremetic-eric condition): v38 vs v37 on a
+    flooded board (`/tmp/rmf.sh`, foodSpawnChance 40, minimumFood 8, 16 games each order):
+    v38-A **11-4**, v38-B **7-8** -> aggregate v38 **18** vs v37 **12** (net positive; position-biased).
+  * ✅ STANDARD SELF-PLAY NO REGRESSION: v38 vs v37 = 7-7 as A, 6-8 as B (essentially even — the
+    _giant gate rarely fires in standard play where both snakes grow together so lead stays small).
+  * ✅ REGRESSION PASS: v38 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **NOTE on validation limits:** self-play canNOT fully reproduce eremetic-eric (its opponent STAYS
+  SMALL, letting our lead grow to 8-20+ which triggers the cap; in self-play both grow so lead stays
+  small & the cap rarely fires). The unit repro (v38 flees food at a real giant state) + the
+  food-flooded self-play net-win are the validators. The cap is directionally correct: it CAPS our
+  growth so we don't self-coil while the opponent outlasts us.
+- **DECISION: shipped v38.** Directly targets the ONLY loss mode this match (giant-snake self-coil
+  from over-eating on a food-flooded board) with a MUCH stronger growth cap (fdist*12 flee vs v37's
+  weak fdist*3), repro-proven to flee food at a real giant state, no starvation risk, no standard
+  regression, net-positive food-flooded self-play.
+- **TODO next teammate:** re-run /tmp/classify.py (edit d="/logs/rounds/N") + /tmp/tr.py <sim> on the
+  new round. If our snakes are now SMALLER (max len dropped from 95 toward ~14-20) -> the cap worked;
+  if losses persist they're the residual multi-step coil at moderate length. If our snakes are STILL
+  ballooning (60+), STRENGTHEN the cap: lower `_giant` thresholds (lead>=6->4, len>=14->10), or raise
+  the flee weight (12->20), or lower the eat-only-when-starving threshold health<35->health<25. The
+  goal vs eremetic-eric: keep OUR snake COMPACT (~len 12-20) and SURVIVE — the opponent stays small
+  and outlasts a bloated snake, so growing is FATAL here. Repro: /tmp/mk.py <sim> <turn> <out.json>
+  (writes state, "you"=opus), /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <startturn> (per-turn US/OP
+  len/hp/food#), /tmp/classify.py (loss class last-alive frame). Test: /tmp/rmf.sh <A> <B> <N>
+  (food-flooded self-play, foodSpawnChance 40/minFood 8 — the eremetic-eric condition; >=8s warmup,
+  N<=16 for 30s cmd limit), /tmp/rm2.sh (standard), ALWAYS both A/B orders (position bias). Repro is
+  the real validator; food-flooded self-play IS a valid proxy for this opponent's flooded-board mode.

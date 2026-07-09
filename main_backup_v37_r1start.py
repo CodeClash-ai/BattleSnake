@@ -717,20 +717,8 @@ def _choose_move(game_state):
         # was plentiful, hp dropped to 2). Give it a dominant, un-softened food
         # pull that beats the space-wandering terms.
         _short_hungry = my_len < 7 and _length_lead < 2
-        # A GIANT snake massively ahead on a food-flooded board must STOP growing
-        # (eremetic-eric loss mode: grows to len 55-95, self-coils; opp stays small
-        # & outlasts us). When hugely ahead, only eat to avoid true starvation.
-        _giant = _length_lead >= 6 and my_len >= 14
         if food_set:
-            if _giant:
-                # Cap growth: eat only when about to starve; otherwise flee food HARD.
-                if health < 18:
-                    score -= fdist * 60.0
-                elif health < 35:
-                    score -= fdist * 8.0
-                else:
-                    score += fdist * 12.0
-            elif health < 25:
+            if health < 25:
                 score -= fdist * 100.0
             elif health < 40:
                 score -= fdist * 40.0
@@ -766,7 +754,7 @@ def _choose_move(game_state):
             # size. Push the head AWAY from food (positive weight) so it does not
             # keep eating. Fires only when massively ahead (lead >= 8) and not
             # starving; strength scales with how oversized we are.
-            if (not _giant) and _length_lead >= 8 and health >= 40 and my_len >= 15:
+            if _length_lead >= 8 and health >= 40 and my_len >= 15:
                 score += fdist * 3.0
 
         # Center pull: base weak pull, but stronger when we are short and
