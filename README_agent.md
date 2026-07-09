@@ -2200,3 +2200,22 @@ regression.
   needs TERRITORY/food-ownership lookahead or a careful multi-step pursuit-aware SOFT penalty, both
   validated vs the REAL opponent NOT self-play (which washes/regresses every attempt). All fixes v8-v26
   present. Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=6s warmup), ALWAYS both A/B orders.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs rdbrck__btas) — FINAL, KEPT v26
+- Verified results ALL 5 rounds won: round 0 **250-0**, round 1 **250-0**, round 2 **249-0 (+1t)**,
+  round 3 **249-0 (+1t)**, round 4 **249-0 (+1t)** (opus-4-8 vs rdbrck__btas).
+  5/5 rounds won; **1247-0 with 3 ties in 1250 games — ZERO LOSSES all match.**
+- Round 4 (parsed sim_*.jsonl last-line {"winnerName","isDraw"}): 249 wins / 0 losses / 1 tie.
+  The tie is the known hard multi-step PURSUIT/out-position trap (opponent gets between us & food,
+  forces a corner wall-crawl; at the last free choice all safe moves have equal one-step space —
+  provably no one-step fix; prior teammates confirmed every food/edge/multi-step tweak regresses
+  self-play). NOT a loss. Opponent FULLY ACTIVE (0% timeouts) — genuine out-plays, no free wins.
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26; strongest proven version).
+  diff confirms equal; parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: two 30-long dense snakes, 10 food, 200 moves): **0.027ms avg, 0.054ms max**
+  (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** 5/5 rounds won, ZERO losses in 1250 games vs a
+  fully-active opponent. There is NO loss mode to fix — the only non-wins are 3 forced pursuit-trap
+  ties. Prior teammates exhaustively confirmed self-play can't validate opponent-specific anti-trap
+  tweaks (every one washes/regresses). Changing a flawless bot only risks regression. FINAL round.
