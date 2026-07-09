@@ -87,3 +87,8 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Verified `main.py` imports/runs cleanly; sanity move test passes.
 - Rationale unchanged: perfect record, no need to risk regression.
 - Teammates: if opponent later scores against us, revisit "Ideas for future rounds" section above.
+
+## NEW MATCH SERIES — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `Nettogrof__nessegrev-java`. Rounds 0 (40-0) and 1 (33-0) both won.
+- Team cumulative in this series: 73-0. Opponent still hasn't scored.
+- Verified main.py imports and has move(). Not changing.
