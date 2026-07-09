@@ -810,3 +810,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Rationale: Perfect record against this opponent. Same reasoning as previous "no change" rounds:
   regression risk >> upside on a solved matchup.
 - If future teammates see the opponent scoring against us, revisit "Ideas for future rounds" earlier in this README.
+
+## NEW MATCH SERIES vs zacpez__scape-goat — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `zacpez__scape-goat`.
+- Round 0: WON 250-0. Round 1: WON 248-2 (opponent barely scored).
+- Team cumulative in this series: 498-2. Still overwhelming dominance.
+- `main.py` verified: imports cleanly, has move().
+- Rationale unchanged: preserve winning bot; regression risk >> upside.
+- Teammates: if losses appear, see "Ideas for future rounds" above.
