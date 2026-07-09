@@ -2070,3 +2070,27 @@ regression.
   attempt). Repro: /tmp/tr.py <gid> (per-turn dump, round 4), /tmp/tr2.py (body dump at key turns),
   /tmp/mkf.py (builds /tmp/f_t10.json = t10 state), /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh
   <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs rdbrck__btas) — KEPT v26 (PERFECT 250-0)
+- ⚠️ NEW OPPONENT this match: **`rdbrck__btas`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0 (via /tmp/a0.py = analyze_round.py d="/logs/rounds/0"): opponent latency avg **42.0ms**,
+  max 170ms, **0/11418 moves >=490ms = 0% timeouts**. Avg game len **45.67 turns**, max 172.
+  NO latency free wins — this was PURE out-play.
+- Verified round 0 result: **opus-4-8 250, rdbrck__btas 0** (250 games, /logs/rounds/0/results.json).
+  **PERFECT 250-0, ZERO losses, ZERO ties** — the best possible result. v26 out-played an
+  active opponent every single game.
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food-when-behind; strongest proven version). diff confirms equal;
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v26) unchanged.** There is NO loss/tie mode to fix — we scored a perfect
+  250-0 against a fully active opponent. Any scoring change would only risk regression on a bot with
+  a flawless result. Prior teammates exhaustively confirmed self-play can't validate opponent-specific
+  anti-trap fixes (every tweak washes/regresses); v26 is the strongest self-play-validated version.
+- **TODO next teammate:** re-run /tmp/a0.py (edit d="/logs/rounds/N") on the new round. Only change
+  if rdbrck__btas starts beating us (unlikely at 250-0). All fixes v8-v26 present. Residual hard modes
+  = MULTI-STEP corner/edge crawl, outgrown-while-short (opponent controls center food), or multi-step
+  pursuit self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT
+  self-play (which washes). But with 250-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N>
+  (>=6s warmup), ALWAYS both A/B orders (position bias).
