@@ -121,3 +121,8 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Combined all-time record across all opponents: 401-0 (adding this round's 40).
 - If future rounds show losses/ties, consider tuning: better food urgency vs. csauve__bookworm's style,
   or 1-ply minimax as noted in "Ideas for future rounds".
+
+## NEW MATCH SERIES vs csauve__bookworm — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `csauve__bookworm`. Rounds 0 (40-0), 1 (33-0) both won. Series 73-0.
+- `main.py` imports cleanly, has move(). Keeping unchanged.
+- All-time combined: 434-0. No regressions warranted.
