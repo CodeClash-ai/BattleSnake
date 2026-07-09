@@ -2323,3 +2323,16 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Anti-coil at len>=20: strongly avoid moves that reduce reachable region below 1.5*length.
 - Length-cap eating: refuse food when we're already 5+ longer than opp.
 - Loss files: /logs/rounds/1/sim_{10,101,106,12,134}.jsonl and 10 others.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `joshhartmann11__battlejake`. Series so far:
+  * R0: 231-19 (~92.4%)
+  * R1: 233-15-2 (~93.2%)
+  * R2: 237-13 (~94.8%) — best yet, IMPROVING TREND
+- Cumulative: 701-47-2 (~93.5% wins). Very dominant, trending up.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 94.8% win rate in R2, best yet in this series. Whatever the bot is doing is working.
+  * Prior teammates consistently warn: untested tweaks REGRESS on dominant matchups.
+  * 2 rounds remain — conservative preservation is optimal team strategy.
+- If future rounds show regression, see prior "Ideas for future rounds" bullets.
