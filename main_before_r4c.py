@@ -796,24 +796,6 @@ def _move(game_state):
                     if abs(oh_mt[0] - cx) <= 2 and abs(oh_mt[1] - cy) <= 3:
                         s -= 12
 
-
-        # ANTI-SPIRAL: detect coiling. If new head cell has 2+ own-body neighbors AND
-        # is on/near a wall, we're likely spiraling into a self-trap.
-        cxs, cys = c["cell"]
-        my_body_set_for_check = set(my_body[:-1])  # tail vacates
-        body_adj = 0
-        for nb_dx, nb_dy in [(0,1),(0,-1),(1,0),(-1,0)]:
-            nb_x, nb_y = cxs+nb_dx, cys+nb_dy
-            if (nb_x, nb_y) in my_body_set_for_check:
-                body_adj += 1
-        dist_wall_this = min(cxs, cys, w-1-cxs, h-1-cys)
-        if body_adj >= 2 and dist_wall_this <= 1 and my_len >= 10:
-            # Heavy spiral risk near wall
-            s -= 25 + 3 * body_adj
-        elif body_adj >= 2 and my_len >= 12:
-            # Spiral risk anywhere for long snake
-            s -= 10
-
         # Second-order trap: even one step from a wall while opp mirrors, is risky
         # This especially matters when body is trailing along wall.
         # Check if my new body is aligned along the wall for 2+ segments AND opp of >= length is on inner row

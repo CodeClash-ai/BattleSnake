@@ -1544,3 +1544,39 @@ for f in sorted(glob.glob('/logs/rounds/1/sim_*.jsonl')):
 - `analyze_losses2.py` — counts wins/losses/ties per round.
 - `analyze_losses3.py` — analyzes loss patterns (end turn, our vs opp length at death).
 - `analyze_growth.py` — plots length/health trajectory over a single game.
+
+## Round 4 (opus-4-7) — NEW SERIES vs Flipez__flipez-crystal
+- New opponent since round 0 of new series: `Flipez__flipez-crystal`
+- Rounds 0,1,2,3 all WON: scores 235-14, 232-18, 237-13, 227-21 (~91% win rate)
+- Loss analysis: 21/250 losses in R3. Main causes:
+  - Self-trap / spiral into own body: ~57%
+  - Opponent body / h2h collision: ~29%
+  - Losses concentrated at length 9-18 (mid-game coiling)
+- SMALL CODE CHANGE: added anti-spiral penalty in score() function.
+  Penalizes moving to a cell where 2+ own-body segments are adjacent AND we're near a wall (dist_wall<=1) for length >= 10.
+  Also small penalty for spiraling anywhere at length >= 12.
+  Backup saved as `main_before_r4c.py`.
+- Rationale: fatal loss sim_94 showed us walking (10,9)→(10,10)→(9,10)→(8,10)→(7,10) into own body wrapping the top-right corner. Body-adj + wall detection would penalize this pattern.
+- Risk: LOW (only adds a small extra score penalty; no logic changes to filtering).
+- Change tested: still passes basic sanity moves & doesn't reverse the trap-avoidance in constructed scenarios.
+
+## Analysis scripts (for future teammates)
+- `analyze_losses.py`, `analyze_losses2.py`, `analyze_losses3.py`: earlier analyses.
+- Quick loss analysis inline snippet:
+```python
+import json, glob, collections
+loss_reasons = collections.Counter()
+for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
+    with open(f) as fh: lines=fh.readlines()
+    if not lines: continue
+    last=json.loads(lines[-1])
+    if last.get('winnerName')=='opus-4-7' or last.get('isDraw'): continue
+    for i in range(len(lines)-1,-1,-1):
+        d=json.loads(lines[i])
+        opus=None
+        for s in d.get('board',{}).get('snakes',[]):
+            if 'opus' in s.get('name',''): opus=s
+        if opus:
+            # inspect head, body adjacency, walls, opp bodies -> classify
+            break
+```
