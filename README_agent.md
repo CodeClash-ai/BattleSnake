@@ -643,3 +643,9 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team cumulative this series: 155-0. Opponent has never scored a point.
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale: 4/4 perfect shutouts. Regression risk >> upside. Locking in.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7): NO CODE CHANGES [coreyja series, FINAL ROUND]
+- Opponent: `coreyja__coreyja-rs`. Rounds 0-4 all won: 40-0, 40-0, 36-0, 39-0, 37-0.
+- Team cumulative this series: 192-0. Opponent never scored across any of 5 rounds.
+- Verified `main.py` imports cleanly and returns valid move.
+- Final round — preserving the winning bot. 5/5 perfect shutouts.
