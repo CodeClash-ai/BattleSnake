@@ -976,3 +976,37 @@ regression.
   soft tie-breaker penalty (-15..-30) rather than a hard -200/filter, (c) require BOTH forced_trap
   AND low timed_space before penalizing. Repro tool: /tmp/repro2.py (turn 88/89 of game 96055754).
   Test: /tmp/rm2.sh (>=3s warmup), ALWAYS both A/B orders. Loss analysis: /tmp/lossd.py, /tmp/lc.py.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs Xe__since) — KEPT v14
+- Verified results: round 0 **203-5 (+1 tie)**, round 1 **241-8** (opus-4-8 vs Xe__since). 2/2 won,
+  but losses grew 5->8. Opponent ACTIVELY PLAYS (round 1 latency avg 175ms, only 160/11429 moves
+  >=490ms = 1.4%; avg game 45.9 turns, max 183). No latency free wins — pure out-play.
+- **Root cause of round-1 losses = SELF-TRAP / SQUEEZE while at GOOD length & HIGH health.**
+  Via /tmp/lossd.py + /tmp/trace.py on /logs/rounds/1: MOST losses were len-12 snakes with
+  health 91-97 that boxed themselves in (all 4 neighbors blocked). CRUCIALLY several were
+  LONGER than the opponent (06713779 us12/opp6; d89065c4 us12/opp10; 5cef1372 us12/opp11) —
+  NOT outgrown. Turn-by-turn (game 06713779): at t57 head=(5,0) legal=[L,R] we chose R (into
+  own coil) -> forced U,U -> boxed at t60. Correct move was L (open). Classic multi-step
+  coil self-trap the one-step space metrics miss (space stays ~104 the whole way).
+- **ATTEMPT 1: multi-step SELF-ONLY greedy trap detector** (`_self_trap_steps`, backup logic in
+  git of main_backup_v14_r1_current.py which is actually clean v14). Advances our body greedily
+  (max-open-neighbors) K=8 steps, penalizes if space<my_len. FAILED to flip the 06713779 repro:
+  greedy sim escapes both L and R because it plays OPTIMALLY afterward, while the real bot plays
+  its own scoring and gets forced. Self-play = pure position-bias WASH (17-12 as A, 12-17 as B).
+  Provided no proven benefit -> reverted.
+- **ATTEMPT 2: center-pull for large healthy snakes** (my_len>=10, health>=60, !want_food, cpull
+  0.6) to stop perimeter-crawling into corners. REGRESSED self-play (10-17 as A). Reverted.
+- REGRESSION PASS: main.py (v14) vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v14.py (diff confirms). parses clean; move() try/except + _safe_fallback.
+- **DECISION: kept v14.** Losses are genuine multi-step coil self-traps (last-free-choice ~3 turns
+  before death) that self-play can't reproduce/validate, and both my tweaks washed/regressed. v14
+  is the proven match winner. No regression risk taken.
+- **TODO next teammate:** the ONLY loss mode is a mid-size snake (len ~12) coiling into its own
+  body 2-3 moves after the last free choice. The greedy self-sim in ATTEMPT 1 doesn't work because
+  it assumes optimal follow-up. A BETTER fix: simulate our body advancing using OUR OWN scoring
+  function's move choice (or simply: penalize entering the smaller of two regions our own body
+  splits the board into — pick the side away from where the tail leads). Repro: /tmp/getstate.py
+  (saves /tmp/state57.json = turn 57 of game 06713779, head (5,0), should pick 'left' not 'right').
+  Test: compare main.py vs main_backup_v14.py on that state. Analysis: /tmp/lossd.py, /tmp/trace.py
+  (edit gid). Test tool: /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders (position bias dominates
+  30-game runs). Don't trust self-play washes as improvements.
