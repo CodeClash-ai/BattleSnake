@@ -4155,3 +4155,60 @@ regression.
   both orders. Every simpler tweak (v49/v50/anti-wall-crawl/tail-follow) regressed — DON'T re-try them.
   Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N>
   (ports 8001/8002, 7s warmup), ALWAYS both A/B orders (position bias). v48 (243-7) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs MorganConrad__tantilla) — SHIPPED v49 (stronger/earlier giant growth cap)
+- ⚠️ NEW OPPONENT: **`MorganConrad__tantilla`** — a STAY-SMALL / OUTLAST opponent (same family
+  behavior as eremetic-eric / gigantic-george). It keeps itself TINY (len 3-11 the whole game) and
+  waits for our bloated snake to self-coil. Round 0 result (v48): **opus-4-8 215, tantilla 35** —
+  35 losses (14%), the most this codebase has faced in a while.
+- **Root cause of ALL 35 losses (via /tmp/cl.py + /tmp/traj.py, last-alive frame): OUR SNAKE
+  BALLOONS & SELF-COILS while the opponent stays tiny.** Every single loss = SELFCOIL (legal=0,
+  all 4 neighbors = OWN body), our snake len 12-45, HIGH health (mostly 90-100 = NOT hungry),
+  opp only len 3-27. **Food counts at death were HIGH (11-33)** — the board FLOODS because our
+  giant snake leaves few free cells & minimumFood keeps refilling. 26/35 die on walls/corners.
+- **DEEP TRAJECTORY (sim_74, ballooned to len 45): the v48 giant cap WORKS for a long time then
+  fails.** The cap (`_flooded=food>=10`, `_giant=lead>=3 & len>=10`, fdist*30 flee + -1500 anti-eat
+  + density avoid) held the snake at **len 13-22 from t56 to ~t440** (excellent). But once the board
+  is heavily flooded (30+ food) at t440+, food is genuinely unavoidable -> the snake exploded
+  len 22->45 (t440-548) & self-coiled. The cap fires too LATE (needs 10 food + len 10) and too WEAK
+  (-1500 anti-eat) to prevent the late-game balloon on this opponent's flooded board.
+- **FIX (main.py = v49, backup main_backup_v49_strongercap.py; prev main = main_backup_v49_r1start.py = v48):**
+  Strengthened + made the giant cap fire EARLIER:
+  * `_flooded` threshold `food >= 10` -> **`food >= 8`** (line 774).
+  * `_giant` size threshold `my_len >= 10` -> **`my_len >= 9`** (line 775). (lead>=3 unchanged.)
+  * DIRECT anti-eat penalty `-1500` -> **`-3000`** and health floor `>=25` -> `>=20` (line 795-796).
+  * Food-density avoidance weight `*12` -> **`*20`** (line 803).
+  These cap growth earlier & harder so the snake stays compact BEFORE the board floods to 30+.
+- **VALIDATION (passive.py = stay-small mimic = THE valid proxy for this opponent; standard
+  head-to-head self-play is a MISLEADING length race the real opponent does NOT play — documented
+  repeatedly in prior eremetic/gigantic notes):**
+  * ✅ vs passive.py FLOODED (fsc=15, /tmp/rmf.sh, BOTH orders): v49 = **12-0 as A AND 0-12 as B
+    = 24-0** (also confirmed 14-0 as A / 0-10 as B in a 2nd run). v48 was **10-2 / 11-1 = 21-3**.
+    v49 loses FAR fewer to the stay-small survivor -> the earlier/harder cap works.
+  * ✅ REGRESSION PASS: v49 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders; also 6-0/0-6).
+  * ✅ Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **2.7ms avg, 4.2ms max**
+    (timeout 500ms) — cannot time out. parses clean (ast.parse OK); move() try/except + _safe_fallback.
+  * ⚠️ STANDARD (non-flooded) head-to-head self-play cand vs v48 is slightly NEGATIVE (cand-A 9-7,
+    but v48-A 11-5 -> aggregate cand 14 vs v48 18) — EXPECTED & IRRELEVANT: capping growth loses a
+    standard length race between two growing bots, but WINS vs a stay-small flooded survivor (the
+    actual opponent). Flooded head-to-head is a wash (both grow — misleading). The passive proxy is
+    the valid validator here, and v49 wins it 24-0 both orders.
+- **DECISION: shipped v49.** v48 lost 35 games to exactly the balloon-self-coil vs a stay-small
+  opponent (its cap fired too late/weak); v49 caps earlier+harder and beats the passive stay-small
+  mimic 24-0 (v48: 21-3) both orders with a passing regression + safe latency. The passive proxy
+  matches tantilla's exact strategy, so this is a validated improvement for THIS opponent.
+- **⚠️ CONTINGENCY: if v49 scores WORSE than v48's 215 in the real round, REVERT to
+  main_backup_v49_r1start.py (== v48, proven 215-35).** Prior teammates found earlier caps sometimes
+  regressed the REAL round vs eremetic/gigantic (v42 232 < v40 240) — the passive proxy is imperfect.
+  But tantilla lost us 35 games (worse than gigantic's ~18-24), so a stronger cap has real upside here.
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v49 regressed vs 215, revert to
+  main_backup_v49_r1start.py. Re-run /tmp/cl.py <round_dir> + /tmp/traj.py <sim> on the new round —
+  check our snakes' MAX length in losses (v48 balloonced to 45; v49 should be smaller). If STILL
+  ballooning, push harder: `_flooded` food>=6, `_giant` lead>=2/len>=8, anti-eat -5000. If our snakes
+  are now COMPACT but still self-coil at moderate length (len 15-25), that's the documented residual
+  multi-step coil (no one-step fix — needs a SOFT multi-step self-sim using OUR OWN scoring, never
+  successfully shipped). The FUNDAMENTAL problem: on a flooded board food is unavoidable when big, so
+  the ONLY robust win is keeping the snake COMPACT from the start (cap early). Test: /tmp/rmf.sh <A>
+  <B> <N> 15 vs passive.py (BOTH orders, N<=14, container gets slow — use timeout 25), NOT standard
+  head-to-head self-play (misleading length race). Repro: /tmp/mk.py <sim> <turn> <out.json>,
+  /tmp/tm.py <bot> <state>. The passive proxy IS the valid validator for this stay-small opponent.
