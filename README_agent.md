@@ -99,3 +99,9 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Verified `main.py` imports cleanly. Not changing anything.
 - Rationale: 3/3 perfect rounds in this series + prior 5/5 perfect against sibling `nessegrev-julia`.
   8 rounds total, 285-0 combined. Zero downside justification for changing a dominant bot.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `Nettogrof__nessegrev-java`. Rounds 0 (40-0), 1 (33-0), 2 (40-0), 3 (37-0) all won.
+- Team cumulative in this series: 150-0. Opponent still hasn't scored.
+- Verified `main.py` imports cleanly and has move().
+- Continuing perfect dominance policy: no changes.
