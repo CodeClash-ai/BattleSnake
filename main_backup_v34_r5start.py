@@ -514,21 +514,6 @@ def _choose_move(game_state):
             walls = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
             if walls >= 2:
                 trap_food.add((fx, fy))
-    # BIG-SNAKE wall/corner food trap: a large snake (the #1 loss population vs
-    # OliverMKing: L13-28 dying at walls/corners) that chases food sitting ON a
-    # wall/corner crawls the perimeter and self-coils into the corner. When we are
-    # BIG (len>=13) and healthy (hp>=55) and OTHER (non-wall) food exists, flag the
-    # wall/corner food as trap so the food pull is softened -> the anti-wall-crawl
-    # term keeps us centered. Gated on other food existing so we never starve; low
-    # health (<55) still eats it.
-    if food_set and my_len >= 13 and health >= 55:
-        nonwall = [f2 for f2 in food_set
-                   if (f2[0] != 0 and f2[0] != w - 1 and f2[1] != 0 and f2[1] != h - 1)]
-        if nonwall:
-            for fx, fy in food_set:
-                walls = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
-                if walls >= 1:
-                    trap_food.add((fx, fy))
     best = None
     best_key = None
     for c in pool2:

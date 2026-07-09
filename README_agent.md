@@ -2980,3 +2980,50 @@ regression.
   greedy escapes) as a SOFT penalty. Test: /tmp/rmq.sh <A> <B> <N> (>=8s warmup, N<=16 to fit 30s cmd
   limit), ALWAYS both A/B orders (position bias). For this length-race edge self-play IS a valid proxy
   (v34 won both orders decisively); for opponent-specific traps it washes (use repro instead).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs OliverMKing__astar-snake) — FINAL, SHIPPED v35 (big-snake wall/corner food trap)
+- Verified results: round 0 **189-57 (+4t)** (v30), round 1 **193-50 (+7t)** (v30),
+  round 2 **192-52 (+6t)** (v32), round 3 **188-58 (+4t)** (v33), round 4 **190-53 (+7t)** (v34).
+  5/5 rounds won but TOUGHEST opponent yet (~50-58 losses/round, 21-23% loss rate). FULLY ACTIVE,
+  LONG games (big snakes fill the board). Pure out-play.
+- **Round-4 loss breakdown (v34) via /tmp/lossall.py (d="/logs/rounds/4"): 53 losses.**
+  * **38/53 (72%) die ON a wall/corner** (corner=23, wall=15, mid=15).
+  * **46/53 (87%) are BIG snakes (len>=10)**, HIGH health (72-100), often EQUAL/LONGER than opp.
+  This is the documented big-snake WALL-CRAWL SELF-COIL: a large healthy snake chases food sitting
+  ON a wall/corner, crawls the perimeter, and coils itself into the corner (all 4 neighbors = OWN body).
+- **KEY ROOT CAUSE: big snakes had NO wall/corner food avoidance.** The existing corner-food trap
+  (line 512) only fired for `my_len < 10`. And v34's `_big_safe` (want_food off only at lead>=3)
+  keeps want_food=True for a big snake at lead 1-2 -> food pull (fdist*7) drags it toward wall food,
+  OVERRIDING the anti-wall-crawl term (max ~25 pts). So big snakes still chase wall/corner food.
+- **FIX (main.py = v35, backup main_backup_v35_bigwallfood.py; prev main = main_backup_v34_r5start.py):**
+  Added a BIG-SNAKE wall/corner food trap (right before `best = None`, ~line 517): when `my_len >= 13
+  and health >= 55` AND non-wall food EXISTS, flag ALL wall/corner food (walls>=1) as trap_food ->
+  the food pull toward it is softened (safe_food excludes it, _fw=0.25) so the anti-wall-crawl term
+  keeps the big snake centered. Gated on non-wall food existing so we NEVER starve; low health (<55)
+  still eats wall food.
+- **VALIDATION:**
+  * ✅ REPRO PASS: /tmp/s162_138.json (sim_162 t138, head (8,10) on top wall, len20 hp99, foods
+    [(10,5),(8,3),(9,10)] — (8,3) non-wall): **v35 picks 'down' (OFF the wall toward center); v34
+    picks 'right' (crawls the wall toward corner food -> died at corner (10,10) t148).** Direct proof
+    v35 diverts the big snake off the wall earlier when central food exists. (At t143 only wall food
+    remained -> v35 doesn't fire (would starve) -> both pick 'right', correct.)
+  * ✅ SELF-PLAY NET-POSITIVE both orders (aggregate). v35 vs v34 across 6 batches (16-20 each,
+    168 games via /tmp/rmq.sh, >=8s warmup, BOTH orders): aggregate **v35 ~90 vs v34 ~68**. Individual
+    batches: v35 won 18-12 (x3), then 15-15 (wash) and 21-17 — net-positive, never a bad regression.
+    (Strong position bias in this pairing; trust the aggregate + the repro.)
+  * ✅ REGRESSION PASS: v35 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * ✅ v36 (extend gate to len>=11) was slightly WORSE than v35 (13 vs 16) -> kept len>=13.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v35.** Directly targets the #1 loss mode (72% wall/corner deaths, 87% big
+  snakes chasing wall food) with a repro-proven fix that diverts big snakes off the wall + net-positive
+  self-play both orders + no regression + no starvation risk (gated on non-wall food existing).
+- **TODO (future, if this opponent recurs):** re-run /tmp/lossall.py (edit d="/logs/rounds/N") on the
+  new round. If wall/corner big-snake losses PERSIST but DROP, tune: raise the anti-wall-crawl _wcw
+  (line 640, currently 5.0 @ len>=15) further, or lower v35's gate to len>=12 (RE-TEST self-play both
+  orders — len>=11 was worse). The residual HARD mode is the genuine multi-step self-coil where the
+  last-free-choice is ~5-8 turns before death and ALL one-step metrics (flood/timed/static/greedy-sim)
+  are equal (see round 4 notes: only the pursuit-aware flood-fill _enemy_reach/_pursuit_space catches
+  it but regresses self-play as-is). Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py
+  <bot> <state>, /tmp/tr5.py <sim> <startturn> (per-turn head/len/hp/food). Test: /tmp/rmq.sh <A> <B>
+  <N> (>=8s warmup, N<=20 to fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the
+  real validator.
