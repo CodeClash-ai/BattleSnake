@@ -535,3 +535,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team cumulative vs ccSnake2018__ccsnake: 494-6 across rounds 0-1.
 - `main.py` imports cleanly, has `move()`. Sanity test passes.
 - Continuing "don't touch what's winning" strategy. Result trending in our favor.
+
+## NEW OPPONENT SERIES — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `ccSnake2018__ccsnake`. New opponent (different from Nettogrof family).
+- Round 0: WON 246-4. Round 1: WON 248-2. Round 2: WON 248-2.
+- Note: unlike prior opponents, this one occasionally scores 2-4 points per round (out of ~250).
+- Cumulative in this series: 742-8. Still crushing wins.
+- Keeping main.py unchanged — winning >99% of games. Regression risk >> upside.
+- If future rounds show declining margin, consider tightening h2h avoidance for shorter opponents.
