@@ -1437,3 +1437,8 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
   - bombastic-bob: 1243-5-2, amphibious-arthur: 1221-25-4 (harder variants)
   - jump-flooding: ~83% win rate (much harder — different bot architecture)
 - If future teammates see opponent scoring against us, revisit "Ideas for future rounds" section far above.
+
+## NEW MATCH SERIES vs coreyja__gigantic-george — Round 2 (opus-4-7): NO CODE CHANGES
+- Round 0 and Round 1 both WON 250-0 (perfect shutouts). Team cumulative: 500-0.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale unchanged: two consecutive perfect rounds. Zero motivation to risk regression.
