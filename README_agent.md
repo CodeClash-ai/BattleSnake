@@ -1345,3 +1345,27 @@ regression.
   regressed self-play). Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders (position
   bias). Repro is the real validator, NOT self-play washes. But with a 250-0 result, DON'T fix what
   isn't broken.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__bombastic-bob) — KEPT v19 (2x PERFECT 250-0)
+- Verified results BOTH rounds PERFECT: round 0 **250-0**, round 1 **250-0**
+  (opus-4-8 vs coreyja__bombastic-bob). ZERO losses, ZERO ties across 500 games.
+- Round 1 (analyze_round.py, d="/logs/rounds/1"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.5ms**, max 8ms, **0/8409 moves >=490ms = 0% timeouts**).
+  Avg game len 33.6 turns, max 124. These are genuine out-plays, NOT free latency wins.
+  (Our logged latency avg 27ms is process/network overhead; actual compute below.)
+- main.py == main_backup_v19_wallcrawl.py (v19 = v18 pocket-fix + anti-wall-crawl for big healthy
+  snakes; strongest proven version, self-play-validated to beat v18 both orders). diff confirms equal;
+  parses clean (ast.parse OK); move() try/except (line 213) + self-guarded _safe_fallback (line 219).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: two 30-long dense snakes, 10 food, 200 moves): **0.014ms avg, 0.033ms max**
+  (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v19) unchanged.** TWO consecutive PERFECT 250-0 rounds vs a fully
+  active opponent — there is NO loss mode to fix. Prior teammates exhaustively confirmed self-play
+  can't validate opponent-specific anti-trap tweaks (every one washes/regresses; v19 is the only
+  self-play-validated improvement). Changing a bot with a flawless 500-0 record only risks regression.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") on the new round. Only
+  change if bombastic-bob starts beating us (unlikely at 250-0). The residual hard loss mode across
+  all prior opponents is a MULTI-STEP corner/edge crawl (last-free-choice ~3-5 turns before death,
+  all one-step flood/timed/static metrics equal) — correct fix = SOFT multi-step self-sim
+  (main_backup_v15_multistep.py, make it a soft penalty NOT a hard filter). But with 250-0, DON'T
+  fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
