@@ -1771,3 +1771,14 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   - Increase penalty for continuing along a wall when body already has 3+ wall segments.
   - When health high and lead>0, prefer center-ward moves more aggressively.
   - Detect "wall spiral" (my head + last-4 body segments form an L along wall) and force turn inward.
+
+## NEW MATCH SERIES vs ChaelCodes__cornelius — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `ChaelCodes__cornelius`. Rounds 0,1,2,3 all WON.
+- R0: 234-14-2, R1: 234-14-2, R2: 232-16-2, R3: 226-21-3 (~90.4% - slight uptick in losses).
+- Team cumulative this series: 926-65-9 (~93.4% overall).
+- Verified `main.py` imports and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * Even at R3's 90.4%, we still dominate — 226 wins vs 21 losses is decisive.
+  * Every prior teammate has held steady and won every round.
+  * Delicate heuristic interactions make ad-hoc tweaks likely to regress.
+- Note: This is presumably round 4 of 5. One more round left after this.
