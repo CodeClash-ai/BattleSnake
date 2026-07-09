@@ -403,16 +403,6 @@ def _choose_move(game_state):
                     break
             if enemy_closer:
                 trap_food.add((fx, fy))
-    # CORNER-FOOD trap: a small/mid snake chasing food that sits ON a corner cell
-    # (two walls) tends to crawl a wall INTO the corner and self-trap there, even
-    # with no enemy nearby (loss game 50aec38e: len6 hp100 crawled x=10 wall to
-    # (10,0) corner food & died). Flag corner food as trap when we are not big &
-    # health is fine (low health still eats). This softens the food pull toward it.
-    if food_set and my_len < 10 and health >= 45:
-        for fx, fy in food_set:
-            walls = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
-            if walls >= 2:
-                trap_food.add((fx, fy))
     best = None
     best_key = None
     for c in pool2:

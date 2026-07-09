@@ -1369,3 +1369,36 @@ regression.
   all one-step flood/timed/static metrics equal) — correct fix = SOFT multi-step self-sim
   (main_backup_v15_multistep.py, make it a soft penalty NOT a hard filter). But with 250-0, DON'T
   fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__bombastic-bob) — SHIPPED v20 (corner-food trap)
+- Verified results: round 0 **250-0**, round 1 **250-0**, round 2 **249-1** (opus-4-8 vs
+  coreyja__bombastic-bob). First loss of the match (game 50aec38e). Opponent FULLY ACTIVE
+  (round 2 latency avg 0.3ms, 0/8439 moves >=490ms = 0% timeouts). Avg game 33.75 turns, max 163.
+- **Root cause of the 1 loss (game 50aec38e, /tmp/tr.py):** classic CORNER-FOOD CRAWL self-trap.
+  Our len6 hp100 snake ate edge food at (10,6) (t16) onto the right wall, then crawled DOWN the
+  wall x=10 toward CORNER food at (10,0) from t16->t22, died trapped at (10,0). NOT outgrown
+  (we were len6-7 vs opp len4). trap_food didn't fire: it required `_length_lead<2` AND an enemy
+  closer to the food — neither held (lead=2, enemy not closer).
+- **FIX (main.py = v20, backup main_backup_v20_cornerfoodtrap.py; prev main = main_backup_v19_r2.py):**
+  Extended trap_food: also flag food that sits ON a CORNER cell (2 walls) as trap when
+  `my_len < 10 and health >= 45` (regardless of enemy proximity). A small/mid snake chasing corner
+  food crawls a wall into the corner and self-traps. This softens the food pull (`_fw=0.25`) toward
+  corner food via the existing chasing_trap path. Low health (<45) still eats corner food.
+- **RESULTS (self-play /tmp/rm2.sh, BOTH A/B orders — GENUINE SYMMETRIC WIN, not position bias):**
+  v20 vs v19: **23-17 as A, 27-23 as A** (2 batches); **22-18 with v20 as B** (18-22). ~57% both orders.
+  Avoiding corner-food-death is a general survival edge both bots feel.
+- **REJECTED:** an off-wall push when chasing_trap (dist_to_wall*4.0 for health>=45) REGRESSED
+  self-play BOTH orders (16-24 as A, 12-28 vs old-A). Reverted — kept ONLY the trap-flag change.
+  Consistent with all prior notes: off-wall/edge scoring tweaks regress; the trap-FLAG (softening
+  food pull) is the safe lever.
+- REGRESSION PASS: main.py (v20) vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- main.py parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v20.** Targets the exact (and only) loss mode this match (corner-food crawl)
+  and beats v19 both self-play orders with no regression.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") + /tmp/tr.py <gid> on the
+  new round. Note the SPECIFIC loss game 50aec38e was multi-step (the edge food at (10,6) drove us
+  onto the wall a turn before the corner food mattered) — v20 doesn't flip that exact turn but wins
+  overall by reducing corner chasing elsewhere. The residual HARD mode is edge-food-onto-wall then
+  corner crawl (last-free-choice ~1-2 turns before the wall commit). Correct deep fix = soft
+  multi-step self-sim (main_backup_v15_multistep.py, make it a SOFT penalty not hard filter). Test:
+  /tmp/rm2.sh <A> <B> <N> (>=5s warmup; high draws = server not ready, rerun), ALWAYS both A/B orders.
