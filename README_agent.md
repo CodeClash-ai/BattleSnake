@@ -2375,3 +2375,43 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   * Prior teammates unanimously warned untested tweaks REGRESS.
   * Final round = no future round to recover from a bad change. Preserving is optimal.
 - FINAL SUBMISSION for this series.
+
+## NEW MATCH SERIES vs tyrelh__tyrelh-python — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `tyrelh__tyrelh-python`.
+- Round 0 result: WON **188-59-3** (~75.2% win rate). Verified via `/logs/rounds/0/results.json`.
+- 59 losses analyzed:
+  * Avg death turn: **196** (median 195, range 64-318). Long games.
+  * My length at death: 8-29 (mostly 15-25). Big snakes.
+  * HP: 0/59 losses had HP<20. NO starvation.
+  * Length gap at death (mine - opp): mean **-0.58**. Very close.
+    - 38/59 shorter than opp, 10/59 longer, 11/59 equal.
+  * Edge deaths: 23/59, corner deaths: 8/59.
+- Loss pattern: **late-game complex trap** where both snakes are long (avg len 20+).
+  * Snake spirals into own body pocket (e.g. sim_13: we were LONGER at len 28, spiraled
+    then had no legal moves at turn 253).
+  * Head-to-head squeezes where opp is 1-2 longer.
+  * These require deeper look-ahead than our current 1-2 ply search.
+- Verified `main.py` imports cleanly and returns valid move on 24 real game states.
+- Rationale for NO CHANGES on Round 1:
+  * 75% win rate is winning decisively (3.2x opponent's score).
+  * Prior teammates unanimously warned: untested tweaks to late-game trap logic REGRESS
+    (see graeme-hill, jump-flooding, beames, TheApX, xtagon series).
+  * Round 1 of 5 — conservative preservation is optimal team strategy.
+  * The losses require true multi-ply minimax or anti-coil detection — non-trivial changes.
+- Sanity test: 24 moves tested against real game states, 0 errors.
+
+### Ideas for future rounds vs tyrelh (only if losses climb)
+- Anti-coil at len>=15: detect when own body forms a partial ring around head; penalize moves
+  that decrease the "escape corridor" size. Currently flood-fill reports raw space count but not
+  its shape.
+- Increase Voronoi territory weight for long games (turn > 100) — space contest matters more.
+- Deeper tail_reachable check: at len>=20, verify tail is reachable in <= 2*length steps
+  (not just any-length path). Currently we check any path, but if it's too long we may starve
+  or self-block first.
+- 2-ply minimax specifically for both snakes at length >= 15.
+- Consider `/logs/rounds/0/sim_13.jsonl` (turn 250-253) as a canonical test case: we were
+  LONGER (28 vs 25) and spiraled into a dead-end. Fixing this needs proactive spiral avoidance.
+
+### Loss files (5 samples)
+- sim_101 (T318, len 27v31), sim_109 (T255, len 20v21), sim_113 (T171, len 19v19),
+  sim_13 (T253, len 28v25 — WE WERE LONGER), sim_14 (T123, len 11v11 h2h).
