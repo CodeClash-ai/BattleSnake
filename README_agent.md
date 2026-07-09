@@ -410,3 +410,36 @@ regression.
   (currently static = conservative, may make us over-cautious near enemy tail). Next big edge:
   2-ply minimax on contested cells. ALWAYS test BOTH A and B orders (position bias); keep
   v8 vs opp_straight at 15-0 both orders (no regression). Test tool: ./run_match.sh <A> <B> <N>.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs graeme-hill__snakebot) — KEPT v8
+- Verified results: round 0 **241-4 (+1 tie)**, round 1 **245-4** (opus-4-8 vs
+  graeme-hill__snakebot). Both rounds won; 98.4% game win rate.
+- Opponent is a REAL competitor (does NOT reliably time out: round 1 latency avg
+  363ms, only 738/10122 moves >=490ms = 7%). Avg game length 40.6 turns, max 227.
+  Our latency avg 0.37ms, max 19ms.
+- **Analyzed the 4 losses (/tmp/loss.py on /logs/rounds/1):** games cca5d25b,
+  a00383a9, 56ef62a5, ff1f024e. Root cause = OPPONENT SQUEEZE, not pure self-trap.
+  In each we get pinned against a wall/edge and the opponent walls off our only
+  escape, cornering us (e.g. 56ef62a5: opp forced us right along top wall y=10 into
+  corner (10,10) then blocked (10,9); ff1f024e: pinned up left wall into (0,10)).
+  By the time only 1 legal move remained (into the corner), the trap was already set
+  2-3 turns earlier. This is an aggressive cut-off the plain/timed flood-fills don't
+  fully anticipate multiple enemy moves ahead.
+- **Tuning experiments (ALL tested vs v8, self-play /tmp run_match.sh, BOTH orders):**
+  * v9: contested_space*2.0 + on-edge/corner penalties -> **18-41 LOSS** (over-restrictive). REJECTED.
+  * v10: contested_space 1.0->1.5 -> wash (29-28 as A, but 27-32 as B = loses reverse). REJECTED.
+  * v11: penalty when contested_space < my_len AND < timed_space -> perfect wash (30-29 both orders). REJECTED.
+  * v12: center pull cdist 0.4->0.8 -> won A (32-26) but lost B (27-33) = wash. REJECTED.
+  * v13: center pull 0.4->0.6 -> wash (39-40). REJECTED.
+  CONCLUSION: v8 sits at a self-play local optimum; nothing robustly beats it both orders.
+- REGRESSION PASS: main.py (v8) vs opp_straight = **15-0 as A AND 0-15 as B**.
+- main.py == main_backup_v8.py (proven), parses clean, move() wrapped in try/except + _safe_fallback.
+- **DECISION: kept v8 unchanged.** 98.4% win rate; every attempted tuning was a self-play
+  wash or regression, and I can't test against the real opponent to validate an anti-squeeze fix.
+  Not worth the regression risk on a proven bot.
+- **TODO next teammate:** the ONLY remaining losses are opponent WALL-SQUEEZE plays (see
+  /tmp/loss.py analysis). The real fix is a multi-ply lookahead of the enemy CUTTING OFF our
+  escape (2-3 enemy moves ahead), or avoiding getting pinned against a wall when an enemy is
+  positioned between us and center. Self-play does NOT reproduce these squeezes, so tune/validate
+  by re-running /tmp/loss.py on the NEW /logs/rounds/N and checking if losses are still
+  wall-corner squeezes. Do NOT trust self-play washes as improvements. Always test BOTH A/B orders.
