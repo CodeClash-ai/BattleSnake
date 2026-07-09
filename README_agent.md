@@ -711,3 +711,43 @@ regression.
   fix is a real 2-3 step SELF-simulation (advance own body greedily K steps, verify space doesn't
   collapse) — one-step space metrics miss multi-step coil traps. Test: /tmp/rm2.sh (>=3s warmup),
   BOTH A/B orders (position bias).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs m-schier__kreuzotter) — KEPT v10 (FINAL round)
+- Verified results ALL 4 rounds won: round 0 **47-2**, round 1 **40-0**, round 2 **37-0**,
+  round 3 **34-1** (opus-4-8 vs m-schier__kreuzotter).
+- Round 3 (via /tmp/a3.py = analyze_round.py d="/logs/rounds/3"): 35 games, opus 34 / opp 1.
+  Opponent INCONSISTENT: avg game len 9.94 turns, MAX 177; opp latency avg 349ms, only
+  139/349 moves >=490ms (40% timeouts). So it actively plays part of the time.
+- **Analyzed the SINGLE round-3 loss (game ac3bed62, 177 turns, we were len 14):** a mix of
+  LONG-GAME + WALL-SQUEEZE. At turn 170 (head (9,9), health 56 -> want_food, len 13) we chased
+  edge food at (9,10) UP into the top-right corner, then walked DOWN the right wall (x=10) while
+  the opponent CLIMBED UP the same right wall -> head-on wall squeeze, died turn 177 at (10,6)
+  with opp head at (10,5). Repro tool: /tmp/repro.py (turn-170 state) confirms v10 picks 'up'
+  (into the trap). /tmp/sp.py shows BOTH 'up' and 'right' report timed_space=111/space=100 —
+  the trap forms multiple moves later, so one-step metrics can't distinguish; food eat (fdist=0)
+  makes 'up' win. The genuine last-free-choice was EARLIER (~turn 168, head (7,9), still hugging
+  the wall) so a one-step fix at turn 170 can't cleanly avoid it.
+- **Tuning attempts this round — ALL REJECTED (self-play regression, /tmp/rm2.sh, BOTH orders):**
+  * v11 (softened food weight in 40-65 band: health<55->*12, 55-65->*6; + anti-wall-hug penalty
+    on perimeter cells near corners w/ enemy within 5): **32 wins vs 48 (17-23 as A, 15-25 as B)**
+    = clear regression BOTH orders. REJECTED.
+  * Food-suppression on edge food near enemy (health>=50/len>=10/enemy<=4): did NOT flip the repro
+    ('up' still chosen; up & right are symmetric on space + the corner food) -> ineffective. REJECTED.
+  * Narrow anti-corner-hug penalty (corner_score<=3, enemy<=4, -(4-cs)*3): did NOT flip repro
+    (both (9,10) and (10,9) have corner_score=1 -> equal penalty; food eat still wins). REJECTED.
+  CONCLUSION (matches all prior teammates): self-play does NOT reproduce the long-game/wall-squeeze
+  trap, so it cannot validate an anti-trap fix; every attempt that touched food/edge scoring
+  REGRESSED normal self-play. The trap is genuinely multi-step (last-free-choice is ~2 turns before
+  the visible dead-end). A safe fix needs a real 2-3 step SELF+ENEMY simulation, not one-step tweaks.
+- main.py == main_backup_v10.py == main_backup_v10_r3.py (this round's backup). parses clean (ast OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- move() wrapped in try/except + self-guarded _safe_fallback -> cannot crash into a timeout.
+- **DECISION: kept main.py (v10) unchanged.** 100% MATCH win rate (4/4 rounds, ~98% game win rate);
+  v10 already fixes the ORIGINAL round-0 long-game self-trap losses (tail-follow tie-breaker). The
+  one remaining loss/round is a hard multi-step corner squeeze that self-play can't validate and
+  every one-step tweak regressed. Not worth risking a proven bot on the FINAL round.
+- **TODO (if this match continues / future):** the ONLY loss mode left is a big snake hugging a wall
+  while an enemy climbs the same wall from the other side -> mutual wall squeeze. The real fix is a
+  2-3 step lookahead simulating BOTH our body advance AND the enemy advancing along the shared wall,
+  detecting the collapsing corridor. One-step space/timed_space/anti-squeeze all miss it (verified).
+  Repro: /tmp/repro.py (edit body/head from the new loss's last-free-choice turn ~2 before death).
