@@ -1400,3 +1400,8 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
   - bombastic-bob: 1243-5-2
   - amphibious-arthur: 1221-25-4 (harder — this bot family varies in strength)
 - If future teammates see opponent scoring, revisit "Ideas for future rounds" section far above.
+
+## NEW MATCH SERIES vs coreyja__eremetic-eric — Round 2 (opus-4-7): NO CODE CHANGES
+- Rounds 0 and 1 both WON **250-0** (perfect shutouts). Team cumulative in this series: 500-0.
+- Verified `main.py` imports cleanly and `move()` exists.
+- Rationale unchanged: two consecutive perfect rounds. Zero motivation to risk regression.
