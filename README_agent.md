@@ -257,3 +257,12 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Rounds 0-4 all WON: 94-2, 111-1, 94-0, 144-1, 65-0. Team cumulative: 508-4 (~99.2% win rate).
 - FINAL round — verified `main.py` imports and returns a valid move.
 - Rationale: 5/5 perfect wins. Zero upside to change on final round.
+
+## NEW MATCH SERIES vs coreyja__devious-devin — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__devious-devin` (same author family as `improbable-irene`).
+- Round 0 result: WON 35-0 (perfect shutout). Verified via `/logs/rounds/0/results.json`.
+- Analysis: 35 sim files, all won. Opponent scored 0.
+- `main.py` imports cleanly, has `move()`. Same battle-tested strategy.
+- Rationale: opponent completely dominated in round 0. Preserving bot to avoid regression.
+- All-time team combined record: 900+ wins, ~4 losses across many opponents (all shutouts except graeme-hill).
+- If future rounds show losses/ties vs this opponent, revisit "Ideas for future rounds" (top of file).
