@@ -308,7 +308,6 @@ def _choose_move(game_state):
         candidates.append({
             "name": name,
             "cell": nxt,
-            "h2h_len": h2h_len,
             "loses_h2h": loses_h2h,
             "wins_h2h": wins_h2h,
             "space": space,
@@ -340,21 +339,6 @@ def _choose_move(game_state):
     # Prefer moves that don't lose head-to-heads if any exist.
     safe = [c for c in candidates if not c["loses_h2h"]]
     pool = safe if safe else candidates
-
-    # STARVATION FIX (jump-flooding loss mode): an equal-length enemy head next to
-    # us makes every food-ward move a "loses_h2h" (h2h_len >= my_len), so a SHORT,
-    # HUNGRY snake flees forever and STARVES (died len4 hp2 with food on board). But
-    # an EQUAL-length H2H is at worst a TIE, and the enemy may not even move there.
-    # When we are short & hungry, treat equal-length-h2h survivable moves as usable
-    # (still exclude moves where a strictly LONGER enemy could take the cell = real loss).
-    _shungry = my_len < 8 and (health < 80 or (my_len - max((e["len"] for e in enemies), default=0)) < 1)
-    if _shungry:
-        eq_ok = [c for c in candidates
-                 if c["loses_h2h"] and c["h2h_len"] == my_len and c not in safe]
-        # keep only survivable-ish ones (won't self-trap)
-        eq_ok = [c for c in eq_ok if c["space"] >= min(my_len, 4)]
-        if eq_ok:
-            pool = safe + eq_ok if safe else (candidates if not eq_ok else eq_ok + candidates)
 
     # CRITICAL FIX (v16): avoiding a merely POSSIBLE head-to-head must NOT force
     # us into a certain self-trap. If every non-losing-h2h move is NOT survivable
@@ -403,11 +387,7 @@ def _choose_move(game_state):
     # Mark such food as "trap food" so we don't get the strong food pull toward it
     # unless our health is genuinely low (then we must eat regardless).
     trap_food = set()
-    # A SHORT snake that is behind on length MUST eat (starvation is the #1 loss
-    # mode vs jump-flooding: len4 hp2 death while 7-19 food on board). Only apply
-    # edge/corner trap-food avoidance once we are safely fed (len>=7 and hp>=50).
-    _fed = my_len >= 7 and health >= 50
-    if food_set and enemies and _length_lead < 2 and health >= 40 and _fed:
+    if food_set and enemies and _length_lead < 2 and health >= 40:
         for fx, fy in food_set:
             f_on_edge = (fx == 0 or fx == w - 1 or fy == 0 or fy == h - 1)
             if not f_on_edge:
@@ -428,7 +408,7 @@ def _choose_move(game_state):
     # with no enemy nearby (loss game 50aec38e: len6 hp100 crawled x=10 wall to
     # (10,0) corner food & died). Flag corner food as trap when we are not big &
     # health is fine (low health still eats). This softens the food pull toward it.
-    if food_set and my_len < 10 and health >= 45 and _fed:
+    if food_set and my_len < 10 and health >= 45:
         for fx, fy in food_set:
             walls = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
             if walls >= 2:
@@ -586,19 +566,11 @@ def _choose_move(game_state):
         # When every food is a corner-trap lure, soften the pull so we don't
         # dive into the wall-crawl-to-corner death (still eat if health is low).
         _fw = 0.25 if chasing_trap and health >= 40 else 1.0
-        # A SHORT snake (len < 7) that is not comfortably ahead MUST commit to
-        # food or it STARVES (jump-flooding loss mode: wandered at len4 while food
-        # was plentiful, hp dropped to 2). Give it a dominant, un-softened food
-        # pull that beats the space-wandering terms.
-        _short_hungry = my_len < 7 and _length_lead < 2
         if food_set:
             if health < 25:
                 score -= fdist * 100.0
             elif health < 40:
                 score -= fdist * 40.0
-            elif _short_hungry:
-                # dominant pull so we grow instead of circling in open space
-                score -= fdist * 20.0
             elif health < 65:
                 score -= fdist * 12.0 * _fw
             elif _length_lead < 0:
@@ -621,12 +593,7 @@ def _choose_move(game_state):
             cpull = 1.2
         score -= cdist * cpull
         if c["loses_h2h"]:
-            # An EQUAL-length h2h is only a TIE. When short & hungry, penalize it
-            # only mildly (a tie beats starvation); a LONGER enemy h2h stays a hard loss.
-            if _shungry and c["h2h_len"] == my_len:
-                score -= 20.0
-            else:
-                score -= 100.0
+            score -= 100.0
 
         if best is None or score > best_key:
             best = c

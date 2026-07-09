@@ -1535,3 +1535,41 @@ regression.
 - DECISION: kept main.py (v20) unchanged. 100% win rate (5/5 rounds, 0 losses) via latency edge +
   robust survival bot; v20 is the strongest tested version. No regression risk taken on a bot winning
   every round with a flawless record. This was the final round of the match.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__jump-flooding) — SHIPPED v21 (STARVATION fix)
+- ⚠️ NEW OPPONENT: **`coreyja__jump-flooding`** — FULLY ACTIVE (round 0: latency avg 0.9ms,
+  0/4052 moves >=490ms = 0% timeouts). NO latency free wins — pure out-play.
+- Round 0 result: **opus-4-8 244, jump-flooding 4, 2 ties** (250 games, /logs/rounds/0). Won, 4 losses.
+- **Root cause of ALL 4 losses = STARVATION (brand-new loss mode).** Via /tmp/a0.py + /tmp/starve.py:
+  our snake stayed at **len 4-5 with health dropping to 1-2** while **7-19 food sat on the board**.
+  It WANDERED (head oscillating on the left side x=1-2 while food was at x=6-10), never committing to
+  eat, and the opponent out-grew us then we starved. e.g. game 08d35c72: len4 the whole game,
+  hp 100->2, died t102.
+- **DEEP REPRO (game 08d35c72 t30, head (2,6) len4 hp72, food (10,6)+(9,3), enemy head (3,5) len4):**
+  The food-ward move 'right'->(3,6) was PRUNED from the candidate pool because the equal-length enemy
+  at (3,5) could move to (3,6) -> `loses_h2h` (h2h_len 4 >= my_len 4). So we FLED food forever ->
+  starved. An EQUAL-length h2h is only a TIE, not a loss — fleeing it to death is strictly worse.
+- **FIX (main.py = v21, backup main_backup_v21_starvefix.py; prev main = main_backup_v20_r0_current.py):**
+  1. **Equal-h2h is a TIE, not a loss, when short & hungry:** added `_shungry = my_len<8 and
+     (health<80 or lead<1)`. When `_shungry`, equal-length-h2h survivable moves are ADDED to the pool
+     (stored new `h2h_len` in candidate dict), and their `loses_h2h` scoring penalty is softened
+     from -100 to -20 (a tie beats starvation; a strictly-longer-enemy h2h stays a hard -100 loss).
+  2. **Short+behind snake MUST eat:** `_short_hungry = my_len<7 and lead<2` gets a DOMINANT
+     un-softened food pull `fdist*20.0` (beats the space-wandering terms that caused the circling).
+  3. **Don't flag food as trap when starving:** trap_food (edge/corner-food avoidance) now requires
+     `_fed = my_len>=7 and health>=50`. A short/hungry snake no longer avoids edge food -> won't starve.
+- **VALIDATION:**
+  * REPRO PASS (/tmp/testmove.py on /tmp/state.json = 08d35c72 t30): **v21 picks 'right' (toward
+    food); v20 picks 'up' (away -> starves).** Direct proof v21 fixes the exact loss mode.
+  * SELF-PLAY WIN both orders (/tmp/rm2.sh): v21 as A vs v20 **25-14 (+1 draw)**; v21 as B **20-20**.
+    Combined v21 **45** vs v20 **34** — genuine improvement (faster growth + equal-h2h willingness).
+  * REGRESSION PASS: v21 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v21.** Fixes the exact (and only) loss mode this match (starvation from
+  fleeing equal-h2h food) with a repro-proven fix that ALSO wins self-play both orders.
+- **TODO next teammate:** re-run /tmp/a0.py (edit d="/logs/rounds/N") + /tmp/starve.py on the new
+  round. If starvation persists, check whether `_shungry`/`_short_hungry` thresholds need widening
+  (len<8/9, health<85) or the food pull raising past 20. If losses flip to self-trap/corner-crawl,
+  all prior fixes (v8-v20: timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap,
+  corner-food, pocket, anti-wall-crawl) are still present. Repro: /tmp/getstate.py (edit target/want),
+  /tmp/testmove.py <bot>. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
