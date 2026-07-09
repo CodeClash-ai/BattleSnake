@@ -4352,3 +4352,50 @@ regression.
   (STRONG position bias — trust aggregate/symmetric wins). Repro: /tmp/mk.py <sim> <turn> <out.json>,
   /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <startturn> (per-turn trace). DON'T ship a self-play
   regression — v50 (212-38) is the fallback.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs MorganConrad__tantilla) — FINAL, KEPT v51
+- Verified results ALL 5 rounds won: round 0 **215-35** (v48), round 1 **212-38** (v49, reverted),
+  round 2 **203-46 (+1t)** (v48), round 3 **212-38** (v50), round 4 **219-31** (v51).
+  ⭐ v51 (mid-health giant off-wall pull, shipped round 4) scored the BEST result of the match
+  (219-31) — losses trending down 46->38->38->31. Per the prior teammate's CONTINGENCY note
+  ("if v51 scores WORSE than v50's 212, REVERT") — v51 scored BETTER (219>212), so KEPT v51.
+- **Round-4 loss classification (/tmp/cl2.py d="/logs/rounds/4"): ALL 31 losses = SELFCOIL** while
+  MUCH LONGER than the tiny opponent (our len 7-47, mostly 15-33, HIGH health 89-100 = NOT hungry;
+  opp len 3-21). Boards FLOOD (14-31 food, because our big snake leaves few free cells). ~20/31 die
+  on walls/corners (heads at x=0/10, y=0/10). Same balloon/compact wall-crawl self-coil vs a
+  stay-small outlast opponent (tantilla mimics eremetic/gigantic behavior; this match is ROYALE mode
+  but hazards never actually appear in logged games).
+- **Tuning attempt this round — cand (flat -40 penalty for a _giant STEPPING ONTO a wall cell,
+  dtw==0, in the health>=60 off-wall block) — REJECTED (royale self-play regression):**
+  * ROYALE self-play (/tmp/rmroyale.sh, g=royale shrink25 hz14, matches this match's mode, 14 each,
+    BOTH orders): cand-A **5-9**, cand-B **8-6** -> AGGREGATE cand **13** vs v51 **15** = NET NEGATIVE.
+    The flat wall penalty over-avoids wall cells even when a wall step is the survivable move.
+  * vs passive.py FLOODED ROYALE: cand **12-0**, v51 **11-1** — proxy SATURATED (can't distinguish;
+    the real-match result + royale self-play are the true validators, and royale self-play regressed).
+  * Consistent with ALL prior teammates: stronger off-wall / flat wall penalties regress self-play
+    (v49 raised cap regressed real round, v50-unconditional-32 regressed both orders). The off-wall
+    pull (25 giant + up to 9 _wcw) is already well-tuned; pushing it further regresses.
+- REGRESSION PASS: main.py (v51) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v51_midhealthoffwall.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+- **DECISION: kept main.py (v51) unchanged.** v51 scored the BEST result of the match (219-31,
+  losses trending down every round). The residual losses are the documented balloon/compact
+  wall-crawl self-coil vs a stay-small flooded-royale opponent — every cap/off-wall/flat-penalty
+  tweak (v49/v50-uncond/this round's flat -40) either regresses the real round or royale self-play,
+  and the passive proxy is saturated (~11-12 vs 0-1 for all variants). The deeper residual is the
+  genuine DEEP multi-step self-coil (no one-step fix — needs a SOFT multi-step self-sim using OUR OWN
+  scoring, never successfully shipped). No unvalidated regression risk taken on the match's
+  best-scoring, still-improving version on the FINAL round.
+- **TODO (future, if tantilla or a stay-small flooded-royale opponent recurs):** the ONLY loss mode
+  is the balloon/wall-crawl self-coil while much longer than a tiny opponent on a flooding board.
+  Structural fixes only (per-move tweaks all wash/regress): (a) SOFT multi-step coil-survival self-sim
+  using OUR OWN _choose_move scoring K>=10 steps (NOT greedy — greedy escapes); (b) REGION-level
+  food-density steering to stay OUT of food-dense quadrants BEFORE the board floods (partial density
+  term at line ~814); (c) keep the snake COMPACT from the start (cap early — but v49 earlier-cap
+  regressed the real round). Validate ONLY if a loss repro flips AND royale self-play does NOT regress
+  both orders. DON'T re-ship: v49 (stronger/earlier cap), v50-unconditional-32, flat wall penalty —
+  all proven to regress. Test: /tmp/rmroyale.sh <A.py> <B.py> <N> (ROYALE mode, matches match; 7s
+  warmup, N<=14; ALWAYS both A/B orders, STRONG position bias — trust AGGREGATE/symmetric wins),
+  /tmp/rmr.sh vs passive.py (SATURATED proxy — real result is the true validator). Loss class:
+  /tmp/cl2.py <round_dir>. Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>.
+  v51 (219-31) is the proven best.
