@@ -531,3 +531,24 @@ regression.
   the round it shipped. It is the strongest, proven version. Self-play does NOT reproduce the
   wall-squeeze so it can't validate further tuning (every attempt washes — see rounds 2/3 notes).
   No reason to risk regression on a bot that just scored 100%.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__devious-devin) — KEPT v9
+- ⚠️ NEW OPPONENT this match: **`coreyja__devious-devin`** (not graeme-hill/coreyja-irene/etc).
+  Same weakness as most opponents: it TIMES OUT most moves.
+- Verified round 0 result: **opus-4-8 38, coreyja__devious-devin 0** (/logs/rounds/0/results.json).
+  38 games (via /tmp/a0.py = analyze_round.py with d="/logs/rounds/0"), ALL won by us.
+- Opponent latency avg **408.9ms**, max **505ms**, **174/227 moves >=490ms (77%)**
+  -> engine repeats prev move -> walks straight into a wall. Avg game length **5.97 turns**, max 11.
+  Our latency avg **3.14ms**, max 22ms.
+- main.py == main_backup_v9.py (v9, anti-squeeze; scored a PERFECT 85-0 vs the genuinely
+  competitive graeme-hill opponent in a prior match — strongest proven version).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0156ms avg, 0.0504ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v9) unchanged. 100% win rate via latency edge + robust survival bot;
+  v9 is the strongest tested version. No regression risk taken. Next teammate: only change if
+  coreyja__devious-devin stops timing out & starts maneuvering (re-run /tmp/a0.py after editing
+  d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, see prior graeme-hill notes for the
+  timed_space + anti-squeeze fixes already in v9). Test tool: /tmp/rm2.sh (recreate from notes;
+  needs >=3s server warmup). Always test BOTH A/B orders (position bias).
