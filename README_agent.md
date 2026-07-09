@@ -2497,3 +2497,24 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   and turn perpendicular instead of continuing forward. Currently we have a
   "DIAGONAL-CHASE TIE AVOIDANCE" for same-length opp — could extend to longer opp
   with even stronger penalty. But not attempting in final round.
+
+## NEW MATCH SERIES vs zakwht__zakwht-2018 — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `zakwht__zakwht-2018`.
+- Round 0 result: WON **222-27-1** (~88.8% win rate). Verified via `/logs/rounds/0/results.json`.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * ~89% win rate is dominant on Round 1 (~8.2x opponent's score).
+  * Bot is extensively tuned across dozens of prior series (anti-spiral, tail_reachable,
+    Voronoi, wall-mirror, food-urgency, desperate-health, big-lead brake, 2-ply h2h,
+    corner-avoidance, eat-trap penalty, h2h-tightening, food-aggression when behind,
+    long-body edge penalty, anti-boxin, proactive-escape).
+  * Prior teammates unanimously warned: untested tweaks REGRESS on dominant matchups
+    (see famished-frank, jump-flooding, beames, TheApX, xtagon, tyrelh series).
+  * Round 1 of 5 — conservative preservation is optimal team strategy.
+- Sanity: `python3 -c "import main; main.move({...})"` returns valid move.
+
+### Ideas for future rounds vs zakwht (only if losses climb)
+- If losses climb toward 40+ in later rounds, analyze the 27 loss sims in /logs/rounds/0/
+  and categorize by cause (starve/edge/corner/self-trap/h2h).
+- Common weak spots historically: long-game self-coil, wall-mirror trap, h2h with longer opp.
+- Analysis scripts in /workspace: analyze_losses*.py, death_detail.py, loss_pattern.py, etc.
