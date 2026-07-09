@@ -2024,3 +2024,49 @@ regression.
   needs TERRITORY/food-ownership lookahead (BFS/Voronoi to route to food WE reach first), validated vs
   the REAL opponent NOT self-play. All fixes v8-v26 present. Test: /tmp/rm2.sh <A> <B> <N> (>=6s
   warmup), ALWAYS both A/B orders. But with 250-0, DON'T fix what isn't broken.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs tim-hub__awesome-snake) — FINAL, KEPT v26
+- Verified results ALL 5 rounds won: round 0 **250-0** (v24), round 1 **249-1** (v24),
+  round 2 **242-0 (+8t)** (v25), round 3 **250-0** (v26), round 4 **249-1** (v26).
+  5/5 rounds won. TREND: v25 (contest-food lead<=0) traded round-1's 1 loss for 8 TIES (net -7pts);
+  v26 (tightened to lead<0) fixed the ties -> round 3 PERFECT 250-0. Round 4 = 249-1 (1 loss).
+- Round 4 (/tmp/a4.py = analyze_round.py d="/logs/rounds/4"): 250 games, opus 249 / opp 1 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **1.3ms**, max 23ms, **0/10511 moves >=490ms = 0% timeouts**).
+  Avg game len 42.04 turns, max 124. Pure out-play, no free latency wins.
+- **Root cause of the single round-4 loss (game f183217a, /tmp/tr.py + /tmp/tr2.py): OUTGROWN-
+  WHILE-SHORT via a SYMMETRIC food race.** At t10 our len5 (AHEAD of opp len4) marched toward the
+  center food (5,5)/(5,6); the opponent sat at (5,7) BETWEEN us and the food and reached (5,6) then
+  (5,5) first (grew to len6) while we stayed len5, then killed us in an H2H at t20. At t11 both were
+  len5, food (5,5) was equally contested (US(4,5) OP(5,6) both manhattan 1) -> v26's tie-gate (lead<0)
+  correctly stepped aside (no tie) but that left us permanently short -> outgrown -> lost. NEITHER
+  food was "owned" by us at t10 (opp equally/closer to both) -> geometrically forced positional loss.
+- **ATTEMPTED FIX this round — REJECTED (self-play regression, both orders):**
+  * FOOD-OWNERSHIP ROUTING (main_backup_v26_r4.py, now removed): when short & not ahead
+    (my_len<8, _length_lead<2), compute `contested_food` (food an equal/longer enemy is at-least-as-
+    close to) and prefer `owned_food = food_set - trap_food - contested_food` for the food pull.
+    Idea: route to food WE reach first (grow without a symmetric collision) instead of the contested
+    race. **DID NOT flip the repro** (at t10 BOTH foods are contested -> owned_food empty -> falls
+    back to v26 behavior). And **REGRESSED self-play BOTH orders: new 15-24 (A) and 18-22 (B) vs
+    v26** — avoiding contested food too much loses the food race even when we could win it.
+    Consistent with ALL prior teammates: food-routing tweaks regress self-play. REVERTED to v26.
+- **The contest-vs-tie tension is fundamental & already optimally balanced by v26:** contesting
+  equal-H2H food at lead=0 (v25) fixes the outgrown loss but creates ~8 ties/round (net WORSE in
+  points); fleeing (v26, lead<0) avoids the ties but accepts ~1 loss/round. v26 (1 loss) > v25 (8
+  ties) in expected points. The residual 1 loss is a geometrically-forced positional loss (opponent
+  gets between us & the only food) that no one-step scoring change fixes without regression.
+- REGRESSION PASS: main.py (v26) vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: dense board): **0.21ms avg, 0.55ms max** (timeout 500ms) — cannot time out.
+- main.py == main_backup_v26_tiefix4.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** 5/5 rounds won; v26 is the strongest, best-balanced
+  version (tie-fix chain v21-v26 + full stack v8-v26). The single round-4 loss is a hard positional
+  outgrown-while-short mode where the food is geometrically contested; my food-ownership routing fix
+  regressed self-play both orders (as all food tweaks do — self-play can't reproduce the opponent
+  out-positioning us). No regression risk taken on a bot winning every round. This is the final round.
+- **TODO (future, if this opponent recurs):** the ONLY loss mode is being OUTGROWN while short when
+  the opponent gets BETWEEN us and contested food. A one-step food pull/routing can't fix it (proven:
+  contest -> ties; avoid-contest -> regression). The real edge needs TERRITORY/Voronoi food-ownership
+  lookahead validated vs the REAL opponent (self-play eats symmetrically & washes/regresses every
+  attempt). Repro: /tmp/tr.py <gid> (per-turn dump, round 4), /tmp/tr2.py (body dump at key turns),
+  /tmp/mkf.py (builds /tmp/f_t10.json = t10 state), /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh
+  <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
