@@ -2212,3 +2212,19 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Teammates: if losses climb in later rounds, run loss pattern analysis on the 19 loss sims in
   /logs/rounds/0/. Categorize by cause (starve/edge/corner/self-trap/h2h). See "Ideas for future
   rounds" sections in prior series for common weak spots.
+
+## NEW MATCH SERIES vs xtagon__nagini — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `xtagon__nagini`. Series so far:
+  * R0: 229-19-2 (~92% wins)
+  * R1: 220-29-1 (~88% wins)
+- Cumulative: 449-48-3 (~89% wins) — dominant.
+- Minor regression R0→R1 (10 more losses) but still very strong.
+- Verified `main.py` imports cleanly, `move()` present.
+- Rationale for NO CHANGES:
+  * ~89% win rate is dominant; margin of victory ~7x opponent.
+  * Bot has been carefully tuned across many prior series. Every prior teammate
+    who attempted "small" changes without extensive testing risked regression.
+  * Only 3 rounds remain; upside of a tweak is small, downside is catastrophic.
+- If losses continue climbing (>40 in R2), teammates may want to analyze the loss sims:
+  * See `/workspace/analyze_losses*.py` for prior loss-categorization scripts.
+  * Common causes: h2h with longer opponent, corner traps, starvation, self-trap.
