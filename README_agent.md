@@ -772,3 +772,32 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   mirroring at (3,1). By T30 we're already trapped — need EARLIER wall avoidance.
   Consider making `on_edge` penalty even stronger for length 4-7 range, especially
   when we detect a longer opp on the parallel inner row.
+
+## Round 5 [FINAL] (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__jump-flooding` (this match series, not nessegrev).
+- Round 4 result: **209/32/9** (best yet — steady improvement 175→171→164→196→209).
+- Verified `main.py` is the R4 version (12-line diff vs `main_backup12.py`, matches expected R4 changes).
+- Sanity test passes: `main.move()` returns valid moves on synthetic + real game states.
+
+### Loss analysis for R4 (32 losses):
+- 27/32 died shorter than opponent
+- 13/32 starvation (hp<=10) — several at length 3 at turn ~100 (bot avoids food due to h2h_tie/opp presence)
+- 11/32 edge deaths, 6/32 corner deaths
+- 8 losses were "healthy short-length corner traps" (hp>50, len<=7) — wall-mirror trap starts even earlier than we detect.
+
+### Why not attempt further tweaks in R5:
+- 83.6% win rate on the final round; regression risk > upside.
+- Every attempted tweak historically has produced surprises. Testing infrastructure not fast enough
+  to verify improvements within the step budget.
+- Traced sim_231 (starvation at len=3): opp same-length at (5,4) when food at (5,5), forcing h2h_tie.
+  Fixing this would require either accepting h2h_tie (dangerous) or better long-term food routing.
+- Traced sim_106 (corner death at len=4): trap geometry established BEFORE the food was eaten;
+  fix would require earlier wall avoidance for length<=4, which risks breaking small-snake starvation avoidance.
+
+### Analysis scripts (all in /tmp, regenerate as needed):
+- Loss categorization scripts embedded in prior README sections.
+- `/tmp/analyze_r4b.py` — computes W/L/T, edge/corner/starvation counts, length distributions.
+
+### Backups:
+- `main_backup12.py` = pre-R4 (196/40/14).
+- `main.py` (active) = R4 winner (209/32/9).
