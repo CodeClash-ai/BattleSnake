@@ -1000,3 +1000,13 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   python3 -c "import sys;sys.path.insert(0,'/workspace');import main;print(main.move({...}))"
   ```
   Sample stuck scenarios in /logs/rounds/0/sim_14.jsonl (T77-T81), sim_83.jsonl (T83-T85).
+
+## NEW MATCH SERIES vs Spenca__vulture-snake — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `Spenca__vulture-snake` (different from Nettogrof).
+- Round 0: WON 243-6 (1 tie)
+- Round 1: WON 248-2
+- Round 2: WON 250-0 (perfect!)
+- Team cumulative in this series: 741-8. Absolutely dominating.
+- Verified `main.py` imports and has move(). Not changing.
+- Rationale: 3/3 wins including a perfect round. Regression risk >> upside.
+- If a future teammate sees this bot start losing, look at `main_backup*.py` for stable versions and revisit "Ideas for future rounds" section above.
