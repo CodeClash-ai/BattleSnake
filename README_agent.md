@@ -2724,3 +2724,45 @@ regression.
   (needs narrow gating). Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>,
   /tmp/board.py <sim> <turn>, /tmp/lfc.py <sim> (last-free-choice turn). Test: /tmp/rm2.sh <A> <B> <N>
   (N<=16 to fit 30s limit, >=8s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__amphibious-arthur) — SHIPPED v30 (huge-lead: no chase/H2H-lure)
+- Verified results: round 0 **247-3** (v27), round 1 **246-4** (v28), round 2 **245-5** (v28),
+  round 3 **246-4** (v29). 4/4 rounds won. Opponent FULLY ACTIVE (LONG games ~90+ turns, big snakes).
+- **Root cause of ALL 4 round-3 losses = LONG-GAME SELF-COIL TRAP while MUCH LONGER than opp**
+  (via last-frame parse: all 4 losses had legal=[] i.e. all 4 neighbors = OUR OWN body).
+  3 were big (L13-17, hp77-99, opp L5-15) coiling into a pocket; 1 early corner (L5 at (10,0)).
+  Loss files round 3: sim_122, sim_133, sim_202, sim_224.
+- **DEEP TRACE (sim_133, L12-13 hp91-97, lead=7 vs opp L5): the AGGRESSION + wins_h2h bonus lure
+  the big snake TOWARD the tiny harmless enemy near a wall/corner -> self-coils to death.**
+  At the last-free-choice t104 (head (6,6), moves D/L/R all sp=106/ts=116 wide open): v29 picked
+  'right'->(7,6) which is ADJACENT to the enemy head (8,6) L5 -> gets wins_h2h +30 AND aggression
+  pull, dragging us toward the top-right corner where we coiled & died t112 at (10,10). 'left'
+  (open board, away from corner) was the escape. (repro: /tmp/s133_104.json; /tmp/tm.py <bot> <state>.)
+- **FIX (main.py = v30, backup main_backup_v30_hugeleadnochase.py; prev main = main_backup_v29_coilfix.py):**
+  When we have a HUGE lead (`_length_lead >= 5`), the tiny enemy can't threaten us, so DON'T chase it
+  into a corner:
+  * wins_h2h bonus (line 649): `30.0` normally, `5.0` when `_length_lead >= 5`.
+  * aggression pull (line 657): disabled entirely (`if _length_lead < 5:`) when far ahead
+    (was 0.8 at lead>=5). This removes the coil-lure toward the harmless short enemy near walls.
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent-specific coil):**
+  * REPRO FLIP: /tmp/s133_104.json: **v30 picks 'left' (open board, escapes the corner lure);
+    v29 picks 'right' (into the coil)**. /tmp/tm.py /workspace/main.py /tmp/s133_104.json -> left.
+  * REGRESSION PASS: v30 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * SELF-PLAY WASH/slight edge (no regression): v30 vs v29 over 4 batches (16 each), BOTH orders:
+    combined new **31** vs v29 **29** (as A ~even 12-11, as B ~even 19-18). Not a clear win but NOT a
+    regression -> satisfies the iron ship-rule (repro flips AND self-play does NOT regress).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v30.** Removes the huge-lead H2H/aggression coil-lure that caused the big-snake
+  self-coil losses (the #1 loss mode this match), flipping the loss repro toward open space with no
+  self-play regression. Complements v29 (lead-scaled aggression/tail-follow); v30 fully cuts the lure
+  at lead>=5 (v29 only softened aggression to 0.8 & left wins_h2h at 30, which still lured us).
+- **TODO next teammate (likely FINAL round):** re-run the loss parser (parse each /logs/rounds/N/sim_*.jsonl
+  last line {winnerName,isDraw}; check last-alive frame for legal=[] = self-coil) on the new round.
+  If self-coil losses PERSIST at big length: the residual is a genuine MULTI-STEP coil where the true
+  last-free-choice is even earlier (all one-step metrics equal). Options: (a) lower the huge-lead
+  threshold 5->4 (RE-TEST self-play both orders — too aggressive removal of the H2H bonus may regress,
+  it's a real edge vs equal opponents at modest lead); (b) raise tail-follow weight at large lead
+  (1.5->2.0); (c) the pursuit-aware flood-fill (_enemy_reach/_pursuit_space in git history) catches
+  multi-step traps but regresses self-play as-is (needs narrow gating). Repro: /tmp/mkstate.py
+  <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (recreate;
+  >=8s warmup, N<=16 to fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator.
