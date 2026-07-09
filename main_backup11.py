@@ -502,15 +502,10 @@ def _move(game_state):
                 # Boost bonus significantly when we're shorter (need to catch up).
                 food_bonus = max(0, 45 - c["food_dist"] * 3)
                 if my_len < max_opp_len:
-                    # BIGGER urgency: length gap matters
-                    gap = max_opp_len - my_len
-                    food_bonus += max(0, 35 - c["food_dist"] * 2) + gap * 4
+                    food_bonus += max(0, 25 - c["food_dist"] * 2)  # extra urgency
                 s += food_bonus
                 if c["eats"]:
-                    if my_len < max_opp_len:
-                        s += 30 + (max_opp_len - my_len) * 3
-                    else:
-                        s += 15
+                    s += 25 if my_len < max_opp_len else 15
             elif margin >= 0 and c["food_dist"] < 5:
                 # Only chase food when close and space is at least survivable
                 s += max(0, 22 - c["food_dist"] * 3)
@@ -626,39 +621,17 @@ def _move(game_state):
                 break
         if longer_opp_close:
             if dist_wall_after > dist_wall_before:
-                s += 15  # STRONG reward escape from wall (was 6)
+                s += 6  # reward escape from wall
             elif dist_wall_after < dist_wall_before:
                 if dist_wall_after == 0:
-                    s -= 60  # was 25 - never enter wall when chased
+                    s -= 25
                 elif dist_wall_after == 1:
-                    s -= 25  # was 10
+                    s -= 10
                 else:
-                    s -= 8   # was 3
+                    s -= 3
             elif dist_wall_after <= 1 and dist_wall_before <= 1:
-                # Staying near wall with longer opp close -> stronger penalty
-                s -= 12  # was 4
-            elif dist_wall_after <= 2 and dist_wall_before <= 2:
-                # Still uncomfortably close to wall
-                s -= 3
-
-        # MIRROR-TRAP detection: longer opp is exactly parallel to us near a wall.
-        # If we're heading to a cell where opp is mirror-adjacent (perpendicular to wall)
-        # AND opp is longer, this is a wall-chase setup.
-        for oid_mt, info_mt in opp_head_moves.items():
-            if info_mt["length"] < my_len:
-                continue
-            oh_mt = info_mt["head"]
-            # Check for mirror geometry: same y (or x), opp within 1-2 of a wall on opposite side
-            # (i.e., opp shadows us on parallel line near wall)
-            if dist_wall_after <= 2:
-                # If we're going to be near right/left wall, check y-mirror
-                if cx <= 1 or cx >= w-2:
-                    if abs(oh_mt[1] - cy) <= 2 and abs(oh_mt[0] - cx) <= 3:
-                        s -= 12
-                # near top/bottom wall, check x-mirror
-                if cy <= 1 or cy >= h-2:
-                    if abs(oh_mt[0] - cx) <= 2 and abs(oh_mt[1] - cy) <= 3:
-                        s -= 12
+                # Staying near wall with longer opp close -> mild penalty (encourages escape)
+                s -= 4
 
         # Second-order trap: even one step from a wall while opp mirrors, is risky
         # This especially matters when body is trailing along wall.

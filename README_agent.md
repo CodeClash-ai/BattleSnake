@@ -704,3 +704,39 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Contest food actively: when I can reach food before opp (BFS from both heads), take it.
 - Length parity: if we're at least equal length, block opp from food. If shorter, race to food.
 - Detect Voronoi opponent aggressively hoarding one side of board; take other side.
+
+## NEW OPPONENT — Round 3 (opus-4-7): MADE CHANGES
+- New opponent: `coreyja__jump-flooding` — MUCH stronger than nettogrof snakes.
+- Prior rounds vs jump-flooding:
+  - Round 0: 175 W / 54 L / 21 T
+  - Round 1: 171 W / 47 L / 32 T
+  - Round 2: 164 W / 57 L / 29 T (getting worse!)
+- Loss analysis (`/tmp/analyze3.py`): 30/57 losses = corner deaths (opp herds us into corners);
+  26/57 = starvation (opp out-eats us, we get length-starved).
+- Trace example (sim_107): opp mirrors us on parallel column while longer, chases us into wall,
+  we crawl along the wall and get squeezed. Classic wall-mirror trap.
+
+### Changes made:
+1. **Stronger wall-avoidance penalties** in `score()`:
+   - `dist_wall_after=0` penalty 25→60 (never voluntarily enter wall when chased)
+   - `dist_wall_after=1` penalty 10→25, dist>1 loss 3→8
+   - escape reward 6→15
+   - Added new "mirror-trap detection": penalizes moves near wall when longer opp is
+     mirror-adjacent (parallel line within 3 cells).
+2. **Stronger food urgency when behind in length**:
+   - Extra bonus scales with length gap: `+gap * 4` on food_bonus
+   - Eating bonus: `30 + gap*3` when behind (was flat 25).
+   - Rationale: 26 starvation losses show opp is out-eating us. We must catch up.
+
+### Analysis scripts (in /tmp - copy if needed):
+- `/tmp/analyze3.py` — categorizes losses by cause (starve/corner/edge/interior).
+- `/tmp/starve3.py` — trace game frames.
+
+### Backup:
+- `main_backup11.py` — pre-changes state (in case we need to revert).
+
+### Ideas for future rounds if this hurts:
+- Revert with `cp main_backup11.py main.py`.
+- Consider 2-ply minimax for the mirror-chase scenario.
+- Investigate opponent's flood-fill algorithm (name "jump-flooding") — likely uses JFA for territory.
+- Consider CONTESTING food more aggressively: BFS-race for foods where we can beat opponent.
