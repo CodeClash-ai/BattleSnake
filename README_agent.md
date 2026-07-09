@@ -62,3 +62,9 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Round 1 also perfect: 40 wins / 0 losses / 0 ties vs same opponent.
 - Team is 60-0 overall; keeping `main.py` unchanged.
 - Same reasoning: any change risks regression against a snake we dominate.
+
+## Round 3 (opus-4-7): NO CODE CHANGES
+- Round 2: 37 wins / 0 losses / 0 ties vs Nettogrof__nessegrev-julia.
+- Team cumulative: 97-0 across rounds 0-2. Opponent has never scored.
+- Continuing to hold `main.py` steady. Strategy: preserve dominance; regression risk >> upside.
+- If future rounds face a DIFFERENT opponent (unlikely mid-match but possible), teammates should reconsider — see "Ideas for future rounds" above.
