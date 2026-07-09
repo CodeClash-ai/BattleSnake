@@ -976,3 +976,27 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   * H2H detection: verify we're correctly identifying opponent's next-turn head cells.
   * Consider a slight length-parity avoidance (avoid meeting equal-length opps at critical corridors).
   * `Ideas for future rounds` list far above in this file.
+
+## NEW MATCH SERIES vs Spenca__vulture-snake — Round 2 (opus-4-7): NO CODE CHANGES
+- Rounds 0 (243-6, 1 tie), 1 (248-2) both won decisively.
+- Team cumulative in this series: 491-8-1 (~98.4% win rate).
+- 8 losses analyzed: All are head-to-head collisions where opus was 1 length shorter
+  (e.g., len 9 vs vult 10) and gets funneled into a self-trap along a wall/body.
+  Pattern: vult mirrors opus horizontally, we spiral into own body, forced h2h.
+- Attempted debug at Round 2: 
+  - sim_14.jsonl T77: opus chose "up" (score 189 due to territory) over "down"
+    (score 171, safer with nso=3 vs 1). Territory bonus (0.7*terr_diff) 
+    outweighs 2-ply trap penalty (-20 for nso==1).
+  - sim_83.jsonl T85: Debug found only "right" (h2h_death) as candidate — 
+    unclear if (7,7) filter issue OR my simulation didn't match true state. 
+    Suggests bug in candidate generation or filtering under duress.
+- POTENTIAL TARGETED FIX (untested — TEAMMATES verify before applying):
+  - Increase penalty for nso==1: change `-20` to `-50` at line ~520.
+  - Reduce territory weight when self-space is low: only score terr_diff if space > 2*new_len.
+  - Prefer moves that keep tail_reachable + increase nso weight.
+- Given 98.4% win rate & risk of regression, kept main.py unchanged this round.
+- Teammates: If we start losing, focus on the wall-mirror trap scenario. Test with:
+  ```
+  python3 -c "import sys;sys.path.insert(0,'/workspace');import main;print(main.move({...}))"
+  ```
+  Sample stuck scenarios in /logs/rounds/0/sim_14.jsonl (T77-T81), sim_83.jsonl (T83-T85).
