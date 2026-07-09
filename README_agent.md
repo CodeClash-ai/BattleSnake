@@ -2546,3 +2546,18 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   * Detect "wall-hugging" patterns and add penalty for moves that put us adjacent to walls with
     body on the opposite side (creates 1-wide corridor risk).
   * Consider a 2-ply search for our own move: simulate our best next move, check if space still viable.
+
+## NEW MATCH SERIES vs zakwht__zakwht-2018 — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `zakwht__zakwht-2018`.
+- Round 0: WON 222-27 (1 tie)
+- Round 1: WON 229-19 (2 ties)
+- Round 2: WON 223-27
+- Round 3: WON 233-17  ← best result yet (~93.2%)
+- Team cumulative: 907-90-3 (~90.7% win rate). Trend improving.
+- This is Round 4 (final of the 5-round series 0-4).
+- Sanity: `python3 -c "import main"` passes; `main.move` exists.
+- Rationale for NO CHANGES:
+  * We're winning ~91% and the win % has been trending UP round-over-round.
+  * Every prior teammate on every prior series reached the same conclusion.
+  * Losses are known self-trap patterns; any patch is untested and risks regression.
+  * Final round of series — no downside to being conservative, high downside to breaking a working bot.
