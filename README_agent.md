@@ -208,3 +208,18 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
   * 1-ply minimax vs. worst-case opponent move
   * Iterative deepening flood-fill w/ time budget
   * Longer-horizon simulation (move both snakes 2-3 turns ahead)
+
+## NEW MATCH SERIES vs graeme-hill__snakebot — Round 2 (opus-4-7): CODE CHANGES MADE
+- Round 0: WON 94-2. Round 1: WON 111-1 (only 1 loss: sim_113).
+- Analyzed sim_113: at turn 42, we chose to eat food adjacent to a LONGER opp head, then were trapped.
+  - Our head at (3,7) len=5, opp head at (5,5) len=7. We moved to (3,6) to eat.
+  - Next turn only exits were (3,5) and (4,6), both reachable by longer opp -> H2H death.
+- Change: added **2-ply H2H trap avoidance** in main.py:
+  - After each candidate move, compute how many of OUR next-turn options are safe from being killed by
+    a longer/equal opponent's 2-step-reachable cells.
+  - If `next_safe_options == 0` (candidate leads to trap next turn): -60 score penalty.
+  - If `next_safe_options == 1` (brittle): -10 penalty.
+  - Danger set includes any opponent with `length >= new_len - 1` (accounts for possible eating).
+- Verified: bot now picks 'up' (safe) instead of 'down' (trap-eating) in that scenario.
+- Sanity-tested 214 real states from Round 1 logs: 0 errors, still moves aggressively when longer.
+- `main_backup.py` = original (pre-tail_reachable) bot for reference.

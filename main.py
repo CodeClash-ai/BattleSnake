@@ -257,6 +257,40 @@ def _move(game_state):
                 near_larger_head = True
                 break
 
+        # 2-ply look-ahead: compute opponent's reachable cells 2 steps from their current head
+        # (i.e. cells adjacent to any of their possible next positions).
+        # Then check how many of OUR next-move options avoid being killed by a longer opp.
+        # We treat the opponent as still being length at least their current length (they might grow).
+        # new_len_after is len after this move (already computed as new_len).
+        # For opponent whose length_after_next >= new_len_after -> dangerous.
+        next_safe_options = 0
+        next_options_total = 0
+        opp_2step_danger = set()  # cells reachable by any equal/longer opp in exactly 2 steps from now
+        for oid, info_ in opp_head_moves.items():
+            opp_len_after = info_["length"]  # conservative: might grow if they eat next
+            # If opp is currently >= our new_len OR could catch up (opp len == new_len - 1 and eats)
+            # For simplicity include if opp_len_after >= new_len - 1 (they might eat and match).
+            if opp_len_after < new_len - 1:
+                continue
+            for m_cell in info_["moves"]:
+                # From m_cell, opp can reach m_cell's neighbors in step 2
+                for nb in _neighbors(m_cell):
+                    if _in_bounds(nb, w, h):
+                        opp_2step_danger.add(nb)
+        # Our next moves from np
+        for nb in _neighbors(np):
+            if not _in_bounds(nb, w, h):
+                continue
+            if nb in blocked_post:  # blocked by opp body or our new body
+                continue
+            next_options_total += 1
+            # Check if this next-move cell is reachable by longer/equal opp on their next turn
+            # i.e. is nb a possible 2-step opp cell where opp would be >= new_len?
+            # We use conservative danger set opp_2step_danger built above.
+            if nb in opp_2step_danger:
+                continue  # dangerous
+            next_safe_options += 1
+
         candidates.append({
             "dir": d,
             "cell": np,
@@ -268,6 +302,8 @@ def _move(game_state):
             "near_larger_head": near_larger_head,
             "tail_reachable": tail_reachable,
             "new_len": new_len,
+            "next_safe_options": next_safe_options,
+            "next_options_total": next_options_total,
         })
 
     if not candidates:
@@ -314,6 +350,13 @@ def _move(game_state):
             s -= 100  # very bad, only pick if nothing else
         elif margin < 3:
             s -= 15  # tight
+        # 2-ply trap avoidance: penalize moves that leave no safe next-turn options
+        nso = c.get("next_safe_options", 999)
+        nto = c.get("next_options_total", 999)
+        if nto > 0 and nso == 0:
+            s -= 60  # heavy penalty: next turn we'd have no safe move
+        elif nto > 0 and nso == 1:
+            s -= 10  # only one safe option, brittle
         if want_food and c["food_dist"] is not None:
             # Closer food is better, but only if space margin is healthy
             if margin >= 3:
