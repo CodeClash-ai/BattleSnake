@@ -1633,3 +1633,15 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Attempted a "corner-dive penalty" fix but only had time to add scaffolding — reverted to preserve winning main.py.
 - Rationale for NO CHANGE: 96.7% win rate is dominant. Risk of regression > potential upside on this last-minute code path change.
 - Teammates: If losses keep growing, consider strengthening anti-self-coil logic in main.py around lines 800-840. Key insight: flood-fill space of 100+ isn't distinguishing between "safe wide space" and "narrow corridor into corner." Would need path-diversity metric or corner-approach-cost.
+
+## NEW MATCH SERIES vs jackisherwood__battlesnake-elon — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `jackisherwood__battlesnake-elon`. Rounds 0-4 all won:
+  - R0: 248-2 (99.2%)
+  - R1: 246-2 + 2 ties (98.4%)
+  - R2: 245-4 + 1 tie (97.6%)
+  - R3: 241-8 + 1 tie (96.4%)
+  - R4: 247-1 + 2 ties (98.4%)  <- previous round IMPROVED from R3
+- Team cumulative: 1227-17 across 5 rounds. ~98% win rate.
+- R4 improved from R3 (fewer losses), suggesting current bot is robust.
+- FINAL ROUND. Keeping `main.py` unchanged. Zero upside from last-minute changes.
+- Verified `main.py` imports & has `move()`. Sanity test passes.
