@@ -943,3 +943,36 @@ regression.
   deeper fix needs real 2-3 ply lookahead of the enemy cutting us off, OR food-contention that
   actually validates vs the real opponent (self-play washes it). Repro: /tmp/lossd.py (edit gid /
   round dir). Test: ./run_match.sh <A> <B> <N> (>=2s warmup), ALWAYS BOTH A/B orders (position bias).
+
+## Round 1 update (opus-4-8 — NEW MATCH vs Xe__since) — KEPT v14 (reverted multistep)
+- ⚠️ NEW OPPONENT: **`Xe__since`** — GENUINELY COMPETITIVE (only 209/9687 moves >=490ms,
+  avg game len 46 turns, max 149). Round 0: **opus-4-8 203, Xe__since 5, 1 tie**. Won, but 5 losses.
+- Analyzed all 5 losses (/tmp/lossd.py, /tmp/lc.py, d="/logs/rounds/0"):
+  * Mixed modes: 2 outgrown (418a1a3d us12/opp15; 2c204c97 us7/opp9), 2 wall/corner squeeze
+    while EVEN/longer (232c286a us10/opp9 cornered at (0,10)->(0,9); 3bbf4ff4 crawled to (0,10)),
+    1 SELF-TRAP-WHILE-LONGER (96055754: us len13 vs opp len8, walked into own coil pocket, head
+    (6,8) all 4 neighbors blocked turn 92). Last-free-choice was turn 89 head (5,10): bot chose
+    'right'->(6,10) into the coil; 'left'->(4,10) was open.
+- **ATTEMPTED FIX (v15, backup main_backup_v15_multistep.py): `_forced_trap()` — a 6-step greedy
+  self-simulation that advances our body AND blocks cells nearby enemies (manhattan<=5 from move
+  cell) can reach within t+1 steps (BFS from enemy heads). Flags moves that lead to a forced
+  dead-end / space<my_len. Wired into survival filter (drop forced-trap moves if alt exists) and
+  scoring (-200).**
+  * ✅ REPRO PASS: at turn 89 of game 96055754 v15 chooses 'left' (escapes) vs v14's 'right' (dies).
+    Correctly flags the enemy-cut squeeze (the killer was a SHORTER enemy cutting our corridor).
+  * ✅ REGRESSION PASS vs opp_straight: 10-0 both orders.
+  * ❌ **SELF-PLAY REGRESSION: v15 LOST to v14 both orders (~11-18 as A, ~11-19 as B).** The
+    enemy-reachability blocking is too conservative — it avoids contestable space and costs games
+    vs an equal opponent. Distance-limiting (<=5) and dropping the len filter did not fix the
+    self-play loss.
+- **DECISION: REVERTED to v14** (main.py == main_backup_v14.py, the proven 203-5 winner). The
+  multi-step detector provably fixes the exact self-trap repro but regresses self-play too much to
+  risk on a bot already winning the match. Self-play is the only proxy for this active opponent and
+  it says v15 is worse overall.
+- **TODO next teammate:** the fix direction (multi-step self+enemy simulation, in
+  main_backup_v15_multistep.py) is CORRECT for the self-trap/squeeze losses but needs to be made
+  LESS conservative so it doesn't cost normal games. Ideas: (a) only trigger the enemy-block part
+  when the escape corridor is genuinely narrow (1 legal move for >=2 sim steps), (b) use it as a
+  soft tie-breaker penalty (-15..-30) rather than a hard -200/filter, (c) require BOTH forced_trap
+  AND low timed_space before penalizing. Repro tool: /tmp/repro2.py (turn 88/89 of game 96055754).
+  Test: /tmp/rm2.sh (>=3s warmup), ALWAYS both A/B orders. Loss analysis: /tmp/lossd.py, /tmp/lc.py.
