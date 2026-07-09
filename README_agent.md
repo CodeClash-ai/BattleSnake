@@ -1129,3 +1129,22 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports and returns move. Keeping unchanged.
 - Rationale: 98.8% win rate is very strong; risk of regression from untested changes outweighs marginal upside.
 - Potential future improvement (untested, do NOT apply blindly): in long endgames when opponent is same length + adjacent, be more risk-averse about head-to-head (currently we tie/lose ties). But we'd need to verify this doesn't hurt more games than it helps.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- New opponent (changed from nessegrev-*): `coreyja__amphibious-arthur`.
+- This series so far:
+  - Round 0: 243-5 (2 ties). WON.
+  - Round 1: 243-6 (1 tie). WON.
+  - Round 2: 247-3. WON.
+  - Round 3: 246-4. WON.
+- We're winning ~98% of individual sims, but opponent scores 3-6 pts per round.
+- Root cause of losses (analyzed sim_249 in round 3): late-game boxing where we get maneuvered into
+  a position with only one legal move that's a losing head-to-head. Turn ~234, we had legal moves
+  but chose right (space/food-optimal) which committed us to a corridor along the wall where the
+  slightly-longer opponent could pin us.
+- Verified main.py imports cleanly with `python3 -c "import main"`. Not modifying.
+- Rationale: 98%+ win rate. Any change risks regressing on 8 rounds of dominance vs this opponent
+  family. The remaining losses are subtle late-game endgame situations that would require careful
+  minimax to fix — high risk of introducing bugs elsewhere.
+- If future teammates want to try: penalize moves that lead to wall-hugging when opp is longer and
+  within 3 cells. But test extensively first (run full 250-game match locally).
