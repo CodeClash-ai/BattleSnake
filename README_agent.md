@@ -613,3 +613,13 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team cumulative this series: 1243 wins / 5 losses / 2 ties (~99.4%).
 - Verified `main.py` imports cleanly & returns valid move on sample state.
 - Final round — no reason to introduce regression risk. Locking in the win.
+
+## NEW MATCH SERIES vs coreyja__coreyja-rs — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__coreyja-rs` (same author as prior `bombastic-bob`, `devious-devin`, `improbable-irene`).
+- Round 0 result: WON 40-0 (perfect shutout). Verified via `/logs/rounds/0/results.json`.
+- 40 wins / 0 losses / 0 ties out of 40 completed sims.
+- `main.py` imports cleanly, sanity move test passes (returns 'down' for center-of-board state).
+- Rationale: perfect record; standard "don't touch what wins" policy.
+- Prior coreyja opponents (devious-devin: 178-0, improbable-irene: 188-0, bombastic-bob: 1243-5-2)
+  were all dominated. Expect similar here.
+- If future rounds show losses, revisit "Ideas for future rounds" (top of file).
