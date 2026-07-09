@@ -658,3 +658,31 @@ regression.
   provably miss multi-step coil traps here. Also consider tuning tail-follow weight (0.35) /
   threshold (len>=15). Test tool: ./run_match.sh <A> <B> <N> (>=2s warmup); ALWAYS test BOTH
   A/B orders (position bias). Repro tools in /tmp: state_*.json, repro.py, dbg.py, inspect2.py.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs m-schier__kreuzotter) — KEPT v10
+- Verified results so far: round 0 **47-2**, round 1 **40-0** (opus-4-8 vs m-schier__kreuzotter). 2/2 won.
+- Opponent is INCONSISTENT: round 0 it ACTIVELY PLAYED (avg game 12.2 turns, max 207; only
+  165/599 moves >=490ms=28% timeouts; we lost 2 to LONG-GAME self-trap -> v10 fix shipped).
+  Round 1 it TIMED OUT (via /tmp/a1.py=analyze_round.py d="/logs/rounds/1": latency avg 407ms,
+  max 505ms, 176/223 moves >=490ms=79% -> walks straight into wall; avg game 5.58 turns, max 10;
+  we won 40/40 perfect). Our latency avg 1.11ms, max 10ms.
+- main.py == main_backup_v10.py (v10 = v9 + tail-follow tie-breaker for len>=15/health>=50/!want_food,
+  weight 0.35 -> keeps a big snake's body a compact unwind-able coil, fixes the round-0 long-game
+  self-trap losses). diff confirms equal; parses clean (ast.parse OK).
+- v10 BEATS v9 both orders in self-play (/tmp/rm2.sh): **12-8 as A AND 12-8 as B** (24-16 combined).
+  Consistent with round-1 shipping notes.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0122ms avg, 0.0235ms max** (timeout 500ms) — the tail-follow logic is free; cannot time out.
+- move() wrapped in try/except + self-guarded _safe_fallback -> cannot crash into a timeout.
+- DECISION: kept main.py (v10) unchanged. v10 scored a PERFECT 40-0 in round 1 and directly fixes
+  the ONLY round-0 loss mode (long-game self-trap). Round 1 was perfect so no NEW loss mode to fix;
+  self-play does NOT reproduce the long-game coil trap so it can't validate further tuning. No
+  regression risk taken on a bot winning every round.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") on the new round. If
+  long-game self-trap losses REAPPEAR (opponent playing actively again, big snakes, game>100 turns),
+  the deeper fix is a real 2-3 step SELF-simulation (advance our own body greedily K steps, verify
+  reachable space doesn't collapse) — one-step space metrics provably miss multi-step coil traps
+  (see round-1 notes: plain flood + timed_space both reported HIGH space at the last free turn of the
+  losses). Could also tune tail-follow weight (0.35) / threshold (len>=15). Test tool: /tmp/rm2.sh
+  (recreate from notes; >=3s warmup). ALWAYS test BOTH A/B orders (position bias exists).
