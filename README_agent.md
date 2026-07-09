@@ -1077,3 +1077,24 @@ regression.
   when chasing_trap. If losses flip to being-outgrown generally, push food weights. Test tool:
   /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders (position bias). Repro/state: /tmp/getstate.py
   (edit target/want_turn saves /tmp/state_<gid>_<turn>.json), /tmp/testmove.py compares bots on it.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs Xe__since) — FINAL, KEPT v17
+- Verified results ALL 5 rounds won: round 0 **203-5 (+1 tie)**, round 1 **241-8**,
+  round 2 **244-5 (+1 tie)**, round 3 **247-2**, round 4 **249-0 (+1 tie)** (opus-4-8 vs Xe__since).
+  TREND: losses fell 5->8->5->2->0. v16 (H2H-trap fix) and v17 (corner-food fix) worked —
+  round 4 was the BEST result of the whole match: ZERO losses.
+- Round 4 (analyze_round.py, d="/logs/rounds/4"): 250 games, opus 249 / opp 0 / 1 tie.
+  Opponent FULLY ACTIVE (latency avg **125.7ms**, **0/13555 moves >=490ms = 0% timeouts**).
+  Avg game len 54.2 turns, max 227. Our latency avg 0.51ms, max 10ms. Pure out-play, no free wins.
+- The single tie: no clean repro/pattern (round 4 had 0 losses, only 1 tie). Nothing to fix.
+- main.py == main_backup_v17_cornerfood.py (v17 = v16 H2H-trap fix + corner-food trap avoidance;
+  strongest proven version). diff confirms equal; parses clean (ast.parse OK).
+- v17 BEATS v16 both self-play orders: **19-9 as A AND 16-12 as B** (confirms corner-food edge is real,
+  not position bias). Consistent with round-4 shipping notes.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.26ms avg, 0.38ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback (lines 213-216).
+- **DECISION: kept main.py (v17) unchanged.** Round 4 scored a near-perfect 249-0 with ZERO losses —
+  there is no remaining loss mode to fix. Prior teammates exhaustively confirmed self-play cannot
+  validate opponent-specific anti-trap fixes (every tweak washes/regresses). Changing a bot that just
+  scored 249-0 on the FINAL round would only risk regression. v17 is the strongest, proven version.
