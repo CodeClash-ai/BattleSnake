@@ -656,19 +656,6 @@ def _move(game_state):
         on_edge = (cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1)
         if on_edge:
             s -= 3
-            # LATE-GAME (long snake) edge penalty: coiling risk grows with length.
-            # We lose ~10% of games by spiraling into wall traps around length 15-25.
-            if my_len >= 12:
-                # Count how many of my body segments (head-side, first 8) are on ANY edge
-                edge_body = sum(1 for seg in my_body[:8]
-                                if seg[0]==0 or seg[0]==w-1 or seg[1]==0 or seg[1]==h-1)
-                # If already have 3+ body segs near walls, extra penalty on more edge moves
-                if edge_body >= 3:
-                    s -= 5 + 2 * (my_len - 12)  # grows with length
-                # Space-margin gated: if margin < 6 and long, edge is very risky
-                margin_here = c["space"] - c["new_len"]
-                if margin_here < 8 and my_len >= 15:
-                    s -= 8
             # EARLY-GAME edge penalty: short snakes shouldn't skulk on walls unnecessarily.
             # (Wall-mirror trap risk is compounded before we've grown large enough to survive it.)
             if my_len <= 6:

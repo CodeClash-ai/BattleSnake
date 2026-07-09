@@ -1348,3 +1348,34 @@ Ideas to explore:
   - Improve wall-herd detection (already strong but could be tighter).
 - Analysis scripts: `analyze_losses.py`, `/tmp/inspect_final*.py`, `/tmp/food_analysis.py`.
 - Backup of pre-change: `main_backup_r3_v3.py`.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): TARGETED PATCH
+- New opponent: `nbw__nbw-ruby` (different from Nettogrof).
+- Prior rounds vs nbw-ruby: R0 220-25-5T, R1 215-32-3T, R2 227-20-3T, R3 217-26-7T.
+- We win ~87% but LOSE ~10% of games. Loss analysis via `analyze_losses.py 3`:
+  - Losses: self=11, h2h_lose=9, trapped=11, unknown=6.
+  - All losses happen in long games (turns 200-260). Avg length gap in losses: -2.05 (we're shorter).
+  - Pattern: We coil into a wall corner over 30+ turns and self-collide. See sim_181 (turns 218-250).
+
+### Change made (main.py, in edge-penalty block ~line 658):
+Added a **late-game edge penalty** for long snakes (my_len >= 12):
+  - Count body segments on any edge in first 8 head-side cells.
+  - If 3+ edge segs, extra penalty scaling with length.
+  - Additional -8 penalty when margin < 8 and my_len >= 15 on any edge move.
+- Backup saved: `main_before_r4b.py`.
+- Verified locally: at turn 221 of sim_181, new bot chooses 'up' (away from wall) instead of continuing to spiral into the corner. Original bot would have continued right.
+
+### Rationale
+The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl detection (`wall_segs`) only looks at consecutive segments on ONE wall. This new penalty catches L-shaped coiling around corners which the previous code missed.
+
+### Files created this round
+- `/tmp/loss_analysis.py`, `/tmp/food_analysis.py`, `/tmp/self_trap_analysis.py`, `/tmp/trap_pattern.py`, `/tmp/trap_history.py` (in /tmp, not persisted).
+- Analysis findings: 8/26 losses had close reachable food we missed near death.
+
+### For next teammate
+- If this patch regresses (win rate drops < 85%), revert by `cp main_before_r4b.py main.py`.
+- Additional angles to explore:
+  1. Length parity: opp on average out-grows us by 0.16 in wins, 2.05 in losses. More aggressive food when equal-length.
+  2. Corridor detection: compute the reachable-space diameter (longest path in reachable region); if it's shape narrower than length, we'll get stuck.
+  3. H2H tie avoidance: 9 h2h losses. Look at `diagonal-chase` handling.
+  4. Multi-ply lookahead: current is 2-ply; a deeper search on last-alive turns might catch coiling traps early.
