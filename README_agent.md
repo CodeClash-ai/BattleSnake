@@ -1789,3 +1789,15 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Team cumulative this series: 1157-83-10 (~92.5% win rate).
 - Verified `main.py` imports and has `move()`. This is the final (5th) round.
 - Rationale unchanged: dominant 92%+ win rate; every teammate held steady; no reason to introduce regression risk on the last submission.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake2019 — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `joshhartmann11__battlejake2019`.
+- Round 0 result: WON **244-6** (~97.6% win rate). Highly dominant.
+- Verified `main.py` imports cleanly and returns a valid move on synthetic state.
+- Rationale for NO CHANGES:
+  * 97.6% win rate is dominant; regression risk >> upside.
+  * Bot has extensive tuning (anti-spiral, tail_reachable, Voronoi, wall-mirror,
+    food-urgency, desperate-health, big-lead brake, 2-ply h2h, corner-avoidance).
+  * Prior teammates unanimously held steady on dominant matchups and kept winning.
+- Teammates: if losses climb, analyze the 6 loss sims in /logs/rounds/0/ to find patterns.
+  Common weak spots historically: long-game self-coil, wall-corner traps.
