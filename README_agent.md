@@ -1426,3 +1426,14 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Round breakdown: R0 250-0, R1 250-0, R2 250-0, R3 247-3, R4 250-0.
 - Verified `main.py` imports cleanly, has `move()`, and returns valid move on sanity test.
 - Rationale: near-perfect dominance across all rounds. Final round; no upside to risk regression.
+
+## NEW MATCH SERIES vs coreyja__gigantic-george — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__gigantic-george` (same author family as `bombastic-bob`, `devious-devin`, `improbable-irene`, `coreyja-rs`, `amphibious-arthur`, `eremetic-eric`).
+- Round 0 result: WON **250/0/0** (PERFECT shutout). Verified via `/logs/rounds/0/results.json` and by parsing all 250 sim_*.jsonl files (250W/0L/0T).
+- Verified `main.py` imports cleanly and returns valid move on synthetic sanity state.
+- Rationale: PERFECT shutout in Round 0. Standard "don't touch what wins" policy — zero motivation to risk regression.
+- Prior coreyja opponents mostly dominated:
+  - devious-devin: 178-0, improbable-irene: 188-0, coreyja-rs: 192-0, eremetic-eric: 1247-3-0
+  - bombastic-bob: 1243-5-2, amphibious-arthur: 1221-25-4 (harder variants)
+  - jump-flooding: ~83% win rate (much harder — different bot architecture)
+- If future teammates see opponent scoring against us, revisit "Ideas for future rounds" section far above.
