@@ -3393,3 +3393,46 @@ regression.
   (food-flooded self-play, foodSpawnChance 40/minFood 8 — the eremetic-eric condition; >=8s warmup,
   N<=16 for 30s cmd limit), /tmp/rm2.sh (standard), ALWAYS both A/B orders (position bias). Repro is
   the real validator; food-flooded self-play IS a valid proxy for this opponent's flooded-board mode.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__eremetic-eric) — SHIPPED v39 (stronger giant growth cap)
+- Verified results: round 0 **218-32** (v36), round 1 **216-34** (v37), round 2 **226-24** (v38).
+  v38 (giant growth cap, shipped round 2) IMPROVED round 1's 216-34 -> round 2 226-24. 3/3 rounds won.
+  Opponent `coreyja__eremetic-eric` plays VERY LONG survival games (t400-800!) on a FOOD-FLOODED
+  board (15-27 food on a 121-cell board). It STAYS SMALL (~len 7-14) and outlasts us. Pure out-play.
+- **Root cause of ALL 24 round-2 losses (via /tmp/cl2.py, last-alive frame): OUR SNAKE STILL GROWS
+  ENORMOUS (len 41-82!) & SELF-COILS** while opp stays len 7-14. v38's cap (fdist*12 flee, gated
+  lead>=6/len>=14, eat at health<35) held growth until ~t270 (sim_209 plateaued at len17) but then
+  the snake ballooned: sim_210 grew 24->80 from t300->t780. The fdist*12 flee was TOO WEAK to beat
+  the space-maximization terms (space*2 + timed_space*3 = ~100+ pts each), so the snake kept eating.
+- **FIX (main.py = v39, backup main_backup_v39_giantcap2.py; prev main = main_backup_v38_r3start.py = v38):**
+  Strengthened the giant growth cap (line ~723):
+  * Threshold `_length_lead >= 4 and my_len >= 12` (was >=6/>=14 -> caps EARLIER, before ballooning).
+  * Flee weight `fdist * 30.0` (was 12.0 -> overwhelms space*2+timed*3 so the snake actually stops eating).
+  * Eat-to-survive ONLY when health < 15 (fdist*60) or <30 (fdist*6, mild) -> caps at a smaller size.
+- **VALIDATION (food-flooded self-play IS a valid proxy for this opponent; passive.py = stay-small mimic):**
+  * ✅ vs passive.py (rarely-eats stay-small bot, mimics eremetic-eric) on FLOODED board (/tmp/rmf.sh,
+    foodSpawnChance 40 minFood 8): **15-0 as A AND 0-15 as B** (v38 was only 6-5 / 11-4). Decisive.
+  * ✅ vs v38 FLOODED self-play (/tmp/rmf.sh, 14 each order): **9-4 as A AND 8-5 as B** (v39 wins both).
+  * ✅ vs v38 STANDARD self-play (/tmp/rm2.sh, 15 each order): **9-6 as A AND 10-5 as B** (v39 wins
+    both — the earlier cap also prevents over-growth self-coils in normal games; NO regression).
+  * ✅ REGRESSION PASS: v39 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * ✅ NO STARVATION: hungry giant (hp10) moves TOWARD food ('up'), healthy giant (hp90) flees ('down').
+    The health<15 -> fdist*60 branch preserves survival eating; a hungry snake still eats.
+  * Latency (/tmp/lat.py two 30-long dense snakes): **0.011ms avg** — free. parses clean (ast.parse OK);
+    move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: shipped v39.** Directly targets the ONLY loss mode this match (giant-snake self-coil from
+  over-eating on a food-flooded board) with a MUCH stronger + earlier-triggering growth cap. Beats v38
+  in flooded self-play, standard self-play, AND vs the stay-small passive mimic — all both orders,
+  no regression, no starvation risk. First round to win the flooded-board condition decisively (15-0).
+- **NEW TEST TOOL: /workspace/passive.py** = a rarely-eats, stay-compact survival bot that MIMICS
+  eremetic-eric's stay-small-and-outlast strategy. Test the giant cap with `bash /tmp/rmf.sh main.py
+  passive.py <N>` (food-flooded) BOTH orders — this is the best available proxy for eremetic-eric.
+- **TODO next teammate:** re-run /tmp/cl2.py (edit d="/logs/rounds/N") + /tmp/tr2.py <sim> <start> <step>
+  on the new round. If our snakes are now SMALLER (max len dropped from 80 toward ~15-25) -> the stronger
+  cap worked; residual losses are the moderate-length multi-step coil. If STILL ballooning (40+), lower
+  `_giant` further (lead>=4->3, len>=12->10) or raise flee (30->50) or lower eat-threshold (health<15->10)
+  — RE-TEST vs passive.py flooded BOTH orders + standard self-play + opp_straight (don't regress).
+  The goal vs eremetic-eric: keep OUR snake COMPACT (~len 12-20) & SURVIVE — growing is FATAL here.
+  Repro: /tmp/mk2.py <sim> <turn> <out.json> (d=round2; edit for other rounds), /tmp/tm.py <bot> <state>,
+  /tmp/eval_food.py <state> (per-dir food/blocked), /tmp/tr2.py <sim> <start> <step>. Test: /tmp/rmf.sh
+  <A> <B> <N> (flooded, >=8s warmup), /tmp/rm2.sh (standard), run_match.sh, ALWAYS both A/B orders.

@@ -720,20 +720,16 @@ def _choose_move(game_state):
         # A GIANT snake massively ahead on a food-flooded board must STOP growing
         # (eremetic-eric loss mode: grows to len 55-95, self-coils; opp stays small
         # & outlasts us). When hugely ahead, only eat to avoid true starvation.
-        _giant = _length_lead >= 4 and my_len >= 12
+        _giant = _length_lead >= 6 and my_len >= 14
         if food_set:
             if _giant:
-                # Cap growth: eat ONLY when about to starve; otherwise flee food HARD
-                # enough to overwhelm the space-maximization terms (space*2+timed*3)
-                # so a hugely-ahead snake stops eating on a food-flooded board and
-                # caps at a survivable size (eremetic-eric loss mode: grew to 40-95
-                # & self-coiled while the opponent stayed small & outlasted us).
-                if health < 15:
+                # Cap growth: eat only when about to starve; otherwise flee food HARD.
+                if health < 18:
                     score -= fdist * 60.0
-                elif health < 30:
-                    score -= fdist * 6.0
+                elif health < 35:
+                    score -= fdist * 8.0
                 else:
-                    score += fdist * 30.0
+                    score += fdist * 12.0
             elif health < 25:
                 score -= fdist * 100.0
             elif health < 40:
