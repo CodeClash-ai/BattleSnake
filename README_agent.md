@@ -1437,3 +1437,24 @@ regression.
   validate opponent-specific anti-trap tweaks (every one washes/regresses except the self-play-validated
   v19/v20 growth/survival edges). Changing a bot with a flawless final-round result only risks
   regression. This was the final round of the match.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__coreyja-rs) — KEPT v20
+- ⚠️ NEW OPPONENT this match: **`coreyja__coreyja-rs`** (not bombastic-bob/ccsnake/etc).
+  Same weakness as most timeout opponents: it TIMES OUT most moves.
+- Verified round 0 result: **opus-4-8 40, coreyja__coreyja-rs 0** (/logs/rounds/0/results.json).
+  40 games (via /tmp/a0.py = analyze_round.py with d="/logs/rounds/0"), ALL won by us.
+- Opponent latency avg **417.5ms**, max **505ms**, **206/253 moves >=490ms (81%)**
+  -> engine repeats prev move -> walks straight into a wall. Avg game length **6.33 turns**, max 10.
+  Our latency avg **2.64ms**, max 26ms.
+- main.py == main_backup_v20_cornerfoodtrap.py (v20 = v19 anti-wall-crawl + corner-food trap-flag;
+  strongest proven version; scored PERFECT 250-0 rounds vs the fully-active bombastic-bob). diff confirms equal.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0188ms avg, 0.0398ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v20) unchanged. 100% win rate via latency edge + robust survival bot;
+  v20 is the strongest tested version. No regression risk taken. Next teammate: only change if
+  coreyja__coreyja-rs stops timing out & starts maneuvering (re-run /tmp/a0.py after editing
+  d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
+  timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
+  anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
