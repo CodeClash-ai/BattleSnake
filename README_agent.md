@@ -1226,3 +1226,48 @@ regression.
   /tmp/tr.py <gid> (per-turn legal moves). Analyze: /tmp/a2.py (=analyze_round.py d="/logs/rounds/N").
   Test: /tmp/rm2.sh <A> <B> <N> (>=4s warmup), ALWAYS both A/B orders. Repro is the real validator.
   Backup of this round's start: main_backup_v18_r2.py (== v18).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs ccSnake2018__ccsnake) — SHIPPED v19 (anti-wall-crawl)
+- Results ALL 4 rounds won: round 0 **232-16 (+2t)**, round 1 **228-21 (+1t)**,
+  round 2 **228-20 (+2t)**, round 3 **230-19 (+1t)** (opus-4-8 vs ccSnake2018__ccsnake).
+  Opponent FULLY ACTIVE (round 3 latency avg 34.5ms, 0/19001 moves >=490ms; avg game 75.9
+  turns, max 182). NO latency free wins — pure out-play. Losses stuck ~16-21/round.
+- **Root cause of losses = HIGH-HEALTH SELF-TRAP (wall-crawl into corners).** Via /tmp/a3.py
+  (=analyze_round.py d="/logs/rounds/3"): nearly EVERY loss is our LONGER snake (len 10-14,
+  **health 88-100** i.e. NOT hungry) dying at corners/edges: heads at (10,10),(0,0),(0,10),
+  (10,0),(3,0),(8,0), etc. It wall-crawls toward edge food and coils itself to death. Confirmed
+  matches prior teammates' rounds 1-3 traces (same mode).
+- **WHY it wall-crawls: `want_food` stayed True for a big healthy snake.** `want_food = health<75
+  or my_len<7 or _length_lead<3`. When only slightly ahead (lead=1-2) a healthy len-13 snake STILL
+  wanted food -> food pull (fdist*7-10) dragged it along the wall toward edge food -> corner death.
+  This ALSO disabled the `not want_food` anti-crawl/tail-follow terms.
+- **FIX (main.py = v19, backup main_backup_v19_wallcrawl.py; prev main = main_backup_v18_r3.py):**
+  1. **Tightened want_food:** `_big_safe = my_len>=10 and health>=65 and _length_lead>=1`; if
+     `_big_safe: want_food=False`. A big, healthy, at-least-even snake stops racing food (re-enables
+     the anti-crawl/tail-follow terms). Small/hungry/behind snakes still race (perimeter food OK).
+  2. **Anti-wall-crawl term:** for `my_len>=10 and health>=60`, `score += dist_to_wall * 2.5`
+     (dist_to_wall = min dist to any wall, 0 on wall, ~5 at center). Nudges a big healthy snake
+     OFF the perimeter toward open board so it doesn't coil into a corner. Weight kept MODERATE
+     (2.5) so it never distorts small-snake food-racing (which needs perimeter food).
+- **RESULTS (self-play /tmp/rm2.sh, BOTH A/B orders — GENUINE SYMMETRIC WIN, not position bias):**
+  * v19 as A vs v18: **27-13** and **25-15**. v19 as B vs v18: **25-15**. Combined ~65% BOTH orders.
+  * v19 vs v17: 19-11. This is the FIRST tweak this whole match (rounds 1-3) that WINS self-play
+    both orders instead of washing — because avoiding wall-crawl-death is a general growth/survival
+    edge both bots feel (unlike opponent-specific traps that self-play can't reproduce).
+- **REGRESSION PASS:** v19 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+- **Tuning:** dist_to_wall weight 1.5 / 2.5 / 3.5 are all equivalent (differences = pure position
+  bias when tested both orders). Kept 2.5 (middle).
+- Latency (/tmp/lat.py two 28-long snakes, dense 11x11, 3 food, 200 moves): **0.029ms avg, 0.13ms max**
+  (timeout 500ms) — free. parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v19.** Directly targets the ONLY loss mode (high-health wall-crawl self-trap)
+  and beats v18 both self-play orders with no regression. This is the first genuine self-play win
+  of the match (prior anti-trap tweaks only washed/regressed).
+- **TODO next teammate (FINAL round likely):** re-run /tmp/a3.py (edit d="/logs/rounds/N") + /tmp/tr.py
+  <gid> on the new round. If corner self-traps PERSIST, options: (a) widen anti-wall-crawl to
+  my_len>=8 or health>=50; (b) raise weight toward 3.5-5.0 (test both orders — but it may over-center);
+  (c) expand trap_food to flag edge/corner food when WE are big+healthy even with NO enemy nearby.
+  If losses flip to being-outgrown (short snake), push food weights (v14/v13 logic present). The hard
+  residual mode is genuine MULTI-STEP corridor collapse (last-free-choice ~3 turns before death, all
+  one-step metrics look fine) — needs soft multi-step self-sim (main_backup_v15_multistep.py, make it
+  a soft penalty not a hard filter). Test: /tmp/rm2.sh (>=4s warmup; all-draws=server not ready, rerun),
+  ALWAYS both A/B orders (position bias dominates 40-game runs). Repro is the real validator.

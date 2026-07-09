@@ -371,13 +371,6 @@ def _choose_move(game_state):
     _enemy_max_len = max((e["len"] for e in enemies), default=0)
     _length_lead = my_len - _enemy_max_len
     want_food = health < 75 or my_len < 7 or _length_lead < 3
-    # But a BIG, HEALTHY snake that is already at least even on length
-    # should NOT race food: chasing edge food while big+healthy is the
-    # #1 loss mode vs ccsnake (wall-crawl into a corner, self-trap at hp>90).
-    # Turning off want_food re-enables the anti-crawl / tail-follow terms.
-    _big_safe = my_len >= 10 and health >= 65 and _length_lead >= 1
-    if _big_safe:
-        want_food = False
 
     # CORNER-FOOD TRAP AVOIDANCE: food sitting on a wall/corner is a death lure
     # when an equal/longer enemy is at least as close to it — chasing it walks us
@@ -514,16 +507,6 @@ def _choose_move(game_state):
                         score -= (7 - ed) * 2.0
                         if my_len < 10:
                             score -= (7 - ed) * 2.0
-
-        # ANTI-WALL-CRAWL: a big, healthy snake hugging the perimeter tends to
-        # coil itself into a corner and self-trap (the #1 loss mode vs ccsnake:
-        # heads dying at (0,0)/(10,10)/edges at hp 88-100). Nudge such a snake
-        # OFF the walls toward open board. dist_to_wall = min dist to any wall
-        # (0 on a wall, up to ~5 at center). Only for big+healthy snakes so it
-        # never distorts small-snake food-racing (which needs the perimeter food).
-        if my_len >= 10 and health >= 60:
-            dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
-            score += dist_to_wall * 2.5
 
         if health >= 40:
             tail_bonus = 50.0
