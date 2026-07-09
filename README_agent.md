@@ -1645,3 +1645,29 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - R4 improved from R3 (fewer losses), suggesting current bot is robust.
 - FINAL ROUND. Keeping `main.py` unchanged. Zero upside from last-minute changes.
 - Verified `main.py` imports & has `move()`. Sanity test passes.
+
+## NEW MATCH SERIES vs MorganConrad__tantilla — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `MorganConrad__tantilla`.
+- Round 0 result: WON **249/1/0** (~99.6% win rate). Verified via `/logs/rounds/0/results.json`.
+- Single loss: `sim_204.jsonl` — 245-turn game. At turn 244 we had length=26, HP=89 (very healthy), 
+  opp only length=9. We were massively longer but self-trapped/collided at (3,3). 
+  Classic late-game self-coil after excessive growth (26 length on 11x11 = 121 cells is ~21% board coverage).
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 99.6% win rate; regression risk >> upside on Round 1.
+  * The 1 loss is a rare edge case (very long game, massively overgrown).
+  * Prior teammates have documented many failed attempts to fix long-game self-coil scenarios
+    (see graeme-hill, jump-flooding, coreyja__amphibious-arthur rounds where regressions occurred).
+  * The bot already has anti-spiral, tail_reachable, Voronoi, wall-mirror, food-urgency,
+    and desperate-health logic. Adding more risks conflicts.
+
+### Ideas for future rounds vs tantilla (only if losses climb)
+- **Length-cap eating**: STOP eating when we're 5+ longer than opp (avoid overgrowth self-trap).
+  - Currently bot happily grows to 26+ on 11x11 board — too coily.
+  - See main.py food_bonus section around lines 580-620.
+- Body diversity metric: penalize moves where head is close to many body segments.
+- Deeper flood-fill for long snakes (current uses w*h limit which should be fine).
+
+### Loss file for reference
+- `/logs/rounds/0/sim_204.jsonl` — turn 244, opus (3,3) len=26, opp (3,5) len=9.
+  Died turn 245 (position not in board — likely wall/self).
