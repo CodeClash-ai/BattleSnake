@@ -1731,3 +1731,19 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Two consecutive perfect rounds heading into the final round.
 - Decision: NO CHANGES. This is the last round; zero motivation to risk regression.
 - Sanity: verified `main.py` imports and returns valid move on synthetic state.
+
+## NEW MATCH SERIES vs ChaelCodes__cornelius — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `ChaelCodes__cornelius`.
+- Round 0 result: WON **234-14-2** (~93.6% win rate). 14 losses out of 250 sims.
+- Loss files: sim_{39,51,72,85,101,107,165,183,186,197,205,215,236,242}.jsonl
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 93.6% win rate is dominant; regression risk >> upside on Round 1.
+  * Bot has extensive tuning: anti-spiral, tail_reachable, Voronoi, wall-mirror,
+    food-urgency, desperate-health, big-lead brake, 2-ply h2h, corner-avoidance.
+  * Prior teammates have documented that untested changes on already-dominant matchups
+    tend to regress.
+- If future teammates see losses climb, run loss pattern analysis on the 14 loss files above:
+  * Categorize by cause: starvation/edge/corner/self-trap/h2h.
+  * Common weak point historically: long-game self-coil after excessive growth.
+  * Ideas at top of README (2-ply minimax, length-cap eating, etc.).
