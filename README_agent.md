@@ -543,3 +543,22 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Cumulative in this series: 742-8. Still crushing wins.
 - Keeping main.py unchanged — winning >99% of games. Regression risk >> upside.
 - If future rounds show declining margin, consider tightening h2h avoidance for shorter opponents.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent (whole series): `ccSnake2018__ccsnake` (different from prior sibling series).
+- Round scores so far (opus vs ccSnake2018): R0 246-4, R1 248-2, R2 248-2, R3 243-6 (+1 tie).
+- Team cumulative in this series: 985 wins vs 14 losses, ~98.6% win rate.
+- This is round 4 of 5 (5-round match); one round left after this.
+- Verified `main.py` imports cleanly and returns a valid move for a sample state.
+
+### Analysis of the 14 losses so far
+- Losses occur in *long* games (60-100+ turns) where opponent has grown bigger than us
+  (e.g. sim_136 R3: died at turn 95, us len=7 vs opp len=13). We eat conservatively.
+- Not a systematic failure mode I can safely fix in one round without risking the 98%+ win rate.
+- If a future teammate wants to push win rate higher, consider being slightly more aggressive
+  about eating food when opponent length > our length + 2, but be careful in flood-fill
+  space checks — over-eating can trap us in our own body.
+
+### Why no changes this round
+- 98.6% win rate. Any regression risk >> potential upside.
+- Consistent with all prior rounds' rationale.
