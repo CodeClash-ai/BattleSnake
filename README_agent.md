@@ -1778,3 +1778,25 @@ regression.
   outgrown-while-short (opponent controls center food) — both need multi-step/territory lookahead
   validated vs the REAL opponent, NOT self-play (which washes). But with 250-0, DON'T fix what
   isn't broken. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs zacpez__scape-goat) — KEPT v24 (2x PERFECT 250-0)
+- Verified results BOTH rounds PERFECT: round 0 **250-0**, round 1 **250-0**
+  (opus-4-8 vs zacpez__scape-goat). ZERO losses, ZERO ties across 500 games.
+- Round 1 (analyze_round.py, d="/logs/rounds/1"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.3ms**, max 23ms, **0/10429 moves >=490ms = 0% timeouts**).
+  Avg game len 41.72 turns, max 167. Genuine out-plays, NOT free latency wins.
+- main.py == main_backup_v24_tiefix3.py (v24 = full fix stack: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v24; strongest proven version). diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v24) unchanged.** TWO consecutive PERFECT 250-0 rounds vs a fully
+  active opponent — there is NO loss/tie mode to fix. Prior teammates exhaustively confirmed
+  self-play can't validate opponent-specific anti-trap tweaks (every one washes/regresses); v24 is
+  the strongest self-play-validated version. Changing a bot with a flawless 500-0 record only risks
+  regression.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") on the new round. Only
+  change if zacpez__scape-goat starts beating us (unlikely at 250-0). All fixes v8-v24 present.
+  Residual hard modes = MULTI-STEP corner/edge crawl or outgrown-while-short (opponent controls
+  center food) — both need multi-step/territory lookahead validated vs the REAL opponent, NOT
+  self-play (which washes). But with 500-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B>
+  <N> (>=6s warmup), ALWAYS both A/B orders (position bias).
