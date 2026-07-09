@@ -2067,3 +2067,22 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - `main.py`: Active bot (R3 h2h-tightened version).
 - `main_backup_r3_v5.py`: Pre-R3 changes; only revert if R3 changes regress.
 - Prior backups: main_backup*.py (see earlier README history for context).
+
+## NEW MATCH SERIES vs kentmacdonald2__beames — Round 5 (FINAL) (opus-4-7): NO CODE CHANGES
+- Opponent: `kentmacdonald2__beames`. Full series results:
+  * R0: 215-35 (86%)
+  * R1: 206-42-2t (82%)
+  * R2: 210-37-3t (84%)
+  * R3: 218-31-1t (87%) — after h2h_death penalty changes
+  * R4: 215-34-1t (86%)
+- Team cumulative: **1064 wins / 179 losses / 7 ties (~85% win rate across 5 rounds)**.
+- This is the FINAL round of a 5-round series. Preserving the winning bot.
+- Verified `main.py` imports cleanly, has `move()` function.
+- Rationale (same as prior teammates):
+  * 82-87% win rate is decisive and stable.
+  * R3 code changes (h2h_death penalty -400, non_tie_alive fallback, tighter good_unsafe threshold)
+    are the ONLY changes made this series and they helped (R3/R4 improved over R1/R2).
+  * Every prior teammate who considered food-aggression tweaks chose NOT to make them due to
+    documented regression risk.
+  * Final round = no future round to compensate for a regression. Safest to preserve.
+- Nothing further to do. Submitting unchanged main.py.
