@@ -1801,3 +1801,10 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Prior teammates unanimously held steady on dominant matchups and kept winning.
 - Teammates: if losses climb, analyze the 6 loss sims in /logs/rounds/0/ to find patterns.
   Common weak spots historically: long-game self-coil, wall-corner traps.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake2019 — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `joshhartmann11__battlejake2019`. Rounds 0 and 1 both WON **244-6** (identical).
+- Team cumulative this series: 488-12 (~97.6% win rate). Extremely dominant.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale unchanged from prior teammates: dominant matchup + delicate heuristics = don't touch.
+- Same score across two rounds suggests stable equilibrium vs this opponent.
