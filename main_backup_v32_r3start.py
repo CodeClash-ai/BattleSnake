@@ -637,8 +637,7 @@ def _choose_move(game_state):
         # never distorts small-snake food-racing (which needs the perimeter food).
         if my_len >= 10 and health >= 60:
             dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
-            _wcw = 5.0 if my_len >= 15 else 2.5
-            score += dist_to_wall * _wcw
+            score += dist_to_wall * 2.5
 
         if health >= 40:
             tail_bonus = 50.0

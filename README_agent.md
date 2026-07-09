@@ -2888,3 +2888,53 @@ regression.
   self-play). Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/board.py
   <sim> <turn>, /tmp/lfc.py <sim> (per-turn legal). Test: /tmp/rmq.sh <A> <B> <N> (>=8s warmup, N<=14 to
   fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs OliverMKing__astar-snake) — SHIPPED v33 (very-big-snake anti-wall-crawl escalation)
+- Verified results: round 0 **189-57 (+4t)** (v30), round 1 **193-50 (+7t)** (v30),
+  round 2 **192-52 (+6t)** (v32). 3/3 rounds won but ~50 losses/round — TOUGHEST opponent yet.
+  Opponent FULLY ACTIVE, LONG games (avg ~146 frames, big snakes fill the board). Pure out-play.
+- **Round-2 loss breakdown (v32) via /tmp/lossall.py (d="/logs/rounds/2"):** 52 losses =
+  **SELFTRAP 36** (19 wall, 10 mid, 7 corner) + **OUTGROWN 16**. But nearly ALL are BIG snakes
+  (L11-28), HIGH health (86-100), often EQUAL/LONGER than opp, coiling into their own body.
+  Traced sim_13 ("OUTGROWN" L18/opp19): actually a self-coil (die at (5,4) after spiraling).
+  Traced sim_101 (wall L27 both): near-full-board endgame, walks into corner (10,10) at t294.
+  The dominant mode is the documented big-snake long-game self-coil; wall/corner = 26/52.
+- **FIX (main.py = v33, backup main_backup_v33_bigwallcrawl.py; prev main = main_backup_v32_r3start.py):**
+  Escalated the ANTI-WALL-CRAWL weight for VERY BIG snakes. Line ~640: `dist_to_wall * _wcw`
+  where `_wcw = 5.0 if my_len >= 15 else 2.5` (was flat 2.5). Steers a very large snake (the
+  self-coil loss population) more strongly OFF the perimeter toward open board, reducing the
+  wall/corner self-coils that dominate the losses. Gated at len>=15 so it never distorts
+  normal/small-snake food-racing (which needs perimeter food).
+- **VALIDATION (self-play IS a valid proxy here — keeping a big snake off the wall is a general
+  survival edge both bots feel, unlike opponent-specific traps):**
+  * SELF-PLAY WIN BOTH ORDERS, 3 batches (14/14/16 each) via /tmp/rmq.sh (>=8s warmup):
+    combined **cand(v33) 24 vs v32 19 as A, cand 25 vs v32 18 as B** (~57% both orders,
+    consistent across all 3 batches — genuine improvement, NOT position bias).
+  * REGRESSION PASS: v33 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **0.06ms avg, 0.17ms max**
+    (timeout 500ms) — free. parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+  * NOTE: does NOT flip the sim_101 near-full-board corner repro (head already ON wall x=10 at
+    t293, near-full board -> no off-wall alternative). That's the genuinely-hard endgame coil.
+    v33 wins by reducing wall-crawls in the MANY cases where the snake isn't yet cornered.
+- **DECISION: shipped v33.** Narrow, self-play-net-positive (both orders, 3 batches) escalation
+  of the proven anti-wall-crawl term for the very-big-snake population that dominates this
+  opponent's losses. Low-risk (only fires at len>=15), no regression.
+- **TODO next teammate:** re-run /tmp/lossall.py (edit d="/logs/rounds/N") + /tmp/tr.py <lossgame>
+  <startturn> on the new round. If big-snake self-coil losses PERSIST (they will partly — the
+  residual is the genuine multi-step coil where all one-step metrics equal at the true last-free-
+  choice ~5-8 turns before death, e.g. near-full-board endgame corner crawls):
+  * Try widening v33's gate to len>=13 (RE-TEST self-play both orders — len>=11 regressed in v32
+    round-2 notes) and/or raising _wcw (5.0->7.0) but keep it net-positive both orders.
+  * The "correct" but never-successfully-built fix = a multi-step self-sim that advances OUR body
+    using OUR OWN _choose_move scoring K=6-8 steps (NOT greedy — greedy escapes, confirmed by
+    /tmp/simtest.py & prior notes) and flags the coil as a SOFT penalty. Factor scoring into a
+    helper you can call recursively. Validate ONLY if it flips a coil repro AND self-play doesn't
+    regress both orders.
+  * 16/52 losses classified OUTGROWN but most are also self-coils by ~1 length; the food-race is
+    already aggressive.
+  Repro/analysis tools: /tmp/lossall.py (loss classification, d=round dir), /tmp/tr.py <sim> <turn>
+  (per-turn US/OP head/len/hp), /tmp/mkstate.py <sim.jsonl> <turn> <out.json> (writes state,
+  "you"=opus), /tmp/tm.py <bot> <state> (bot's move on state), /tmp/rmq.sh <A> <B> <N> (self-play,
+  >=8s warmup, N<=16 to fit 30s cmd limit), /tmp/lat.py (latency). ALWAYS both A/B orders (position
+  bias). Repro is the real validator for opponent-specific traps; self-play IS valid for general
+  survival edges like this anti-wall-crawl (it won both orders 3 batches).
