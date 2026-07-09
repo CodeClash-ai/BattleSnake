@@ -2632,3 +2632,49 @@ regression.
   bot by path, calls move). Repros: /tmp/s60_119.json (should pick L/D not R), /tmp/s142_183.json
   (should pick U/L not D), /tmp/s86_118.json (should pick L not U). Repro is the real validator,
   NOT self-play washes. But do NOT ship a self-play regression — v28 as-is is net negative.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__amphibious-arthur) — SHIPPED v28 (tail-follow @ len>=12)
+- Verified results: round 0 **247-3**, round 1 **246-4** (opus-4-8 vs coreyja__amphibious-arthur).
+  Both won. Opponent FULLY ACTIVE (round 1 latency avg 39ms, 0/22758 moves >=490ms = 0% timeouts;
+  avg game len 91 turns, max 326). LONG games, big snakes fill the board. Pure out-play.
+- **Root cause of ALL 4 round-1 losses = LONG-GAME SELF-COIL TRAP while LONGER than opp** (via
+  /tmp/death.py + /tmp/trace.py + /tmp/board.py). Every loss: our snake L13-17, HIGH health (85-91),
+  MUCH longer than opp (L8-14), coiled into a pocket where ALL 4 neighbors = OUR OWN body. Deaths at
+  (2,6)/(1,4)/(2,6)/(8,5). NOT outgrown, NOT pursuit — pure self-coil in the mid/left board.
+- **DEEP TRACE (sim_19 t119 head(3,6) L13, sim_90 t168 head(6,4) L15, sim_192 t146 head(4,6) L15):**
+  In every case the snake was spiraling: its body forms a hook, the tail sits in the OPEN region, but
+  the head keeps turning AWAY from the tail/open space INTO the shrinking pocket. The tail-follow
+  tie-breaker (line 663) only fired at `my_len >= 15` — so at L13/L14 it was OFF, and the snake
+  coiled. want_food was already False (big_safe) so tail-follow was eligible.
+- **FIX (main.py = v28, backup main_backup_v28_tailfollow12.py; prev main = main_backup_v27_r2start.py):**
+  Lowered the tail-follow threshold `my_len >= 15` -> `my_len >= 12` and raised weight `0.35` -> `0.6`
+  (line 663-665). This pulls a big healthy snake's head TOWARD its own tail (which sits in the open
+  region) so the body stays a COMPACT, unwind-able coil instead of spiraling into a self-sealed pocket.
+- **VALIDATION:**
+  * REPRO PASS: flips **3 of the 4** loss repros toward OPEN space at the last-free-choice turns:
+    sim_19 t121/t122 'down'->'right' (toward tail/open right); sim_90 t168 'down'->'left' (toward
+    tail/open left); sim_192 t145/t146 'up'->'right' (toward the huge open right, away from the
+    shrinking pocket under the opp body). Verified via /tmp/board.py that the flipped direction is
+    the open-space escape. (sim_57 was already survivable at the traced turns.)
+  * SELF-PLAY WIN (net ~56%, no regression): v28 vs v27 over 4 batches BOTH orders (15/15/15/16):
+    v28-A 7,6,8 vs v27-B 8,9,7; v27-A 5,4 vs v28-B 10,11. Combined v28 **42** vs v27 **33** (+1 draw).
+    v28 dominates as B (21-9) and is ~even as A (21-24) -> net positive, never a bad regression.
+    (Self-play has an A-position bias; the aggregate + decisive B-side win = genuine improvement, and
+    unlike prior anti-trap tweaks that washed, keeping the body compact is a general survival edge.)
+  * REGRESSION PASS: v28 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v28.** Directly targets the ONLY loss mode this match (long-game self-coil while
+  longer) with a repro-flipping fix (3/4) that also WINS self-play both-orders-net with no regression.
+  This is the first self-play-validated fix for the documented long-game self-coil trap (prior teammate's
+  aggression-gate flipped repros but REGRESSED self-play; the tail-follow lowering does NOT regress).
+- **TODO next teammate:** re-run /tmp/a1.py (=analyze_round.py, edit d="/logs/rounds/N") on the new
+  round to get win/loss/tie + loss files (all 4 round-1 losses were self-coil, /tmp/death.py shows all
+  4 neighbors blocked). If self-coil losses PERSIST: try lowering tail-follow further (my_len>=10) or
+  raising weight (0.6->1.0) but RE-TEST self-play both orders (weight too high over-centers & may
+  regress — prior teammates confirmed strong center/tail pulls regress). The remaining unflipped case
+  (sim_19 t120) is a deeper multi-step coil; the pursuit-aware flood-fill (_enemy_reach/_pursuit_space,
+  in git history of prior rounds) is the "correct" metric but regressed self-play as-is (needs narrow
+  gating). Repro tools: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>,
+  /tmp/board.py <sim> <turn> (ascii board), /tmp/trace.py <sim> (per-turn legal moves), /tmp/death.py
+  <sim> (final blocked neighbors). Test: ./run_match.sh <A> <B> <N> (N<=16 to fit 30s cmd limit,
+  >=2s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.

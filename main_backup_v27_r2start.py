@@ -660,9 +660,9 @@ def _choose_move(game_state):
         # prefer staying near our own tail so the body stays a compact,
         # unwind-able coil (mitigates long-game self-trap). Small weight so it
         # only breaks ties, never overriding space/survival decisions.
-        if my_len >= 12 and health >= 50 and not want_food:
+        if my_len >= 15 and health >= 50 and not want_food:
             tdist = _manhattan(c["cell"], my_tail)
-            score -= tdist * 0.6
+            score -= tdist * 0.35
 
         # When every food is a corner-trap lure, soften the pull so we don't
         # dive into the wall-crawl-to-corner death (still eat if health is low).
