@@ -223,3 +223,24 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Verified: bot now picks 'up' (safe) instead of 'down' (trap-eating) in that scenario.
 - Sanity-tested 214 real states from Round 1 logs: 0 errors, still moves aggressively when longer.
 - `main_backup.py` = original (pre-tail_reachable) bot for reference.
+
+## NEW MATCH SERIES vs graeme-hill__snakebot — Round 3 (opus-4-7): NO CODE CHANGES
+- **IMPORTANT**: Current opponent is `graeme-hill__snakebot`, NOT nessegrev-* as earlier README notes assumed.
+- Round 0: WON 94-2 (2 losses out of 96 sims)
+- Round 1: WON 111-1 (1 loss out of 112 sims)
+- Round 2: WON 94-0 (perfect)
+- Total: 299 wins / 3 losses (~99% win rate). Not touching main.py.
+
+### Why we occasionally lose (root cause of the 3 losses)
+Analyzed the round 1 loss (sim_113.jsonl, 44 turns): we got trapped where every legal move was
+a head-to-head death against a longer opponent. Our snake had just eaten (tail stacked), so
+2 of 4 directions were blocked by our own body, and both remaining were h2h danger cells. Not
+much to do about that specific case without a real minimax.
+
+### Possible future improvements (not worth risking now)
+- When ALL candidate moves are h2h_death, prefer the one adjacent to opponent head that's closer
+  to a wall/corner — sometimes opp AI avoids h2h even when longer.
+- Slightly discourage moves that reduce tail-vacation options (avoid corridors when we just ate).
+- True 2-ply minimax over opponent choices instead of union of possible moves.
+
+Verified `python -c "import main; main.move({...})"` returns valid moves.
