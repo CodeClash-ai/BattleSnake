@@ -398,58 +398,53 @@ def _move(game_state):
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 5
-        # Corner/edge food-chase penalty: don't take food into a wall trap.
+        # Corner/edge food-chase penalty when a larger opp is close: don't take food into a trap.
         cx0, cy0 = c["cell"]
         if c["eats"]:
             corner = (cx0 in (0, w-1)) and (cy0 in (0, h-1))
             on_edge0 = (cx0 == 0 or cx0 == w-1 or cy0 == 0 or cy0 == h-1)
+            # Nearest opp head distance and length
             for oid_, info__ in opp_head_moves.items():
                 oh__ = info__["head"]
                 dman = abs(oh__[0]-cx0)+abs(oh__[1]-cy0)
-                opp_bigger = info__["length"] >= my_len
-                # Larger/equal opp near edge food = trap (existing)
-                if opp_bigger and dman <= 5:
-                    if corner: s -= 40
-                    elif on_edge0: s -= 15
-                # Even a SHORTER opp near edge/corner food can trap us (herd into corner).
-                # Penalize less severely but still deter.
-                elif not opp_bigger and dman <= 4:
-                    if corner: s -= 25
-                    elif on_edge0: s -= 10
+                if info__["length"] >= my_len and dman <= 5:
+                    if corner:
+                        s -= 40
+                    elif on_edge0:
+                        s -= 15
         # Edge/wall penalty. Much stronger when a >=length opponent is on inner adjacent row/col
         # (mirror-chase trap along wall).
         cx, cy = c["cell"]
         on_edge = (cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1)
         if on_edge:
             s -= 3
-            # Detect wall-chase trap: opp head on/near inner adjacent row/col.
-            # NOTE: Even a SHORTER opponent can herd us into a corner where we die
-            # from walls/self, so trap geometry matters more than head-to-head length.
+            # Detect wall-chase trap: same-or-longer opp head on the inner adjacent row/col within 2 cells
             trap_risk = False
-            trap_risk_hard = False  # opp is same-or-longer: extra penalty
             for oid, info_ in opp_head_moves.items():
+                if info_["length"] < my_len:
+                    continue
                 oh = info_["head"]
-                same_or_longer = info_["length"] >= my_len
-                # Check if opp is on inner adjacent row/col (mirror position),
-                # OR diagonal chase (within 2 inward and 5 along). Broader than exact mirror.
-                inner_mirror = False
-                if cy == 0 and oh[1] <= 2 and abs(oh[0] - cx) <= 5:
-                    inner_mirror = True
-                elif cy == h - 1 and oh[1] >= h - 3 and abs(oh[0] - cx) <= 5:
-                    inner_mirror = True
-                elif cx == 0 and oh[0] <= 2 and abs(oh[1] - cy) <= 5:
-                    inner_mirror = True
-                elif cx == w - 1 and oh[0] >= w - 3 and abs(oh[1] - cy) <= 5:
-                    inner_mirror = True
-                if inner_mirror:
-                    trap_risk = True
-                    if same_or_longer:
-                        trap_risk_hard = True
-                        break
-            if trap_risk_hard:
+                # If we're on bottom edge (y=0), danger if opp is at y=1 within 2 cells x-wise
+                # Consider opp within 4 cells along the wall direction:
+                if cy == 0 and oh[1] == 1 and abs(oh[0] - cx) <= 4:
+                    trap_risk = True; break
+                if cy == h - 1 and oh[1] == h - 2 and abs(oh[0] - cx) <= 4:
+                    trap_risk = True; break
+                if cx == 0 and oh[0] == 1 and abs(oh[1] - cy) <= 4:
+                    trap_risk = True; break
+                if cx == w - 1 and oh[0] == w - 2 and abs(oh[1] - cy) <= 4:
+                    trap_risk = True; break
+                # Also detect: opp is BEHIND us on inner row, chasing
+                if cy == 0 and oh[1] <= 1 and abs(oh[0] - cx) <= 4:
+                    trap_risk = True; break
+                if cy == h - 1 and oh[1] >= h - 2 and abs(oh[0] - cx) <= 4:
+                    trap_risk = True; break
+                if cx == 0 and oh[0] <= 1 and abs(oh[1] - cy) <= 4:
+                    trap_risk = True; break
+                if cx == w - 1 and oh[0] >= w - 2 and abs(oh[1] - cy) <= 4:
+                    trap_risk = True; break
+            if trap_risk:
                 s -= 60
-            elif trap_risk:
-                s -= 25  # shorter opp mirror; still risky (corner-death) but less severe
             # Corner is worse
             if (cx in (0, w - 1)) and (cy in (0, h - 1)):
                 s -= 15
@@ -465,9 +460,6 @@ def _move(game_state):
                 wall_segs = sum(1 for seg in my_body[:4] if seg[0] == w - 1)
             if wall_segs >= 2:
                 s -= 5 * wall_segs  # discourage prolonged wall crawl
-                # If also being chased/mirrored, extra penalty
-                if trap_risk:
-                    s -= 10 * wall_segs
         # Second-order trap: even one step from a wall while opp mirrors, is risky
         # This especially matters when body is trailing along wall.
         # Check if my new body is aligned along the wall for 2+ segments AND opp of >= length is on inner row

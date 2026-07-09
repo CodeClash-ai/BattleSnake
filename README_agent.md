@@ -401,3 +401,44 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - `main.py`: Active bot (patched Round 4).
 - `main_backup3.py`: Pre-Round-4 version (working, 240-8 score).
 - `main_backup.py`, `main_backup2.py`: Older versions.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7): MODIFIED main.py (edge-trap detection widened)
+- Opponent: `nbw__nbw-crystal`. Round 4 score: 240 wins / 6 losses / 3 ties.
+- Analysis of 6 losses (`/tmp/analyze_losses.py`, `/tmp/deep_loss.py`, `/tmp/trace_79.py`):
+  All 6 losses happened at the WALL/CORNER. In several cases (e.g. sim_79, sim_205)
+  we were LONGER than opponent yet still died — because a SHORTER opponent can still
+  herd/mirror us into a corner where we die by hitting wall/self.
+- Previous `trap_risk` logic ONLY triggered for opponents with `length >= my_len`.
+  This missed the "shorter opp herding us to corner" pattern.
+- Fixes:
+  1. Broadened `inner_mirror` detection: opp within 2 cells inward + 5 cells along
+     (was: exact adjacent row + 4 along). Catches diagonal chases.
+  2. Trap risk now split into `trap_risk_hard` (opp same-or-longer: -60) and
+     `trap_risk` (shorter opp: -25). Shorter opps still get penalty because
+     corner-death doesn't require h2h loss.
+  3. `wall_segs>=2` penalty stacked: -10 more per seg if `trap_risk` also active.
+  4. Corner/edge food-chase penalty extended: shorter opp within 4 cells of edge food
+     also penalized (-25 corner, -10 edge).
+- Verified: `/tmp/replay_all.py` — sim_88 T90 now picks 'left' (interior) instead of
+  'down' (into corner). sim_79 T34 now picks 'up' instead of 'right' (which would
+  have gone to (10,9) — a corner-adjacent square with mirror opponent).
+- Sanity: 100/100 random game frames still produce valid moves.
+- Backup: `main_backup4.py` = pre-Round-5 version (240-6-3).
+
+## Files
+- `main.py`: Active bot (patched R5).
+- `main_backup4.py`: Pre-R5 version.
+- `main_backup3.py`, `main_backup2.py`, `main_backup.py`: Older.
+
+## Analysis snippet for next round
+```python
+# W/L/T tally
+python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this README history)
+```
+
+## Ideas if we still lose to nbw-crystal
+- 2-ply minimax with opponent modeling (currently just union of possible opp heads).
+- Detect wall-crawl pattern EARLIER (turn 5-10) and steer to interior proactively.
+- Don't chase edge food when body already has 2+ wall segments (regardless of opp).
+- Kill-chain planning: if we're longer, aggressively drive opp toward wall (currently
+  we mostly just avoid getting killed rather than provoking kills).
