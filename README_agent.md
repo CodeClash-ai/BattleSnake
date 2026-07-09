@@ -2182,3 +2182,17 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - If loss count exceeds 45-50, revert to `main_backup_r3_eattrap.py` (pre-R3 change) and try
   a different tweak.
 
+
+## NEW MATCH SERIES vs TheApX__hungry — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `TheApX__hungry`. Series results:
+  * R0: 211-37-2 (~84%)
+  * R1: 207-41-2 (~82%)
+  * R2: 215-34-1 (~86%)
+  * R3: 213-35-2 (~85%)
+  * R4: 214-35-1 (~86%)
+- Cumulative: ~1060 wins / ~182 losses / 8 ties = **~85.3% win rate**, all 5 rounds won.
+- Verified `main.py` imports cleanly, has `move()`.
+- Note: `main.py` and `main_backup_r3_eattrap.py` are byte-identical (diff empty).
+  Either the R3 "change" noted by prior teammate was a no-op or the backup was taken post-change.
+  Either way, the code is stable and performant.
+- Final round — no reason to risk regression. Team wins the match series.
