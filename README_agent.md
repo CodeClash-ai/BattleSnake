@@ -2122,3 +2122,53 @@ regression.
   pursuit self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT
   self-play (which washes). But with 500-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N>
   (>=6s warmup), ALWAYS both A/B orders (position bias).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs rdbrck__btas) — KEPT v26
+- Verified results: round 0 **250-0**, round 1 **250-0**, round 2 **249-0 (+1 TIE)** (opus-4-8 vs
+  rdbrck__btas). 3/3 rounds won; 749-0 with 1 tie in 750 games. NOTE: analyze_round.py's default
+  parser returns games=0 for this log format — use /tmp/ana.py <dir> (reads the LAST line's
+  {"winnerName",...,"isDraw"} record; recreate from git if lost).
+- Opponent FULLY ACTIVE (round 2 via /tmp/ana.py: latency avg **53.1ms**, max 159ms,
+  **0/11990 opp moves >=490ms = 0% timeouts**). Pure out-play, NO free latency wins.
+- **Analyzed the SINGLE round-2 tie (game 653e1bb3, sim_163, /tmp/tie3.py + /tmp/dbg.py):**
+  PURSUIT WALL-CRAWL into corner -> forced mutual-death tie. Our len5 snake crawled RIGHT along
+  row y=1 (t16->t20) toward the right wall while the EQUAL-len (5) opponent mirrored/tracked us
+  from just above; then we went into the bottom-right corner (9,0) and crawled LEFT along y=0
+  while OP cut down the diagonal -> at t24 US(6,0) had ONLY one legal move (5,0) which OP could
+  also reach -> mutual death TIE (both len 5). **Root: the opponent positions itself BETWEEN us &
+  the (up/left) food, forcing us to flee sideways along a wall into the corner.**
+  * At t17 (head (6,1), food only at (6,10) straight UP, OP at (6,3) directly blocking):
+    up->(6,2) is an equal-H2H risk cell, so v26 (correctly, per tie-fix) took 'right'->(7,1) ->
+    began the rightward crawl. At t20 (head (9,1)) the only non-H2H moves were down->(9,0) [corner]
+    and right->(10,1) [wall] — BOTH have identical space=112/timed=116 (trap forms 4 turns later);
+    v26 took 'down'. This is the documented HARD multi-step pursuit/out-position trap: at the last
+    free choice ALL safe moves have equal one-step space, so no one-step metric distinguishes them.
+- **Tuning attempt this round — REJECTED (did NOT flip the trap):**
+  * v27 (main_backup_v27_test.py, now removed): extended the anti-wall-crawl term to SHORT snakes
+    (my_len<10) as a *1.5 dist_to_wall nudge, gated on an equal/longer enemy within manhattan 4.
+    DID NOT flip t20 ('down' still chosen — down(9,0) & right(10,1) both have dist_to_wall=0, so the
+    term doesn't differentiate them) NOR t17/t18 ('right' still chosen). The trap is driven by the
+    opponent blocking the food route (a positional out-play), not a one-step scoring bug. Reverted.
+  CONFIRMS all prior teammates: this pursuit/out-position tie mode can't be fixed with one-step
+  scoring (all safe moves equal at the last free choice), and food/edge tweaks regress self-play.
+- REGRESSION PASS: main.py (v26) vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Self-play sanity: v26 vs v26 = 3-7 (position-bias, no draws/crashes, full games); server logs clean.
+- Latency (/tmp/lat.py: two 28-long dense snakes, 10 food, 200 moves): **0.29ms avg, 0.62ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except (line 213) + self-guarded
+  _safe_fallback (line 219) -> cannot crash into a timeout. main.py == main_backup_v26_tiefix4.py
+  (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v26) unchanged.** 3/3 rounds won, 749-0 with only 1 tie (not a loss)
+  in 750 games. The single tie is a hard multi-step PURSUIT/out-position trap where the opponent
+  blocks our food route and forces a corner crawl; at the last free choice all safe moves have
+  identical one-step space (provably no one-step fix), and my anti-corner nudge (v27) didn't even
+  flip it. Prior teammates exhaustively confirmed food/edge/multi-step tweaks regress self-play.
+  No regression risk taken on a near-perfect bot.
+- **TODO next teammate:** re-run /tmp/ana.py <dir> (edit for /logs/rounds/N) on the new round.
+  Only change if rdbrck__btas starts BEATING us (unlikely — 1 tie in 750). The ONLY non-win mode
+  is the pursuit/out-position wall-crawl tie (opponent gets between us & food -> we flee into a
+  corner). The real fix needs TERRITORY/food-ownership lookahead (route to food WE reach first so
+  we don't get out-positioned) OR a careful multi-step pursuit-aware SOFT penalty — both must be
+  validated vs the REAL opponent (self-play eats symmetrically & washes/regresses every attempt).
+  All fixes v8-v26 present. Repro: /tmp/mkstate.py <turn> (game 653e1bb3, writes /tmp/state<T>.json),
+  /tmp/testmove.py <bot> <state>, /tmp/dbg.py (per-dir space/timed/fdist), /tmp/dbg4.py (h2h cells).
+  Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders. Repro is the real validator.
