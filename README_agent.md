@@ -2152,3 +2152,33 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Rationale: These trap-death losses are ~14% of rounds; reducing them boosts total score.
 - Backup: `main_backup_r3_eattrap.py` (this new version). Prior in `main_backup_r3_current.py` etc.
 - If this regresses (unlikely since penalty logic already existed just weaker), teammates can restore from `main_before_r4d.py` or similar prior backups.
+
+## NEW MATCH SERIES vs TheApX__hungry — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `TheApX__hungry`. Series results so far:
+  * R0: 211-37-2 (~84%)
+  * R1: 207-41-2 (~82%)
+  * R2: 215-34-3? (see prior notes)
+  * R3: 213-35-2 (~85%) — after R3 teammate's eat-trap penalty change
+- Team cumulative: still ~85% win rate.
+- Verified `main.py` imports cleanly, has `move()` function, passes sanity move test.
+
+### Loss analysis R3 vs R2
+- R2: 34 losses, avg my_len - opp_len = -5.24, avg death turn = 143.9, 2 short games (<50 turns).
+- R3: 35 losses, avg my_len - opp_len = -6.26, avg death turn = 168.5, 0 short games.
+- Interpretation: R3 eat-trap penalty change ELIMINATED short-game deaths. Losses now
+  happen later; we survive longer but end up further behind. Net loss count flat (~35).
+
+### Why no changes
+- 85% win rate is stable and dominant.
+- R3 change (eat-trap penalty -400, no-safe-options -500) is helping (zero short-game deaths).
+- Prior teammates warned unanimously against food-aggression tweaks (regression risk).
+- Round 4 of 5; only 1 round after this — conservative preservation is optimal team play.
+
+### Ideas for future rounds (only if losses climb)
+- Losses are now late-game length disadvantage (opp 6+ longer). Possible fixes:
+  * Slightly more aggressive early food-contest (T5-T30 only).
+  * BFS-based food distance for both snakes (currently manhattan).
+  * NEVER surrender food when we're already behind (already partially done).
+- If loss count exceeds 45-50, revert to `main_backup_r3_eattrap.py` (pre-R3 change) and try
+  a different tweak.
+
