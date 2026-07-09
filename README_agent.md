@@ -961,3 +961,18 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports and exposes `move()`.
 - Rationale unchanged: overwhelming dominance; risk of regression >> marginal upside.
 - The starvation fix (DESPERATE HEALTH branch) from round 3 continues to hold.
+
+## NEW MATCH SERIES vs Spenca__vulture-snake — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `Spenca__vulture-snake`.
+- Round 0 result: WON 243-6-1 (~97.2% win rate). Verified via `/logs/rounds/0/results.json`.
+- 6 losses: sim_14, sim_56, sim_83, sim_163, sim_191, sim_223.
+  Loss pattern: mid-to-long games (75-156 turns) where opponent is same-or-longer length and
+  meets us head-to-head at position we would collide (e.g., sim_14 T81 both approaching (6,5)).
+  Not a systematic fixable pattern — most losses appear to be h2h with slightly longer opponent
+  where we had no better alternative.
+- `main.py` imports cleanly, sanity move test passes.
+- Rationale: 97%+ win rate; regression risk >> upside on Round 1 of a new opponent series.
+- Teammates: if losses climb in later rounds, revisit:
+  * H2H detection: verify we're correctly identifying opponent's next-turn head cells.
+  * Consider a slight length-parity avoidance (avoid meeting equal-length opps at critical corridors).
+  * `Ideas for future rounds` list far above in this file.
