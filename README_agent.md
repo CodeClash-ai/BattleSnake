@@ -3436,3 +3436,48 @@ regression.
   Repro: /tmp/mk2.py <sim> <turn> <out.json> (d=round2; edit for other rounds), /tmp/tm.py <bot> <state>,
   /tmp/eval_food.py <state> (per-dir food/blocked), /tmp/tr2.py <sim> <start> <step>. Test: /tmp/rmf.sh
   <A> <B> <N> (flooded, >=8s warmup), /tmp/rm2.sh (standard), run_match.sh, ALWAYS both A/B orders.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__eremetic-eric) — KEPT v39 (all growth-cap tweaks regressed)
+- Verified results ALL 4 rounds won: round 0 **218-32** (v36), round 1 **216-34** (v37),
+  round 2 **226-24** (v38), round 3 **233-17** (v39). TREND: v38->v39 growth cap kept improving
+  (24->17 losses). Opponent `coreyja__eremetic-eric` plays VERY LONG survival games (t400-800!) on
+  a FOOD-FLOODED board (15-27 food on 121 cells); it STAYS SMALL (~len 7-19) and outlasts us.
+- **Round-3 loss classification (/tmp/cl3.py, last-alive frame): 17 losses, our snakes STILL
+  BALLOON to len 43-81** (hp mostly 100, opp len 7-19). Every loss = giant-snake self-coil
+  (mostly walls/corners). v39's cap (fdist*30 flee, lead>=4/len>=12, eat at hp<15) slowed but did
+  NOT stop the ballooning — on a flooded board food is UNAVOIDABLE (fdist tiny everywhere, snake
+  steps onto food while navigating), so fdist-based avoidance can't cap growth hard enough.
+- **Tuning experiments this round — ALL REJECTED (regress or wash vs v39):**
+  * v40 (lower giant threshold lead>=3/len>=10, flee fdist*80): vs v39 flooded self-play (/tmp/rmf.sh,
+    14 each order) = 8-5 as A but 4-9 as B -> aggregate v40 12 vs v39 14 (NET NEGATIVE, caps too
+    early in normal games). vs passive 11-1/9-3 (WORSE than v39's 12-0/11-1). REJECTED.
+  * v41 (keep v39 threshold, flee fdist*50, tail-follow tw=5.0@len>=25/3.0@len>=18): vs v39 = 7-6 A,
+    5-8 B -> aggregate 12 vs 14 (NET NEGATIVE). vs passive 13-1/10-4 = 23-5 (~= v39's 23-1). REJECTED.
+  * v42 (escalate anti-self-coil bias line 569: _acw=3.0@len>=30/2.0@len>=22/1.0@len>=15): vs v39 =
+    7-6 A, 4-9 B -> aggregate 11 vs 15 (NET NEGATIVE head-to-head). vs passive 16-0/14-2 = 30-2
+    (BEST vs passive, tied with v39's 30-2) — but slightly LOSES head-to-head vs v39. WASH/REJECTED.
+  CONCLUSION: v39 is at a LOCAL OPTIMUM for both proxies (flooded self-play + passive.py stay-small
+  mimic). Every strengthening of the growth-cap / anti-coil over-restricts normal play and loses
+  more games than the giant self-coil it saves. The residual losses are the documented genuine
+  multi-step self-coil at large length (all one-step flood/timed/static metrics equal at the true
+  last-free-choice ~5-8 turns before death; greedy self-sim escapes — confirmed by ALL prior notes).
+- REGRESSION PASS: main.py (v39) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v39_giantcap2.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v39) unchanged.** 233-17 is the BEST result this match (losses trending
+  down each round: 32->34->24->17). Every growth-cap/anti-coil tweak I tried (v40/v41/v42) regressed
+  or washed vs v39 in flooded self-play AND was no better vs the passive stay-small mimic. Iron
+  ship-rule (don't ship a self-play regression) -> keep v39. No regression risk taken on the
+  match's best-scoring, still-improving version.
+- **TODO next teammate (likely FINAL round):** re-run /tmp/cl3.py (edit d="/logs/rounds/N") on the
+  new round. If our snakes are SMALLER (max len dropping below ~40) the cap is finally working;
+  residual is the moderate-length multi-step coil. The FUNDAMENTAL problem: on a food-flooded board
+  food is unavoidable, so fdist-avoidance can't cap growth — the REAL fix is better COIL SURVIVAL at
+  large length (a multi-step self-sim using OUR OWN _choose_move scoring K=6-8 steps as a SOFT
+  penalty — NOT greedy, greedy escapes; never successfully shipped, regresses as a hard filter).
+  Or: a smarter food-avoidance that avoids ENTERING regions dense with food (not just the nearest
+  food cell). Test proxies: /tmp/rmf.sh <A> <B> <N> (flooded, foodSpawnChance 40/minFood 8, the
+  eremetic-eric condition; >=8s warmup, N<=16 for 30s cmd limit), passive.py (stay-small mimic,
+  `bash /tmp/rmf.sh main.py passive.py N`). ALWAYS both A/B orders (STRONG position bias — A-side
+  wins more; trust the AGGREGATE over both orders, not a single batch). Repro: /tmp/mk2.py <sim>
+  <turn> <out.json>, /tmp/tm.py <bot> <state>. DON'T ship a self-play regression (v40/v41/v42 all did).
