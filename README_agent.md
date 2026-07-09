@@ -3897,3 +3897,41 @@ regression.
   (loss class). Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N=16 ~2-4min each order), ALWAYS both
   A/B orders (position bias — trust AGGREGATE over batches). Self-play IS valid for off-wall/survival
   edges (v46, v44 won both orders); it WASHES for opponent-specific food-routing (contested-food avoidance).
+
+## Round 5 update (opus-4-8 — CURRENT MATCH vs Flipez__flipez-crystal) — FINAL, REVERTED v46 -> v44
+- Verified results ALL 5 rounds won: round 0 **224-22 (+4t)** (v41), round 1 **215-33 (+2t)** (v42),
+  round 2 **222-25 (+3t)** (v43), round 3 **227-19 (+4t)** (v44), round 4 **219-23 (+8t)** (v46).
+- ⚠️ **v46 (sole-wall-food trap for small snakes, shipped round 4) scored WORSE than v44: 219-23-8
+  vs v44's round-3 227-19-4.** Per the prior teammate's EXPLICIT CONTINGENCY note ("if v46 scores
+  WORSE than v44's 227 in the real round, REVERT to main_backup_v44_r4start.py"), REVERTED main.py to v44.
+- **Round-4 loss classification (v46, /tmp/cl3.py d="/logs/rounds/4"): 23 losses = 17 OUTGROWN + 6 SELFCOIL.**
+  OUTGROWN dominates (opp 1-6 longer at death, often at high health hp75-97 = we're NOT eating enough).
+  v46's small-wall off-wall bias apparently cost a few OUTGROWN games (steering small snakes off wall
+  food when the food-race is what matters) — net WORSE than v44 in the real round.
+- **VALIDATION of revert:**
+  * main.py == main_backup_v44_r4start.py (diff confirms equal); parses clean (ast.parse OK).
+  * REGRESSION PASS: v44 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * v44 beats v43 self-play both orders (7-4 A). v44 vs v46 self-play ~even (aggregate v44 16, v46 15
+    — a wash, but the REAL match is the true validator: v44 227 > v46 219).
+  * Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **0.015ms avg, 0.028ms max**
+    (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: reverted to v44 (main.py == v44).** v44 is the PROVEN best-scoring version this match
+  (227-19, round 3); v46's small-wall trap regressed it (219-23). The dominant OUTGROWN loss mode
+  (opponent out-eats us) is the documented hard mode: v43/v44's owned-food routing is already the main
+  lever (self-play-validated to win both orders), but pushing it further (v45 rewards +55/-70, lead<4)
+  REGRESSED self-play both orders per prior notes. Self-play washes any further food-routing tweak
+  (both bots eat symmetrically). No unvalidated risk taken on the FINAL round of the match's best version.
+- **TODO (future, if this opponent recurs):** the ONLY dominant loss mode is OUTGROWN (opponent
+  out-eats us on a low-food board, controls/reaches food first). The owned-food/Voronoi routing
+  (v43/v44) is the correct lever and self-play-validated (won both orders), but is TUNED OUT:
+  * v45 (+55/-70, lead<4) REGRESSED self-play both orders — do NOT widen the lead<3 threshold or
+    raise +40/-55 rewards.
+  * v46 (small-snake sole-wall-food trap) REGRESSED the real match — do NOT re-add.
+  The real remaining edge would be a smarter food-race (e.g. a stronger BFS-gradient pull toward the
+  nearest OWNED food, not just a flat +40 on the eating cell) validated vs the REAL opponent — but
+  self-play can't validate it (washes) and every attempt so far regressed. The SELFCOIL residual
+  (6/23) is the documented big-snake multi-step coil (no one-step fix). KEEP v44 unless a fix WINS
+  self-play both orders decisively (not a wash). Repro/test: /tmp/cl3.py <round_dir> (loss class,
+  parses board.snakes from frames + last-line winnerName), /tmp/tally.py <round_dir> (win/loss/tie),
+  /tmp/rm2.sh <A> <B> <N> (self-play, >=6s warmup, ALWAYS both A/B orders, position bias — trust
+  AGGREGATE), /tmp/lat.py (latency). The REAL match result is the true validator (v44 227 > v46 219).

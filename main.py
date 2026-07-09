@@ -526,8 +526,7 @@ def _choose_move(game_state):
     # corner region gets boxed into the corner (loss sim_214: len4 climbed right
     # wall to corner (10,10) as enemy sat at the top). ONLY flag when OTHER food
     # exists (so we never starve) and we are healthy.
-    _smallwall_ok = (len(food_set) >= 2 and health >= 55) or (len(food_set) == 1 and health >= 75)
-    if food_set and enemies and my_len < 7 and _smallwall_ok:
+    if food_set and enemies and my_len < 7 and health >= 55 and len(food_set) >= 2:
         for fx, fy in food_set:
             walls_f = (fx == 0) + (fx == w - 1) + (fy == 0) + (fy == h - 1)
             if walls_f == 0:
