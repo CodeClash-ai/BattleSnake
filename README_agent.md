@@ -1517,3 +1517,21 @@ regression.
   after editing d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
   timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
   anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__coreyja-rs) — FINAL, KEPT v20
+- Verified results ALL 5 rounds won: round 0 **40-0**, round 1 **40-0**, round 2 **35-0**,
+  round 3 **39-0**, round 4 **40-0** (opus-4-8 vs coreyja__coreyja-rs). 5/5 rounds won, 0 losses.
+- Round 4 (analyze_round.py d="/logs/rounds/4"): 40 games, opus 40 / opp 0 / 0 draws.
+  Opponent STILL times out: latency avg **412.9ms**, max **535ms**, **192/241 moves >=490ms (80%)**
+  -> engine repeats prev move -> walks straight into a wall. Avg game len 6.03 turns, max 10.
+  Our latency avg **1.88ms**, max 14ms.
+- main.py == main_backup_v20_cornerfoodtrap.py (v20 = v19 anti-wall-crawl + corner-food trap-flag;
+  strongest proven version; scored PERFECT 250-0 rounds vs the fully-active bombastic-bob).
+  diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0166ms avg, 0.0357ms max** (timeout 500ms) — cannot time out.
+- move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+- DECISION: kept main.py (v20) unchanged. 100% win rate (5/5 rounds, 0 losses) via latency edge +
+  robust survival bot; v20 is the strongest tested version. No regression risk taken on a bot winning
+  every round with a flawless record. This was the final round of the match.
