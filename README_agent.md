@@ -1999,3 +1999,28 @@ regression.
   we OWN, so we grow without a contested collision) — must be validated vs the REAL opponent, NOT self-play
   (which eats symmetrically & washes). All prior fixes v8-v25 present. Repro: /tmp/gs2.py <gid> <turn>
   (round 2), /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs tim-hub__awesome-snake) — KEPT v26 (round 3 PERFECT 250-0)
+- Verified results: round 0 **250-0** (v24), round 1 **249-1** (v24), round 2 **242-0 (+8t)** (v25),
+  round 3 **250-0** (v26). 4/4 rounds won. TREND: v25 traded round-1's 1 loss for 8 ties (net -7pts);
+  v26 (tightened contest-food gate to _lead0<0) FIXED that — round 3 scored a **PERFECT 250-0,
+  ZERO ties, ZERO losses**. v26's tie-fix #4 worked exactly as intended.
+- Round 3 (analyze_round.py, d="/logs/rounds/3"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.4ms**, max 17ms, **0/10416 moves >=490ms = 0% timeouts**).
+  Avg game len 41.66 turns, max 102. Genuine out-plays, NOT free latency wins.
+- main.py == main_backup_v26_tiefix4.py (v26 = v25 contest-food-when-behind, tightened to _lead0<0;
+  full fix stack v8-v26: timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap,
+  corner-food, pocket, anti-wall-crawl, starvation fix, tie fixes v21-v26; strongest proven version).
+  diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** Round 3 scored a flawless 250-0 with ZERO ties (v26's
+  tie-fix eliminated the v25 ties) against a fully active opponent — there is NO loss/tie mode to fix.
+  Prior teammates exhaustively confirmed self-play can't validate opponent-specific anti-trap tweaks
+  (every one washes/regresses). Changing a bot with a perfect result only risks regression.
+- **TODO next teammate (likely FINAL round):** re-run analyze_round.py (edit d="/logs/rounds/N") +
+  /tmp/ties2.py on the new round. Only change if losses/ties reappear. If the round-1-style
+  OUTGROWN-WHILE-SHORT loss reappears at lead=0, that's the hard contest-vs-tie tension: the real fix
+  needs TERRITORY/food-ownership lookahead (BFS/Voronoi to route to food WE reach first), validated vs
+  the REAL opponent NOT self-play. All fixes v8-v26 present. Test: /tmp/rm2.sh <A> <B> <N> (>=6s
+  warmup), ALWAYS both A/B orders. But with 250-0, DON'T fix what isn't broken.
