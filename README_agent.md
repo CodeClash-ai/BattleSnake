@@ -869,3 +869,42 @@ regression.
   losses become wall-squeeze/self-trap instead (not length), the anti-squeeze(v9)/timed_space(v8)/
   tail-follow(v10)/wall-pin(v11) logic is already present. Test tool: /tmp/rm2.sh (>=3s warmup);
   ALWAYS both A/B orders (position bias). Don't trust self-play washes as improvements.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs nbw__nbw-crystal) — SHIPPED v14 (harder food-race + center pull)
+- Verified results so far: round 0 **244-1 (+1 tie)**, round 1 **244-5 (+1 tie)**,
+  round 2 **233-6 (+7 ties)**, round 3 **242-3 (+5 ties)** (opus-4-8 vs nbw__nbw-crystal). 4/4 won.
+  v13 (round 3) IMPROVED on v12: losses 6->3, ties 7->5. Directionally correct — keep pushing food.
+- Opponent is now FULLY ACTIVE (round 3 via /tmp/a3.py=analyze_round.py d="/logs/rounds/3":
+  latency avg **125.3ms**, **0/3578 moves >=490ms = 0% timeouts!**). Avg game len 14.3 turns, max 84.
+  The latency-edge free wins are GONE — pure out-play now.
+- **Root cause of ALL 3 round-3 losses + the 5 ties = WE STAY TOO SHORT (wall-crawl camping).**
+  Via /tmp/lossdetail.py + /tmp/inspect.py on /logs/rounds/3: in every loss our snake was
+  **1-3 SHORTER** (us7 vs opp8/opp8/opp10) with **HIGH health (86-98)** — we were NOT eating!
+  Turn-by-turn (game ef456012) shows our snake CIRCLING THE PERIMETER (walls y=0,x=0,x=10) the
+  whole game, keeping health ~90-100, only occasionally grabbing corner food, while the opponent
+  ate the CENTER food and grew steadily. By turn 60 we were len7 vs opp len8 -> cornered at (0,0),
+  died. Ties (/tmp/tie.py game f31b2f96): equal-length H2H mutual death (t19 both len5 collide).
+  A LONGER snake converts those losses AND ties into WINS (wins H2H).
+- **FIX (main.py = v14, backup main_backup_v14.py; prev main = main_backup_v13_r3.py):**
+  * Food scoring: `_length_lead<0 -> fdist*14.0` (was 10.0); NEW `_length_lead<1 -> fdist*10.0`
+    (race hard even when roughly even); `want_food -> fdist*7.0` (unchanged).
+  * NEW CENTER PULL: `cpull = 1.2` (was flat 0.4) when `want_food and _length_lead < 2`.
+    Breaks the perimeter-camping habit that starves us of central food -> we grow & win length races.
+- **RESULTS (self-play /tmp/rm2.sh, BOTH orders, 2 batches of 40+40 = 160 games): v14 BEATS v13**
+  ~55% BOTH orders (not a wash!): batch1 v14-A 19-18, v14-B 22-15; batch2 v14-A 22-15, v14-B 19-18.
+  Combined v14 **82** vs v13 **66**. The center-pull/food-race makes v14 grow faster & win length
+  races even in self-play (unlike prior anti-trap tweaks which only washed).
+- REGRESSION PASS: v14 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.48ms avg, 0.68ms max**
+  (timeout 500ms) — free. main.py parses clean (ast.parse OK); move() wrapped in try/except +
+  self-guarded _safe_fallback -> cannot time out.
+- **DECISION: shipped v14.** Fixes the exact loss/tie mode (outgrown by camping the perimeter);
+  beats v13 both orders in self-play with no regression.
+- **TODO next teammate (FINAL round likely next):** re-run analyze_round.py (edit d="/logs/rounds/N")
+  + /tmp/lossdetail.py + /tmp/inspect.py (edit gid) + /tmp/tie.py on the new round. If we're STILL
+  outgrown/short in losses, push food weight / center pull further OR add food-contention (target a
+  DIFFERENT food when enemy is closer to nearest). If losses flip to wall-squeeze/self-trap, the
+  anti-squeeze(v9)/timed_space(v8)/tail-follow(v10)/wall-pin(v11) logic is all present. Test tool:
+  /tmp/rm2.sh (recreate from top notes, >=3s warmup, all-draws=server not ready rerun); ALWAYS BOTH
+  A/B orders (position bias). NOTE: this round self-play DID validate the fix (v14 beats v13 both
+  orders) because the fix is a growth-race edge both bots feel — unlike opponent-specific traps.

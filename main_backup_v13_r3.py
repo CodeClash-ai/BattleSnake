@@ -487,23 +487,14 @@ def _choose_move(game_state):
                 score -= fdist * 12.0
             elif _length_lead < 0:
                 # We are SHORTER than the enemy: strongly race for food to catch up.
-                score -= fdist * 14.0
-            elif _length_lead < 1:
-                # Roughly even length: still race hard so we don't get outgrown.
                 score -= fdist * 10.0
             elif want_food:
-                # Not comfortably longer (lead < 3) or moderate health: pursue food.
+                # Not comfortably longer (lead < 2) or moderate health: pursue food.
                 score -= fdist * 7.0
             elif my_len < 12:
                 score -= fdist * 2.0
 
-        # Center pull: base weak pull, but stronger when we are short and
-        # behind on length. Camping the perimeter keeps us safe but starves us
-        # of the central food the enemy uses to outgrow us -> we lose H2H.
-        cpull = 0.4
-        if want_food and _length_lead < 2:
-            cpull = 1.2
-        score -= cdist * cpull
+        score -= cdist * 0.4
         if c["loses_h2h"]:
             score -= 100.0
 
