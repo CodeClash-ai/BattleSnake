@@ -1098,3 +1098,49 @@ regression.
   there is no remaining loss mode to fix. Prior teammates exhaustively confirmed self-play cannot
   validate opponent-specific anti-trap fixes (every tweak washes/regresses). Changing a bot that just
   scored 249-0 on the FINAL round would only risk regression. v17 is the strongest, proven version.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs ccSnake2018__ccsnake) — SHIPPED v18 (pocket-fix)
+- ⚠️ NEW OPPONENT: **`ccSnake2018__ccsnake`** — FULLY ACTIVE (latency avg 31.7ms, 0/18449
+  moves >=490ms = 0 timeouts). NO latency free wins — pure out-play. Round 0 result:
+  **opus-4-8 232, ccsnake 16, 2 ties** (250 games). Won, but 16 losses — most this match.
+- **Root cause of losses = SELF-TRAP at HIGH health (94-100), heads dying at corners/edges
+  or mid-board pockets.** Analyzed via /tmp/a0.py (=analyze_round.py d="/logs/rounds/0") +
+  /tmp/trace.py, /tmp/trace2.py. Two sub-modes:
+  1. **FOOD-INTO-POCKET (found & FIXED):** game c039416b (t85, head (7,8), len12, hp94).
+     Food sat AT (7,7) inside a 2-cell pocket. Move 'down'->(7,7): flood=2 but timed_space=110
+     (BUG: timed_space lets the flood "escape" through our own neck cells that vacate over time,
+     but physically our advancing body seals them). Move 'left'->(6,8): flood=98. Bot chose
+     'down' (chased food fdist=0 into the 2-cell death pocket) -> coiled to death t88.
+  2. **WALL-CRAWL corridor collapse (harder, multi-step):** games d6f357f2, 1e8a2808, f1cc637f
+     crawled ALONG a wall (y=0/y=10) into a shrinking corridor; last-free-choice was ~3 turns
+     before death when flood still looked fine (one-step metrics can't distinguish). Not fixed.
+- **FIX (main.py = v18, backup main_backup_v18_pocketfix.py; prev main = main_backup_v17_r0_current.py):**
+  In `survivable(c)`, added a PLAIN-SPACE gate BEFORE the timed_space check:
+    `if c["space"] < min(my_len, 4): return False`
+  timed_space is wildly over-optimistic for a tiny pocket (counts own-body-vacate cells on the
+  escape path); a cell whose plain reachable space is far below our length is a real self-trap
+  regardless. This makes the 2-cell food-pocket NON-survivable so it's dropped from the pool.
+- **VALIDATION (repro is the real validator — self-play can't reproduce the trap):**
+  * /tmp/state.json (c039416b t85): **v18 picks 'left' (escapes to 98-cell space); v17 picks
+    'down' (into 2-cell death pocket).** Direct proof v18 fixes the exact loss. Also verified
+    at t84: even if we enter the neck, v18 escapes at t85 (fix intervenes at the pocket-entry).
+  * REGRESSION PASS: v18 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+  * Self-play vs v17 is a WASH/position-bias (v18-A 23-16, v17-A 24-15 = ~even combined) —
+    EXPECTED, self-play doesn't reproduce the food-pocket trap (consistent with ALL prior notes).
+  * v18 vs itself = 5-5 (even, no crashes, full-length games). No errors in server logs.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v18.** Genuine bugfix (timed_space over-optimism for tiny pockets) that
+  provably fixes the food-into-pocket loss mode with zero regression. Safe, targeted, no risk.
+- **TODO next teammate:** re-run /tmp/a0.py (edit d="/logs/rounds/N") + /tmp/trace.py (edit target
+  gid) on the new round. If losses persist:
+  * If still FOOD-pockets, may need to also cap the food bonus when the eating-cell's plain space
+    is tiny (belt-and-suspenders on the survivable gate).
+  * If WALL-CRAWL corridor collapse (heads dying at (0,0)/(10,0) etc after crawling a wall), that's
+    the hard multi-step trap: last-free-choice is ~3 turns before death, flood looks fine there.
+    The real fix needs multi-step self-simulation (see main_backup_v15_multistep.py — the greedy
+    version regressed self-play; needs to be a soft penalty, not a hard filter). OR: penalize
+    entering a wall-adjacent corridor when our body is coiled behind (compute the corridor width).
+  Repro/state tools: /tmp/getstate2.py <gid> <turn> (saves /tmp/s_<gid>_<turn>.json),
+  /tmp/testmove.py <bot.py> (evaluates move on /tmp/state.json), /tmp/eval.py (per-direction
+  flood/timed_space). Test tool: /tmp/rm2.sh (>=4s warmup); ALWAYS both A/B orders (position bias
+  dominates 40-game runs — repro is the real validator, NOT self-play washes).

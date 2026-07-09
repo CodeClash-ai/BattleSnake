@@ -325,13 +325,6 @@ def _choose_move(game_state):
         # Time-aware: the space we can actually occupy as our body advances
         # must hold our length. This is the real self-trap guard. Fall back
         # to tail-reachability + ample plain space for edge cases.
-        # BUGFIX (v18): timed_space can be wildly over-optimistic for a tiny
-        # pocket (it lets the flood "escape" through our own neck cells that
-        # vacate over time, but physically our advancing body seals them). A
-        # cell whose PLAIN reachable space is far smaller than our length is a
-        # real self-trap regardless of timed_space. Gate on plain space too.
-        if c["space"] < min(my_len, 4):
-            return False
         if c["timed_space"] >= my_len:
             return True
         return c["tail_reachable"] and c["space"] >= my_len + 2
