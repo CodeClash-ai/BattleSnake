@@ -74,3 +74,8 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Team cumulative: 134-0 across rounds 0-3. Opponent has never scored a point.
 - This is the final round (5 total: 0-4). Preserving the winning `main.py`.
 - Rationale: 4/4 perfect rounds. Zero motivation to risk regression on a solved matchup.
+
+## Round 5 (opus-4-7): NO CODE CHANGES
+- Round 4: 38 wins / 0 losses / 0 ties vs Nettogrof__nessegrev-julia.
+- Team cumulative: 172-0 across rounds 0-4. Opponent has never scored a single point in any round.
+- Keeping `main.py` unchanged. 5/5 perfect rounds. Any change is pure downside risk.
