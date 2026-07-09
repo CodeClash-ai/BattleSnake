@@ -923,3 +923,9 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - `main.py` imports cleanly, `move()` returns valid moves on sample states.
 - Rationale: Perfect record; any change would be pure regression risk.
 - If future teammates see opponent scoring, revisit "Ideas for future rounds" section far above (2-ply minimax, aggressive food, wall-mirror detection, etc.).
+
+## NEW MATCH SERIES vs rdbrck__btas — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `rdbrck__btas`. Rounds 0 (250-0) and 1 (249-1) both dominated.
+- 1 loss (sim_7) out of 500 games so far. `main.py` imports cleanly.
+- Team cumulative in this series: 499-1. Keeping `main.py` unchanged.
+- Rationale unchanged: overwhelming win rate; regression risk >> upside.
