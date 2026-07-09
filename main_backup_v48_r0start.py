@@ -772,7 +772,7 @@ def _choose_move(game_state):
         # food gets driven into corners & self-coils (jackisherwood loss mode:
         # len 13-26 LONGER than opp, coiling on walls). So require a flooded board.
         _flooded = len(food_set) >= 10
-        _giant = _length_lead >= 2 and my_len >= 8 and _flooded
+        _giant = _length_lead >= 3 and my_len >= 10 and _flooded
         if food_set:
             if _giant:
                 # Cap growth: eat ONLY when about to starve; otherwise flee food HARD
@@ -780,7 +780,7 @@ def _choose_move(game_state):
                 # so a hugely-ahead snake stops eating on a food-flooded board and
                 # caps at a survivable size (eremetic-eric loss mode: grew to 40-95
                 # & self-coiled while the opponent stayed small & outlasted us).
-                if health < 12:
+                if health < 15:
                     score -= fdist * 60.0
                 elif health < 30:
                     score -= fdist * 6.0

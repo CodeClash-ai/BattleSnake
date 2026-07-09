@@ -4155,3 +4155,47 @@ regression.
   both orders. Every simpler tweak (v49/v50/anti-wall-crawl/tail-follow) regressed — DON'T re-try them.
   Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N>
   (ports 8001/8002, 7s warmup), ALWAYS both A/B orders (position bias). v48 (243-7) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs MorganConrad__tantilla) — SHIPPED v49 (tighter giant growth cap)
+- ⚠️ NEW OPPONENT: **`MorganConrad__tantilla`** — a STAY-SMALL survivor (same family as
+  eremetic-eric/gigantic-george). It stays len 4-17 and OUTLASTS our bloated snake over VERY LONG
+  games (500+ turns). Round 0 result (v48): **opus-4-8 212, MorganConrad__tantilla 38** (38 losses, ~15%).
+- **Root cause of ALL 38 losses (via /tmp/cl2.py, last-alive frame): 100% SELFCOIL.** Our snake grew
+  ENORMOUS (len 12-50!) while the opponent stayed small (len 4-17), high health (mostly 87-100 = not
+  hungry), then self-coiled (legal=0, all 4 neighbors = OWN body). ~65% on walls/corners, ~35% mid-board.
+  Trace (/tmp/tr.py sim_18): our snake grew 3->50 over 560 turns while opp stayed len 15; board floods
+  to 22-24 food (opp doesn't eat + our giant body blocks food) -> `_flooded>=10` fires but v48's cap
+  (eat at health<15) still let the snake SLOWLY bloat ~1 food per health-cycle over 500 turns -> len 50 -> coil.
+- **FIX (main.py = v49, backup main_backup_v49_tightgiantcap.py; prev main = main_backup_v48_r0start.py = v48):**
+  Tightened the giant growth cap so the snake stays SMALLER (harder to self-coil at len 13 than len 50):
+  * `_giant` trigger `_length_lead>=3 and my_len>=10` -> **`>=2 and my_len>=8`** (caps earlier).
+  * Eat-to-survive threshold `health < 15` -> **`health < 12`** (eats less -> stays smaller).
+  Still gated on `_flooded = len(food_set)>=10` so it ONLY fires on a flooded board (vs stay-small
+  opponents); normal balanced games are unaffected (both snakes grow -> food eaten -> not flooded).
+- **VALIDATION:**
+  * ✅ vs passive.py (stay-small mimic, /tmp/rmp.sh fsc=15, THE valid proxy) BOTH orders:
+    **v49 = 12-0 as A AND 0-12 as B** (perfect); v48 was 11-1 / 0-12. v49 cleanly better both orders.
+  * ✅ GROWTH CAP TIGHTER: in a logged passive game v49 kept our max length at **13** (v48 bloats to 50
+    vs the real long-surviving opponent), min health 40 (NO starvation).
+  * ✅ REGRESSION PASS: v49 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * ✅ NO STARVATION: `health<12 -> fdist*60` still eats hard when truly about to starve; the giant cap
+    only fires when `_flooded` (which only happens vs a stay-small opponent, never in a normal game).
+  * Head-to-head self-play vs v48 (fsc=15): cand 10-4 as A, 9-5 as B-loss -> aggregate ~even (position
+    bias dominates; head-to-head is a misleading length race — passive proxy is the valid validator here).
+  * parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219).
+- **DECISION: shipped v49.** ALL 38 losses were giant-snake self-coil from slow bloat over long games;
+  the tighter cap keeps the snake smaller (max len 13 vs 50), wins the passive stay-small proxy both
+  orders cleanly, passes regression, no starvation risk. Directly targets the ONLY loss mode this match.
+- **CONTINGENCY: if v49 scores WORSE than v48's 212 in the real round, REVERT to
+  main_backup_v48_r0start.py (== v48, proven 212-38).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v49 regressed, revert to
+  main_backup_v48_r0start.py. Re-run /tmp/cl2.py <round_dir> (loss class — SELFCOIL=legal 0, check our
+  len vs opp len; giant self-coil = our len >> opp len). If giant self-coils PERSIST but DROP (snake
+  smaller), tighten further: `_giant` lead>=1/my_len>=6, or eat at health<10, or raise the fdist*30 flee
+  / -1500 anti-eat. If mid-board self-coils dominate at MODERATE length (len 13-20), that's the residual
+  hard multi-step coil (no one-step fix — greedy self-sim escapes; needs a SOFT multi-step self-sim using
+  OUR OWN _choose_move scoring, never successfully shipped). Test proxy: /tmp/rmp.sh <A> <B> <N> 15 vs
+  passive.py (stay-small mimic — the valid proxy; head-to-head self-play is a misleading length race),
+  ALWAYS both A/B orders (STRONG position bias). Growth check: /tmp/rmp_log.sh <bot> logs a passive game &
+  reports our max length. Loss class: /tmp/cl2.py <round_dir>, trace: /tmp/tr.py <sim>. Repro is the real
+  validator; the REAL match result is the ultimate validator (v48 212, target higher with v49).
