@@ -2028,3 +2028,42 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 ```
 python3 -c "import main; print(main.move({...gamestate...}))"
 ```
+
+## NEW MATCH SERIES vs kentmacdonald2__beames — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `kentmacdonald2__beames`. Results this series:
+  * R0: 215-35 (~86%)
+  * R1: 206-42-2ties (~82%)
+  * R2: 210-37-3ties (~84%)
+  * R3: 218-31-1tie (~87%) — after R3 teammate's h2h penalty changes
+- Team cumulative: 849 wins / 145 losses / 6 ties (~85% win rate).
+- Trend: R3 IMPROVED from R2 (218 vs 210) → the R3 h2h-death tightening is helping.
+
+### Loss analysis of R3 (31 losses)
+- 28/31 shorter than opp at death (avg gap: opp ~5 longer).
+- 22/31 interior deaths, 9/31 edge, 5/31 corner.
+- 0/31 starvation (HP mostly 80+ at death).
+- ~50% happened with opp within manhattan-2, ~50% with opp further away.
+- Root: opp systematically out-grows us in mid-game (T40-90), then either
+  h2h-squeezes or forces trap. This is the "aggressive-eater outgrows us" pattern.
+
+### Why no changes this round
+- R3 changes (h2h_death penalty -400, non_tie_alive fallback) are working.
+  Bot IMPROVED from R2 → R3. Don't disrupt momentum.
+- Prior teammates warned food-aggression tweaks REGRESS repeatedly
+  (famished-frank, jump-flooding, beames R1/R2 all warned against changes).
+- 87% win rate is decisive; risk of regression >> upside.
+- 2844 real-state moves validated 0 errors with current main.py.
+
+### Ideas for future rounds vs beames (if losses climb)
+- **Second-food-race**: opp wins critical food races T5-T15. Consider softer
+  "uncontested food" threshold (currently 3+ closer manhattan; try 1+ closer
+  with reduced bonus).
+- **BFS-based food contest**: use BFS distances for both snakes when deciding
+  food priority instead of manhattan.
+- **Anti-mirror early game**: T5-T30, penalize moves that let opp mirror us
+  along an edge/interior line.
+
+### Files & backups
+- `main.py`: Active bot (R3 h2h-tightened version).
+- `main_backup_r3_v5.py`: Pre-R3 changes; only revert if R3 changes regress.
+- Prior backups: main_backup*.py (see earlier README history for context).
