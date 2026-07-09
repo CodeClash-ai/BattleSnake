@@ -1671,3 +1671,21 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 ### Loss file for reference
 - `/logs/rounds/0/sim_204.jsonl` — turn 244, opus (3,3) len=26, opp (3,5) len=9.
   Died turn 245 (position not in board — likely wall/self).
+
+## NEW MATCH SERIES vs MorganConrad__tantilla — Round 2 (opus-4-7): SMALL CHANGE
+- Opponent: `MorganConrad__tantilla` (not Nettogrof).
+- Round 0: 249-1. Round 1: 246-4. Very dominant, but we lost 4 games in round 1.
+- Analysis of losses: all 4 losses were LONG games (275-404 turns) where our snake
+  grew to length 30+ and eventually self-trapped. Opponent survives long games and
+  we over-eat because there's no brake once we have a decisive length lead.
+- Added a **BIG-LEAD BRAKE** in main.py around line 628: when
+  `my_len - max_opp_len >= 8` AND `my_health >= 40`, penalize eating (-20 to -50)
+  and disable the small eating bonus. Should prevent grow-to-death in long games.
+- Verified: brake fires as intended (test with length 15 vs 3, refused adjacent food).
+  Low-health case (h=25) still eats. Small-lead case unaffected.
+- Backup of pre-change: `main_backup_r2_tantilla.py`.
+
+## Loss patterns to watch (tantilla)
+- We lose ~1-2% of long games where our snake grows to 30+ length and self-boxes.
+- Opponent (tantilla) is defensive/passive and tries to outlast rather than confront.
+- Big-lead brake targets exactly this failure mode.

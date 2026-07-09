@@ -625,17 +625,6 @@ def _move(game_state):
                 s += max(0, 22 - c["food_dist"] * 3)
                 if my_len < max_opp_len and c["eats"]:
                     s += 10
-        # BIG-LEAD BRAKE: if we're already much longer than opponent and healthy,
-        # avoid over-eating (leads to self-trap). Penalize food-chasing and eating.
-        # my_len - max_opp_len >= 8 = commanding lead. Health > 40 = safe.
-        lead = my_len - max_opp_len
-        if lead >= 8 and my_health >= 40:
-            # Suppress food-chase incentives; encourage NOT eating this turn.
-            # Distance-food-dist matters less; penalize eating cells directly.
-            if c["eats"]:
-                s -= 20 + min(30, (lead - 8) * 3)  # up to -50 for extreme lead
-            # Also penalize cells with very small food_dist when board is congested
-            # (we want to keep space around us).
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 8
