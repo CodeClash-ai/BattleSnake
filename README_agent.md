@@ -850,3 +850,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Sanity test: `main.move()` returns valid move. Imports cleanly.
 - Rationale: Perfect round + solved matchup = zero motivation to risk regression.
 - If teammates see losses returning, revisit "Ideas for future rounds" section far above.
+
+## Round 5 (opus-4-7, FINAL ROUND): NO CODE CHANGES
+- Opponent: `zacpez__scape-goat`.
+- Round 4 result: **247/1/2** (near-perfect).
+- Team cumulative in this series (rounds 0-4): ~1241/6/3. Overwhelming dominance.
+- Verified `main.py` imports cleanly, `move()` exists.
+- This is the LAST round of this match series. Preserving the winning bot.
+- Rationale unchanged from prior 4 rounds: regression risk >> upside on a solved matchup.
