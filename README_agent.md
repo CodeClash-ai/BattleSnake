@@ -1944,3 +1944,41 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * With only 30 steps and no way to A/B test at scale, targeted changes are high-risk.
   * Final round — preserving proven strategy is the correct move.
 - FINAL SUBMISSION.
+
+## NEW MATCH SERIES vs kentmacdonald2__beames — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `kentmacdonald2__beames`.
+- Round 0 result: WON **215-35** (~86% win rate). Verified via `/logs/rounds/0/results.json`.
+- 35 losses analyzed (`/tmp/analyze_beames.py`):
+  * ALL 35 losses had opponent LONGER than opus. Avg length gap: -5.7 (opp usually 4-9 longer).
+  * Deaths mostly INTERIOR (24), some edge (10), 1 corner. NOT edge-trap deaths.
+  * Not starvation (only 1 low-HP loss; avg HP 86 at death). Health high in most losses.
+  * Loss turns spread across mid-game (50-200 turns).
+- Early game race trace (`/tmp/early_race.py`) on 3 loss games:
+  * Both snakes eat first food ~T2. Opp then wins the SECOND food race (center 5,5) by 1-3 turns.
+  * Once opp is 1-2 longer, gap grows over next 20-40 turns to 3-5+.
+  * By turn 60+, opp is decisively longer and we're doomed to lose eventually via h2h or squeeze.
+- **Rationale for NO CHANGES**:
+  * 86% win rate is dominant.
+  * The root issue is losing the SECOND food race (T5-T15) by 1-2 turns due to slight suboptimal
+    routing. Fixing this requires better food-contest logic — an area where prior teammates
+    documented that untested tweaks tend to REGRESS (see famished-frank, jump-flooding rounds).
+  * Bot already has: gap*5 food-urgency, uncontested-food boost, small_urgent bonus, equal-length
+    bonus (line ~587), and CRITICAL HEALTH branch — extensive food logic already tuned.
+  * Round 1 of 5 — conservative preservation of a dominant bot.
+- Verified `main.py` imports cleanly and returns valid moves (2761 real states, 0 errors, 0.57ms avg).
+
+### Ideas for future rounds vs beames (only if losses climb)
+- **Second-food-race routing**: currently we go for the nearest food, but opp often eats it first
+  because their heuristic routes more directly. Consider "reachable-first" heuristic: prefer foods
+  where our BFS distance ≤ opp BFS distance (currently we use manhattan for "uncontested" check;
+  BFS might route around obstacles better).
+- **Turn-1 direction**: sim_1 opus went to (1,6) then (0,6) [wall!], hitting edge unnecessarily.
+  Could add a very early-game (turn<5) mild penalty for moving toward wall when food isn't in that direction.
+- **Contest food more aggressively**: uncontested threshold currently 3+ closer. Try 1+ closer with reduced bonus.
+- Loss files to inspect: /logs/rounds/0/sim_{1,102,114,116,124}.jsonl and 30 others.
+
+## Analysis scripts left in /tmp (regenerate if needed):
+- `/tmp/analyze_beames.py`: categorizes losses by cause (edge/starve/length-gap).
+- `/tmp/trace_beames.py`: turn-by-turn length/HP for specific loss games.
+- `/tmp/early_race.py`: shows first 24 turns of key loss games (food positions, distances).
+- `/tmp/mass_test.py`: sanity-check `main.py` against thousands of real game states.
