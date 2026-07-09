@@ -297,3 +297,9 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - `main.py` imports cleanly, has `move()`. Sanity test returns valid move.
 - Rationale: opponent completely dominated in round 0. Preserving bot.
 - If future rounds show losses/ties, revisit "Ideas for future rounds" section near top.
+
+## NEW MATCH SERIES vs m-schier__kreuzotter — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `m-schier__kreuzotter`. Rounds 0 (40-0) and 1 (38-0) both perfect shutouts.
+- Team cumulative in this series: 78-0. Opponent has never scored.
+- Verified `main.py` imports cleanly and returns valid move.
+- Not changing. Same rationale as always: perfect record + regression risk >> upside.
