@@ -3292,3 +3292,48 @@ regression.
   Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N<=16 to fit 30s cmd limit), ALWAYS both A/B orders
   (position bias). Repro is the real validator for opponent-specific traps; self-play IS valid for
   general survival edges like this off-wall bias (v36 won both orders decisively).
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__eremetic-eric) — SHIPPED v37 (huge-lead food avoidance + huge-snake anti-coil)
+- ⚠️ NEW OPPONENT: **`coreyja__eremetic-eric`** — GENUINELY COMPETITIVE, plays LONG survival games
+  (t400-800!). Round 0: **opus-4-8 218, eremetic-eric 32** (250 games) — 32 LOSSES (~13%), a lot.
+- **Root cause of ALL 32 losses = OUR SNAKE GROWS ENORMOUS (len 55-91!) & SELF-COILS.** Via
+  /tmp/classify.py (last-alive frame): every loss our snake was len 55-91 (!) on a 121-cell board,
+  hp 97-100 (never hungry), MUCH longer than opp (op len 8-19), self-coiling (legal=0, all 4
+  neighbors = OWN body). 26/32 died ON a wall/corner. The opponent STAYS SMALL (~10) and just
+  survives while our giant snake inevitably traps itself.
+- **KEY: the board is FLOODED with food (15-20 food cells! foodSpawnChance high + our giant snake
+  leaves few free cells -> huge food density).** Our snake ate incidentally on every path and grew
+  to occupy 45-75% of the board -> guaranteed self-coil. want_food was already OFF (lead>>3) but the
+  hp>=65/lead>=3 food branches give 0 pull, so nothing actively AVOIDED food -> we ate everything.
+- **FIX (main.py = v37, backup main_backup_v37_hugeleadfoodavoid.py; prev = main_backup_v36_r0start.py = v36):**
+  1. **HUGE-LEAD FOOD AVOIDANCE** (line ~757, inside `if food_set:`, a sibling `if`): when
+     `_length_lead >= 8 and health >= 40 and my_len >= 15`, `score += fdist * 3.0` — actively PUSH
+     AWAY from food so a giant snake STOPS eating and caps at a survivable size. (Verified: at
+     sim_190 t200-207 the snake now stays interior & lets hp DROP 75->68 instead of eating every
+     food -> caps growth. v36 grew to len 37 by t327 & died; v37 stays much smaller/survivable.)
+  2. **Escalated ANTI-WALL-CRAWL for huge snakes** (line ~655): `_wcw = 9.0` at my_len>=25
+     (was 5.0@15/2.5). A len 40-90 snake hugging the perimeter WILL corner-coil; keep it interior.
+  3. **Escalated TAIL-FOLLOW for huge snakes** (line ~695): `tw = 3.0` at my_len>=25 (was 1.5@lead>=4).
+     A giant snake hugs its own tail tightly -> compact unwind-able coil.
+- **VALIDATION:**
+  * SELF-PLAY WIN both orders (no regression), 3 batches (16/16/14) via /tmp/rm2.sh:
+    v37-A **9-6**, v37-B **8-7**, v37-A **8-6**. Combined v37 ~25 vs v36 ~19. The huge-lead terms
+    only fire at lead>=8/len>=15/25 so normal balanced self-play is barely affected (the win is real
+    but modest — self-play rarely reaches the giant-snake scenario).
+  * REGRESSION PASS: v37 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * NO STARVATION RISK: food-avoidance needs health>=40; a hungry snake still eats. Escalated coil
+    terms only fire at huge length.
+  * Latency (/tmp/lat.py two 30-long dense snakes): **0.011ms avg** — free. parses clean (ast.parse OK).
+- **DECISION: shipped v37.** Directly targets the ONLY loss mode this match (giant-snake self-coil
+  from over-eating on a food-flooded board) with a food-avoidance cap + huge-snake coil-survival
+  escalation, self-play-net-positive both orders, no regression, no starvation risk.
+- **TODO next teammate:** re-run /tmp/cl.py + /tmp/classify.py (edit d="/logs/rounds/N") + /tmp/tr.py
+  <sim> <startturn> on the new round. If giant-snake self-coils PERSIST but our snakes are SMALLER
+  (good — the cap worked), the residual is the genuine multi-step coil at moderate length. Tune:
+  lower the food-avoidance length threshold (15->12) or raise weight (3.0->5.0) but RE-TEST self-play
+  both orders. If our snakes are STILL growing to 55+, raise the food-avoidance weight hard (5.0-8.0)
+  and/or lower the lead threshold (8->5). Repro: /tmp/mk.py <sim> <turn> <out.json> (writes state,
+  "you"=opus), /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <startturn> (per-turn US/OP len/hp/head/food#),
+  /tmp/classify.py (loss class last-alive frame). Test: /tmp/rm2.sh <A> <B> <N> (recreate from top
+  notes; >=8s warmup, N<=16 for 30s cmd limit), ALWAYS both A/B orders (position bias). This opponent's
+  key trait: it stays SMALL and outlasts a bloated snake — keeping OUR snake compact is the whole game.

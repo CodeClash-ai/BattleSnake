@@ -652,17 +652,7 @@ def _choose_move(game_state):
         # never distorts small-snake food-racing (which needs the perimeter food).
         if my_len >= 10 and health >= 60:
             dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
-            # Escalate off-wall pull for HUGE snakes: on a 121-cell board a
-            # len 40-90 snake that hugs the perimeter WILL coil into a corner
-            # and self-trap (eremetic-eric loss mode: len 55-91 crawling walls
-            # to death). Keep such a snake in the interior where its own tail
-            # vacates cells, so it can coil safely.
-            if my_len >= 25:
-                _wcw = 9.0
-            elif my_len >= 15:
-                _wcw = 5.0
-            else:
-                _wcw = 2.5
+            _wcw = 5.0 if my_len >= 15 else 2.5
             score += dist_to_wall * _wcw
         elif chasing_trap and health >= 60:
             # A SMALL healthy snake whose ONLY food is wall/corner-trap food will
@@ -701,12 +691,7 @@ def _choose_move(game_state):
         # only breaks ties, never overriding space/survival decisions.
         if my_len >= 12 and health >= 50 and not want_food:
             tdist = _manhattan(c["cell"], my_tail)
-            if my_len >= 25:
-                tw = 3.0
-            elif _length_lead >= 4:
-                tw = 1.5
-            else:
-                tw = 0.6
+            tw = 1.5 if _length_lead >= 4 else 0.6
             score -= tdist * tw
 
         # When every food is a corner-trap lure, soften the pull so we don't
@@ -745,17 +730,6 @@ def _choose_move(game_state):
                 score -= fdist * 7.0
             elif my_len < 12:
                 score -= fdist * 2.0
-
-            # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the
-            # opponent, growing further only risks self-coil (eremetic-eric loss
-            # mode: our snake grew to len 55-91 on a 121-cell board flooded with
-            # food, then coiled itself to death while the opponent stayed small &
-            # waited). A giant snake must STOP eating and cap at a survivable
-            # size. Push the head AWAY from food (positive weight) so it does not
-            # keep eating. Fires only when massively ahead (lead >= 8) and not
-            # starving; strength scales with how oversized we are.
-            if _length_lead >= 8 and health >= 40 and my_len >= 15:
-                score += fdist * 3.0
 
         # Center pull: base weak pull, but stronger when we are short and
         # behind on length. Camping the perimeter keeps us safe but starves us
