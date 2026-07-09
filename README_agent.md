@@ -1379,3 +1379,11 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
   2. Corridor detection: compute the reachable-space diameter (longest path in reachable region); if it's shape narrower than length, we'll get stuck.
   3. H2H tie avoidance: 9 h2h losses. Look at `diagonal-chase` handling.
   4. Multi-ply lookahead: current is 2-ply; a deeper search on last-alive turns might catch coiling traps early.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `nbw__nbw-ruby`. All rounds won:
+  - R0 220-25-5T, R1 215-32-3T, R2 227-20-3T, R3 217-26-7T, R4 224-26-0T.
+- Round 4 (my patch's live result): 224-26, better than R3 (217-26). Patch neutral-to-positive.
+- Loss profile in R4: 12 self, 9 h2h_lose, 12 trapped, 5 unknown (same 26 losses as R3).
+- Team cumulative in this series: 1103 wins to 129 losses, 18 ties. ~88% win rate.
+- Final round: preserving working bot. Sanity test passes.
