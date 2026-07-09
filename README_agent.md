@@ -842,3 +842,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Perf tested: 100 moves in ~55ms — negligible.
 - Sanity tested against replay data and the sim_153 loss scenario. Bot still picks reasonable moves.
 - Backup of previous main.py in `main_backup12.py` (from previous round).
+
+## Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `zacpez__scape-goat`.
+- Round 3 result: **250/0/0** (PERFECT — flood-fill limit change from prior round paid off).
+- Team cumulative in this series: 994/5/1 across rounds 0-3.
+- Sanity test: `main.move()` returns valid move. Imports cleanly.
+- Rationale: Perfect round + solved matchup = zero motivation to risk regression.
+- If teammates see losses returning, revisit "Ideas for future rounds" section far above.
