@@ -375,3 +375,38 @@ regression.
 - main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
 - DECISION: kept main.py (v7) unchanged. 100% win rate via latency edge + robust survival bot.
   Extensive tuning already exhausted (see rounds 3/4 rejected-tuning notes). No regression risk taken.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs graeme-hill__snakebot) — SHIPPED v8
+- ⚠️ **NEW, GENUINELY COMPETITIVE OPPONENT this match: `graeme-hill__snakebot`.**
+  It does NOT reliably time out (only ~5% of moves >=490ms, latency avg 344ms).
+  It ACTIVELY PLAYS: round 0 avg game length **48.9 turns**, max **341**. This is
+  NOT the free-win straight-line opponent of prior matches. We must out-play it.
+- Verified round 0 result: **opus-4-8 241, graeme-hill__snakebot 4, 1 tie** (246 games).
+  We WON 241 but LOST 4 and TIED 1 (first real losses this match).
+- **Root cause of all 4 losses = SELF-TRAP** (analyzed via /tmp/loss.py + /tmp/death.py
+  on /logs/rounds/0). In every loss our snake coiled into a shrinking pocket where the
+  reachable space could not hold our advancing body (e.g. game ac9c7039: walked up left
+  wall into corner (0,10) sealed by own body; 1a62dbd3, 887c091f, 12ae5713 similar U-traps).
+  The old v7 survival test `tail_reachable OR space>=my_len+1` was TOO PERMISSIVE: a
+  tail-reachable move can still be a trap because the tail-loop path gets eaten as we advance.
+
+- **FIX (main.py = v8, backup = main_backup_v8.py; prev main = main_backup_v7.py):**
+  Added `_timed_space()` — a TIME-AWARE flood-fill. It BFS's from the move cell and lets
+  our OWN body cells free up over time (segment i vacates after ~my_len-i steps, tail first),
+  while treating enemy bodies as static (conservative). This detects shrinking-corridor
+  self-traps a plain flood-fill misses. Wired into:
+    * survival(): `timed_space >= my_len` is the real self-trap guard (fallback: tail_reachable AND space>=my_len+2).
+    * scoring: +3.0*timed_space, +10 for max timed_space, STRONG -12*(my_len-timed_space) penalty when timed_space<my_len.
+    * reduced plain-space weight 3.0->2.0 to make room for timed_space.
+- **Results (self-play /tmp/rm2.sh / run_match.sh):**
+  * v8 vs v7: **48-31** first 80 games, **50-29** second 80 games (both orders, ~62% win). Clear improvement.
+  * v8 vs v5: 16-9. REGRESSION PASS: v8 vs opp_straight = **15-0 as A AND 0-15 as B**.
+  * Latency (/tmp/lat.py two 30-long snakes, dense 11x11, 10 food, 300 moves): **0.018ms avg, 0.040ms max** — extra BFS is free.
+- main.py parses clean; move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v8.** Directly fixes the self-trap losses; beats v7 both orders.
+- **TODO next teammate:** opponent graeme-hill is a real competitor. Re-run /tmp/loss.py &
+  /tmp/death.py on the NEW round's /logs/rounds/N to see if we still self-trap or lose H2H.
+  If self-traps persist, tune the _timed_space penalty / consider enemy tails vacating too
+  (currently static = conservative, may make us over-cautious near enemy tail). Next big edge:
+  2-ply minimax on contested cells. ALWAYS test BOTH A and B orders (position bias); keep
+  v8 vs opp_straight at 15-0 both orders (no regression). Test tool: ./run_match.sh <A> <B> <N>.

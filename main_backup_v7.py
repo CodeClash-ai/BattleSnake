@@ -98,71 +98,6 @@ def _flood_fill(start_cell, obstacles, w, h, limit=None):
     return count
 
 
-def _timed_space(start_cell, board, you, w, h, food_set, limit=None):
-    """Flood-fill that accounts for our OWN body vacating over time.
-
-    We BFS from start_cell (the move destination). A cell occupied by our
-    body segment `i` (0=head) frees up after `my_len - i` steps (the tail
-    end vacates first). We can enter such a cell only if we reach it at a
-    step >= the time it frees. Enemy bodies are treated as static obstacles
-    (conservative). This detects shrinking-corridor self-traps that a plain
-    flood-fill misses.
-    """
-    body = you["body"]
-    my_len = len(body)
-    # Map our body cell -> time it becomes free (steps from now).
-    # Segment i (0=head) vacates at step (my_len - i) roughly, since tail
-    # moves each turn. Eating extends body; ignore that (conservative).
-    my_free = {}
-    for i, seg in enumerate(body):
-        c = (seg["x"], seg["y"])
-        # earliest step this cell is free
-        my_free[c] = my_len - i
-    # Enemy bodies static (their tails vacate too but treat as blocked = safe).
-    enemy_block = set()
-    for snake in board["snakes"]:
-        if snake["id"] == you["id"]:
-            continue
-        for seg in snake["body"]:
-            enemy_block.add((seg["x"], seg["y"]))
-
-    from collections import deque as _dq
-    # We arrive at start_cell at step 1.
-    if not _in_bounds(start_cell, w, h):
-        return 0
-    if start_cell in enemy_block:
-        return 0
-    # start_cell might be our own tail freeing; check free time.
-    sc_free = my_free.get(start_cell, 0)
-    if sc_free > 1:
-        return 0
-    seen = {start_cell}
-    q = _dq([(start_cell, 1)])
-    count = 0
-    while q:
-        cur, t = q.popleft()
-        count += 1
-        if limit is not None and count >= limit:
-            return count
-        cx, cy = cur
-        for nb in ((cx, cy + 1), (cx, cy - 1), (cx - 1, cy), (cx + 1, cy)):
-            if nb in seen:
-                continue
-            nx, ny = nb
-            if nx < 0 or nx >= w or ny < 0 or ny >= h:
-                continue
-            if nb in enemy_block:
-                continue
-            nt = t + 1
-            free = my_free.get(nb, 0)
-            if free > nt:
-                # cell still occupied by our body when we'd arrive
-                continue
-            seen.add(nb)
-            q.append((nb, nt))
-    return count
-
-
 def _reachable(start_cell, target, obstacles, w, h):
     if start_cell == target:
         return True
@@ -301,10 +236,6 @@ def _choose_move(game_state):
                 contested_obstacles.add(ec)
         contested_space = _flood_fill(nxt, contested_obstacles, w, h, limit=total_cells)
 
-        # Time-aware space: simulate our body vacating as we advance. Detects
-        # shrinking-corridor self-traps that plain flood-fill misses.
-        timed_space = _timed_space(nxt, board, you, w, h, food_set, limit=total_cells)
-
         candidates.append({
             "name": name,
             "cell": nxt,
@@ -312,7 +243,6 @@ def _choose_move(game_state):
             "wins_h2h": wins_h2h,
             "space": space,
             "contested_space": contested_space,
-            "timed_space": timed_space,
             "tail_reachable": tail_reachable,
         })
 
@@ -327,19 +257,13 @@ def _choose_move(game_state):
     # space is at least our length (we won't box ourselves in immediately).
     # Require BOTH a decent tail loop or ample space to avoid coiling traps.
     def survivable(c):
-        # Time-aware: the space we can actually occupy as our body advances
-        # must hold our length. This is the real self-trap guard. Fall back
-        # to tail-reachability + ample plain space for edge cases.
-        if c["timed_space"] >= my_len:
-            return True
-        return c["tail_reachable"] and c["space"] >= my_len + 2
+        return c["tail_reachable"] or c["space"] >= my_len + 1
 
     surv = [c for c in pool if survivable(c)]
     pool2 = surv if surv else pool
 
     # Among survivable, prefer ones with the most space to keep options open.
     max_space = max(c["space"] for c in pool2)
-    max_timed = max(c["timed_space"] for c in pool2)
 
     want_food = health < 65 or my_len < 5
     best = None
@@ -359,22 +283,15 @@ def _choose_move(game_state):
 
         score = 0.0
         # Space is the primary survival driver.
-        score += c["space"] * 2.0
-        # Time-aware space: strongly reward room that survives body advance.
-        score += c["timed_space"] * 3.0
+        score += c["space"] * 3.0
         # Reward space we still control even if the enemy pushes toward us.
         score += c["contested_space"] * 1.0
         # Extra reward for having the most space (avoid corridors).
         if c["space"] == max_space:
-            score += 6.0
-        if c["timed_space"] == max_timed:
-            score += 10.0
+            score += 8.0
         # Penalize tight spaces relative to our length (trap risk).
         if c["space"] < my_len + 2:
-            score -= (my_len + 2 - c["space"]) * 5.0
-        # STRONG penalty when time-aware space can't hold our body (self-trap).
-        if c["timed_space"] < my_len:
-            score -= (my_len - c["timed_space"]) * 12.0
+            score -= (my_len + 2 - c["space"]) * 6.0
 
         if health >= 40:
             tail_bonus = 50.0
