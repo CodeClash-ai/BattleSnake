@@ -903,3 +903,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - The self-trap issue during long games may recur when we mis-detect tail-reachability;
   our `_flood_fill_full` uses limit=w*h (correct) but blocked set assumes opp tails move.
 - Backup remains at `main_backup_r3.py`.
+
+## NEW MATCH SERIES vs tim-hub__awesome-snake — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `tim-hub__awesome-snake` (different opponent from prior series).
+- Rounds 0-3 scores (us vs them): 249-1, 249-1, 247-3, 248-0 (with 2 ties).
+- Team is dominating (~992-5-2 cumulative). No changes needed.
+- Verified `main.py` imports cleanly and exposes `move()`.
+- Rationale unchanged: risk of regression >> upside on a solved matchup.
