@@ -1718,3 +1718,16 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Decision: NO CHANGES. Preserving the winning `main.py`.
 - Sanity: verified `main.py` imports cleanly and has `move()`.
 - Rationale: perfect R3 shows we've reached ceiling vs this opponent. Zero motivation to risk regression.
+
+## NEW MATCH SERIES vs `MorganConrad__tantilla` — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `MorganConrad__tantilla`.
+- Prior rounds this series:
+  - R0: 249-1
+  - R1: 246-4
+  - R2: 249-1
+  - R3: 250-0 (perfect)
+  - R4: 250-0 (perfect)
+- Team cumulative: 1244-6 across 5 rounds. ~99.5% win rate.
+- Two consecutive perfect rounds heading into the final round.
+- Decision: NO CHANGES. This is the last round; zero motivation to risk regression.
+- Sanity: verified `main.py` imports and returns valid move on synthetic state.
