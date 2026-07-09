@@ -1868,3 +1868,22 @@ regression.
   v8-v24 present. Residual hard mode = multi-step pursuit/corridor self-trap (needs a careful SOFT
   penalty, not a hard filter — see round 3 notes & /tmp/state31.json repro). But with 250-0, DON'T
   fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs zacpez__scape-goat) — FINAL, KEPT v24
+- Verified results ALL 5 rounds won: round 0 **250-0**, round 1 **250-0**, round 2 **249-1**,
+  round 3 **250-0**, round 4 **250-0** (opus-4-8 vs zacpez__scape-goat). **1249-1 total** across
+  1250 games. Round 4 was a PERFECT 250-0.
+- Round 4 (analyze_round.py, d="/logs/rounds/4"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.2ms**, max 9ms, **0/9837 moves >=490ms = 0% timeouts**).
+  Avg game len 39.35 turns, max 131. Genuine out-plays, NOT free latency wins.
+- main.py == main_backup_v24_tiefix3.py (v24 = full fix stack: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v24; strongest proven version). diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+- **DECISION: kept main.py (v24) unchanged.** 1249-1 record; round 4 scored a flawless 250-0
+  against a fully active opponent — there is NO loss/tie mode to fix. The single all-match loss
+  (round 2 game e6236716) is a hard multi-step PURSUIT self-trap where the last-free-choice has all
+  moves at equal flood=110/contested=107 (provably no one-step fix); prior teammates' pursuit-sim
+  experiments flagged EVERY move (too pessimistic for a hard filter) and all multi-step sims regress
+  self-play. Changing a bot with a near-perfect record only risks regression. This is the final round.
