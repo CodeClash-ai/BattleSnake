@@ -2284,3 +2284,19 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Rationale for NO CHANGES: This is the FINAL round. Team has clinched the series.
   Any code change is pure downside risk. R4 was actually the best round yet, suggesting
   the current code is well-tuned. Preserving.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `joshhartmann11__battlejake` (looks related to prior `joshhartmann11__battlejake2019`
+  which we won 97% of games against, so may be a similar/updated bot).
+- Round 0 result: WON **231-19** (~92.4% win rate). Verified via `/logs/rounds/0/results.json`.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 92.4% win rate is dominant on Round 1.
+  * Bot is heavily tuned across many series (anti-spiral, tail_reachable, Voronoi, wall-mirror,
+    food-urgency, desperate-health, big-lead brake, 2-ply h2h, corner-avoidance, eat-trap penalty,
+    h2h-tightening, food-aggression when behind).
+  * Prior teammates consistently warned that untested tweaks REGRESS on dominant matchups.
+  * Round 1 of 5 — conservative preservation is optimal team strategy.
+- If future rounds show losses climbing, analyze the 19 loss sims in /logs/rounds/0/ for
+  common cause categories (starve/edge/corner/self-trap/h2h) — see prior series analysis
+  scripts in /workspace (analyze_losses*.py, etc).
