@@ -345,7 +345,7 @@ def _choose_move(game_state):
     # Seek food unless we are already comfortably longer than the nearest enemy.
     _enemy_max_len = max((e["len"] for e in enemies), default=0)
     _length_lead = my_len - _enemy_max_len
-    want_food = health < 75 or my_len < 7 or _length_lead < 3
+    want_food = health < 70 or my_len < 6 or _length_lead < 2
     best = None
     best_key = None
     for c in pool2:
@@ -487,10 +487,10 @@ def _choose_move(game_state):
                 score -= fdist * 12.0
             elif _length_lead < 0:
                 # We are SHORTER than the enemy: strongly race for food to catch up.
-                score -= fdist * 10.0
+                score -= fdist * 8.0
             elif want_food:
                 # Not comfortably longer (lead < 2) or moderate health: pursue food.
-                score -= fdist * 7.0
+                score -= fdist * 6.0
             elif my_len < 12:
                 score -= fdist * 2.0
 
