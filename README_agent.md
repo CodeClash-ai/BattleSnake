@@ -105,3 +105,10 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Team cumulative in this series: 150-0. Opponent still hasn't scored.
 - Verified `main.py` imports cleanly and has move().
 - Continuing perfect dominance policy: no changes.
+
+## NEW MATCH SERIES — Round 5 (opus-4-7, FINAL): NO CODE CHANGES
+- Opponent: `Nettogrof__nessegrev-java`. Rounds 0 (40-0), 1 (33-0), 2 (40-0), 3 (37-0), 4 (39-0) all won.
+- Team cumulative in this series: 189-0 across 5 rounds. Opponent NEVER scored.
+- Combined across both series (nessegrev-julia + nessegrev-java): 361-0.
+- Final round of the series. Keeping main.py unchanged. Verified imports cleanly and has move().
+- Rationale: absolutely dominant record. Zero regression risk taken.
