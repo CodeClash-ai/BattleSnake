@@ -3177,3 +3177,54 @@ regression.
   <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/lfc.py <sim> (per-turn head/hp/len/legal),
   /tmp/classify3.py (loss class). Test: /tmp/rm2.sh <A> <B> <N> (recreate; >=6s warmup, N<=16 for 30s
   cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play washes.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs nbw__nbw-ruby) — KEPT v35 (candidate regressed self-play)
+- Verified results: round 0 **245-4 (+1t)**, round 1 **240-5 (+5t)**, round 2 **241-4 (+5t)**,
+  round 3 **240-10** (all v35). 4/4 rounds won but round-3 LOSSES JUMPED 4->10. Opponent FULLY
+  ACTIVE (LONG games, big snakes). Pure out-play.
+- **Round-3 loss classification (/tmp/classify4.py, last-alive frame): 10 losses = 5 SELFCOIL +
+  5 OUTGROWN.** SELFCOIL: big/mid snakes (L11-21), HIGH health (82-100), often EQUAL/LONGER than
+  opp, coiling on walls (sim_111 (0,8), sim_200 (8,10), sim_202 (0,10), sim_220 (10,0), sim_8 (6,10))
+  or mid (sim_84 (1,8)). OUTGROWN: shorter, lost late H2H (sim_146/147/241/73).
+- **DEEP TRACE of sim_200 (CLEANEST repro): L13 hp100 SOLE-WALL-FOOD wall-crawl self-coil.** At t84
+  our L13 snake (lead=2 vs opp L11) had the ONLY food at (8,10) [on top wall]. `_big_safe` needs
+  lead>=3 to turn off want_food, so at lead=2 want_food stayed True -> the food pull dragged us up
+  the RIGHT wall (x=9,10) toward (8,10) into the top-right, then to (8,10) at t96 -> self-coiled,
+  died t97. **v35's big-snake wall-food-trap (line 524) did NOT fire because it requires NON-WALL
+  food to exist** (starvation guard) — here the sole food was on a wall. Last-free-choice = t88
+  (head (9,5), legal left(8,5)/right(10,5), open board to the LEFT): v35 picks 'right' (up the wall).
+  (repro: /tmp/s200_88.json; /tmp/tm2.py <bot> <state>; /tmp/board2.py <sim> <turn>; /tmp/tr6.py <sim> <startturn>.)
+- **BUILT candidate fix (/tmp/cand.py) — flipped the repro but REJECTED (self-play regression):**
+  3 changes: (1) extend big-snake wall-food-trap to SOLE wall food when my_len>=13 & health>=70 &
+  lead>=1 (safe: not hungry -> won't starve); (2) apply `_fw` (the trap-softening 0.25) to the
+  `want_food` (fdist*7) AND `my_len<12` (fdist*2) food branches — v35 did NOT soften those, so the
+  trap-flag had no effect on a want_food big snake; (3) escalate anti-wall-crawl `_wcw = 5.0` at
+  my_len>=13 (was only >=15).
+  * ✅ REPRO PASS: /tmp/cand.py flips sim_200 t88 'right' -> **'left' (off the wall, escapes)**.
+    REGRESSION PASS vs opp_straight = 8-0 as A.
+  * ❌ **SELF-PLAY REGRESSION both orders (/tmp/rm2.sh, N=14/16):** cand-A vs v35: **7-7** then
+    **4-11-1** (batch2); cand-B: **6-8**. Aggregate cand **~17** vs v35 **~26** — clear regression.
+    Softening the big-snake food pull + escalating anti-wall-crawl over-restricts normal play vs an
+    equal opponent (costs more games than the SELFCOIL it saves). Violates the iron ship-rule
+    (repro flips AND self-play must NOT regress). CONSISTENT with ALL prior notes: food/anti-wall
+    tweaks that go beyond v33/v34's proven gates regress self-play.
+- **DECISION: KEPT main.py (v35) unchanged** (diff confirms == main_backup_v35_bigwallfood.py;
+  parses clean). 240-10 is still a strong win (96%). The candidate flips the exact sim_200 repro but
+  regresses self-play both orders — not worth the risk on a bot winning every round. No unvalidated
+  regression taken.
+- **TODO next teammate:** the sim_200 SOLE-WALL-FOOD self-coil is the newer sub-mode (v35's wall-food
+  trap can't fire on sole wall food without risking starvation). The candidate (/tmp/cand.py, or
+  reconstruct the 3 changes above) is directionally correct (flips the repro) but needs to NOT
+  regress self-play. To ship it: make it MUCH narrower — e.g. apply ONLY change (1)+(2) (the sole-
+  wall-food trap + _fw on want_food branch) WITHOUT change (3) (the _wcw escalation, which likely
+  causes most of the regression by over-centering); OR gate the whole thing on `len(food_set)==1`
+  (only the sole-food case) AND my_len>=14 AND health>=80 (narrower population). RE-TEST self-play
+  BOTH orders in AGGREGATE over several N=14-16 batches (position bias dominates single batches —
+  the A-position bias made batch1 look even but batch2 revealed the regression). If it stays
+  net-neutral-or-positive across ~4 batches both orders, ship it. The OUTGROWN losses need
+  territory/Voronoi food-ownership (self-play can't validate — eats symmetrically). All fixes
+  v8-v35 present. Repro: /tmp/mkstate2.py <sim.jsonl> <turn> <out.json> (writes state, "you"=opus),
+  /tmp/tm2.py <bot> <state>, /tmp/board2.py <sim> <turn> (ascii), /tmp/tr6.py <sim> <startturn>
+  (per-turn US/OP len/hp/head/food), /tmp/classify4.py (loss class, edit d="/logs/rounds/N").
+  Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=8s warmup, N<=16 for 30s cmd limit),
+  ALWAYS both A/B orders. Repro is the real validator for traps; self-play regression is a HARD veto.
