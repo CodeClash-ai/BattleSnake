@@ -531,19 +531,6 @@ def _choose_move(game_state):
                     trap_food.add((fx, fy))
     best = None
     best_key = None
-    # GIANT anti-eat refinement: only skip food if there's an interior (off-wall)
-    # non-eating alternative. On a food-flooded board the only non-food move is
-    # often onto a WALL, which leads to a corner forced-eat spiral & self-coil.
-    # Eating one food (interior) is far safer than crawling onto a wall corridor.
-    _giant_now = _length_lead >= 3 and my_len >= 10
-    _interior_noneat = False
-    if _giant_now:
-        for _c in pool2:
-            _cx, _cy = _c["cell"]
-            _dw = min(_cx, w - 1 - _cx, _cy, h - 1 - _cy)
-            if (not _c["reaches_food"]) and _dw >= 1:
-                _interior_noneat = True
-                break
     for c in pool2:
         sim_obstacles = set(obstacles)
         sim_obstacles.discard(my_tail)
@@ -753,17 +740,8 @@ def _choose_move(game_state):
                     # (gigantic-george/eremetic-eric loss mode). Heavily penalize
                     # the move that STEPS ONTO food, and steer toward food-SPARSE
                     # regions so the giant snake actively stops growing.
-                    if c["reaches_food"] and health >= 25 and _interior_noneat:
+                    if c["reaches_food"] and health >= 25:
                         score -= 1500.0
-                    # If the ONLY non-eating option is a wall cell (leads to a
-                    # corner forced-eat spiral), avoid the wall instead: heavily
-                    # penalize on-wall giant moves so it eats one interior food
-                    # rather than crawling the perimeter into a self-coil.
-                    if (not _interior_noneat):
-                        _gcx, _gcy = c["cell"]
-                        _gdw = min(_gcx, w - 1 - _gcx, _gcy, h - 1 - _gcy)
-                        if _gdw == 0:
-                            score -= 2000.0
                     # Food-density avoidance: fewer nearby food cells = safer for a
                     # giant that must stop growing. Count food within radius 2 of
                     # the destination and push away from dense clusters.

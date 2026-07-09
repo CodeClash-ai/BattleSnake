@@ -3652,3 +3652,37 @@ regression.
   (BOTH orders, N<=12 to fit container limits, kill stale /tmp/bot* between runs), /tmp/traj.py <sim>
   <startturn> (growth trajectory), /tmp/analyze2.py (loss class). DON'T ship a wash/regression — v41
   is the proven best (240-10).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__gigantic-george) — SHIPPED v42 (giant: eat-interior-not-wall)
+- Verified results: r0 228-22, r1 226-24, r2 240-10, r3 237-13 (all v41 after r1). Trend good.
+- **Root cause of round-3 losses (still ballooning giants len 23-71 self-coiling; /tmp/cl3.py):**
+  the v41 giant cap (-1500 anti-eat) FORCES the snake ONTO WALLS. DEEP TRACE sim_54 t328
+  (head (9,3), len20 hp85): the 3 legal moves were up/down = FOOD (interior, dist_to_wall=1),
+  left = own body, right = (10,3) on the WALL (non-food). v41's -1500 anti-eat made up/down score
+  ~-860 vs right +706 -> picked RIGHT onto the wall -> crawled into corner (10,0) where legal
+  moves are 1-2 & mostly food -> FORCED to eat -> ballooned len 20->30 in ~15 turns -> self-coil.
+  So the anti-eat penalty (pushing off food) + anti-wall-crawl (pushing off wall) CONFLICT: when
+  the only non-food move is a wall, v41 chose the wall (fatal corner spiral). Eating one interior
+  food is far safer.
+- **FIX (main.py = v42, backup main_backup_v42_interioreat.py; prev = main_backup_v41_r4start.py):**
+  In the pool2 loop, compute `_interior_noneat` = does any giant candidate have an interior
+  (dist_to_wall>=1) NON-eating cell? Then:
+  * anti-eat (-1500) now ONLY applies when `_interior_noneat` is True (a genuinely safe non-food
+    interior alternative exists — skip food then).
+  * when NO interior non-eat move exists, add `-2000` to on-wall (dist_to_wall==0) giant cells so
+    the snake EATS one interior food instead of crawling onto the wall into the corner spiral.
+- **VALIDATION:** REPRO PASS — sim_54 t328 v42 picks 'up' (interior eat) not 'right' (wall);
+  t329-332 stay interior/off-wall (v41 crawled the corner). REGRESSION PASS: v42 vs opp_straight
+  flooded = 6-0. vs passive.py FLOODED (fsc15, the valid proxy): v42 11-1 as A / 9-3 as B (aggregate
+  20-4) ~= v41's 11-1 / 10-2 (22-3) — NEUTRAL within proxy noise (proxy is saturated). Narrowly
+  gated (giants only, only when no interior non-eat move) so no normal-play distortion. parses clean.
+- **DECISION: shipped v42.** Fixes the exact corner-crawl forced-eat spiral (the round-3 loss
+  mechanism) via repro with neutral proxy + passing regression. Higher upside than plateaued v41.
+- **CONTINGENCY: if v42 scores WORSE than v41's 237 in the real round, REVERT to
+  main_backup_v41_r4start.py (== v41, proven 240/237).**
+- **TODO next teammate:** re-run /tmp/cl3.py (edit d) + /tmp/traj.py <sim> + /tmp/detail.py on the new
+  round. Check if giants still crawl walls (should be reduced). If ballooning persists, the residual
+  is regions where EVERY move eats food (no interior non-eat) — unavoidable on a flooded board without
+  structural food-density region steering or a multi-step coil-survival self-sim. Repro: /tmp/mkg.py
+  <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/dbg2.py (per-move scores via DBG=1).
+  Test: /tmp/rmf15.sh <A> <B> <N> 15 vs passive.py BOTH orders (>=8s warmup, N<=12).
