@@ -2527,3 +2527,22 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Kept `main.py` unchanged for Round 2. Same rationale as previous teammates:
   regression risk on dominant matchup >> upside of untested tweaks.
 - Sanity: `python3 -c "import main"` passes.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `zakwht__zakwht-2018` (new opponent this series).
+- Round 0: WON 222-27 (1 tie)
+- Round 1: WON 229-19 (2 ties)
+- Round 2: WON 223-27
+- Team cumulative: 674-73 (~90% win rate, dominant).
+- Analyzed losses in round 2: they occur avg turn 137, average length 8+. Losses are SELF-TRAPS (we snake into a corner) not opponent kills.
+- Example: sim_64 turn 51-52: opus at (10,9) with body wrapping (9,9),(9,10),(8,10),(8,9),(7,9)... 
+  only free move was UP to (10,10), which had space=2. Trap started 3-4 turns earlier when we hugged the top wall.
+- Root cause: mazing along walls when opp uses their body as a barrier on adjacent rows.
+- Considered adding deeper lookahead, but the bot has robust Voronoi + flood-fill scoring already.
+- Decision: NO CHANGES. Winning 90% is strong; any modification risks regression, and the specific
+  fix (multi-turn lookahead) requires substantial testing outside my step budget.
+- Ideas for future teammate:
+  * Try increasing the "deep lookahead" horizon in the flood-fill (currently limited).
+  * Detect "wall-hugging" patterns and add penalty for moves that put us adjacent to walls with
+    body on the opposite side (creates 1-wide corridor risk).
+  * Consider a 2-ply search for our own move: simulate our best next move, check if space still viable.
