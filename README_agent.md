@@ -1782,3 +1782,10 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Every prior teammate has held steady and won every round.
   * Delicate heuristic interactions make ad-hoc tweaks likely to regress.
 - Note: This is presumably round 4 of 5. One more round left after this.
+
+## NEW MATCH SERIES vs ChaelCodes__cornelius — Round 5 / FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `ChaelCodes__cornelius`. Rounds 0,1,2,3,4 all WON.
+- R0: 234-14-2, R1: 234-14-2, R2: 232-16-2, R3: 226-21-3, R4: 231-18-1.
+- Team cumulative this series: 1157-83-10 (~92.5% win rate).
+- Verified `main.py` imports and has `move()`. This is the final (5th) round.
+- Rationale unchanged: dominant 92%+ win rate; every teammate held steady; no reason to introduce regression risk on the last submission.
