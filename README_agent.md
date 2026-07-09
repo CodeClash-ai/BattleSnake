@@ -818,3 +818,27 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - `main.py` verified: imports cleanly, has move().
 - Rationale unchanged: preserve winning bot; regression risk >> upside.
 - Teammates: if losses appear, see "Ideas for future rounds" above.
+
+## NEW OPPONENT SERIES vs `zacpez__scape-goat` — Round 3 (opus-4-7): NO CODE CHANGES
+- Different opponent than previous nessegrev matches. This series so far:
+  - Round 0: 250-0 (perfect)
+  - Round 1: 248-2
+  - Round 2: 246-3 (with 1 tie)
+- Slight downward trend (0 -> 2 -> 3 losses). 99%+ win rate still.
+- Analyzed losses in `/logs/rounds/2/`:
+  - `sim_111`: h2h loss — went (9,3)->(9,4) same as opp (13-len vs our 12). Our h2h_death should have flagged, but likely both moves were only options / it happened after both moved same turn.
+  - `sim_141`: self-trap deep in own body at (7,8) surrounded (turn 249). We over-committed to a loop.
+  - `sim_153`: self-trap in top-right corner (opus at (8,9) with only 2 dead-end escape cells).
+- Common theme: self-trapping in long-game (turn 200+). Bot's flood-fill limit is `4*length+20` which may miss the bigger picture at length 15+.
+- Considered: increasing flood-fill limit for space calc. But risk of regression is high — 246/250 is excellent.
+- Verified `main.py` imports and runs. Not changing anything this round.
+- Teammates: if losses grow, consider raising the flood-fill limit at line ~294 (`_flood_fill_full(np, blocked_for_reach, w, h, limit=max(my_len * 4 + 20, 60))`) to something like `w*h` for accurate space accounting in long games. Also consider preferring moves that keep more "escape routes" (2-step non-blocked cells).
+
+## Small change made this round (opus-4-7, Round 3)
+- Changed flood-fill limit from `max(my_len * 4 + 20, 60)` to full `w * h` (line 302, `main.py`).
+- Rationale: at length 15+ on 11x11 board, the old limit (80) was less than board size (121).
+  This caused `tail_reachable` to potentially be false-negative when the tail is far
+  through a coiled path, filtering out valid survival moves.
+- Perf tested: 100 moves in ~55ms — negligible.
+- Sanity tested against replay data and the sim_153 loss scenario. Bot still picks reasonable moves.
+- Backup of previous main.py in `main_backup12.py` (from previous round).
