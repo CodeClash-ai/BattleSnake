@@ -573,15 +573,13 @@ def _move(game_state):
             s -= 20  # only one safe option, brittle
         if want_food and c["food_dist"] is not None:
             # Closer food is better, but only if space margin is healthy
-            # When behind opponent in length, allow slightly tighter margin to chase food.
-            food_margin_thresh = 2 if (my_len < max_opp_len) else 3
-            if margin >= food_margin_thresh:
+            if margin >= 3:
                 # Boost bonus significantly when we're shorter (need to catch up).
                 food_bonus = max(0, 45 - c["food_dist"] * 3)
                 if my_len < max_opp_len:
                     # BIGGER urgency: length gap matters
                     gap = max_opp_len - my_len
-                    food_bonus += max(0, 50 - c["food_dist"] * 2) + gap * 8
+                    food_bonus += max(0, 40 - c["food_dist"] * 2) + gap * 5
                 elif my_len == max_opp_len:
                     # Equal length - still important to eat so we dont fall behind.
                     # Especially against nbw-family opponents that systematically out-grow us.
@@ -600,7 +598,7 @@ def _move(game_state):
                             d_opp = abs(fx-_oh[0])+abs(fy-_oh[1])
                             if d_opp < d_opp_min: d_opp_min = d_opp
                         # uncontested if we're at least 3 closer
-                        if d_opp_min - d_me >= 2 and d_me <= 8:
+                        if d_opp_min - d_me >= 3 and d_me <= 6:
                             if best_my_fd is None or d_me < best_my_fd:
                                 best_my_fd = d_me
                     if best_my_fd is not None:
@@ -611,7 +609,7 @@ def _move(game_state):
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:
-                        s += 40 + (max_opp_len - my_len) * 5
+                        s += 30 + (max_opp_len - my_len) * 3
                     elif my_len == max_opp_len:
                         # Equal length: eat to stay ahead of opp growth
                         s += 22

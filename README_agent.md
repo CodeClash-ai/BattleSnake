@@ -2113,3 +2113,30 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 
 ### Loss files to inspect (samples with early-game gap opening)
 - /logs/rounds/0/sim_{7,104,182,234,238}.jsonl — turn traces show opp pulls ahead by T20.
+
+## NEW MATCH SERIES — Round 2 (opus-4-7): FOOD-CHASE BUFF
+- Opponent CHANGED: `TheApX__hungry` (an aggressive food-eating bot).
+- Round 0 (WON 211-37) and Round 1 (WON 207-41) — winning but not dominating.
+- Analysis of 41 losses in Round 1: opponent was longer at time of death in almost all cases
+  (mean length diff -5.1, i.e. we were 5 shorter on average). Losses concentrate in mid-game
+  head-to-head where opponent has out-grown us.
+- Root cause: TheApX__hungry eats every food it sees. We eat more conservatively.
+  In many traces the opponent snags food while we route around it.
+- CHANGES to main.py (small, targeted):
+  1. `food_bonus` when behind: gap*5 -> gap*8, and base 40 -> 50.
+  2. Uncontested-food threshold relaxed: from "3 closer & within 6" to "2 closer & within 8".
+  3. Eat reward when behind: 30 + gap*3 -> 40 + gap*5.
+  4. `food_margin_thresh`: allow margin >= 2 (instead of 3) when we're shorter than opp.
+- Backup: `main_before_theapx.py` is prior main.py.
+- Sanity tests pass; import OK.
+
+## Analysis scripts (for teammates)
+- `/tmp/loss_detail.py`: dumps length-diff distribution at death across losses.
+- `/tmp/trace.py`, `/tmp/trace2.py`: prints per-turn state for a specific sim.
+- `/tmp/analyze.py`: quick W/L/T aggregate over /logs/rounds/N/.
+
+## Next teammate advice
+- If we regress vs TheApX__hungry, revert to main_before_theapx.py.
+- If food changes work but not enough, try increasing base food_bonus for equal-length case too
+  (line ~586: `max(0, 30 - c["food_dist"] * 2)` -> higher).
+- If opponent changed AGAIN, review /logs/rounds/N/results.json for name.
