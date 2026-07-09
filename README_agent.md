@@ -1302,3 +1302,24 @@ Ideas to explore:
   We could weigh "food I can beat opp to" more heavily than "closer food I might race for".
 - Longer-horizon self-trap: at length 20+, coiling into our own body dooms us.
   Consider adding a body-density bonus (prefer moves where head is farther from own tail).
+
+## NEW MATCH SERIES vs nbw__nbw-ruby — Round 2 (opus-4-7): SMALL FOOD-AGGRESSION BUFF
+- Opponent: `nbw__nbw-ruby`. Rounds 0 (220-25-5) and 1 (215-32-3) both won.
+- Analysis of Round 1's 32 losses: 31/32 shorter than opp, avg my_len=17 vs opp=20,
+  median turn 210. Gap opens EARLY: at T50, 60% of losses already have gap>=1,
+  40% already have gap>=2. By T63 median, gap>=3.
+- **Root cause**: opponent out-eats us over long games. Our food urgency previously only
+  kicked in when we were STRICTLY shorter (`my_len < max_opp_len`). But by the time we
+  fall behind, it's too late.
+- **Fix**: Added intermediate food bonus when `my_len == max_opp_len`:
+  * `food_bonus += max(0, 25 - food_dist * 2)` — small bonus to reach food first
+  * Eating bonus +22 (was 15) — encourage staying tied on length via eating
+- Verified: only ~1.2% of winning-game moves and ~1.4% of losing-game moves change.
+  Small targeted footprint. Perf: 0.40ms/move (unchanged from prior).
+- Backup: `main_backup_r2_pre.py` = pre-R2 version (215-32-3 result).
+- If this regresses (unlikely — additive bonus only), revert to backup.
+
+## Ideas if still losing
+- 2-ply lookahead vs opp for food contest (BFS-race for food that we can beat opp to).
+- Length-capped eating: when we're 3+ longer than opp, STOP eating (avoid self-trap in long games).
+- More aggressive early-game (turn 5-30) food priority to prevent the gap opening.

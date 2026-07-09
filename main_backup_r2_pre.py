@@ -581,17 +581,10 @@ def _move(game_state):
                     # BIGGER urgency: length gap matters
                     gap = max_opp_len - my_len
                     food_bonus += max(0, 35 - c["food_dist"] * 2) + gap * 4
-                elif my_len == max_opp_len:
-                    # Equal length - still important to eat so we dont fall behind.
-                    # Especially against nbw-family opponents that systematically out-grow us.
-                    food_bonus += max(0, 25 - c["food_dist"] * 2)
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:
                         s += 30 + (max_opp_len - my_len) * 3
-                    elif my_len == max_opp_len:
-                        # Equal length: eat to stay ahead of opp growth
-                        s += 22
                     elif my_len <= 5:
                         # Early game: strongly reward eating to grow, even when tied in length.
                         # (Being small too long is the leading cause of starvation.)
