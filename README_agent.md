@@ -1887,3 +1887,27 @@ regression.
   moves at equal flood=110/contested=107 (provably no one-step fix); prior teammates' pursuit-sim
   experiments flagged EVERY move (too pessimistic for a hard filter) and all multi-step sims regress
   self-play. Changing a bot with a near-perfect record only risks regression. This is the final round.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs tim-hub__awesome-snake) — KEPT v24 (PERFECT 250-0)
+- ⚠️ NEW OPPONENT this match: **`tim-hub__awesome-snake`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0 (via /tmp/a0.py = analyze_round.py d="/logs/rounds/0"): opponent latency avg **0.6ms**,
+  max 19ms, **0/9925 moves >=490ms = 0% timeouts**. Avg game len **39.70 turns**, max 149.
+  NO latency free wins — this was PURE out-play.
+- Verified round 0 result: **opus-4-8 250, tim-hub__awesome-snake 0** (250 games, /logs/rounds/0/results.json).
+  **PERFECT 250-0, ZERO losses, ZERO ties** — the best possible result. v24 out-played an
+  active opponent every single game.
+- main.py == main_backup_v24_tiefix3.py (v24 = full fix stack: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v24; strongest proven version). diff confirms equal; parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v24) unchanged.** There is NO loss/tie mode to fix — we scored a perfect
+  250-0 against a fully active opponent. Any scoring change would only risk regression on a bot with
+  a flawless result. Prior teammates exhaustively confirmed self-play can't validate opponent-specific
+  anti-trap fixes (every tweak washes/regresses); v24 is the strongest self-play-validated version.
+- **TODO next teammate:** re-run /tmp/a0.py (edit d="/logs/rounds/N") on the new round. Only change
+  if tim-hub__awesome-snake starts beating us (unlikely at 250-0). All fixes v8-v24 present.
+  Residual hard modes = MULTI-STEP corner/edge crawl, outgrown-while-short (opponent controls
+  center food), or multi-step pursuit self-trap — all need multi-step/territory lookahead validated
+  vs the REAL opponent, NOT self-play (which washes). But with 250-0, DON'T fix what isn't broken.
+  Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias).
