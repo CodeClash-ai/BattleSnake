@@ -2256,3 +2256,39 @@ regression.
   territory/multi-step lookahead validated vs the REAL opponent, NOT self-play. Repro: /tmp/mkstate.py
   <turn> (game 7a0a7be3), /tmp/testmove.py <bot> <state>, /tmp/body.py (body dump). Test: /tmp/rm2.sh
   <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs Spenca__vulture-snake) — KEPT v26
+- Verified results: round 0 **249-1**, round 1 **249-0 (+1 tie)** (opus-4-8 vs Spenca__vulture-snake).
+  2/2 rounds won; 498-1 with 1 tie in 500 games. Opponent FULLY ACTIVE (round 1 latency avg low,
+  0% timeouts; avg game ~short). Pure out-play, no free latency wins.
+- **Analyzed the SINGLE round-1 tie (game sim_247, /tmp/trace.py + /tmp/tie3.py): WALL-CRAWL
+  FOOD-RACE tie.** We ate spawn food at (8,0) then crawled LEFT along the bottom wall (y=0) from
+  x=8->x=3 chasing far food at (2,0) while the equal-len(4) opponent came down the left side racing
+  the SAME food. At t7 head (3,0) BOTH remaining moves (left->(2,0) & up->(3,1)) were enemy-reachable
+  equal-H2H cells (forced) -> mutual death TIE. Last free choice = t4/t5 (head (6,0)/(5,0)) still
+  crawling the wall; center food (5,5) existed but we chased the closer contested edge food (2,0).
+  Repro: /tmp/mkt.py <turn> builds /tmp/s<T>.json (turns 4-7); /tmp/testmove.py <bot> <state>.
+- **ATTEMPTED FIX (NOT shipped): SHORT-SNAKE contested-edge-food trap-flag.** Flag far edge food
+  an equal/longer enemy is also racing as trap (soften its pull) for a short HEALTHY snake (my_len<7,
+  hp>=70/80), ONLY when OTHER food exists (preserves anti-starvation). Two variants:
+  * Broad (hp>=70, lead<2): FLIPPED the repro to 'up' (off wall -> center food) at ALL turns 4-7. ✅
+    But SELF-PLAY REGRESSED BOTH orders: new 17-20 as A AND 17-20 as B (v26 wins ~57% both ways).
+  * Narrow (hp>=80, lead<1, head_on_wall, my_fd>=3): flipped t4/t5 to 'up' (the real last-free-choice)
+    but STILL regressed self-play 15-22 as A. ❌
+  CONFIRMS all prior teammates: edge/food scoring tweaks regress self-play, and self-play CANNOT
+  reproduce/validate the opponent-specific wall-crawl food-race tie. The regression (~57% both orders)
+  is a genuine negative, and the tie is only 1/250 (0 points, not a loss). REVERTED to v26.
+- REGRESSION PASS: main.py (v26) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Self-play sanity: main.py (v26) BEATS v24 both orders (12-7 as B, 11-8 vs v24-A) — v26 confirmed strongest.
+- main.py == main_backup_v26_tiefix4.py (diff confirms equal); parses clean (ast.parse OK); move()
+  wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** 2/2 rounds won at 99.6%+; the only non-win is 1 forced
+  wall-crawl food-race tie whose fix regresses self-play both orders (as all food/edge tweaks do).
+  Not worth a real self-play regression to save 1 tie (0 pts). No regression risk taken.
+- **TODO next teammate:** re-run /tmp/ana.py /logs/rounds/N + /tmp/trace.py on the new round. If the
+  wall-crawl food-race tie PERSISTS, the fix direction (soften contested-far-edge-food pull for short
+  snakes when alternative food exists) is directionally correct BUT regresses self-play — it needs
+  TERRITORY/food-ownership lookahead (route to food WE reach first) validated vs the REAL opponent,
+  NOT self-play (which eats symmetrically & washes/regresses). All fixes v8-v26 present. Repro:
+  /tmp/mkt.py <turn> (game sim_247), /tmp/testmove.py <bot> <state>, /tmp/trace.py. Test: /tmp/rm2.sh
+  <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
