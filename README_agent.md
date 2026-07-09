@@ -1708,3 +1708,49 @@ regression.
   Repro: /tmp/mkstate.py <gid> <turn> (round 3), /tmp/checkties.py (replays all ties old-vs-new),
   /tmp/testmove.py <bot> <state>, /tmp/eval.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N>
   (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__jump-flooding) — FINAL, KEPT v24
+- Verified results ALL rounds won: round 0 **244-4 (+2t)** (v21), round 1 **197-0 (+53t)** (v21),
+  round 2 **214-0 (+36t)** (v22), round 3 **231-0 (+19t)** (v23), round 4 **245-1 (+4t)** (v24).
+  TREND: v21->v22->v23->v24 slashed TIES 53->36->19->**4** (each tie fix worked); losses stayed
+  ~0-4. Round 4 (v24) is the BEST result: only 4 ties + 1 loss out of 250 games.
+- Round 4 (analyze_round.py, d="/logs/rounds/4"): 250 games, opus 245 / opp 1 / 4 ties.
+  Opponent FULLY ACTIVE (latency avg **0.6ms**, max 6ms, **0/3249 moves >=490ms = 0% timeouts**).
+  Avg game len 13.0 turns, max 127. Genuine out-plays, NOT free latency wins.
+- **The 4 ties (via /tmp/ties.py) are largely UNAVOIDABLE FORCED positions.** Traced e3a6af2b t4
+  (/tmp/mkstate.py + /tmp/testmove.py): our len4 head (10,6) pinned on the right wall, body sealing
+  'up' -> ONLY legal moves were down (10,5) & left (9,6), and the equal-len enemy at (9,5) can reach
+  BOTH -> every move is a possible equal-H2H tie. v24 can't avoid it (no safe move exists). The
+  other ties are similar equal-len H2H at len 4-5. v24's tie gate already avoids all the AVOIDABLE
+  voluntary ties (why ties fell 19->4).
+- **The 1 loss (game aacd59cb) = OUTGROWN-WHILE-SHORT + cornered (hard positional mode).** Via
+  /tmp/tt.py: our snake stayed **len 4 from t2 to t31** (health 72-100, NOT starving) while the
+  opponent ate CENTER food and grew to len 6, then cornered us at (9,10) at t35. Food kept spawning
+  far (x=0 left) or in the center the OPPONENT controlled; our one-step food pull (fdist*20 when
+  short_hungry) couldn't overcome the space-hugging terms when food was ~13 cells away & contested.
+  Repro: /tmp/state_aacd59cb_5.json (t5, food far-left, enemy between) -> v24 picks 'up' (can't
+  reach the far/contested food this turn).
+- **Tuning attempt this round — REJECTED (self-play regression):**
+  * v25: stronger center-pull (cpull=2.0) for short+outgrown (my_len<7 and _length_lead<0), to bias
+    toward the contested center food instead of circling the perimeter. SELF-PLAY REGRESSED slightly
+    BOTH orders: v25-A vs v24 18-19-3, v24-A vs v25 19-18-3 -> combined v24 38, v25 36. Reverted.
+  CONFIRMS all prior notes: self-play can't reproduce the opponent controlling center food, so it
+  can't validate this positional fix; the tweak just washed/regressed. The loss is genuinely about
+  the opponent out-positioning us for food, not a one-step scoring bug.
+- REGRESSION PASS: main.py (v24) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Latency (/tmp/lat.py: two 30-long dense snakes, 10 food, 200 moves): **0.020ms avg, 0.045ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- main.py == main_backup_v24_tiefix3.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v24) unchanged.** BEST result of the match (245-1-4, ties slashed to 4);
+  the tie-fix chain (v21->v24) is the validated improvement. The single loss is a hard positional
+  outgrown-while-short mode self-play can't reproduce/validate (my center-pull tweak regressed).
+  No regression risk taken on a bot with the match's best result. This is the final round.
+- **TODO (future, if this opponent recurs):** the ONLY loss mode left is being OUTGROWN while short
+  because the opponent controls the CENTER food. A one-step food pull can't fix it (v25 proved a
+  center-pull regresses self-play). The real edge would be TERRITORY/food-control lookahead: predict
+  which food WE reach first vs the enemy (Voronoi/BFS-distance ownership) and route to food we own,
+  denying the enemy growth -- but that must be validated vs the REAL opponent, not self-play (which
+  eats symmetrically). The 4 ties are mostly forced (no safe move) so not worth chasing further.
+  Repro: /tmp/mkstate.py <gid> <turn> (round 4), /tmp/testmove.py <bot> <state>, /tmp/tt.py <gid>
+  (per-turn dump), /tmp/ties.py (all ties). Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS
+  both A/B orders (position bias). Repro is the real validator, NOT self-play washes.
