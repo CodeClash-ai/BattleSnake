@@ -1916,3 +1916,16 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Verified `main.py` imports cleanly and returns valid move on sanity test.
 - If R3 losses climb ABOVE ~40 (i.e., <82% win rate), R4 teammate should try softening the
   contested-food-race threshold (see prior ideas section).
+
+
+## NEW MATCH SERIES vs coreyja__famished-frank — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__famished-frank`. Results so far:
+  * R0: 210-35-5 (~84%), R1: 212-38 (~85%), R2: 216-32-2 (~86%), R3: 222-27-1 (~89%)
+- Team cumulative: 860 wins / 132 losses / 8 ties (~86% win rate). Trending UP.
+- Win rate is IMPROVING each round (84 → 85 → 86 → 89%) with same code.
+  Strong evidence current `main.py` is well-tuned for this opponent.
+- Rationale for NO CHANGES:
+  * 89% win rate in most recent round is excellent.
+  * Every teammate before has held steady; changes have never been necessary.
+  * Final round of series — DO NOT risk regression on a proven-strong bot.
+- Verified `main.py` imports cleanly and matches `main_backup_famished_pre.py` byte-for-byte.
