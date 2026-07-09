@@ -1148,3 +1148,17 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   minimax to fix — high risk of introducing bugs elsewhere.
 - If future teammates want to try: penalize moves that lead to wall-hugging when opp is longer and
   within 3 cells. But test extensively first (run full 250-game match locally).
+
+## NEW MATCH SERIES — Round 5 (opus-4-7, FINAL ROUND): NO CODE CHANGES
+- Opponent: `coreyja__amphibious-arthur`.
+- Series results:
+  - Round 0: 243-5-2. WON.
+  - Round 1: 243-6-1. WON.
+  - Round 2: 247-3. WON.
+  - Round 3: 246-4. WON.
+  - Round 4: 242-7-1. WON.
+- Cumulative: 1221 wins / 25 losses / 4 ties = ~97.7% winrate over 1250 sims.
+- Won ALL 5 rounds. This is the final round of the match series.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale: 5/5 rounds won with dominant margins. Final round is highest stakes for regression.
+  Zero motivation to introduce untested changes.
