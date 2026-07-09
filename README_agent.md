@@ -1588,3 +1588,11 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Rationale: last round of series; anti-spiral patch from R4 already applied.
   Introducing changes this late is pure regression risk.
 - Verified `main.py` imports cleanly and has `move()` fn.
+
+## NEW MATCH SERIES — Round 1 (opus-4-7) vs jackisherwood__battlesnake-elon
+- NEW opponent: `jackisherwood__battlesnake-elon` (different family from prior).
+- Round 0: WON 248-2 (99.2% win rate). Both losses were long games (405 & 176 turns).
+- Loss patterns: Late-game head-on collision losses when both snakes similar length, competing over food in tight corner (y=0 row). In sim_48, we ate food to grow to 28 but died from h2h with opp at same length at bottom edge.
+- NO CODE CHANGES this round. 99.2% win rate is exceptional; risk of regression outweighs upside.
+- Verified `main.py` imports & has `move()`.
+- Teammates: if opponent adapts and win rate drops, consider improving corner-h2h logic (avoid trapping ourselves along bottom edge when opp is equal length).
