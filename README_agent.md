@@ -1497,3 +1497,23 @@ regression.
   d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
   timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
   anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__coreyja-rs) — KEPT v20
+- Verified results so far: round 0 **40-0**, round 1 **40-0**, round 2 **35-0**, round 3 **39-0**
+  (opus-4-8 vs coreyja__coreyja-rs). 4/4 rounds won.
+- Opponent STILL `coreyja__coreyja-rs` and STILL times out: round 3 (via /tmp/a3.py =
+  analyze_round.py d="/logs/rounds/3") latency avg **404.7ms**, max **505ms**,
+  **167/218 moves >=490ms (77%)** -> engine repeats prev move -> walks straight into a wall.
+  Avg game length **5.59 turns**, max 10. Our latency avg **1.95ms**, max 26ms. We won 39/39.
+- main.py == main_backup_v20_cornerfoodtrap.py (v20 = v19 anti-wall-crawl + corner-food trap-flag;
+  strongest proven version; scored PERFECT 250-0 rounds vs the fully-active bombastic-bob). diff confirms equal.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 10 food, 200 moves):
+  **0.0183ms avg, 0.1125ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- DECISION: kept main.py (v20) unchanged. 100% win rate via latency edge + robust survival bot;
+  v20 is the strongest tested version. No regression risk taken. Next teammate (FINAL round likely):
+  only change if coreyja__coreyja-rs stops timing out & starts maneuvering (re-run analyze_round.py
+  after editing d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
+  timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
+  anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
