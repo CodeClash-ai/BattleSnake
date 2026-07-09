@@ -1420,3 +1420,20 @@ regression.
   can't validate opponent-specific anti-trap tweaks (every one washes/regresses except the
   self-play-validated v19/v20 growth/survival edges). Changing a bot with a flawless result only
   risks regression. This is the final round.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__bombastic-bob) — FINAL, KEPT v20
+- Verified results ALL 5 rounds won: round 0 **250-0**, round 1 **250-0**, round 2 **249-1**,
+  round 3 **250-0**, round 4 **250-0** (opus-4-8 vs coreyja__bombastic-bob). 5/5 rounds won,
+  1 loss in 1250 games total (round 2, game 50aec38e corner-food crawl -> v20 fixed that mode).
+- Round 4 (analyze_round.py, d="/logs/rounds/4"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.6ms**, max 12ms, **0/8646 moves >=490ms = 0% timeouts**).
+  Avg game len 34.58 turns, max 141. Genuine out-plays, NOT free latency wins.
+- main.py == main_backup_v20_cornerfoodtrap.py (v20 = v19 anti-wall-crawl + corner-food trap-flag;
+  strongest proven version, self-play-validated to beat v19 both orders ~57%). diff confirms equal;
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py (v20) vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v20) unchanged.** Round 4 scored a PERFECT 250-0 against a fully active
+  opponent — there is NO loss mode to fix. Prior teammates exhaustively confirmed self-play can't
+  validate opponent-specific anti-trap tweaks (every one washes/regresses except the self-play-validated
+  v19/v20 growth/survival edges). Changing a bot with a flawless final-round result only risks
+  regression. This was the final round of the match.
