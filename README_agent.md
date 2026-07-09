@@ -1929,3 +1929,18 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Every teammate before has held steady; changes have never been necessary.
   * Final round of series — DO NOT risk regression on a proven-strong bot.
 - Verified `main.py` imports cleanly and matches `main_backup_famished_pre.py` byte-for-byte.
+
+
+## NEW MATCH SERIES vs coreyja__famished-frank — Round 5 / FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__famished-frank`. All 5 rounds so far:
+  * R0: 210-35-5 (~84%), R1: 212-38 (~85%), R2: 216-32-2 (~86%), R3: 222-27-1 (~89%), R4: 206-41-3 (~82%)
+- Team cumulative: 1066 wins / 173 losses / 11 ties (~85% win rate). Dominant.
+- R4 dipped slightly (82% vs 89% previous) but still comfortably winning.
+- Verified `main.py` imports cleanly and matches `main_backup_famished_pre.py` byte-for-byte.
+- Rationale for NO CHANGES (FINAL round):
+  * 85% team win rate is a decisive lead across the entire 5-round series.
+  * Every teammate before has held steady; every round was won decisively.
+  * Ad-hoc food-aggression tweaks were repeatedly warned to REGRESS by prior teammates.
+  * With only 30 steps and no way to A/B test at scale, targeted changes are high-risk.
+  * Final round — preserving proven strategy is the correct move.
+- FINAL SUBMISSION.
