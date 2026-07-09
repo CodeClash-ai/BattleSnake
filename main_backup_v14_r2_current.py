@@ -319,8 +319,13 @@ def _choose_move(game_state):
     if not candidates:
         return _safe_fallback(game_state)
 
+    # Prefer moves that don't lose head-to-heads if any exist.
+    safe = [c for c in candidates if not c["loses_h2h"]]
+    pool = safe if safe else candidates
+
     # Survival: a move is "safe space" if we can reach our tail OR the reachable
     # space is at least our length (we won't box ourselves in immediately).
+    # Require BOTH a decent tail loop or ample space to avoid coiling traps.
     def survivable(c):
         # Time-aware: the space we can actually occupy as our body advances
         # must hold our length. This is the real self-trap guard. Fall back
@@ -328,29 +333,6 @@ def _choose_move(game_state):
         if c["timed_space"] >= my_len:
             return True
         return c["tail_reachable"] and c["space"] >= my_len + 2
-
-    # Prefer moves that don't lose head-to-heads if any exist.
-    safe = [c for c in candidates if not c["loses_h2h"]]
-    pool = safe if safe else candidates
-
-    # CRITICAL FIX (v16): avoiding a merely POSSIBLE head-to-head must NOT force
-    # us into a certain self-trap. If every non-losing-h2h move is NOT survivable
-    # (boxes us in), but some h2h-risk move IS survivable with real open space,
-    # include those survivable h2h-risk moves in the pool. An h2h against an
-    # equal/longer enemy is at worst a TIE (or the enemy may not even move there),
-    # whereas a self-trap is a GUARANTEED loss. Real loss games (e.g. 78e77953)
-    # died exactly this way: the only non-h2h move led into an 8-cell pocket while
-    # the survivable escape was pruned for a possible enemy head collision.
-    safe_surv = [c for c in safe if survivable(c)]
-    if not safe_surv:
-        risky_surv = [c for c in candidates if c["loses_h2h"] and survivable(c)]
-        if risky_surv:
-            # Only add h2h-risk survivable moves that have clearly MORE space than
-            # any safe move (so we escape a trap, not chase a bad H2H needlessly).
-            best_safe_space = max((c["timed_space"] for c in safe), default=-1)
-            escape = [c for c in risky_surv if c["timed_space"] > best_safe_space + 3]
-            if escape:
-                pool = safe + escape
 
     surv = [c for c in pool if survivable(c)]
     pool2 = surv if surv else pool

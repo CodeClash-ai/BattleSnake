@@ -1010,3 +1010,34 @@ regression.
   Test: compare main.py vs main_backup_v14.py on that state. Analysis: /tmp/lossd.py, /tmp/trace.py
   (edit gid). Test tool: /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders (position bias dominates
   30-game runs). Don't trust self-play washes as improvements.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs Xe__since) — SHIPPED v16 (H2H-trap fix)
+- Verified results ALL 3 rounds won: round 0 **203-5 (+1 tie)**, round 1 **241-8**,
+  round 2 **244-5 (+1 tie)** (opus-4-8 vs Xe__since). Opponent ACTIVELY PLAYS (round 2 latency
+  avg 166ms, only 2/12958 moves >=490ms; avg game 51.8 turns, max 193). Pure out-play.
+- **Root cause of round-2 losses = H2H-AVOIDANCE FORCED A SELF-TRAP (real bug found & fixed).**
+  Traced game 78e77953 (t82, head (9,3), len12, health95). Flood spaces: **L=91, D=8, R=8**.
+  The opponent head was at (8,2), len12 (EQUAL). Its possible next cells (8,3)[our L] and (9,2)[our D]
+  were pruned by the `loses_h2h` filter (enemy_next>=my_len). That left ONLY 'right' -> an 8-cell
+  pocket -> we coiled to death by t90. i.e. the bot avoided a merely POSSIBLE (equal-len => at worst
+  a TIE) head-to-head by walking into a GUARANTEED self-trap. (repro: /tmp/state82.json + dbg2/dbg4.)
+- **FIX (main.py = v16, backup main_backup_v16_h2h_trap.py; prev main = main_backup_v14_r2_current.py):**
+  In pool selection: if NO non-losing-h2h move is survivable (all safe moves box us in), but some
+  h2h-RISK move IS survivable with clearly more room (timed_space > best_safe_space + 3), add those
+  escape moves to the pool. Rationale: an h2h vs equal/longer = at worst a TIE (or enemy may not move
+  there); a self-trap = certain loss. Also moved `survivable()` def above the pool logic.
+- **VALIDATION (self-play canNOT reproduce this — both bots share the fix — so use the repro):**
+  * /tmp/state82.json: **v16 picks 'left' (escapes to 91-cell space); v14 picks 'right' (dies).**
+    Direct proof v16 fixes the exact loss.
+  * REGRESSION PASS: v16 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+  * Self-play WASH (expected, safe): v16 vs v14 = 19-18 A / 20-17 B (39-35); v16 vs v13 = 14-13 A /
+    15-12 B. No regression — the fix ONLY triggers when non-h2h moves would trap us.
+  * Latency 0.22ms/move (timeout 500ms) — free. parses clean; move() try/except + _safe_fallback.
+- **DECISION: shipped v16.** Fixes a genuine bug (over-strict H2H pruning that ignored the only
+  survivable escape) that directly caused the round-2 losses, with zero self-play regression.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") + /tmp/trace2.py (edit gid;
+  prints per-turn flood spaces) on the new round. If losses persist and are STILL self-traps where a
+  survivable move exists but is pruned, tune the escape threshold (+3 -> +1) or also allow escape when
+  a safe move is non-survivable even if the risk-move space is only slightly larger. If losses flip to
+  being-outgrown (short snake), push food weights (v14 already races hard). Test: /tmp/rm2.sh (>=4s
+  warmup), ALWAYS both A/B orders. Repro is the real validator, NOT self-play washes.
