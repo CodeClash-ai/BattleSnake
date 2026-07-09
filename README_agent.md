@@ -3732,3 +3732,53 @@ regression.
   all variants — real-match result is the true validator), ALWAYS both A/B orders (strong position
   bias). Loss class: parse /logs/rounds/N/sim_*.jsonl last-line {winnerName,isDraw}; per-frame
   our-max-length scan shows ballooning. DON'T ship an unvalidated cap change — v41 (240-10) is best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs Flipez__flipez-crystal) — KEPT v41
+- ⚠️ NEW OPPONENT: **`Flipez__flipez-crystal`** — GENUINELY COMPETITIVE / FULLY ACTIVE, a strong
+  FOOD-EATER. Round 0 result: **opus-4-8 224, Flipez__flipez-crystal 22 (+4 ties)** (250 games).
+  22 losses (~9%). NOT the giant-balloon opponent (our max len in losses was only 4-21).
+- **Loss classification (/tmp/cl2.py, last-alive frame): 22 losses = 15 OUTGROWN + 7 SELFCOIL.**
+  * **OUTGROWN (15, DOMINANT):** in nearly every one the opponent is LONGER than us (opp13/us9,
+    opp19/us17, opp21/us20, opp26/us21, etc.). The opponent consistently OUT-EATS us and wins the
+    late H2H or corners us. Trace (/tmp/tr.py sim_66): both spawn L3; opponent pulls ahead from ~t40
+    (op L8 vs us L6) and keeps growing faster. Deep dive (/tmp/trd.py sim_66 t20-42): the food is
+    usually 1-2 cells only, and it spawns CLOSER TO THE OPPONENT — we chase far/contested food,
+    crawl into corners (we were at (10,10) at t20 chasing food at (8,0) the opp grabbed) & waste
+    turns while the opponent eats & grows.
+  * **SELFCOIL (7):** the documented hard multi-step coil (len 9-21, all 4 neighbors = OWN body).
+- **Tuning experiments this round — ALL REJECTED (self-play wash/regression, as prior teammates
+  warned for ALL food-routing tweaks):**
+  * cand-A: CONTESTED-FOOD AVOIDANCE (when _length_lead<2 & >=2 food & hp>=45, add to trap_food any
+    non-trap food an equal/longer enemy reaches STRICTLY sooner; keeps winnable food, never starves).
+    REGRESSION PASS vs opp_straight = 8-0 both orders. Self-play vs v41 over 3 batches (16 each,
+    BOTH orders): batch1 cand 19-11, batch2 cand 13-17, batch3 cand 12-18 -> AGGREGATE cand 44 vs
+    v41 46 = WASH/slight-negative. Did NOT flip the actual single-food corner-chase repros (sim_66
+    t20 both pick 'down'; the fix needs >=2 food). REJECTED.
+  * cand-B: NARROWER version — only avoid contested WALL/EDGE food (the observed perimeter-crawl
+    failure). REGRESSION PASS 6-0. Self-play batch1 cand 16-14 (wins both orders!), batch2 cand
+    12-18 -> AGGREGATE cand 28 vs v41 32 = WASH/slight-negative. REJECTED.
+  CONFIRMS ALL prior teammates: self-play CANNOT reproduce the opponent out-eating us (both bots eat
+  symmetrically), so it washes/regresses every food-routing tweak. The real fix needs TERRITORY/
+  Voronoi food-ownership lookahead validated vs the REAL opponent, which I cannot do here.
+- REGRESSION PASS: main.py (v41) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Self-play sanity: v41 vs itself = 4-4 (even, NO crashes/errors in server logs); v41 vs v40 ~even
+  (5-7, position bias). main.py == main_backup_v41_giantcap4.py (diff confirms equal); parses clean
+  (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v41) unchanged.** 224-22 is a solid win vs a strong food-eating opponent.
+  The dominant OUTGROWN loss mode (opponent controls/reaches food first) is the documented hard mode
+  that self-play can't validate — both my contested-food fixes (broad & wall-only) washed/slightly-
+  regressed self-play over multiple batches. Iron ship-rule: don't ship a self-play wash/regression
+  on a proven bot. v41 is the strongest self-play-validated version. No regression risk taken.
+- **TODO next teammate:** re-run /tmp/cl2.py (edit d="/logs/rounds/N") on the new round to classify
+  losses (OUTGROWN = opp longer at death; SELFCOIL = legal=0). If OUTGROWN dominates again (opp
+  out-eats us on a low-food board): the food-race is already aggressive (fdist*10-20 when behind);
+  pushing it further OR simple contested-food avoidance both WASH self-play (proven this round). The
+  REAL edge is TERRITORY/Voronoi food-ownership routing (BFS-distance: for each food, compute which
+  snake reaches it first; route to food WE own, denying the opponent growth) — but it MUST be
+  validated vs the REAL opponent (self-play eats symmetrically & washes). Since we can't test vs the
+  real opponent, the safe move is to KEEP v41 unless you find a fix that WINS self-play both orders
+  (not a wash). Repro: /tmp/mk.py <sim> <turn> <out.json> ("you"=opus), /tmp/tm.py <bot> <state>,
+  /tmp/tr.py <sim> (per-turn len/hp/food#), /tmp/trd.py <sim> <t0> <t1> (per-turn heads/food coords),
+  /tmp/cl2.py (loss class). Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N<=16 to fit ~200s;
+  actually N=16 both orders fits in ~120-200s each), ALWAYS both A/B orders (STRONG position bias —
+  trust AGGREGATE over multiple batches, single batches are noisy). Repro is the real validator.
