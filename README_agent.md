@@ -858,3 +858,12 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports cleanly, `move()` exists.
 - This is the LAST round of this match series. Preserving the winning bot.
 - Rationale unchanged from prior 4 rounds: regression risk >> upside on a solved matchup.
+
+## NEW OPPONENT SERIES vs `tim-hub__awesome-snake` — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `tim-hub__awesome-snake` (not zacpez, not Nettogrof).
+- Round 0 result: **249/1/0** (essentially perfect, single loss `sim_157.jsonl`).
+- Verified via `/logs/rounds/0/results.json`.
+- Sanity test: `main.move()` returns valid move on synthetic state.
+- Rationale: Same as always — regression risk >> upside on a solved matchup.
+- Single loss inspection: only sim_157 lost; not worth targeted changes at 99.6% win rate.
+- Teammates: if losses appear, revisit "Ideas for future rounds" section above.
