@@ -141,62 +141,6 @@ def _bfs_distance(src, targets, blocked, w, h):
     return None
 
 
-
-def _voronoi_territory(my_head, opp_heads, blocked_static, w, h):
-    """Multi-source BFS. Returns (my_cells, opp_cells) counts.
-    Ties (same distance) count toward opp (conservative).
-    blocked_static: cells always blocked (bodies)."""
-    # Multi-source BFS: distance grid
-    from collections import deque as _dq
-    INF = 10**9
-    dist_me = {}
-    dist_op = {}
-    q = _dq()
-    if my_head not in blocked_static and _in_bounds(my_head, w, h):
-        dist_me[my_head] = 0
-        q.append((my_head, 0, 'me'))
-    for oh in opp_heads:
-        if oh not in blocked_static and _in_bounds(oh, w, h):
-            dist_op[oh] = 0
-            q.append((oh, 0, 'op'))
-    # Merged BFS layer by layer to handle ties
-    visited = {}
-    # Do proper layered BFS
-    layer = {}
-    if my_head not in blocked_static and _in_bounds(my_head, w, h):
-        layer[my_head] = ('me', 0)
-    for oh in opp_heads:
-        if oh not in blocked_static and _in_bounds(oh, w, h):
-            if oh in layer:
-                layer[oh] = ('tie', 0)
-            else:
-                layer[oh] = ('op', 0)
-    frontier = list(layer.keys())
-    step = 0
-    while frontier:
-        step += 1
-        new_layer = {}
-        for cell in frontier:
-            owner, _ = layer[cell]
-            for nb in _neighbors(cell):
-                if not _in_bounds(nb, w, h): continue
-                if nb in blocked_static: continue
-                if nb in layer: continue
-                if nb in new_layer:
-                    if new_layer[nb][0] != owner:
-                        new_layer[nb] = ('tie', step)
-                else:
-                    new_layer[nb] = (owner, step)
-        for k, v in new_layer.items():
-            layer[k] = v
-        frontier = list(new_layer.keys())
-    my_cells = sum(1 for v in layer.values() if v[0] == 'me')
-    op_cells = sum(1 for v in layer.values() if v[0] == 'op')
-    tie_cells = sum(1 for v in layer.values() if v[0] == 'tie')
-    return my_cells, op_cells, tie_cells
-
-
-
 def move(game_state):
     try:
         return _move(game_state)
@@ -351,29 +295,6 @@ def _move(game_state):
                 continue  # dangerous
             next_safe_options += 1
 
-        # Voronoi territory: how many cells we control faster than opps.
-        # Simulate opp heads at their possible next moves (union approach).
-        # Static blocked for voronoi = my_new_body (minus new head) + opp bodies (minus tails).
-        vor_blocked = set()
-        for seg in my_new_body:
-            vor_blocked.add(seg)
-        for s in snakes:
-            if s["id"] == my_id: continue
-            sb = [(seg["x"], seg["y"]) for seg in s["body"]]
-            if len(sb) >= 2 and sb[-1] != sb[-2]:
-                for seg in sb[:-1]:
-                    vor_blocked.add(seg)
-            else:
-                for seg in sb:
-                    vor_blocked.add(seg)
-        vor_blocked.discard(np)
-        # Use current opp heads as sources
-        opp_heads_vor = [(s["head"]["x"], s["head"]["y"]) for s in snakes if s["id"] != my_id]
-        # Remove opp head cells from blocked (they'll move)
-        for oh in opp_heads_vor:
-            vor_blocked.discard(oh)
-        my_terr, op_terr, tie_terr = _voronoi_territory(np, opp_heads_vor, vor_blocked, w, h)
-
         candidates.append({
             "dir": d,
             "cell": np,
@@ -388,8 +309,6 @@ def _move(game_state):
             "new_len": new_len,
             "next_safe_options": next_safe_options,
             "next_options_total": next_options_total,
-            "my_terr": my_terr,
-            "op_terr": op_terr,
         })
 
     if not candidates:
@@ -445,12 +364,6 @@ def _move(game_state):
     def score(c):
         s = 0.0
         s += c["space"] * 1.0
-        # Territory advantage (Voronoi): we want more of the board than opp
-        terr_diff = c.get("my_terr", 0) - c.get("op_terr", 0)
-        s += terr_diff * 0.5
-        # Absolute low-territory penalty: if we have very few cells, we're getting boxed in.
-        if c.get("my_terr", 999) < c["new_len"]:
-            s -= 30
         if c["h2h_kill"]:
             s += 50
         if c.get("h2h_tie"):

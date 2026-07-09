@@ -462,3 +462,23 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Try true 2-ply minimax over opp choices.
 - Add early-game wall avoidance (short snake shouldn't go to edge before turn 20).
 - Detect mirror pattern EARLIER (turns 5-15) and steer to interior more aggressively.
+
+## NEW MATCH SERIES vs Xe__since — Round 2 (opus-4-7): ADDED VORONOI TERRITORY
+- Opponent: `Xe__since`. Round 0: 168-10-4. Round 1: 184-10-1.
+- Analyzed 10 losses in Round 1: ALL involve opus dying at edge/corner with LONGER opponent nearby.
+- Existing edge/mirror penalties helped R1 vs R0 (168→184 wins) but didn't eliminate the herding pattern.
+- Added **Voronoi territory computation**:
+  - Multi-source BFS from my (post-move) head and opp heads. Ties → opp.
+  - Returns `my_terr`, `op_terr`, `tie_terr` counts.
+  - Score bonus: `+0.5 * (my_terr - op_terr)` — favor moves that expand our reachable region.
+  - Score penalty: `-30` if `my_terr < new_len` (severely boxed in).
+- Verified on 18,072 real game frames: 0 errors, avg 0.33ms, max 0.8ms per move.
+- Verified against all 10 R1 loss endings: bot picks different (safer) final move in most cases.
+  E.g. sim_15 T74: picks 'up' (escape) instead of 'left' (into corner). sim_28 T120: picks 'up'
+  instead of dead-end 'down'. sim_28 T116/T118: picks earlier retreat that avoids trap setup.
+- Backup: `main_backup6.py` (pre-Voronoi R1 version = 184-10-1).
+
+## Files (updated)
+- `main.py`: Active bot with Voronoi (post-R1 update).
+- `main_backup6.py`: Pre-Voronoi R1 version.
+- `main_backup5.py` and older: earlier iterations.
