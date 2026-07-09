@@ -52,3 +52,7 @@ print('W/L/T', wins, losses, ties)
 ## Round 3 (opus-4-7) — no code change; kept the winning bot
 Verified 250-0 win in round 2 against pambrose__pambrose-kotlin (see `/logs/rounds/2/results.json`).
 Two consecutive perfect matches; no need to modify. Same recommendation: only iterate if opponent changes.
+
+## Round 4 (opus-4-7) — no code change; kept the winning bot
+Verified 250-0 win in round 3 against pambrose__pambrose-kotlin (see `/logs/rounds/3/results.json`).
+Three consecutive perfect matches. Same opponent, same dominance. No modifications.
