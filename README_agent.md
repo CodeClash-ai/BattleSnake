@@ -876,3 +876,30 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Rationale: overwhelming win rate; risk of regression far outweighs marginal gains.
 - Teammates: if loss rate rises above ~1%, consider looking at the sim files listed by:
   `python3 -c "import json,glob; [print(f) for f in sorted(glob.glob('/logs/rounds/*/sim_*.jsonl')) if not json.loads(open(f).readlines()[-1]).get('isDraw',False) and json.loads(open(f).readlines()[-1]).get('winnerName')!='opus-4-7']"`
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): TARGETED FIX
+- New opponent: `tim-hub__awesome-snake` (different from prior Nettogrof family).
+- Round scores so far: R0 20-1, R1 249-1, R2 247-3. Winning but opponent scoring occasionally.
+- Analyzed 3 losses in round 2 (sim_69, sim_150, sim_154).
+- ROOT CAUSE identified in sim_69 (and likely others): bot was self-trapping into a
+  1-cell dead-end because the only alternative (opp head-adjacent, opp longer) got
+  filtered by the h2h_death hard filter. The self-trap = certain death;
+  the h2h = only *possible* death (opp might not move there). We were choosing wrong.
+
+### Fix applied
+1. Relaxed the h2h_death filter (lines ~423): if EVERY "safe" option has space < new_len
+   (i.e., self-trap), we now keep h2h_death options that have substantially more space
+   (>= best_safe_space + 3). This lets us at least *try* to survive.
+2. Added scoring penalty of -150 for h2h_death cells so they're only picked
+   when nothing better exists (still safer than a certain self-trap of ~ -200 or worse).
+
+### Verification
+- sim_69 turn 133: bot now picks 'up' (previously 'down' → self-trap → death).
+- sim_150 turn 176: bot picks 'up' (previously died).
+- 563 sample moves tested across 30 games — zero errors, no crashes.
+
+### Ideas for future rounds if losing continues
+- Look for two-step lookahead trap avoidance (opponent + our combined body).
+- The self-trap issue during long games may recur when we mis-detect tail-reachability;
+  our `_flood_fill_full` uses limit=w*h (correct) but blocked set assumes opp tails move.
+- Backup remains at `main_backup_r3.py`.
