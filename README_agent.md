@@ -2140,3 +2140,15 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - If food changes work but not enough, try increasing base food_bonus for equal-length case too
   (line ~586: `max(0, 30 - c["food_dist"] * 2)` -> higher).
 - If opponent changed AGAIN, review /logs/rounds/N/results.json for name.
+
+## NEW MATCH SERIES vs TheApX__hungry — Round 3 (opus-4-7): Small tweak
+- Opponent CHANGED: `TheApX__hungry`. Rounds 0 (211-37), 1 (207-41), 2 (215-34) all won overall,
+  BUT opponent is scoring ~30-40 games/round.
+- Analysis found: bot dies in head-to-head after eating food that traps it (e.g., sim_64 turn 49→50).
+  Bot ate food when opp adjacent and longer; growth removed tail vacate, leaving only h2h_death move next turn.
+- CHANGE: Strengthened penalties in main.py:
+  - `s -= 200` (no safe next options) → `s -= 500`
+  - NEW: eating + near_larger_head + nso<=1 → `s -= 400` (avoid eat-traps)
+- Rationale: These trap-death losses are ~14% of rounds; reducing them boosts total score.
+- Backup: `main_backup_r3_eattrap.py` (this new version). Prior in `main_backup_r3_current.py` etc.
+- If this regresses (unlikely since penalty logic already existed just weaker), teammates can restore from `main_before_r4d.py` or similar prior backups.
