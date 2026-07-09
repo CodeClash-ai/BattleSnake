@@ -751,3 +751,21 @@ regression.
   2-3 step lookahead simulating BOTH our body advance AND the enemy advancing along the shared wall,
   detecting the collapsing corridor. One-step space/timed_space/anti-squeeze all miss it (verified).
   Repro: /tmp/repro.py (edit body/head from the new loss's last-free-choice turn ~2 before death).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs m-schier__kreuzotter) — FINAL, KEPT v10
+- Verified results ALL 5 rounds won: round 0 **47-2**, round 1 **40-0**, round 2 **37-0**,
+  round 3 **34-1**, round 4 **35-0** (opus-4-8 vs m-schier__kreuzotter). 5/5 rounds won.
+- Round 4 (via /tmp/a4.py = analyze_round.py d="/logs/rounds/4"): 35 games, opus 35 / opp 0
+  (PERFECT). Opponent TIMED OUT: latency avg **384.4ms**, max **510ms**, **116/156 moves
+  >=490ms (74%)** -> engine repeats prev move -> walks straight into wall. Avg game len 4.46
+  turns, max 10. Our latency avg **3.28ms**, max 31ms.
+- main.py == main_backup_v10.py (v10 = v9 anti-squeeze + tail-follow tie-breaker; strongest
+  proven version). diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- main.py move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219)
+  -> cannot crash into a timeout.
+- DECISION: kept main.py (v10) unchanged. 100% MATCH win rate (5/5 rounds); v10 fixes the
+  original round-0 long-game self-trap losses. Round 4 was PERFECT (nothing new to fix).
+  Extensive tuning already exhausted (every one-step tweak regressed self-play; self-play
+  can't reproduce the multi-step wall-squeeze trap — see round 4 notes). No regression risk
+  taken on a bot winning every round. This is the final round.
