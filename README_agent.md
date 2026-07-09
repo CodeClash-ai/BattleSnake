@@ -908,3 +908,38 @@ regression.
   /tmp/rm2.sh (recreate from top notes, >=3s warmup, all-draws=server not ready rerun); ALWAYS BOTH
   A/B orders (position bias). NOTE: this round self-play DID validate the fix (v14 beats v13 both
   orders) because the fix is a growth-race edge both bots feel — unlike opponent-specific traps.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs nbw__nbw-crystal) — FINAL, KEPT v14
+- Verified results ALL rounds won: round 0 **244-1 (+1 tie)**, round 1 **244-5 (+1 tie)**,
+  round 2 **233-6 (+7 ties)**, round 3 **242-3 (+5 ties)**, round 4 **247-2 (+1 tie)**
+  (opus-4-8 vs nbw__nbw-crystal). 5/5 rounds won. TREND: v12->v13->v14 steadily cut
+  losses (6->3->2) and ties (7->5->1). v14 (round 4) is the BEST result yet.
+- Round 4 (analyze_round.py d="/logs/rounds/4"): 250 games, opus 247 / opp 2 / 1 tie.
+  Opponent FULLY ACTIVE (latency avg **136ms**, **0/3416 moves >=490ms = 0% timeouts**).
+  Avg game len 13.7 turns, max 75. Our latency avg 1.37ms, max 63.
+- **Both round-4 losses (games in sim_37=bf9b4fdb, +43d2974e): SAME "outgrown while short"
+  pattern.** In sim_37 our snake sat at **len 4 from turn ~16 to ~30** (health 78-93, NOT
+  eating) while the opponent hit len 5 by turn 16; we tied len at 5 by turn 32 but never led,
+  then got cornered at (10,10) at len 5. Consistent w/ every prior round: we grow a touch too
+  slowly and lose a late H2H / corner squeeze while short.
+- **Tuning experiments this round — ALL REJECTED (self-play /tmp run_match.sh, BOTH A/B orders):**
+  * v15 (push food harder: lead<0 *18, lead<1 *12, want_food thresholds up): WASH (v15 38 vs v14 38).
+  * v16 (food-contention penalty: avoid chasing food an enemy reaches first, weight 2.0 then 1.0):
+    slight REGRESSION (v16 38/36 vs v14 41/43 combined). REJECTED.
+  * v17 (extra -25 penalty for cells an equal/longer enemy could also enter when lead<=0):
+    REGRESSION (v17 33 vs v14 41). Over-avoids; loses_h2h(-100) already handles real losses.
+  CONCLUSION (matches all prior teammates): v14 is at a self-play local optimum; the 2 remaining
+  losses are opponent-specific corner/H2H-while-short that self-play does NOT reproduce, so it
+  can't validate an anti-corner fix. v14 already pushes the food race hard (lead<0 *14, center
+  pull 1.2) — that growth edge is why v14 beat v13 both orders and cut losses each round.
+- main.py == main_backup_v14.py == main_backup_v14_r4.py (this round's backup). diff confirms equal.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long snakes, dense 11x11, 3 food, 200 moves): **0.0147ms avg,
+  0.1035ms max** (timeout 500ms) — cannot time out. move() wrapped in try/except + _safe_fallback.
+- **DECISION: kept main.py (v14) unchanged.** BEST result yet (247-2, losses+ties trending down);
+  every attempted tweak this round washed or regressed in self-play and can't be validated vs the
+  real opponent's corner-while-short trap. No regression risk taken on a bot winning every round.
+- **TODO (future):** the ONLY loss mode left is being outgrown/cornered while short (len 4-7). The
+  deeper fix needs real 2-3 ply lookahead of the enemy cutting us off, OR food-contention that
+  actually validates vs the real opponent (self-play washes it). Repro: /tmp/lossd.py (edit gid /
+  round dir). Test: ./run_match.sh <A> <B> <N> (>=2s warmup), ALWAYS BOTH A/B orders (position bias).
