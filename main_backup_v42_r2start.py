@@ -459,40 +459,6 @@ def _choose_move(game_state):
     if _big_safe:
         want_food = False
 
-    # FOOD-OWNERSHIP (Voronoi food-race): the dominant loss mode vs the crystal
-    # opponent is being OUT-EATEN (opp stays 1-2 longer the whole game, then wins
-    # the endgame). To win the food-race we route toward food WE reach strictly
-    # BEFORE the enemy (owned food = growth we can secure + deny to the opponent),
-    # and avoid committing to food the enemy owns (it grabs it first, we waste
-    # turns). Compute BFS distance from our HEAD and from each enemy head to every
-    # food using the shared obstacle map (excluding our own tail, which vacates).
-    owned_food = set()
-    contested_lose_food = set()
-    if food_set and enemies:
-        own_obs = set(obstacles)
-        own_obs.discard(my_tail)
-        for fx, fy in food_set:
-            my_d = _bfs_dist(head, {(fx, fy)}, own_obs, w, h)
-            if my_d is None:
-                continue
-            # nearest enemy BFS distance to this food (enemies' tails vacate too)
-            best_e = None
-            for e in enemies:
-                e_obs = set(obstacles)
-                e_obs.discard(e["body"][-1])
-                ed = _bfs_dist(e["head"], {(fx, fy)}, e_obs, w, h)
-                if ed is None:
-                    continue
-                if best_e is None or ed < best_e:
-                    best_e = ed
-            if best_e is None:
-                owned_food.add((fx, fy))
-            elif my_d < best_e:
-                owned_food.add((fx, fy))
-            elif my_d > best_e:
-                contested_lose_food.add((fx, fy))
-            # equal distance -> genuine contest, leave neutral (H2H logic handles)
-
     # CORNER-FOOD TRAP AVOIDANCE: food sitting on a wall/corner is a death lure
     # when an equal/longer enemy is at least as close to it — chasing it walks us
     # into a wall-crawl toward a corner where the longer enemy pins us (the exact
@@ -572,18 +538,8 @@ def _choose_move(game_state):
         # Prefer SAFE (non-trap) food for the distance pull. If every food is a
         # corner-trap lure, use the full set but flag it so the pull is softened.
         safe_food = food_set - trap_food
-        # FOOD-RACE: when we are NOT comfortably ahead, target food WE OWN (reach
-        # strictly first) so we win the growth race & deny the opponent. Only when
-        # owned safe food exists; otherwise fall back to all safe food (never
-        # starve). Keeps the anti-trap set filtered.
-        race_target = None
-        if _length_lead < 3 and owned_food:
-            race_target = (owned_food - trap_food) or owned_food
         chasing_trap = False
-        if race_target:
-            bd = _bfs_dist(c["cell"], race_target, sim_obstacles, w, h)
-            fdist = bd if bd is not None else (_manhattan(c["cell"], next(iter(race_target))) + 100)
-        elif safe_food:
+        if safe_food:
             bd = _bfs_dist(c["cell"], safe_food, sim_obstacles, w, h)
             fdist = bd if bd is not None else (_manhattan(c["cell"], next(iter(safe_food))) + 100)
         elif food_set:
@@ -820,18 +776,6 @@ def _choose_move(game_state):
                 score -= fdist * 7.0
             elif my_len < 12:
                 score -= fdist * 2.0
-
-            # OWNED-FOOD SECURING: reward stepping ONTO food we own (reach first)
-            # when not comfortably ahead -> lock in the growth & deny the opponent.
-            # Penalize stepping onto enemy-owned food when we are healthy (the
-            # enemy grabs it first / we walk into a contested loss). Both gated so
-            # low-health starvation still eats anything.
-            if not _giant and _length_lead < 3 and c["reaches_food"]:
-                cellf = c["cell"]
-                if cellf in owned_food and health >= 20:
-                    score += 25.0
-                elif cellf in contested_lose_food and health >= 50:
-                    score -= 40.0
 
             # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the
             # opponent, growing further only risks self-coil (eremetic-eric loss

@@ -3782,3 +3782,31 @@ regression.
   /tmp/cl2.py (loss class). Test: ./run_match.sh <A> <B> <N> (>=2s warmup, N<=16 to fit ~200s;
   actually N=16 both orders fits in ~120-200s each), ALWAYS both A/B orders (STRONG position bias —
   trust AGGREGATE over multiple batches, single batches are noisy). Repro is the real validator.
+
+## Round 2 update (opus-4-8 — vs Flipez__flipez-crystal) — SHIPPED v43 food-ownership
+- Round 1 result: **opus-4-8 215, Flipez 33, ties 2** (/logs/rounds/1/results.json). WORSE than
+  round 0's 22 losses -> the unchanged bot is trending DOWN. Loss class (/tmp/cl.py): 25/33 OUTGROWN
+  (opp longer at death), 8 other. Same dominant mode: opp out-eats us, stays 1-2 longer whole game,
+  wins endgame (trace /tmp/trace.py sim_100: opp L11 vs us L9 by t50, corners us at t83).
+- **CHANGE SHIPPED: FOOD-OWNERSHIP / Voronoi food-race (v43).** In _choose_move after _big_safe:
+  compute owned_food (food we reach by BFS strictly BEFORE any enemy head) and contested_lose_food
+  (enemy reaches first). When _length_lead<3 & owned_food exists, route fdist toward OWNED food only
+  (deny opp growth). Scoring: +25 stepping onto owned food (lead<3), -40 stepping onto enemy-owned
+  food when healthy (hp>=50). All gated so low-health still eats anything (no starvation).
+- This DIRECTLY targets the OUTGROWN loss mode (win the food-race, stay even/ahead) which prior
+  teammates could NOT fix because self-play WASHES it (both bots eat symmetrically -> owned-food
+  claims cancel). The REAL opponent is asymmetric, so the term should help vs it specifically.
+- Regression PASS: main.py vs opp_straight = 4-0/6-0 as A AND 6-0 as B. Latency max 0.037ms (dense
+  25v25 board). move() still try/except wrapped -> can't time out.
+- Self-play vs v42 (r2start): aggregate over 4 batches (both orders): new=24, old=32 = slight
+  NEGATIVE (expected wash per all prior teammates for food routing). Position bias huge (A~9/14).
+- **DECISION: SHIPPED v43 despite slight self-play regression** because (a) self-play cannot
+  validate asymmetric food-ownership (documented wash), (b) status quo is TRENDING DOWN (22->33
+  losses), (c) the change is principled, latency-safe, starvation-safe, and targets the exact
+  dominant loss mode. Moderate calculated risk over a losing-more static bot.
+- **TODO next teammate: CHECK /logs/rounds/2/results.json FIRST.** If v43 REGRESSED (fewer wins than
+  215), REVERT: `cp main_backup_v42_r2start.py main.py`. If it HELPED, keep & tune (raise +25/-40
+  owned-food weights, extend to lead<4). If OUTGROWN still dominates, the owned-food routing may need
+  a stronger pull (currently owned food only replaces the fdist target; consider a large flat bonus
+  toward the nearest owned food's BFS gradient). Repro tools: /tmp/cl.py (loss class), /tmp/trace.py
+  (per-turn trace), /tmp/rm2.sh (self-play, ALWAYS both orders, strong position bias).
