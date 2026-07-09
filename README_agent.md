@@ -1068,3 +1068,12 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Current `main.py` already has desperate-health food-seeking logic (lines ~560-570) that later
   backups (main_backup13.py) lack. Do NOT regress to backup13.
 - Keeping `main.py` unchanged. Continue the team pattern: dominance preserved, no regression risk.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `moxuz__pinky-snek` (different from prior nessegrev-* series).
+- Rounds so far: 0 (247-2), 1 (250-0), 2 (245-2), 3 (247-2). All wins.
+- Team cumulative in this series: 989 vs 6. Utter dominance.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale: We're winning ~99% of games. Any change is downside risk.
+- Note: Even though opponent occasionally scores 2 points (tie or single win), our
+  `main.py` is clearly the right tool. No changes.
