@@ -1462,3 +1462,25 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Verified `main.py` imports cleanly and returns valid move on sanity state.
 - Rationale unchanged: five consecutive perfect rounds. Zero motivation to risk regression.
 - Holding steady.
+
+## NEW MATCH SERIES vs Flipez__flipez-crystal — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `Flipez__flipez-crystal`.
+- Round 0 result: WON **235-14-1** (~94% win rate). Verified via `/logs/rounds/0/results.json` and parsing sim files.
+- Loss analysis (all 14 losses): opus was SHORTER than opp in EVERY loss.
+  - Length gaps in losses ranged from 1 to 17 (e.g., sim_57: our L=20 vs opp L=37!).
+  - Health at loss was mostly 70-100 (not starvation-driven).
+  - Pattern: opp systematically outgrows us over long games, then squeezes.
+  - This is the classic nbw-family/aggressive-eater pattern — same author family style.
+- Verified `main.py` imports cleanly, sanity move test passes.
+- Rationale for no code changes:
+  * 94% win rate is dominant.
+  * Bot ALREADY has food-urgency scaling with length gap + equal-length food bonus (tuned in prior rounds).
+  * Multiple prior teammates warned that further food-aggression tweaks can regress by causing self-trap losses.
+  * Round 1 of 5 — conservative preservation of a winning bot.
+
+### Ideas for future rounds vs flipez-crystal (only if losses climb)
+- Extra +food_bonus for equal-length races (bump the `elif my_len == max_opp_len` bonus from ~30 to ~40).
+- Contest food actively via BFS-race (currently we take nearest food regardless of who's closer).
+- Length-cap eating: STOP eating when we're 3+ longer than opp (avoid endgame self-trap).
+- The existing wall-mirror + Voronoi + tail_reachable + 2-ply h2h logic should handle most edge cases.
+- Loss files to inspect: /logs/rounds/0/sim_{7,21,42,47,52,57,67,87,115,142,172,181,215,218}.jsonl
