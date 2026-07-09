@@ -4013,3 +4013,53 @@ regression.
   ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over >=3 batches, single batches noisy).
   Self-play IS valid for off-wall/survival edges; it WASHES for opponent-specific food-routing. DON'T
   ship a self-play wash/regression — v47 is the proven best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs jackisherwood__battlesnake-elon) — SHIPPED v48 (giant food-flee gated on flooded board)
+- Verified results: round 0 **231-18 (+1t)** (v44), round 1 **233-17** (v47), round 2 **235-13 (+2t)** (v47).
+  ⭐ TREND: losses 18->17->13. v47's anti-wall-crawl kept improving. 3/3 rounds won.
+- **Round-2 loss classification (/tmp/cl2.py, last-alive frame): ALL 13 losses = SELFCOIL** (legal=0),
+  our snake LONGER than opp (leads +2 to +5), 10/13 die on WALLS/CORNERS at high health. Documented
+  big/mid wall-crawl self-coil while longer.
+- **ROOT CAUSE FOUND (real bug): the `_giant` growth-cap food-FLEE fires on NORMAL boards.**
+  `_giant = _length_lead>=3 and my_len>=10` (meant for eremetic/gigantic FLOODED-board opponents where
+  the snake balloons to len 55-95). Its healthy branch does `score += fdist*30` (FLEE food) + `-1500`
+  anti-eat. On a NORMAL board with only ~5 food, this drives a lead-3 len-13 snake AWAY from food
+  INTO CORNERS (higher fdist = higher score = toward the corner far from food) -> self-coil.
+  DEEP TRACE sim_65 t121 (head (8,9) len13 lead+3, 5 food): legal [right,left], both space=100/
+  timed=111 (equal). v47 picks 'right' (9,9)->into top-right corner pocket->died t125. Score
+  breakdown (/tmp/dbg.py-style): right fdist=15 (+450 flee), left fdist=11 (+330) -> right wins by
+  the giant food-flee. WITHOUT the flee, left (open board) wins.
+- **FIX (main.py = v48, backup main_backup_v48_giantboardgate.py; prev = main_backup_v47_r2start.py = v47):**
+  Added `_flooded = len(food_set) >= 10` and gated `_giant = ... and _flooded` (line 774-775). Now the
+  giant food-flee/anti-eat ONLY fires on a genuinely food-flooded board (eremetic/gigantic: 15-40 food).
+  On a normal board (few food) a lead-3 snake no longer flees food into corners -> uses normal food +
+  anti-wall-crawl + tail-follow terms.
+- **VALIDATION (all pass — satisfies the iron ship-rule):**
+  * ✅ REPRO FLIP: sim_65 t121 (/tmp/s65_121.json): **v48 picks 'left' (open board, escapes); v47
+    picks 'right' (into corner)**. /tmp/tm.py /workspace/main.py /tmp/s65_121.json -> left.
+  * ✅ SELF-PLAY WIN BOTH ORDERS (decisive, 4 batches of 16, /tmp/rm2.sh, >=7s warmup):
+    v48-A vs v47: 10-5, 9-6. v48-B vs v47: 8-8, 10-6. AGGREGATE v48-A **19-11**, v48-B **18-14**
+    -> v48 **37** vs v47 **25**. Net win both orders (not position bias). Fleeing food on a normal
+    board is a general survival negative both bots feel -> self-play validates it.
+  * ✅ REGRESSION PASS: v48 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * ✅ FLOODED BEHAVIOR PRESERVED: vs passive.py FLOODED (/tmp/rmf.sh fsc40): **10-2** (same as
+    v41/v47's ~10-2). The `_flooded` gate keeps the eremetic/gigantic giant-cap fully active (those
+    boards flood to 15-40 food -> `_flooded` True). Only NORMAL-board behavior changed.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v48.** Genuine bugfix: the flooded-board giant food-flee was mis-firing on
+  normal boards, driving longer snakes into corners (the exact SELFCOIL loss mode this match).
+  Gating it on `_flooded` flips the repro, wins self-play both orders decisively, no regression, and
+  preserves the flooded-opponent giant cap. First self-play-validated fix for this SELFCOIL mode
+  (prior anti-wall-crawl/tail-follow tweaks washed).
+- **CONTINGENCY: if v48 scores WORSE than v47's 235 in the real round, REVERT to
+  main_backup_v47_r2start.py (== v47, proven 235-13).**
+- **TODO next teammate:** check /logs/rounds/3/results.json FIRST. If v48 regressed, revert to
+  main_backup_v47_r2start.py. Re-run /tmp/cl2.py <round_dir> (loss class). If SELFCOIL wall-crawls
+  PERSIST but DROP (the bigger len 20-26 cases sim_55/sim_187 didn't flip — they're the genuine
+  multi-step coil where all metrics equal), that residual needs a SOFT multi-step self-sim using OUR
+  OWN scoring (never shipped; greedy escapes — confirmed /tmp/sim.py). Do NOT lower `_flooded`
+  threshold below ~10 (would re-break normal boards) or raise it above ~14 (would break lightly-
+  flooded eremetic boards). Test: /tmp/rm2.sh <A> <B> <N> (normal, both orders), /tmp/rmf.sh <A> <B>
+  <N> (flooded vs passive.py — MUST stay ~10-2). Repro: /tmp/mk.py <sim> <turn> <out>, /tmp/tm.py
+  <bot> <state>, /tmp/eval.py <state> (per-dir space/timed), /tmp/board.py <state> (ascii). ALWAYS
+  both A/B orders (position bias). Self-play IS valid for this fix (won both orders); repro confirms it.

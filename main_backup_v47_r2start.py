@@ -766,13 +766,7 @@ def _choose_move(game_state):
         # A GIANT snake massively ahead on a food-flooded board must STOP growing
         # (eremetic-eric loss mode: grows to len 55-95, self-coils; opp stays small
         # & outlasts us). When hugely ahead, only eat to avoid true starvation.
-        # Only treat as a "giant that must stop growing" when the board is
-        # actually FOOD-FLOODED (eremetic/gigantic opponents: 15-40 food on a
-        # 121-cell board). On a NORMAL board (few food) a lead-3 snake fleeing
-        # food gets driven into corners & self-coils (jackisherwood loss mode:
-        # len 13-26 LONGER than opp, coiling on walls). So require a flooded board.
-        _flooded = len(food_set) >= 10
-        _giant = _length_lead >= 3 and my_len >= 10 and _flooded
+        _giant = _length_lead >= 3 and my_len >= 10
         if food_set:
             if _giant:
                 # Cap growth: eat ONLY when about to starve; otherwise flee food HARD
