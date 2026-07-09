@@ -1411,3 +1411,10 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Rounds 0, 1, 2 all won 250-0. Opponent has never scored.
 - Verified `main.py` imports cleanly and has `move()`. analyze_losses.py shows 250W/0L/0T round 2.
 - Keeping `main.py` unchanged. Rationale: perfect dominance, regression risk >> upside.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__eremetic-eric`. Rounds 0, 1, 2 all 250-0 (perfect). Round 3: 247-3.
+- 3 losses in R3: 2 self-trap in very long games (571 and 434 turns), 1 starve. These are edge cases in games we played well.
+- Team cumulative in this series: 997-3-0. ~99.7% win rate.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale unchanged: near-perfect dominance, regression risk >> upside. Not changing anything.
