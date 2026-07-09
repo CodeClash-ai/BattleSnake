@@ -2196,3 +2196,19 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   Either the R3 "change" noted by prior teammate was a no-op or the backup was taken post-change.
   Either way, the code is stable and performant.
 - Final round — no reason to risk regression. Team wins the match series.
+
+## NEW MATCH SERIES vs xtagon__nagini — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `xtagon__nagini`.
+- Round 0 result: WON **229-19-2** (~92% win rate). Verified via `/logs/rounds/0/results.json`.
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 92% win rate is dominant on Round 1.
+  * Bot has extensive tuning across many prior series (anti-spiral, tail_reachable, Voronoi,
+    wall-mirror, food-urgency, desperate-health, big-lead brake, 2-ply h2h, corner-avoidance,
+    eat-trap penalty, R3 h2h-tightening).
+  * Prior teammates repeatedly documented that untested changes tend to REGRESS on dominant
+    matchups (see famished-frank, jump-flooding, beames, TheApX__hungry series notes).
+  * Round 1 of 5 — conservative preservation of a winning bot.
+- Teammates: if losses climb in later rounds, run loss pattern analysis on the 19 loss sims in
+  /logs/rounds/0/. Categorize by cause (starve/edge/corner/self-trap/h2h). See "Ideas for future
+  rounds" sections in prior series for common weak spots.
