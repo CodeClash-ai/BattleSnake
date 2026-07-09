@@ -2552,3 +2552,33 @@ regression.
   pursuit_space + my_len + 3`). Repro: /tmp/s156_88.json (should pick 'up'), /tmp/testmove.py <bot>
   <state> (NOTE: joins /workspace/, pass a workspace-relative path), /tmp/eval2.py <state> (shows
   per-move pursuit_space). Test: /tmp/rm2.sh <A> <B> <N> (>=7s warmup, use N<=15 to fit 30s limit).
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs moxuz__pinky-snek) — FINAL, KEPT v27
+- Verified results ALL 5 rounds won: round 0 **250-0**, round 1 **247-2 (+1t)**,
+  round 2 **249-1**, round 3 **250-0**, round 4 **250-0** (opus-4-8 vs moxuz__pinky-snek).
+  5/5 rounds won. v27 (small-snake edge-food-near-enemy trap, shipped round 2) TREND:
+  247-2 (r1, v26) -> 249-1 (r2, v27) -> 250-0 (r3) -> 250-0 (r4). Rounds 3 & 4 were BOTH
+  PERFECT 250-0-0.
+- Round 4 (parsed /logs/rounds/4/sim_*.jsonl last-line {winnerName,isDraw}): 250 games,
+  opus 250 / opp 0 / 0 ties. FLAWLESS. Opponent FULLY ACTIVE (0% timeouts per prior notes)
+  -- genuine perfect out-play, NOT a free latency win.
+- main.py == main_backup_v27_smalledgetrap.py == main_backup_v27_r3.py (diff confirms equal;
+  full fix stack v8-v27: timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap,
+  corner-food, pocket, anti-wall-crawl, starvation fix, tie fixes v21-v26, contest-food lead<0,
+  small-snake edge-food trap). parses clean (ast.parse OK); move() try/except (line 213) +
+  self-guarded _safe_fallback (line 219) -> cannot time out.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (30-long snakes, dense 11x11, 10 food, 200 moves): **0.136ms avg, 0.32ms max**
+  (timeout 500ms) -- cannot time out.
+- **DECISION: kept main.py (v27) unchanged.** Rounds 3 AND 4 both scored a FLAWLESS 250-0-0
+  against a fully active opponent -- there is NO loss/tie mode to fix. The narrow pursuit-trap
+  fix (round 3/4 TODO) flips the round-2 loss repro but REGRESSED self-play (17-20; prior
+  teammates verified), which violates the iron ship-rule (repro flips AND self-play does not
+  regress). Changing a bot that just scored two consecutive perfect rounds only risks regression.
+  This is the FINAL round of the match.
+- **TODO (future, if this opponent recurs):** the only residual non-win mode is the multi-step
+  PURSUIT self-trap (round-2 loss sim_156). The pursuit-aware flood-fill (_enemy_reach +
+  _pursuit_space, in this match's git history) is the FIRST metric that catches it (repro flips
+  'down'->'up') but regresses self-play as-is; needs narrowing (see round 3/4 TODO: gate on
+  nearest_enemy<=3, pursuit_space<3, tie-break only). Validate ONLY if repro flips AND self-play
+  does NOT regress both orders. But with 250-0 two rounds running, DON'T fix what isn't broken.
