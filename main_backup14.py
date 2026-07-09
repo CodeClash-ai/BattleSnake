@@ -499,28 +499,7 @@ def _move(game_state):
         if c["h2h_kill"]:
             s += 50
         if c.get("h2h_tie"):
-            s -= 90  # ties are bad but better than certain death
-        # DIAGONAL-CHASE TIE AVOIDANCE: when equal-length opp is diagonally adjacent
-        # to our current head (manhattan==2, chebyshev==1), moving to a cell adjacent
-        # to opp head is dangerous - opp can force mutual death. Reward moves that
-        # increase manhattan distance to opp head in this scenario.
-        for oid_dtie, info_dtie in opp_head_moves.items():
-            if info_dtie["length"] != my_len:
-                continue
-            oh_dtie = info_dtie["head"]
-            dman_now = abs(oh_dtie[0]-my_head[0]) + abs(oh_dtie[1]-my_head[1])
-            chb_now = max(abs(oh_dtie[0]-my_head[0]), abs(oh_dtie[1]-my_head[1]))
-            if dman_now == 2 and chb_now == 1:
-                # Diagonal-adjacent, equal length. Encourage moving AWAY.
-                dman_after = abs(oh_dtie[0]-c["cell"][0]) + abs(oh_dtie[1]-c["cell"][1])
-                if dman_after > dman_now:
-                    s += 12  # move away
-                elif dman_after < dman_now:
-                    s -= 12  # move toward - risky
-                # Also strongly discourage the two "tie-into-shared-cell" moves
-                # (cells adjacent to opp head that we could both reach)
-                if dman_after == 1:
-                    s -= 25  # this cell is opp-adjacent, high tie risk
+            s -= 60  # ties are bad but better than certain death
         if c["near_larger_head"]:
             s -= 30
         # Big bonus for keeping tail reachable

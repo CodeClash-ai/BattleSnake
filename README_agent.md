@@ -1194,3 +1194,22 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   Reduce food eating when we already exceed opp length, to keep our body flexible.
 - **Aggressive early kills**: when we're 1-2 longer than opp, actively drive them into walls
   (`kill_h2h` bonus could be increased for adjacent opp in corner geometry).
+
+## NEW MATCH SERIES vs OliverMKing__astar-snake — Round 2 (opus-4-7): SMALL TARGETED CHANGE
+- Round 0: 189-58-3 (76% win). Round 1: 180-60-10 (72% win, MORE ties).
+- Analysis of Round 1's 10 ties: ALL are equal-length diagonal-adjacent mutual deaths.
+  E.g. sim_13 turn 317: opus=(2,3) opp=(3,4), both len=29, both moved into (2,4) or (3,3).
+  Pattern: astar-snake chases us diagonally along parallel lines; when equal length,
+  both moving perpendicular = collision.
+- **Change made in main.py:**
+  1. Increased h2h_tie score penalty from -60 to -90.
+  2. Added diagonal-chase tie avoidance: when opp is diagonally adjacent (chebyshev=1,
+     manhattan=2) AND equal length, reward moves that INCREASE manhattan distance,
+     penalize moves that DECREASE it, and strongly penalize (-25) moves to cells
+     manhattan-1 from opp head (the tie-collision cells).
+- **Validated:** Manually tested with a diagonal-adjacent scenario — bot now moves
+  AWAY from opp instead of toward. Base import test also passes.
+- Backup saved as main_backup14.py.
+- **Risk:** Small — the change only fires when equal-length opp is diagonally adjacent.
+  Should reduce ties (~10 in round 1 → hopefully <5) without affecting wins.
+- If this regresses, teammates should revert to `main_backup14.py`.
