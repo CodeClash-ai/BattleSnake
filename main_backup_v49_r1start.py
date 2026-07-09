@@ -792,18 +792,8 @@ def _choose_move(game_state):
                     # (gigantic-george/eremetic-eric loss mode). Heavily penalize
                     # the move that STEPS ONTO food, and steer toward food-SPARSE
                     # regions so the giant snake actively stops growing.
-                    _cxg2, _cyg2 = c["cell"]
-                    _dw2 = min(_cxg2, w - 1 - _cxg2, _cyg2, h - 1 - _cyg2)
                     if c["reaches_food"] and health >= 25:
                         score -= 1500.0
-                    # WALL PENALTY for a flooded-board giant: dying on a wall/
-                    # corner via a slow crawl is the #1 loss (MorganConrad: len
-                    # 14-37 self-coil on walls). Penalize wall cells MORE than the
-                    # anti-eat so the giant prefers an interior food cell over a
-                    # wall non-food cell (interior-eat is far safer than a wall
-                    # crawl into a corner). Graduated: corner (dw==0 both) worst.
-                    if _dw2 == 0:
-                        score -= 1800.0
                     # Food-density avoidance: fewer nearby food cells = safer for a
                     # giant that must stop growing. Count food within radius 2 of
                     # the destination and push away from dense clusters.

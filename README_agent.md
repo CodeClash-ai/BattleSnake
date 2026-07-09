@@ -4199,3 +4199,47 @@ regression.
   ALWAYS both A/B orders (STRONG position bias). Growth check: /tmp/rmp_log.sh <bot> logs a passive game &
   reports our max length. Loss class: /tmp/cl2.py <round_dir>, trace: /tmp/tr.py <sim>. Repro is the real
   validator; the REAL match result is the ultimate validator (v48 212, target higher with v49).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs MorganConrad__tantilla) — SHIPPED v52 (giant WALL penalty -> escape corner crawl)
+- Verified: round 0 **212-38** (v48), round 1 **220-27** (v49). v49's tighter giant cap IMPROVED
+  losses 38->27. main WAS v49; now SHIPPED v52.
+- **Root cause of ALL 27 round-1 losses (/tmp/cl3.py): 100% giant self-coil.** Our snake len 14-37
+  (opp stays len 4-16), high health, FLOODED board (food 12-33), ~18/27 die ON walls/corners
+  ((0,0),(10,10),(0,10),(10,0) etc). The v49 cap holds growth SLOWLY (len 13->21 over 250 turns)
+  but the snake still gets pulled ONTO a wall then crawls into a corner & self-coils.
+- **THE BUG (deep trace sim_53 t328, head (9,5) len19 hp49, flooded food=33):** the giant food-flee
+  has a `-1500` anti-eat on the food cell. At t328 the ONLY non-food move was 'right'->(10,5) = ON
+  THE WALL; 'left'->(8,5) HAD food (-> -1500). So the anti-eat FORCED the giant onto the wall to
+  avoid eating -> it crawled up x=10 into corner (10,10) & self-coiled t334. i.e. the anti-eat
+  penalty (avoid growth) DROVE the snake onto walls (fatal).
+- **FIX (main.py = v52, backup main_backup_v52_giantwallpenalty.py; prev = main_backup_v49_r1start.py = v49):**
+  In the `_giant` flee branch (line ~795), added a WALL PENALTY: `if _dw2==0: score -= 1800.0`
+  (_dw2 = dist_to_wall of the cell). This makes a wall cell WORSE than eating one interior food
+  (-1800 < -1500), so the giant prefers an INTERIOR food cell over a wall non-food cell (interior-eat
+  is far safer than a wall crawl into a corner). Kept the -1500 anti-eat for interior food (still
+  caps growth on interior non-food moves, the common case).
+- **VALIDATION (passive.py = stay-small flooded mimic = valid proxy; repro on the real loss):**
+  * ✅ REPRO FLIP: /tmp/s328.json (sim_53 t328): **v52 picks 'left' (interior, eats 1 food, escapes
+    the wall); v49 picks 'right' (onto wall -> corner crawl -> self-coil).** /tmp/tm.py <bot> <state>.
+  * ✅ GROWTH still moderate: passive games max len 17-21 (vs the losses at 20-37), survives LONGER
+    (163-349 turns vs v49's 100-192). Interior-eat is minimal (usually a non-food interior move exists).
+  * ✅ vs passive.py FLOODED (fsc15, /tmp/rmp.sh): **10-0 as A AND 0-10 as B** (perfect both orders).
+  * ✅ FLOODED SELF-PLAY vs v49: **8-4 as A** (v52 wins the flooded condition — escaping wall crawls
+    is a real survival edge). REGRESSION PASS vs opp_straight = **6-0 as A AND 0-6 as B**.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+  * NORMAL boards unaffected: the wall penalty only fires when `_giant` (flooded>=10 food + lead>=2
+    + len>=8), which only happens vs stay-small flooded opponents, never in a normal balanced game.
+- **DECISION: shipped v52.** Genuine bugfix: the giant anti-eat was FORCING the snake onto walls to
+  avoid eating, causing the exact wall-crawl-corner self-coil (all 27 round-1 losses). The wall
+  penalty (-1800 > -1500 anti-eat) makes interior-eat preferred over wall-crawl, flipping the repro,
+  winning the passive proxy both orders + flooded self-play, no regression, no normal-board impact.
+- **CONTINGENCY: if v52 scores WORSE than v49's 220 in the real round, REVERT to
+  main_backup_v49_r1start.py (== v49, proven 220-27).**
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST. If v52 regressed, revert to
+  main_backup_v49_r1start.py. Re-run /tmp/cl3.py (edit d="/logs/rounds/N") to classify losses. If
+  giant wall-crawl self-coils DROP, residual is mid-board multi-step coil at len 20+ (hard mode, no
+  one-step fix — greedy self-sim escapes; needs SOFT multi-step self-sim using OUR OWN scoring, never
+  shipped). If still bloating, tighten cap further (eat at health<10, or lower _giant len>=8->6).
+  Tools: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <t0> <t1>,
+  /tmp/cl3.py (loss class), /tmp/rmp.sh <A> <B> <N> <fsc> vs passive.py (proxy, BOTH orders, 8s
+  warmup, N<=12), /tmp/growth.sh <bot> (our max len in passive games). ALWAYS both A/B orders.
