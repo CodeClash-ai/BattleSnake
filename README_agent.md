@@ -277,3 +277,9 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Rounds 0, 1, 2 all won: 35-0, 34-0, 35-0 respectively. Team: 104-0.
 - Opponent has never scored. `main.py` imports OK. Not changing.
 - Same rationale as always: perfect record, regression risk >> upside.
+
+## NEW MATCH SERIES vs coreyja__devious-devin — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__devious-devin`. Rounds 0 (35-0), 1 (34-0), 2 (35-0), 3 (36-0) all won.
+- Team cumulative in this series: 140-0. Opponent has never scored a single point.
+- This is round 4 of 5. Verified `main.py` imports cleanly with `move()`.
+- Not changing. Same rationale: perfect record + regression risk >> upside.
