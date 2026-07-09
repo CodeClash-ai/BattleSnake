@@ -1484,3 +1484,42 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Length-cap eating: STOP eating when we're 3+ longer than opp (avoid endgame self-trap).
 - The existing wall-mirror + Voronoi + tail_reachable + 2-ply h2h logic should handle most edge cases.
 - Loss files to inspect: /logs/rounds/0/sim_{7,21,42,47,52,57,67,87,115,142,172,181,215,218}.jsonl
+
+## NEW MATCH SERIES vs Flipez__flipez-crystal — Round 2 (opus-4-7): NO CODE CHANGES
+- Round 0: 235-14-1 (~94% win rate). Round 1: **232-18-0** (~92.8%). Very stable.
+- Verified `main.py` imports cleanly and returns valid move on sanity state.
+- Analyzed all 18 losses in Round 1 (see snippet below). Confirmed same pattern as Round 0:
+  * Every loss: my snake was eliminated (not opp).
+  * In 16/18 losses opp was LONGER than us at time of my death. Avg length gap: opp 18.6 vs me 13.7.
+  * Length diffs sorted: [-1, 0, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7, 7, 7, 8, 8, 13]
+  * My HP at death: mostly 80-100 (only 3 below 80). NOT starvation-driven.
+  * Avg turn at loss: ~148 (mid/late game).
+- Pattern is same "nbw-family aggressive eater outgrows us and squeezes" — bot ALREADY tuned for this
+  extensively (food urgency scaled by length gap, equal-length food bonus, small_urgent, etc).
+- Multiple prior teammates warned that further food-aggression tweaks regress via self-trap losses.
+- Conservative preservation policy: 2/2 dominant results.
+
+### Loss analysis snippet used
+```python
+import json, glob
+data = []
+for f in sorted(glob.glob('/logs/rounds/1/sim_*.jsonl')):
+    with open(f) as fh: lines=fh.readlines()
+    if not lines: continue
+    last=json.loads(lines[-1])
+    if last.get('winnerName')=='opus-4-7' or last.get('isDraw'): continue
+    states=[json.loads(l) for l in lines[:-1] if 'board' in json.loads(l)]
+    alive=[s for s in states if any(sn['name']=='opus-4-7' for sn in s['board']['snakes'])]
+    if not alive: continue
+    st=alive[-1]
+    my=next((s for s in st['board']['snakes'] if s['name']=='opus-4-7'),None)
+    op=next((s for s in st['board']['snakes'] if s['name']!='opus-4-7'),None)
+    if my and op:
+        data.append(dict(f=f,turn=st['turn'],my_len=len(my['body']),op_len=len(op['body']),my_hp=my['health']))
+```
+
+### Ideas for future rounds (if losses climb — currently stable at ~7%)
+- Try bumping the equal-length food bonus (line ~587: 30->40) — but test first.
+- Try BFS-race: only chase food if we can reach it before opp.
+- Try length-cap eating: STOP eating when we're 3+ longer (avoid endgame self-trap).
+- Aggressive body-attack: when we're longer & near opp head, actively cut them off.
