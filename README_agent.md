@@ -1957,3 +1957,45 @@ regression.
   lookahead, validated vs REAL opponent not self-play). If TIES appear, tighten `_lead0 <= 0` to `< 0`.
   All prior fixes v8-v24 present. Repro: /tmp/getstate.py (edit target/want), /tmp/testmove.py <bot> <state>.
   Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias; use >=50-game batches).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs tim-hub__awesome-snake) — SHIPPED v26 (tie fix #4)
+- Verified results: round 0 **250-0** (v24), round 1 **249-1** (v24), round 2 **242-0 (+8 TIES)** (v25).
+  ⚠️ v25 (contest-food-when-behind, shipped round 2) FIXED the round-1 loss (0 losses in round 2)
+  BUT created **8 TIES** -> round 2 scored only **242** vs v24's **249/250**. Ties=0pts, so v25 was
+  NET WORSE in points (fixed 1 loss = +1pt, created 8 ties = -8pts). 1 win = 1 point (Tie=0 to both).
+- Opponent FULLY ACTIVE (round 2 latency avg 0.2ms, 0/10397 moves >=490ms = 0% timeouts; avg game
+  41.6 turns, max 133). Pure out-play.
+- **Root cause of the 8 round-2 ties (via /tmp/ties2.py + /tmp/gs2.py):** ALL are equal-length
+  (both len 4-5), HIGH health (87-100) snakes colliding at the CENTER food. e.g. ba83f398 t7:
+  US head (4,5), OP head (6,5), both len4, food at (5,5) -> BOTH march onto (5,5) -> mutual-eat TIE.
+  This is v25's `_lead0 <= 0` contest-food gate firing at lead=0 (both equal): it ADDED the
+  equal-H2H food cell to the pool -> we voluntarily walked into the tie instead of stepping aside.
+- **FIX (main.py = v26, backup main_backup_v26_tiefix4.py; prev main = main_backup_v25_contestfood.py):**
+  Tightened v25's contest-food gate from `_lead0 <= 0` to **`_lead0 < 0`** (strictly BEHIND only),
+  exactly as the prior teammate's TODO advised ("If ties reappear vs a future opponent, tighten to
+  `< 0`"). At lead=0 (equal length) we now behave like v24 (step aside, avoid the tie); we only
+  contest equal-H2H food when genuinely OUTGROWN (lead<0) and it's our only eat this turn.
+  RATIONALE: at lead=0, fleeing is only a ~1/250 loss risk (round 1) vs a GUARANTEED 0-pt tie (8/250
+  in round 2) -> fleeing at lead=0 is strictly +EV. The narrow lead<0 contest keeps a real edge when
+  truly behind.
+- **VALIDATION (repro is the real validator — self-play can't reproduce both bots marching same food):**
+  * TIE REPRO PASS: /tmp/s2_ba83f398_7.json (round-2 tie, both len4 lead=0): **v26 picks 'up'
+    (avoids tie); v25 picks 'right' (into the tie).** Direct proof v26 fixes the round-2 tie mode.
+  * The round-1 LOSS repro (/tmp/state_f588c585_7.json, also both len4 lead=0): v26 reverts to v24's
+    'up' (accepts the tiny ~1/250 loss risk to avoid the far-more-frequent ties — net +EV).
+  * REGRESSION PASS: v26 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+  * Self-play: v26 vs v25 = wash/position-bias (13-11-1 A, 7-17-1 B — self-play can't reproduce the
+    opponent's straight-march-into-us); v26 vs v24 = EVEN (9-10-1, they only differ at lead<0 which
+    self-play rarely produces). No regression.
+  * Latency (/tmp/lat.py two 30-long dense snakes): **0.23ms avg, 0.66ms max** (timeout 500ms) — free.
+  * main.py == main_backup_v26_tiefix4.py; parses clean (ast.parse OK); move() try/except + _safe_fallback.
+- **DECISION: shipped v26.** v25 traded 1 loss for 8 ties (net -7pts); v26 tightens the contest-food
+  gate to lead<0 so it avoids the equal-length ties (should score like v24's 249-250) while keeping a
+  narrow genuinely-behind improvement. Strictly better than v25 in expected points; no regression vs v24.
+- **TODO next teammate:** re-run /tmp/a2.py (=analyze_round.py d="/logs/rounds/N") + /tmp/ties2.py on the
+  new round. If ties are gone -> keep v26. If the round-1-style OUTGROWN-WHILE-SHORT LOSS reappears at
+  lead=0, that's the hard tension: contesting fixes the loss but creates ties. The real fix needs
+  TERRITORY/food-ownership lookahead (predict which food WE reach first via BFS/Voronoi and route to food
+  we OWN, so we grow without a contested collision) — must be validated vs the REAL opponent, NOT self-play
+  (which eats symmetrically & washes). All prior fixes v8-v25 present. Repro: /tmp/gs2.py <gid> <turn>
+  (round 2), /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B.
