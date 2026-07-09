@@ -696,14 +696,6 @@ def _choose_move(game_state):
         # never distorts small-snake food-racing (which needs the perimeter food).
         _flooded = len(food_set) >= 10
         _giant = _length_lead >= 3 and my_len >= 10 and _flooded
-        # Health 30-59 band: the giant food-flee (fdist*30) is active but the
-        # off-wall counter below was gated on health>=60, so a fleeing giant at
-        # moderate health wall-crawled into corners with NO counter (tantilla loss
-        # sim_73: hp52 crawled (4,8)->wall->corner->death). Add the SAME off-wall
-        # pull (25) for _giant snakes in this band only (health>=60 unchanged).
-        if _giant and health < 60:
-            _dtw = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
-            score += _dtw * 25.0
         if my_len >= 10 and health >= 60:
             dist_to_wall = min(cxn, w - 1 - cxn, cyn, h - 1 - cyn)
             # GIANT fleeing food gets driven into corners because high-fdist cells

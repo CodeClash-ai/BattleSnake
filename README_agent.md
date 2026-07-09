@@ -4301,3 +4301,54 @@ regression.
   <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rmr.sh <A> <B> <N> (ROYALE — matches
   this match's mode), /tmp/rms.sh <A> <B> <N> (standard), vs passive.py (saturated proxy). ALWAYS both
   A/B orders (position bias). Real result is the true validator.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs MorganConrad__tantilla) — SHIPPED v51 (mid-health giant off-wall pull)
+- Verified results: round 0 **215-35** (v48), round 1 **212-38** (v49, reverted), round 2 **203-46 (+1t)** (v48),
+  round 3 **212-38** (v50). ⭐ v50 (giant off-wall pull, shipped round 3) IMPROVED r2's 203-46 -> r3 212-38
+  (losses 46->38). The off-wall pull works. 4/4 rounds won. main.py started this round == v50.
+- **Round-3 loss classification (/tmp/cl2.py, last-alive frame): 38 losses, 27/38 = WALL/corner deaths.**
+  Our snake COMPACT (len 15-25 mostly, giant cap works — no more len 40-90 balloons), HIGH health,
+  MUCH longer than the tiny opponent (opp len 3-19), self-coiling on walls. Same wall-crawl-self-coil
+  mode v50 targets, just not fully eliminated.
+- **ROOT CAUSE of a chunk of the wall deaths (real bug found): the v50 giant off-wall pull (dist_to_wall
+  *25) was gated on `health >= 60`, but the giant food-FLEE (`fdist*30`, drives toward walls) fires at
+  `health >= 30`.** So in the health 30-59 band a fleeing giant wall-crawled into corners with NO
+  off-wall counter. TRACE sim_73 t210 (head (4,8), len17, hp52, food24, lead+8): v50 picks 'up' ->
+  (4,9)->(4,10)[wall]->crawled right to corner (10,10)->down x=10->death t222. The off-wall pull didn't
+  fire (hp52<60). (repro: /tmp/mk.py sim_73 210 /tmp/s73_210.json; /tmp/tm.py <bot> <state>.)
+- **FIX (main.py = v51, backup main_backup_v51_midhealthoffwall.py; prev = main_backup_v50_r4start.py = v50):**
+  Added a dedicated off-wall pull for `_giant` snakes in the health<60 band ONLY (the health>=60 path
+  is UNCHANGED from v50 to avoid regressing normal high-health play): `if _giant and health < 60:
+  score += dist_to_wall * 25.0` (same weight as the existing >=60 pull). Now a fleeing giant at
+  moderate health has the same off-wall counter as at high health.
+- **VALIDATION (self-play IS a valid proxy — off-wall survival is a general edge; repro flips too):**
+  * ✅ REPRO FLIP: sim_73 t210: **v51 picks 'left' (off wall, interior); v50 picks 'up' (into the
+    wall-crawl -> corner death).**
+  * ✅ ROYALE SELF-PLAY WIN BOTH ORDERS (matches this match's mode): v51 vs v50 (/tmp/rmr.sh, royale
+    shrink25 hz14, 14 each): **9-5 as A AND 9-5 as B** (aggregate v51 18, v50 10). Decisive, symmetric
+    — NOT position bias. (NOTE: an EARLIER attempt applying the pull UNCONDITIONALLY at weight 32
+    regressed both orders 9/10 — the health>=60 path must stay UNCHANGED; only add the <60 band.)
+  * ✅ vs passive.py FLOODED ROYALE (stay-small tantilla mimic): **10-2 as A AND 11-1 as B**
+    (aggregate 21-3) = SAME as v50 (proxy saturated, no regression there).
+  * ✅ REGRESSION PASS: v51 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders); no
+    errors/crashes in server logs. parses clean (ast.parse OK); move() try/except + _safe_fallback.
+- **DECISION: shipped v51.** Genuine bugfix: the giant off-wall pull was missing in the health 30-59
+  band where the food-flee still drives toward walls. Flips the wall-crawl repro, WINS royale self-play
+  both orders (18-10), matches the passive proxy, passes regression. Continues the improving trend
+  (46->38, now targeting the remaining mid-health wall-crawls). First self-play-WIN fix this round.
+- **⚠️ CONTINGENCY: if v51 scores WORSE than v50's 212 in the real round, REVERT to
+  main_backup_v50_r4start.py (== v50, proven 212-38).**
+- **TODO next teammate (likely FINAL round):** check /logs/rounds/4/results.json FIRST. If v51
+  regressed vs 212, revert to main_backup_v50_r4start.py. Re-run /tmp/cl2.py <round_dir> (loss class).
+  Remaining wall-crawls are mostly HIGH-health (hp90-100) giants where the off-wall pull (25 + _wcw
+  4-9) still loses to the fdist*30 food-flee toward the perimeter (e.g. sim_2 hp100 crawled to (0,8)).
+  To fix those: either RAISE the giant off-wall weight (25->35+) BUT re-test royale self-play both
+  orders (unconditional 32 regressed — be careful), OR reduce the fdist*30 flee weight when near a
+  wall. The residual is also the genuine DEEP multi-step coil (no one-step fix — needs a SOFT
+  multi-step self-sim using OUR OWN scoring, never shipped). This opponent stays TINY & outlasts on a
+  flooded royale board -> keeping our snake COMPACT (cap, done) AND off walls (v50/v51, done) is the
+  whole game. Test: /tmp/rmr.sh <A> <B> <N> (ROYALE, matches mode), /tmp/rmf.sh <A> <B> <N> vs
+  passive.py (flooded proxy), /tmp/rms.sh <A> <B> <N> (standard/regression), ALWAYS both A/B orders
+  (STRONG position bias — trust aggregate/symmetric wins). Repro: /tmp/mk.py <sim> <turn> <out.json>,
+  /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <startturn> (per-turn trace). DON'T ship a self-play
+  regression — v50 (212-38) is the fallback.
