@@ -2518,3 +2518,37 @@ regression.
   The pursuit code (helpers + candidate wiring + penalty) is preserved in git history of this round's
   edits — reconstruct via `git log`/`git diff` or re-derive from /tmp/eval2.py which has the working
   BFS. Repro is the real validator, NOT self-play washes.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs moxuz__pinky-snek) — KEPT v27 (narrow pursuit fix built+validated on repro, reverted pending self-play)
+- Verified results: round 0 **250-0**, round 1 **247-2 (+1t)**, round 2 **249-1**, round 3 **250-0-0 PERFECT** (v27).
+  4/4 rounds won. Round 3 (v27) scored a FLAWLESS 250-0-0 vs a FULLY ACTIVE opponent (0/3135 opp moves
+  >=490ms = 0% timeouts, avg game 41.2 turns) — genuine out-play, NO free latency wins.
+- main.py == main_backup_v27_smalledgetrap.py (== main_backup_v27_r3.py, this round's start). REGRESSION
+  PASS: v27 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders). parses clean (ast.parse OK).
+- **BUILT a NARROW pursuit-trap fix (per round-3 TODO) and VALIDATED it on the repro — but reverted
+  pending self-play (ran out of steps to run the 80-game self-play; the run exceeds the 30s command limit).**
+  The fix (helpers `_enemy_reach_map` + `_pursuit_space`, per-candidate `pursuit_space`, and a NARROW
+  scoring penalty) is preserved in git history of THIS round's edits (git diff/log). It:
+  * Adds a pursuit-aware flood-fill (blocks cells an enemy head reaches strictly-before/same-time as us).
+  * Penalizes a move ONLY when: `_nearest_enemy<=3` (actively chased) AND `pursuit_space<my_len AND <4`
+    (collapses to tiny) AND `_max_pursuit >= pursuit_space + my_len` (another move keeps far more room).
+    Penalty `-(my_len-pursuit_space)*8.0` — soft, only breaks near-ties.
+  * ✅ REPRO PASS: /tmp/s156_88.json (game sim_156 round-2 t88): **new picks 'up' (escapes the pursuit
+    trap); v27 picks 'down' (dies)**. First metric to catch this hard multi-step pursuit mode.
+  * ✅ REGRESSION PASS vs opp_straight = 8-0 as A AND 0-8 as B.
+  * ⏳ SELF-PLAY vs v27 (both orders, 40+40): NOT completed (80-game run > 30s command timeout).
+- **DECISION: KEPT v27** (reverted the pursuit fix) because round 3 was a PERFECT 250-0-0 (no current
+  loss to fix) and the README's iron rule is: ship ONLY if repro flips AND self-play does NOT regress —
+  I could not verify the self-play half. No unvalidated risk on a flawless bot.
+- **TODO next teammate (HIGH VALUE — the narrow pursuit fix is READY, just needs self-play validation):**
+  Reconstruct the fix from THIS round's git diff (`git log`/`git diff HEAD~1` on main.py) — it re-adds
+  `_enemy_reach_map`, `_pursuit_space`, the per-candidate `pursuit_space` field, `_nearest_enemy`,
+  `_reach_map`, `_max_pursuit`, and the narrow penalty block. Then run self-play in SMALLER batches to
+  fit the 30s limit: `bash /tmp/rm2.sh main.py main_backup_v27_r3.py 15` (as A) AND
+  `bash /tmp/rm2.sh main_backup_v27_r3.py main.py 15` (as B), a couple of times each. If it does NOT
+  regress both orders (draws stay low, ~even or better), SHIP it — it's the first fix to catch the
+  documented multi-step pursuit trap (the residual hard mode across every opponent). If it regresses,
+  narrow further (raise the `pursuit_space<4` bound down to `<3`, or require `_max_pursuit >=
+  pursuit_space + my_len + 3`). Repro: /tmp/s156_88.json (should pick 'up'), /tmp/testmove.py <bot>
+  <state> (NOTE: joins /workspace/, pass a workspace-relative path), /tmp/eval2.py <state> (shows
+  per-move pursuit_space). Test: /tmp/rm2.sh <A> <B> <N> (>=7s warmup, use N<=15 to fit 30s limit).
