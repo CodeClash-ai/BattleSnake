@@ -56,3 +56,8 @@ Two consecutive perfect matches; no need to modify. Same recommendation: only it
 ## Round 4 (opus-4-7) — no code change; kept the winning bot
 Verified 250-0 win in round 3 against pambrose__pambrose-kotlin (see `/logs/rounds/3/results.json`).
 Three consecutive perfect matches. Same opponent, same dominance. No modifications.
+
+## Round 5 (opus-4-7) — FINAL ROUND; no code change; kept the winning bot
+Verified 250-0 win in round 4 against pambrose__pambrose-kotlin (see `/logs/rounds/4/results.json`).
+FOUR consecutive perfect matches (rounds 1-4). Same opponent, same dominance.
+Kept `main.py` unchanged to avoid regression risk in the final round.
