@@ -3127,3 +3127,53 @@ regression.
   Repro is the real validator for opponent-specific traps; self-play IS valid for general
   growth/survival edges (anti-wall-crawl v19/v33, food-race v34 won both orders). DON'T ship a
   self-play regression.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs nbw__nbw-ruby) — KEPT v35
+- Verified results: round 0 **245-4 (+1t)** (v35), round 1 **240-5 (+5t)** (v35),
+  round 2 **241-4 (+5t)** (v35). 3/3 rounds won; ~98% game win rate vs a FULLY ACTIVE opponent.
+- **Round-2 loss classification (via /tmp/classify3.py, last-alive frame): 4 losses =
+  3 SELFCOIL + 1 OUTGROWN.**
+  * sim_41 (SELFCOIL, len7 hp100): small snake wall-crawled bottom-left, spiraled into corner
+    (0,0) area, legal=[] at t22.
+  * sim_235 (SELFCOIL, len7 hp98): small snake crawled DOWN x=2 column, into left wall x=0, then
+    bottom-left corner, self-coiled at t35 (head (0,1) all 4 neighbors = OWN body).
+  * sim_245 (SELFCOIL, len15 hp95): big-snake mid-board coil (documented hard multi-step mode).
+  * sim_47 (OUTGROWN, len13 vs opp14): lost late H2H while 1 shorter.
+- **DEEP TRACE of the small-snake corner coils (sim_235 t27, sim_41 t14; repro: /tmp/mkstate.py
+  <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>):** ROOT CAUSE = the `_short_hungry` DOMINANT
+  food pull (line 701-703, `fdist*20` when my_len<7 & lead<2) drags a SMALL snake toward SOLE
+  wall/corner food (sim_235 food at (1,0)), overriding all space/anti-wall terms -> it crawls the
+  perimeter into the corner and self-coils. The snake is NOT actually starving (hp 90-100) — the
+  dominant pull fires regardless of health, and existing corner/edge-food trap-flags need
+  `len(food_set)>=2` (so they can't fire on sole food -> starvation guard).
+- **Tuning experiments this round — ALL REJECTED (did NOT flip the repros):**
+  * v36 (/tmp/v36.py): soften short_hungry pull to `fdist*6` when hp>=50 AND nearest food is on a
+    wall (added `_nf_on_wall` after `_big_safe`). Did NOT flip sim_235 t27 ('left' still chosen —
+    even the softened pull + the fact 'left' is genuinely toward the corner food beats the tie-break).
+  * v37 (/tmp/v37.py): SMALL-snake soft off-wall tie-break `dist_to_wall*0.8` for my_len<10 & hp>=60.
+    Did NOT flip sim_235 OR sim_41 — the `fdist*20` short_hungry pull dominates any 0.8 nudge.
+  CONFIRMS all prior teammates: the anti-starvation dominant pull is what causes these corner
+  deaths, but weakening it re-introduces starvation losses (documented as WORSE, jump-flooding match).
+  These are the genuinely-hard small-snake corner coils; one-step scoring can't fix them without
+  either (a) failing the repro or (b) regressing (starvation/self-play). The 1 OUTGROWN loss needs
+  territory/Voronoi food-ownership (self-play can't validate — eats symmetrically).
+- REGRESSION PASS: main.py (v35) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long dense snakes, 10 food, 200 moves): **0.21ms avg, 0.50ms max**
+  (timeout 500ms) — cannot time out. main.py == main_backup_v35_bigwallfood.py (diff confirms equal);
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: kept main.py (v35) unchanged.** 241-4 is a strong result (98%+ win rate); the losses
+  are the documented hard modes (small/big self-coil + 1 outgrown) that neither of my tweaks (v36/v37)
+  flipped in the repro, and prior teammates exhaustively confirmed weakening the food pull regresses
+  (starvation) & center/food tweaks regress self-play. v35 is the strongest self-play-validated version.
+  No regression risk taken on a bot winning every round.
+- **TODO next teammate:** re-run /tmp/classify3.py (edit d="/logs/rounds/N") on the new round. The
+  small-snake corner coil (sim_235/41) is the newer sub-mode this match: a len<7 hp90+ snake dragged
+  by `fdist*20` short_hungry pull into sole wall/corner food -> spirals to death. To fix it WITHOUT
+  re-introducing starvation, you likely need: (a) a multi-step self-sim that detects the corner
+  spiral as a SOFT penalty (only when the food-ward move leads to a shrinking corridor within K steps
+  AND health is still fine), NOT a food-pull weakening; OR (b) only apply the dominant fdist*20 pull
+  when hp<50 (actually hungry) — but RE-TEST self-play + starvation (jump-flooding-style) both, since
+  prior notes say weakening it caused starvation losses. Repro tools: /tmp/mkstate.py <sim.jsonl>
+  <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/lfc.py <sim> (per-turn head/hp/len/legal),
+  /tmp/classify3.py (loss class). Test: /tmp/rm2.sh <A> <B> <N> (recreate; >=6s warmup, N<=16 for 30s
+  cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play washes.
