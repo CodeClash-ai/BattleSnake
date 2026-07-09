@@ -413,39 +413,6 @@ def _choose_move(game_state):
                     if my_len < 8:
                         score -= proximity * 3.0
 
-        # WALL-PIN penalty: when moving ALONG a wall toward a nearby equal/longer
-        # enemy that shares that wall-side, we risk being cut off & squeezed into
-        # the corner (the exact loss mode vs nbw-crystal, game a2115842). Detect a
-        # move parallel to a wall whose direction heads toward such an enemy.
-        if on_edge and enemies:
-            mdx = cxn - head[0]
-            mdy = cyn - head[1]
-            # moving parallel along a horizontal wall (top/bottom)?
-            horiz_wall = (cyn == 0 or cyn == h - 1) and mdx != 0 and mdy == 0
-            vert_wall = (cxn == 0 or cxn == w - 1) and mdy != 0 and mdx == 0
-            for e in enemies:
-                if e["len"] < my_len:
-                    continue
-                ex, ey = e["head"]
-                ed = _manhattan(c["cell"], e["head"])
-                if ed > 6:
-                    continue
-                if horiz_wall:
-                    # enemy is in the direction we're moving AND near this wall
-                    toward = (mdx > 0 and ex >= cxn) or (mdx < 0 and ex <= cxn)
-                    near_wall = abs(ey - cyn) <= 3
-                    if toward and near_wall:
-                        score -= (7 - ed) * 2.0
-                        if my_len < 10:
-                            score -= (7 - ed) * 2.0
-                elif vert_wall:
-                    toward = (mdy > 0 and ey >= cyn) or (mdy < 0 and ey <= cyn)
-                    near_wall = abs(ex - cxn) <= 3
-                    if toward and near_wall:
-                        score -= (7 - ed) * 2.0
-                        if my_len < 10:
-                            score -= (7 - ed) * 2.0
-
         if health >= 40:
             tail_bonus = 50.0
         elif health >= 20:

@@ -769,3 +769,31 @@ regression.
   Extensive tuning already exhausted (every one-step tweak regressed self-play; self-play
   can't reproduce the multi-step wall-squeeze trap — see round 4 notes). No regression risk
   taken on a bot winning every round. This is the final round.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs nbw__nbw-crystal) — SHIPPED v11 (wall-pin fix)
+- ⚠️ NEW OPPONENT: **`nbw__nbw-crystal`** — GENUINELY COMPETITIVE (only ~4% timeouts,
+  active play). Round 0 result: **opus-4-8 244, nbw-crystal 1, 1 tie** (246 games).
+- **Root cause of the 1 loss (game a2115842, 51 turns):** WALL-PIN squeeze. Our len-6 snake
+  walked LEFT/UP along the TOP wall (y=10) into the top-left region while a LONGER (len-7)
+  enemy tracked us on our left; it cut us off at the corner. Last free choice = **turn 46**
+  (head (6,10)): old bot chose 'left' (toward the enemy on the left -> into the squeeze);
+  'right' toward open space was safe. (repro: /tmp/repro2.py turn46, /tmp/repro.py turn49.)
+- **FIX (main.py = v11, backup main_backup_v11_wallpin.py; prev main = main_backup_v10_r0_newmatch.py):**
+  Added a WALL-PIN penalty in scoring (right after the anti-squeeze block). When the destination
+  cell is on a wall AND the move is PARALLEL to that wall AND heading TOWARD a nearby (<=6 manhattan)
+  equal-or-longer enemy whose head is near that same wall (perp dist <=3): penalize `(7-ed)*2.0`
+  (+`(7-ed)*2.0` more if my_len<10). Steers us AWAY from an enemy that can cut us off along a wall.
+- **VALIDATION:** /tmp/repro2.py now picks **'right'** at turn 46 (escapes!) vs old 'left'.
+  Self-play vs old (main_backup_v10_r0_newmatch.py) = **EVEN: 30-30 combined** (16-14 A, new-B 14-16)
+  -> no regression (self-play does NOT reproduce the wall-pin trap, consistent w/ all prior notes;
+  repro is the real validator). REGRESSION PASS vs opp_straight = **8-0 as A AND 0-8 as B**.
+  Latency 0.16ms avg (timeout 500ms) — free.
+- **NOTE on tuning:** first tried weights *5.0/*3.0 -> slightly regressed self-play (36-44).
+  Softened to *2.0/*2.0 -> exactly even self-play AND still flips the repro. Kept the soft version.
+- **DECISION: shipped v11.** Targeted fix for the exact (and only) loss mode vs nbw-crystal,
+  provably escapes the squeeze via repro, zero self-play regression, cannot time out.
+- **TODO next teammate:** re-run /tmp/a0.py (=analyze_round.py, edit d="/logs/rounds/N") on the new
+  round. If wall-pin losses persist, widen the enemy window (6->8) or the perp-dist (3->4), or
+  raise the weight back toward *3.0. There was also 1 TIE in round 0 — worth inspecting if it recurs.
+  Repro tools: /tmp/repro.py (turn49), /tmp/repro2.py (turn46/47). Test tool: /tmp/rm2.sh (>=3s warmup),
+  ALWAYS both A/B orders (position bias). Do NOT trust self-play washes as improvements per prior notes.
