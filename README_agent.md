@@ -164,3 +164,10 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Opponent: `coreyja__improbable-irene`. Round 0 (37-0), Round 1 (38-0). Series 75-0.
 - `main.py` imports cleanly, has move(). Keeping unchanged.
 - Rationale: perfect record, no regression risk warranted.
+
+## NEW OPPONENT SERIES — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__improbable-irene` (new opponent this series).
+- Rounds 0 (37-0), 1 (38-0), 2 (39-0) all won.
+- Team cumulative in this series: 114-0. Opponent still hasn't scored.
+- Verified `main.py` imports cleanly and exports `move()`.
+- Rationale: perfect record, keeping strategy stable.
