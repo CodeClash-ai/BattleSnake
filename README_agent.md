@@ -2766,3 +2766,43 @@ regression.
   multi-step traps but regresses self-play as-is (needs narrow gating). Repro: /tmp/mkstate.py
   <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (recreate;
   >=8s warmup, N<=16 to fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__amphibious-arthur) — FINAL, KEPT v30
+- Verified results ALL 5 rounds won: round 0 **247-3** (v27), round 1 **246-4** (v28),
+  round 2 **245-5** (v28), round 3 **246-4** (v29), round 4 **245-4 (+1t)** (v30). 5/5 rounds won.
+  v30 (huge-lead no-chase/H2H-lure, shipped round 4) held at 245-4.
+- Round 4 (via /tmp/parse.py = last-line {winnerName,isDraw} parse of /logs/rounds/4/sim_*.jsonl):
+  245 wins / 4 losses / 1 tie. Loss files: sim_57, sim_92, sim_196, sim_212.
+- **ALL 4 round-4 losses = the same LONG-GAME SELF-COIL TRAP while MUCH LONGER than opp** (via
+  /tmp/losstrace.py + /tmp/lens.py): every loss our snake was big (L12/L16/L17/L29) and high-health
+  (hp62-100), MUCH longer than opp (leads of 4-11), and coiled into a pocket where the last frame had
+  legal=[] (all 4 neighbors = OUR OWN body). sim_57 was a corner death (10,0); the rest mid-board coils.
+- **DEEP TRACE (sim_92, /tmp/lfc.py + /tmp/board.py + /tmp/eval.py + /tmp/eval2.py + /tmp/simtest.py):**
+  Last-free-choice with an open-board alternative = **t198, head (4,6) L17** (3 legal: U/D/L). main.py
+  picks 'left'->(3,6) which spirals into the pocket -> boxed at t206. The open escape was DOWN into the
+  bottom-left region. BUT at t198 **ALL THREE moves have IDENTICAL flood=94 AND static-flood=93** — the
+  trap only becomes visible at t200 (static-flood up=0 vs down=95, i.e. 2 turns later). This is the
+  documented HARD multi-step coil: NO one-step metric distinguishes the moves at the true last-free-choice.
+  * Tail-follow is COUNTERPRODUCTIVE here: the tail sits INSIDE the coil (at (7,6), tail_dist 'right'=2),
+    so a stronger tail-follow would pull us 'right' (deeper into the coil), not toward the open board.
+  * Greedy self-simulation (/tmp/simtest.py, K=10) SURVIVES all 3 moves (down/left=95, up=60) — it plays
+    optimally afterward so it can't reproduce the trap the bot's actual scoring walks into. Confirms (yet
+    again) that greedy self-sim can't catch this mode.
+- **DECISION: kept main.py (v30) unchanged.** v30 is the strongest proven version: it BEATS v29 both
+  self-play orders (/tmp/rm2.sh: **8-7 as A AND 9-6 as B = 17-13 combined**, no regression), passes
+  REGRESSION (main.py vs opp_straight = **10-0 as A AND 0-10 as B**), parses clean (ast.parse OK),
+  move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+  The 4 residual losses are the genuinely-hard multi-step self-coil where flood/static-flood/greedy-sim
+  are ALL equal at the last free choice (t198) and only diverge 2 turns later — provably no one-step
+  scoring fix, and prior teammates confirmed every multi-step/pursuit tweak either fails the repro or
+  regresses self-play. No regression risk taken on a bot winning every round. This is the FINAL round.
+- **TODO (future, if this opponent recurs):** the ONLY loss mode is the big-snake long-game self-coil
+  (last-free-choice ~8 turns before death, all one-step metrics equal, tail buried in the coil). The
+  "correct" fix is a multi-step sim that advances OUR body using OUR OWN scoring's move choice (not
+  greedy — greedy escapes) K steps and detects the corridor collapse, as a SOFT penalty. Or a
+  pursuit-aware flood-fill (_enemy_reach/_pursuit_space, in git history) narrowed so it doesn't regress
+  self-play. Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json> (writes state with "you"=opus),
+  /tmp/tm.py <bot> <state>, /tmp/board.py <sim> <turn> (ascii), /tmp/eval.py / /tmp/eval2.py (flood /
+  static-flood per move), /tmp/lfc.py <sim> (per-turn legal moves), /tmp/lens.py <sim> (final lengths).
+  Test: /tmp/rm2.sh <A> <B> <N> (recreate — grep "A was the winner"; >=8s warmup, N<=16 to fit 30s
+  cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play washes.
