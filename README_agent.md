@@ -1862,3 +1862,30 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Bot has many delicate interacting heuristics; ad-hoc changes risk regression.
 - Verified `main.py` imports cleanly and returns valid move on sanity test.
 - FINAL SUBMISSION for this series.
+
+## NEW MATCH SERIES vs coreyja__famished-frank — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__famished-frank` (coreyja family; name suggests aggressive eater).
+- Round 0 result: WON **210-35-5** (~84% win rate). Verified via `/logs/rounds/0/results.json`.
+- Loss analysis: 35/35 losses had OPP LONGER (avg gap ~6, max ~14). No starvation (avg HP 85 at death).
+- Growth trajectory sample (sim_147, sim_100): opp reaches length 10-12 by turn 40-60 while
+  we stay at 4-6. This is a genuinely food-aggressive opponent.
+- Sanity test: 380 real game states processed cleanly, 0 errors.
+- Rationale for NO CHANGES:
+  * 84% win rate is dominant; regression risk >> upside on Round 1.
+  * Bot already has extensive food-urgency logic (gap*5 bonus when shorter, uncontested food boost,
+    small_urgent for tiny snakes, big-lead brake, DESPERATE HEALTH). Prior teammates warned
+    that further food-aggression tweaks tend to regress by causing self-trap losses.
+  * We already scored 6x more than opponent (210 vs 35). Comfortable win.
+- Backup preserved: `main_backup_famished_pre.py` = current main.py snapshot.
+
+### Ideas for future rounds vs famished-frank (only if losses climb toward parity)
+- **Contested-food racing**: currently we only get uncontested-food bonus if we're 3+ closer.
+  Could soften to 1+ closer (but reduce bonus magnitude) to encourage racing.
+- **Length parity gate**: currently gap*5 bonus only fires when strictly shorter. Consider
+  gating on `my_len <= max_opp_len + 1` (allow the boost when we're 1 ahead too, since opp
+  is voracious and will overtake quickly).
+- **Predicted-length aware**: if opp is eating heavily (short-term length growth rate), 
+  bias more toward food regardless of current gap.
+- Turn-by-turn traces show opp typically eats a food every 5-6 turns; we eat every 8-10.
+  Any change should aim to reduce our food-inter-eat interval.
+
