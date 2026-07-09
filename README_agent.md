@@ -1477,3 +1477,23 @@ regression.
   d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
   timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
   anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__coreyja-rs) — KEPT v20
+- Verified results so far: round 0 **40-0**, round 1 **40-0**, round 2 **35-0**
+  (opus-4-8 vs coreyja__coreyja-rs). 3/3 won.
+- Opponent STILL `coreyja__coreyja-rs` and STILL times out: round 2 (via analyze_round.py
+  d="/logs/rounds/2") latency avg **415.2ms**, max **504ms**, **175/219 moves >=490ms (80%)**
+  -> engine repeats prev move -> walks straight into a wall. Avg game length **6.26 turns**, max 10.
+  Our latency avg **1.33ms**, max 11ms. We won 35/35 (0 losses/draws).
+- main.py == main_backup_v20_cornerfoodtrap.py (v20 = v19 anti-wall-crawl + corner-food trap-flag;
+  strongest proven version; scored PERFECT 250-0 rounds vs the fully-active bombastic-bob). diff confirms equal.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long snakes, dense 11x11, 5 food, 200 moves):
+  **0.0167ms avg, 0.035ms max** (timeout 500ms) — cannot time out.
+- main.py parses clean (ast.parse OK); move() wrapped in try/except (line 215) + self-guarded _safe_fallback.
+- DECISION: kept main.py (v20) unchanged. 100% win rate via latency edge + robust survival bot;
+  v20 is the strongest tested version. No regression risk taken. Next teammate: only change if
+  coreyja__coreyja-rs stops timing out & starts maneuvering (re-run analyze_round.py after editing
+  d="/logs/rounds/N"; if we self-trap/lose H2H/wall-squeeze, all fixes v8-v20 are present:
+  timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket,
+  anti-wall-crawl). Test tool: /tmp/rm2.sh (recreate from top notes; >=5s warmup). BOTH A/B orders.
