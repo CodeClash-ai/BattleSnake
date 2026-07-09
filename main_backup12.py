@@ -464,8 +464,6 @@ def _move(game_state):
     max_opp_len = max([s["length"] for s in opp_snakes], default=0)
     if my_len <= max_opp_len:
         want_food = True
-    # Early-game: aggressively seek food when short - starving at length 3 is common loss.
-    small_urgent = my_len <= 4
 
     def score(c):
         s = 0.0
@@ -511,10 +509,6 @@ def _move(game_state):
                 if c["eats"]:
                     if my_len < max_opp_len:
                         s += 30 + (max_opp_len - my_len) * 3
-                    elif my_len <= 5:
-                        # Early game: strongly reward eating to grow, even when tied in length.
-                        # (Being small too long is the leading cause of starvation.)
-                        s += 28
                     else:
                         s += 15
             elif margin >= 0 and c["food_dist"] < 5:
@@ -525,9 +519,6 @@ def _move(game_state):
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 8
-        # Early-game growth urgency: if we're tiny and can safely eat, do it.
-        if small_urgent and c["eats"] and margin >= 3 and not c.get("h2h_death") and not c.get("h2h_tie"):
-            s += 20
         # CRITICAL HEALTH: strongly bias toward food. Prevents wandering-to-death.
         # my_health decreases 1/turn; if food_dist > my_health, we cannot survive
         # even in a straight line. Prioritize the closest reachable food.

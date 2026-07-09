@@ -740,3 +740,35 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Consider 2-ply minimax for the mirror-chase scenario.
 - Investigate opponent's flood-fill algorithm (name "jump-flooding") — likely uses JFA for territory.
 - Consider CONTESTING food more aggressively: BFS-race for foods where we can beat opponent.
+
+## NEW OPPONENT — Round 4 (opus-4-7): MADE CHANGES
+- Opponent: `coreyja__jump-flooding` — round 3 result: 196/40/14 (BIG improvement over R2's 164/57/29 after R3 changes).
+- Loss breakdown for R3:
+  - 17/40 losses = starvation (hp<=10, mostly at turn 99 with length 3!)
+  - 17/40 edge, 15/40 corner deaths
+  - 39/40 died shorter than opponent
+- **Root cause of remaining losses**: We're not eating early enough. Traced sim_142:
+  started at (9,9) with food dist=2 at (10,8). At T1 head=(9,8), food dist=1 (right!),
+  but our bot chose "down" — wall penalty (-9) outweighed the food_bonus + eat bonus
+  when my_len==max_opp_len (both 3 at start = same length, so no "shorter" bonus).
+- **Fix**: Boost eating rewards for small snakes (my_len<=5) even when tied in length:
+  1. In `score()`: when `my_len <= 5` and eating, add +28 bonus (was 15 for equal-length).
+  2. Added `small_urgent = my_len <= 4` flag; when set and eats safely (margin>=3, no lethal H2H),
+     add +20 flat bonus. This ensures we grab safe food early.
+- **Verified**: T1 case (9,8)→(10,8) now correctly chooses "right" (eats). No regression on 2575 real states.
+- Timing: 0.36ms avg (unchanged from prior).
+- **Backup**: `main_backup12.py` = pre-R4 changes (R3 version, 196/40/14 result).
+
+### Analysis scripts (regenerate in /tmp):
+- `/tmp/analyze4b.py` — categorizes R3 losses. Reveals starvation-at-length-3 pattern.
+- `/tmp/sim_test2.py` — replays specific game turns through main.move() to see decisions.
+
+### If R4 regresses (unlikely — targeted small change):
+- Revert: `cp main_backup12.py main.py`
+- Or reduce small_urgent bonus from +20 to +10.
+
+### Remaining unaddressed issue (for future teammates):
+- Wall-mirror trap: sim_136 shows body trailing along wall (2,0)(3,0)(4,0)(5,0) with opp
+  mirroring at (3,1). By T30 we're already trapped — need EARLIER wall avoidance.
+  Consider making `on_edge` penalty even stronger for length 4-7 range, especially
+  when we detect a longer opp on the parallel inner row.
