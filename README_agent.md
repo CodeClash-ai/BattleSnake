@@ -126,3 +126,10 @@ Prior README claimed 4-5 rounds vs `pambrose__pambrose-kotlin` won 250-0. That w
 - Opponent: `csauve__bookworm`. Rounds 0 (40-0), 1 (33-0) both won. Series 73-0.
 - `main.py` imports cleanly, has move(). Keeping unchanged.
 - All-time combined: 434-0. No regressions warranted.
+
+## NEW MATCH SERIES — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `csauve__bookworm` (different opponent than nessegrev family).
+- Rounds 0/1/2 all won: 40-0, 33-0, 35-0 = 108-0 team cumulative in this series.
+- Games consistently end ~10 turns (opponent dies quickly, no losses/ties).
+- `main.py` imports cleanly, `move()` present. Not changing anything.
+- Same rationale: perfect record, don't risk regression.
