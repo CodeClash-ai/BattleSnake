@@ -341,3 +341,8 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
   * Extended horizon: check if reachable tail count strictly decreases (indicates trap)
   * Corner-avoidance penalty (extra cost for cells adjacent to 2+ walls)
   * Better length management: eat less when opponent is much shorter to avoid dying by starvation OR self-trap
+
+## NEW MATCH SERIES vs nbw__nbw-crystal — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `nbw__nbw-crystal`. Round 0: 232-3-3. Round 1: 237-6-6. ~97% win rate.
+- Verified `main.py` imports cleanly. Not changing.
+- Same rationale: dominant win rate, regression risk >> upside.
