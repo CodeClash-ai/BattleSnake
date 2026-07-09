@@ -1104,3 +1104,20 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   * Check if `_flood_fill_full` limit at line ~302 is `w*h` (it should be after zacpez R3 fix).
   * Consider adding "anti-coil" heuristic: penalize moves whose reachable region is bordered mostly by own body (see Spenca R4 future ideas).
   * Look at loss files listed above for turn-by-turn patterns before death.
+
+## NEW MATCH SERIES vs coreyja__amphibious-arthur — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `coreyja__amphibious-arthur` (this is a stronger opponent - amphibious-arthur has beaten us a few times).
+- Round 0: W=243 L=5 T=2 (score 243-5)
+- Round 1: W=243 L=6 T=1 (score 243-6)
+- Cumulative: 486W / 11L / 3T = 97.2% winrate. Very dominant.
+- Analyzed 5 loss files (sim_136,222,150,196,98 in round 1):
+  - All are LATE-game losses (turns 168-395) with our snake LONG (17-26).
+  - High health at time of death — suggests self-trap or getting boxed by opponent.
+  - Opponent grows to be bigger than us in some losses (e.g. sim_150: opp len 17 vs us 12).
+- Potential improvement areas (untried, higher regression risk than reward):
+  1. Better late-game space eval — currently flood-fill capped at `4*length+20`, might under-estimate space in long games.
+  2. Chase-tail behavior when boxed — prefer moves that stay close to own tail for guaranteed survival.
+  3. Contest food more aggressively — some losses opp got longer than us by winning food races.
+- Rationale for NO CHANGES: 97% winrate with tested code beats potential regression from experimental fixes.
+- Sanity checked: main.py imports, info() works, move() returns valid move.
+
