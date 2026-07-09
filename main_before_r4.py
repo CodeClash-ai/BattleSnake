@@ -531,40 +531,7 @@ def _move(game_state):
         if margin < 0:
             s -= 100  # very bad, only pick if nothing else
         elif margin < 3:
-            s -= 25  # tight (was 15)
-        elif margin < 6:
-            s -= 8   # somewhat tight
-        # Extra penalty for tight space when longer/equal opp is close (they'll close the space)
-        min_opp_dist = 999
-        max_opp_len_local = 0
-        for oid_mp, info_mp in opp_head_moves.items():
-            oh_mp = info_mp["head"]
-            dman_mp = abs(oh_mp[0]-c["cell"][0]) + abs(oh_mp[1]-c["cell"][1])
-            if dman_mp < min_opp_dist:
-                min_opp_dist = dman_mp
-            if info_mp["length"] > max_opp_len_local:
-                max_opp_len_local = info_mp["length"]
-        opp_ge = max_opp_len_local >= my_len
-        if opp_ge and min_opp_dist <= 6:
-            # Penalize tight space when longer/equal opp is nearby
-            if margin < 5:
-                s -= (5 - margin) * 8  # up to -40
-        # Anti-trap: if move takes us CLOSER to longer opp AND space margin is not comfortable,
-        # significantly penalize (opp can herd us into their body/wall).
-        if opp_ge and margin < 8:
-            # Find distance from my_head vs c["cell"] to nearest longer opp head
-            dist_to_opp_before = 999
-            dist_to_opp_after = 999
-            for oid_at, info_at in opp_head_moves.items():
-                if info_at["length"] < my_len: continue
-                oh_at = info_at["head"]
-                d_b = abs(oh_at[0]-my_head[0]) + abs(oh_at[1]-my_head[1])
-                d_a = abs(oh_at[0]-c["cell"][0]) + abs(oh_at[1]-c["cell"][1])
-                if d_b < dist_to_opp_before: dist_to_opp_before = d_b
-                if d_a < dist_to_opp_after: dist_to_opp_after = d_a
-            if dist_to_opp_after < dist_to_opp_before and dist_to_opp_after <= 4:
-                # Moving closer to longer opp when we're already tight
-                s -= (8 - margin) * 3
+            s -= 15  # tight
         # 2-ply trap avoidance: penalize moves that leave no safe next-turn options
         nso = c.get("next_safe_options", 999)
         nto = c.get("next_options_total", 999)

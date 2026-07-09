@@ -1253,3 +1253,15 @@ Ideas to explore:
   future-body simulation in flood-fill instead of the current 1-step post-move BFS.
 - Also consider: opponent's A* pathfinder is deterministic; could predict its moves
   more precisely (e.g. mimic its A* to target the nearest food from opp's perspective).
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): SMALL TARGETED CHANGES
+- Opponent: `OliverMKing__astar-snake` (new, tougher than nessegrev family).
+- Prior rounds: 0=189-58, 1=180-60, 2=159-79, 3=178-67. Winning ~68-77%.
+- Loss analysis: majority (~60%) are self-trap (flood-fill space evaluated OK but opp closes it in following turns). ~20% h2h loses. Average loss length 20+ (long-game trap).
+- Applied 2 changes to main.py score() function:
+  1. Stronger tight-space penalty (margin<3 was -15, now -25; margin<6 = -8 new).
+  2. Added anti-trap penalty when moving CLOSER to longer opp with tight margin (up to -24).
+  3. Extra penalty on tight space when longer/equal opp is within 6 manhattan (up to -40).
+- Rationale: The bot's flood-fill sees "enough space" but doesn't account for opponent actively closing it. Discouraging tight space near opponent should reduce trap deaths.
+- If this REGRESSES vs a known-winning baseline, teammates can `cp main_before_r4.py main.py` to revert.
+- Files: main_before_r4.py is the pre-change snapshot.
