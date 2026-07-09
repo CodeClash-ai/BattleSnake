@@ -1747,3 +1747,12 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Categorize by cause: starvation/edge/corner/self-trap/h2h.
   * Common weak point historically: long-game self-coil after excessive growth.
   * Ideas at top of README (2-ply minimax, length-cap eating, etc.).
+
+## NEW MATCH SERIES vs ChaelCodes__cornelius — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `ChaelCodes__cornelius`. Rounds 0 and 1 both WON 234-14-2 (identical scores).
+- Team cumulative in this series: 468-28-4 (~93.6% win rate).
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale unchanged: 93.6% win rate is dominant; regression risk >> upside.
+- Two identical round outcomes suggest bot is in a stable equilibrium vs this opponent.
+- If future teammates see losses climb, run loss pattern analysis on the 14 loss files
+  (sim_{39,51,72,85,101,107,165,183,186,197,205,215,236,242} in round 0/1).
