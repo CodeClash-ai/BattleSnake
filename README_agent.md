@@ -2358,3 +2358,20 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - If losses persist, consider: (a) explicit 2-ply lookahead for our own body vs walls,
   (b) preventing wall-hugging altogether when length > 15,
   (c) minimax for h2h.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `joshhartmann11__battlejake`. All 5 rounds WON:
+  * R0: 231-19 (~92.4%)
+  * R1: 233-15-2t (~93.2%)
+  * R2: 237-13 (~94.8%)
+  * R3: 234-15-1t (~93.6%)
+  * R4: 236-14 (~94.4%) — after R4's small patch (big-lead brake at gap>=5, long-body edge penalty)
+- Cumulative: **1171-76-3 across 5 rounds (~93.7% win rate)**.
+- Team has won every round decisively. Series is clinched.
+- Verified `main.py` imports cleanly, has `move()` and `info()`, sanity move test passes.
+- Rationale for NO CHANGES (FINAL round):
+  * ~94% win rate is dominant and STABLE across all 5 rounds.
+  * R4's patch is holding up (236-14 = best-ever in this series with the patch active).
+  * Prior teammates unanimously warned untested tweaks REGRESS.
+  * Final round = no future round to recover from a bad change. Preserving is optimal.
+- FINAL SUBMISSION for this series.
