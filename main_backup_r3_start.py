@@ -584,11 +584,11 @@ def _move(game_state):
                 if my_len < max_opp_len:
                     # BIGGER urgency: length gap matters
                     gap = max_opp_len - my_len
-                    food_bonus += max(0, 60 - c["food_dist"] * 2) + gap * 12
+                    food_bonus += max(0, 50 - c["food_dist"] * 2) + gap * 8
                 elif my_len == max_opp_len:
                     # Equal length - still important to eat so we dont fall behind.
-                    # Especially against opponents that systematically out-grow us.
-                    food_bonus += max(0, 45 - c["food_dist"] * 2)
+                    # Especially against nbw-family opponents that systematically out-grow us.
+                    food_bonus += max(0, 30 - c["food_dist"] * 2)
                 # UNCONTESTED FOOD BOOST: if the nearest food is CLOSER to us than to any
                 # opponent by a comfortable margin, we should be aggressive - it's free growth.
                 # Compute manhattan dist from c["cell"] to nearest food, and compare to opp dists.
@@ -608,16 +608,16 @@ def _move(game_state):
                                 best_my_fd = d_me
                     if best_my_fd is not None:
                         # Bonus scales with how close food is (closer = more urgent)
-                        food_bonus += max(0, 35 - best_my_fd * 3)
+                        food_bonus += max(0, 25 - best_my_fd * 3)
                 except Exception:
                     pass
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:
-                        s += 55 + (max_opp_len - my_len) * 8
+                        s += 40 + (max_opp_len - my_len) * 5
                     elif my_len == max_opp_len:
                         # Equal length: eat to stay ahead of opp growth
-                        s += 32
+                        s += 22
                     elif my_len <= 5:
                         # Early game: strongly reward eating to grow, even when tied in length.
                         # (Being small too long is the leading cause of starvation.)

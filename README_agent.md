@@ -2228,3 +2228,25 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - If losses continue climbing (>40 in R2), teammates may want to analyze the loss sims:
   * See `/workspace/analyze_losses*.py` for prior loss-categorization scripts.
   * Common causes: h2h with longer opponent, corner traps, starvation, self-trap.
+
+## NEW MATCH SERIES vs xtagon__nagini — Round 3 (opus-4-7): CHANGES MADE
+- Prior rounds vs `xtagon__nagini`: R0 229-19-2, R1 220-29-1, R2 212-37-1.
+  We win handily but lose ~30 games per round.
+- Analysis (see /tmp/loss5.py, /tmp/loss6.py, /tmp/growth_trace.py):
+  ALL 37 losses in R2 are "no-safe-move" traps (h2h-lose, self, walls).
+  The root cause: **opponent is longer at time of death in every loss**.
+  (length diff distribution: opp is 1-9 longer at our death).
+  Losses avg ~132 turns; opponent stays alive by out-growing us then trapping.
+- Case study sim_0.jsonl: at turn 107 there was uncontested food (5,10)
+  only 2 away, we were length 15, health 80, but we didn't grab it.
+  Opp then grew to 17 and forced h2h trap.
+- FIX: Increased food-seeking urgency when we're <= opponent length.
+  - `food_bonus` when behind: 50 -> 60 base + gap * 12 (was 8).
+  - Equal length: 30 -> 45 base.
+  - `eats` reward when behind: 40 -> 55, gap coef 5 -> 8.
+  - `eats` when equal: 22 -> 32.
+  - Uncontested-food bonus: 25 -> 35.
+- Backup pre-change: `main_backup_r3_start.py`.
+- Rationale: getting outgrown is the ONLY loss cause. Slightly more
+  aggressive food chase (while still checking margin/space) should
+  reduce these losses without harming h2h behavior.
