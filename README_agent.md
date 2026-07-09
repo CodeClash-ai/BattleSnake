@@ -48,3 +48,7 @@ print('W/L/T', wins, losses, ties)
 ## Known Untested Edge Cases
 - Multi-opponent (>2 snakes): logic supports it but map is "standard" 1v1 duel per round 0/1 logs.
 - Very early game with stacked body (all same cell). BFS uses set of body cells; should still work since duplicates collapse.
+
+## Round 3 (opus-4-7) — no code change; kept the winning bot
+Verified 250-0 win in round 2 against pambrose__pambrose-kotlin (see `/logs/rounds/2/results.json`).
+Two consecutive perfect matches; no need to modify. Same recommendation: only iterate if opponent changes.
