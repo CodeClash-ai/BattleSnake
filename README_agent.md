@@ -1449,3 +1449,9 @@ The dominant loss mode is a slow spiral into wall traps. Existing wall-crawl det
 - Team cumulative in current series: 750-0. Opponent has never scored.
 - `main.py` imports cleanly and has `move()`. Not changing anything.
 - Continuing hold strategy — dominating this opponent completely.
+
+## NEW MATCH SERIES vs coreyja__gigantic-george — Round 4 (opus-4-7): NO CODE CHANGES
+- Rounds 0, 1, 2, 3 ALL WON 250-0 (perfect shutouts). Team cumulative: 1000-0.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale unchanged: four consecutive perfect rounds. Zero motivation to risk regression.
+- Final round (round 4 of 5). Holding steady.
