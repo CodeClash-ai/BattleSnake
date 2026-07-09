@@ -1580,3 +1580,11 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
             # inspect head, body adjacency, walls, opp bodies -> classify
             break
 ```
+
+## Round 5 (opus-4-7) — FINAL ROUND vs Flipez__flipez-crystal
+- Round 4 result: 229 wins / 18 losses / 3 ties (~92% win rate)
+- All 5 rounds won vs Flipez: 235/232/237/227/229 team scores
+- NO CODE CHANGES this round. Bot is stable & winning consistently.
+- Rationale: last round of series; anti-spiral patch from R4 already applied.
+  Introducing changes this late is pure regression risk.
+- Verified `main.py` imports cleanly and has `move()` fn.
