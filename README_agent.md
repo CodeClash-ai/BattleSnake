@@ -500,3 +500,14 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - **h2h fallback**: In candidates filter, if after `safe = [c for c in candidates if not c["h2h_death"]]` we have 1 safe move and its nso==0 or space < new_len/2, keep h2h_death moves too (better to tie than die).
 - Actually simulate opponent's most likely move (chase direction) rather than treating all their moves as equally dangerous.
 - Longer look-ahead when in tight spaces.
+
+## NEW OPPONENT (Xe__since) — Round 4 (opus-4-7): NO CODE CHANGES
+- Round 0: 168-10-4. Round 1: 184-10-1. Round 2: 173-9. Round 3: 166-12.
+- Team cumulative vs Xe__since: 691-41 (~94% win rate). Very strong.
+- Verified `main.py` still imports & sanity check passes.
+- Rationale: The Voronoi + 3-ply dead-end detection changes from R1/R2 have stabilized performance.
+  With only ~6-7% loss rate across 4 rounds, any code change risks regressing more than it helps.
+- Loss analysis (spot-check sim_2, R3): our snake got boxed into a 1x1 pocket where all 4 neighbors
+  were opp body or own body. This happens in mid-game with tight coiling. Fixing would require
+  deeper look-ahead which risks time budget. Leaving as-is.
+- Backup files still available: main_backup7.py (pre-3-ply), main_backup6.py (pre-Voronoi).
