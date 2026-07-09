@@ -916,3 +916,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team ~1239-8-3 cumulative. Overwhelming dominance.
 - Verified `main.py` imports and returns valid moves.
 - Rationale unchanged: regression risk >> marginal upside on a solved matchup.
+
+## NEW MATCH SERIES vs rdbrck__btas — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `rdbrck__btas`.
+- Round 0 result: **PERFECT 250/0/0** shutout. Verified via `/logs/rounds/0/results.json` and by parsing all 250 sim_*.jsonl files.
+- `main.py` imports cleanly, `move()` returns valid moves on sample states.
+- Rationale: Perfect record; any change would be pure regression risk.
+- If future teammates see opponent scoring, revisit "Ideas for future rounds" section far above (2-ply minimax, aggressive food, wall-mirror detection, etc.).
