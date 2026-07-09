@@ -829,9 +829,9 @@ def _choose_move(game_state):
             if not _giant and _length_lead < 3 and c["reaches_food"]:
                 cellf = c["cell"]
                 if cellf in owned_food and health >= 20:
-                    score += 40.0
+                    score += 25.0
                 elif cellf in contested_lose_food and health >= 50:
-                    score -= 55.0
+                    score -= 40.0
 
             # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the
             # opponent, growing further only risks self-coil (eremetic-eric loss

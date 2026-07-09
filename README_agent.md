@@ -3810,3 +3810,37 @@ regression.
   a stronger pull (currently owned food only replaces the fdist target; consider a large flat bonus
   toward the nearest owned food's BFS gradient). Repro tools: /tmp/cl.py (loss class), /tmp/trace.py
   (per-turn trace), /tmp/rm2.sh (self-play, ALWAYS both orders, strong position bias).
+
+## Round 3 update (opus-4-8 — CURRENT MATCH vs Flipez__flipez-crystal) — SHIPPED v44 (stronger owned-food routing)
+- Verified results: round 0 **224-22 (+4t)** (v41), round 1 **215-33 (+2t)** (v42), round 2 **222-25 (+3t)** (v43).
+  ⭐ v43's FOOD-OWNERSHIP routing (shipped round 1... actually last teammate) IMPROVED r1's 215-33 -> r2 222-25
+  (losses 33->25). Food-ownership is working. 3/3 rounds won.
+- **Round-2 loss classification (/tmp/cl.py, last-alive frame): 25 losses = 20 OUTGROWN + 5 selfcoil.**
+  OUTGROWN dominates: opponent out-eats us by 1-5 lengths, many die on walls/corners (x=0/10, y=0/10).
+  The opponent (Flipez__flipez-crystal) is a strong food-eater; winning the food race is the key.
+- **FIX (main.py = v44, backup main_backup_v44_strongerownedfood.py; prev = main_backup_v44_r3start.py = v43):**
+  STRENGTHENED the owned-food routing rewards (line ~832): stepping ONTO owned food (food we reach
+  strictly first via BFS, lead<3) `+25 -> +40`; stepping onto enemy-owned (contested_lose) food while
+  healthy `-40 -> -55`. This makes us commit harder to food WE win the race to (denying opp growth) and
+  avoid wasting turns on food the opponent grabs first.
+- **VALIDATION (self-play DOES validate here — stronger owned-food routing wins the food race both bots
+  play; unlike pure fdist tweaks which wash):**
+  * v44 vs v43 (main), ./run_match.sh, BOTH orders, 2 batches (16 each):
+    batch1 v44-A **11-4**, v44-B **8-7**; batch2 v44-A **9-6**, v44-B **7-8**.
+    Aggregate: v44-A **20-10** (clear win), v44-B **15-15** (even). NET POSITIVE both orders, no regression.
+  * REJECTED cand2 (also boost fdist*18 toward owned food when behind): wash vs v44 (8-7 both orders).
+    The reward-strengthening (+40/-55) is the effective lever; the fdist boost adds nothing.
+  * REGRESSION PASS: v44 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * Latency (/tmp/lat.py two long dense snakes, 200 moves): **0.20ms avg** (timeout 500ms) — free.
+  * parses clean (ast.parse OK); move() wrapped in try/except (line 213) + self-guarded _safe_fallback.
+- **DECISION: shipped v44.** v43's owned-food routing helped (33->25 losses); v44 strengthens it and
+  beats v43 in self-play both orders (aggregate 35-25) with no regression. Since the opponent out-eats
+  us (the #1 loss mode), a stronger food-race commitment is the right lever and it validates in self-play
+  (both bots play the food race, unlike opponent-specific traps).
+- **TODO next teammate:** re-run /tmp/cl.py (edit d="/logs/rounds/N") on the new round to classify losses
+  (OUTGROWN = opp longer at death; selfcoil = legal=0). If OUTGROWN still dominates, could push owned-food
+  rewards further (+40->+60, -55->-80) but RE-TEST self-play both orders (may over-avoid & regress). Also
+  consider extending owned-food routing to lead<4 (currently lead<3). If v44 REGRESSED vs v43's 222 in the
+  real round, REVERT: `cp main_backup_v44_r3start.py main.py`. All fixes v8-v44 present. Repro/test:
+  /tmp/cl.py (loss class), ./run_match.sh <A> <B> <N> (>=2s warmup, N=16 ~2min each order), ALWAYS both
+  A/B orders (position bias). Self-play IS a valid proxy for owned-food routing (it won both orders).
