@@ -4250,3 +4250,54 @@ regression.
   <A> <B> <N> (normal self-play regression check), ALWAYS both A/B orders (STRONG position bias).
   Repro/loss-class: /tmp/cl.py <round_dir> (W/L/T + per-loss US len/hp/head vs OP len). v48 (215-35)
   is the proven best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs MorganConrad__tantilla) — SHIPPED v50 (giant off-wall pull)
+- Verified results: round 0 **215-35** (v48), round 1 **212-38** (v49, reverted), round 2 **203-46 (+1t)** (v48).
+  ⚠️ Losses TRENDING UP (35->38->46). ⚠️ NOTE: this match is ROYALE mode (foodSpawnChance=15,
+  shrinkEveryNTurns=25, hazardDamagePerTurn=14) — but in practice NO hazards ever appear in the
+  logged games (games end before/without shrink; board never adds hazard cells). main.py ignores hazards.
+- **Root cause of ALL 46 round-2 losses (via /tmp/cl2.py, last-alive frame): balloon/compact SELF-COIL
+  while LONGER than the tiny opponent.** ALL 46 = our>=opp length (leads +5 to +12), 0 outgrown.
+  Loss lengths 7-56, mostly 14-25 (NOT ballooning to 40-90 — the v48 giant cap KEEPS us compact len
+  12-18 from t80-290, GOOD). Opponent stays TINY (len 3-9) & outlasts. Boards flood (13-28 food).
+- **DEEP TRACE (sim_233): the v48 GIANT FOOD-FLEE DRIVES the compact snake INTO CORNERS.** The cap
+  held len 16 from t80-294 (excellent) but the snake wall-crawled t287->t297: head (7,4)->(8,4)->
+  (9,4)->(10,4)[wall]->crawled up x=10 into corner (10,10) & self-coiled. WHY: `_giant` (lead>=3,
+  len>=10, food>=10) does `score += fdist*30` (flee food). On a flooded board the HIGH-fdist cells
+  are on the PERIMETER (far from food clusters), so fleeing food PULLS the giant toward walls/corners
+  -> wall-crawl self-coil. The anti-wall-crawl term (_wcw=6.0 @len15) was too weak to beat fdist*30.
+- **FIX (main.py = v50, backup main_backup_v50_giantoffwall.py; prev = main_backup_v48_giantboardgate.py = v48):**
+  Added, inside the anti-wall-crawl block (line ~698), a STRONG off-wall pull for `_giant` snakes:
+  `if _giant: score += dist_to_wall * 25.0`. This dominates the fdist*30 food-flee so a compact giant
+  fleeing food does NOT get driven into a corner. Also moved `_flooded`/`_giant` computation up to
+  before the anti-wall-crawl block (was defined later at line 782 -> would've been a NameError; the
+  later definition is now a harmless re-assign of the same values).
+- **VALIDATION:**
+  * ✅ REPRO FLIP: sim_233 t287/t288 (heads (7,4)/(8,4)): **v50 picks 'down' (interior, off wall);
+    v48 picks 'right' (toward the corner -> wall-crawl death).** /tmp/mk.py <sim> <turn> <out>,
+    /tmp/tm.py <bot> <state>. Direct proof v50 diverts the giant off the wall.
+  * ✅ ROYALE SELF-PLAY NO REGRESSION: v50 vs v48 (/tmp/rmr.sh, royale g=royale shrink25 hz14, BOTH
+    orders, 14 each): **7-7 as A AND 7-7 as B** (exactly even — the fix only fires when _giant/fleeing,
+    so normal royale play is unchanged).
+  * ✅ STANDARD SELF-PLAY NET-POSITIVE: v50 vs v48 (/tmp/rms.sh, standard, BOTH orders, 14 each):
+    v50-A **11-3**, v50-B **6-8** -> aggregate v50 **17** vs v48 **11**. Net positive (A-side decisive).
+  * ✅ vs passive.py FLOODED ROYALE: v50 **13-1**, v48 **13-1** (proxy SATURATED — can't distinguish,
+    real result is the true validator).
+  * ✅ REGRESSION PASS: v50 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v50.** Genuine fix: the giant food-flee was driving the (correctly-compact)
+  snake into corners on this stay-small flooded opponent (the exact round-2 loss mode). The off-wall
+  pull flips the wall-crawl repro, is net-positive standard self-play + even royale self-play, passes
+  regression. Higher upside than the losing-more static v48 (35->38->46 trend). Losses were TRENDING UP.
+- **⚠️ CONTINGENCY: if v50 scores WORSE than v48's 203 in the real round, REVERT to
+  main_backup_v48_giantboardgate.py (== v48).**
+- **TODO next teammate:** check /logs/rounds/3/results.json FIRST. If v50 regressed, revert to v48.
+  Re-run /tmp/cl2.py <round_dir> (loss class: our>=opp = selfcoil). If wall-crawl self-coils PERSIST
+  but DROP, could raise the `_giant` off-wall weight (25->35) but RE-TEST royale + standard self-play
+  both orders. The residual is the genuine DEEP multi-step coil (moderate len 14-18, last-free-choice
+  many turns before death, all one-step metrics equal — needs a SOFT multi-step self-sim using OUR OWN
+  scoring, never shipped). This opponent stays TINY & outlasts on a flooded royale board -> keeping
+  our snake COMPACT (giant cap, done) AND off walls (v50, done) is the whole game. Repro: /tmp/mk.py
+  <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>. Test: /tmp/rmr.sh <A> <B> <N> (ROYALE — matches
+  this match's mode), /tmp/rms.sh <A> <B> <N> (standard), vs passive.py (saturated proxy). ALWAYS both
+  A/B orders (position bias). Real result is the true validator.
