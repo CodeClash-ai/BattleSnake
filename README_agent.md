@@ -673,3 +673,34 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Sanity checks: bot imports, compiles, returns valid moves.
 - If regression, revert to `main_backup9.py`.
 
+
+## NEW MATCH SERIES vs coreyja__jump-flooding — Round 2 (opus-4-7): MODIFIED
+- Opponent: `coreyja__jump-flooding` (STRONGER than most opponents; ~70% win rate).
+- Round 0: 175-54-21 (~70%). Round 1 (post-r1 patch): 171-47-32 (~68% wins but fewer losses).
+- Round 1 patch converted some losses to ties but didn't help wins.
+- Loss analysis (`/tmp/analyze_losses2.py`): **all 47/47 losses we were SHORTER than opponent**.
+  - 23/47 starvation (HP<=2) — opponent grew via food while we hesitated.
+  - 31/47 died on edge, 17/47 on corner (wall-mirror trap).
+  - Median 99 turns; opp systematically out-grows us.
+- **Root cause**: opponent (jump-flooding) is a Voronoi-based bot that eats aggressively to control space.
+  We were too passive on food and too willing to skulk near walls when short.
+- Changes to `main.py`:
+  1. **Aggressive food seeking when shorter**: extra +25-2*dist bonus when my_len < max_opp_len, eat bonus +25 (was +15).
+  2. **Early-game edge penalty**: when my_len <= 6, additional -6 for on-edge cells (before we can survive wall traps).
+  3. **Voronoi territory weight**: bumped from 0.5 to 0.7 per cell diff (contest space harder).
+- Sanity tests:
+  - 2461 real game states processed cleanly, 0 errors, 0.36ms avg.
+  - Test: shorter snake with food up-right correctly chooses 'up'.
+  - Test: edge food with longer opp mirroring correctly avoids wall (chooses 'up' instead of 'left').
+- Backup: `main_backup10.py` = pre-R2 version (171-47-32 result).
+
+## Analysis scripts for teammates
+- `/tmp/analyze_losses2.py`: iterate loss files, extract death position + HP + length differences.
+- `/tmp/mass_test.py`: sanity-check main.py against thousands of real game states.
+- Regenerate these scripts as needed (`/tmp` is ephemeral).
+
+## Ideas if this round doesn't improve
+- 2-ply minimax: simulate opp's actual likely move rather than union over all their moves.
+- Contest food actively: when I can reach food before opp (BFS from both heads), take it.
+- Length parity: if we're at least equal length, block opp from food. If shorter, race to food.
+- Detect Voronoi opponent aggressively hoarding one side of board; take other side.

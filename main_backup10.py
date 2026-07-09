@@ -470,7 +470,7 @@ def _move(game_state):
         s += c["space"] * 1.0
         # Territory advantage (Voronoi): we want more of the board than opp
         terr_diff = c.get("my_terr", 0) - c.get("op_terr", 0)
-        s += terr_diff * 0.7
+        s += terr_diff * 0.5
         # Absolute low-territory penalty: if we have very few cells, we're getting boxed in.
         if c.get("my_terr", 999) < c["new_len"]:
             s -= 30
@@ -499,21 +499,15 @@ def _move(game_state):
         if want_food and c["food_dist"] is not None:
             # Closer food is better, but only if space margin is healthy
             if margin >= 3:
-                # Boost bonus significantly when we're shorter (need to catch up).
-                food_bonus = max(0, 45 - c["food_dist"] * 3)
-                if my_len < max_opp_len:
-                    food_bonus += max(0, 25 - c["food_dist"] * 2)  # extra urgency
-                s += food_bonus
+                s += max(0, 40 - c["food_dist"] * 3)
                 if c["eats"]:
-                    s += 25 if my_len < max_opp_len else 15
+                    s += 15
             elif margin >= 0 and c["food_dist"] < 5:
                 # Only chase food when close and space is at least survivable
-                s += max(0, 22 - c["food_dist"] * 3)
-                if my_len < max_opp_len and c["eats"]:
-                    s += 10
+                s += max(0, 20 - c["food_dist"] * 3)
         elif c["eats"] and my_health < 90:
             if margin >= 3:
-                s += 8
+                s += 5
         # CRITICAL HEALTH: strongly bias toward food. Prevents wandering-to-death.
         # my_health decreases 1/turn; if food_dist > my_health, we cannot survive
         # even in a straight line. Prioritize the closest reachable food.
@@ -550,10 +544,6 @@ def _move(game_state):
         on_edge = (cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1)
         if on_edge:
             s -= 3
-            # EARLY-GAME edge penalty: short snakes shouldn't skulk on walls unnecessarily.
-            # (Wall-mirror trap risk is compounded before we've grown large enough to survive it.)
-            if my_len <= 6:
-                s -= 6
             # Detect wall-chase trap: opp head on/near inner adjacent row/col.
             # NOTE: Even a SHORTER opponent can herd us into a corner where we die
             # from walls/self, so trap geometry matters more than head-to-head length.
