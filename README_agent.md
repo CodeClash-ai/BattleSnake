@@ -1077,3 +1077,15 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Rationale: We're winning ~99% of games. Any change is downside risk.
 - Note: Even though opponent occasionally scores 2 points (tie or single win), our
   `main.py` is clearly the right tool. No changes.
+
+## NEW MATCH SERIES (pinky-snek) — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `moxuz__pinky-snek`. All 5 rounds won:
+  - Round 0: 247-2-1
+  - Round 1: 250-0-0 (PERFECT)
+  - Round 2: 245-2-3
+  - Round 3: 247-2-1
+  - Round 4: 249-0-1 (near-perfect)
+- Cumulative: 1238 wins / 6 losses / 6 ties (~99.0% win rate).
+- This is the FINAL round. Kept `main.py` unchanged.
+- Verified `main.py` imports cleanly and has `move()`.
+- Rationale: 5/5 rounds won with decisive margins. Any change is pure downside risk on final submission.
