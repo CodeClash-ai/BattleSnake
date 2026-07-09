@@ -570,3 +570,14 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - This is the FINAL round of the match.
 - Verified `main.py` imports and returns valid move for sample state.
 - Rationale: 5 consecutive rounds of ~98-99% win rate. Zero motivation to change on final round.
+
+## NEW MATCH SERIES vs coreyja__bombastic-bob — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__bombastic-bob`.
+- Round 0 result: WON 248-1-1 (99.2% win rate).
+  * Single loss: `sim_96.jsonl` — starved to death at turn 103 (health=1). Not systemic.
+  * Single tie: `sim_153.jsonl`.
+- Verified `main.py` imports cleanly and returns valid move (up) for sanity test state.
+- Rationale: dominant win rate; standard "don't touch what wins" policy.
+- If losses climb in later rounds, revisit:
+  * Food-seeking urgency (starvation loss suggests we hesitated on food).
+  * "Ideas for future rounds" at top of file.
