@@ -2219,3 +2219,40 @@ regression.
   fully-active opponent. There is NO loss mode to fix — the only non-wins are 3 forced pursuit-trap
   ties. Prior teammates exhaustively confirmed self-play can't validate opponent-specific anti-trap
   tweaks (every one washes/regresses). Changing a flawless bot only risks regression. FINAL round.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs Spenca__vulture-snake) — KEPT v26 (reverted pursuit-trap tweak)
+- ⚠️ NEW OPPONENT: **`Spenca__vulture-snake`** — GENUINELY COMPETITIVE / FULLY ACTIVE
+  (round 0 via /tmp/a0.py: opp latency avg 1.6ms, 0/7615 moves >=490ms = 0% timeouts;
+  avg game len 30.46 turns, max 107). NO latency free wins — pure out-play.
+- Verified round 0 result: **opus-4-8 249, Spenca__vulture-snake 1** (250 games). Won, 1 loss.
+- **Root cause of the single loss (game 7a0a7be3, /tmp/tr.py + /tmp/body.py): PURSUIT/INTERCEPT
+  corner trap.** Our LONGER len6 hp94 snake chased edge food (9,0) DOWN the right wall (x=10) while
+  a shorter/equal enemy at (9,2) was STRICTLY closer to it & raced to intercept -> we got cornered
+  at (10,2) & died t29. **Last-free-choice = turn 25** (head (9,4), food (9,0), OP at (9,2)): v26
+  picks 'right'->(10,4) into the wall corridor; 'up'->(9,5) (open board) was safe.
+- **ATTEMPTED FIX (a pursuit-trap flag, NOT shipped):** extend trap_food to flag edge food an enemy
+  is STRICTLY closer to even at len<7 when health>=60; soften its pull via _fw on the want_food/len<12
+  branches; skip the _short_hungry dominant pull for trap food at health>=70; add `dist_to_wall * W`
+  bonus when chasing_trap & health>=60 to steer off the wall.
+  * ✅ REPRO PASS: at t25 the fix flips v26's 'right' -> 'up' (escapes the corner) at W=1.5 and W=3.0.
+    (repro: /tmp/state25.json; /tmp/testmove.py <bot> <state>; /tmp/dbg_main.py prints per-move scores
+    — the tie was tiny: up=730.0 vs right=731.0, the 1.0 gap was the residual trap-food pull.)
+  * ❌ **SELF-PLAY REGRESSION both weights:** new vs v26 (40+40, BOTH orders): W=3.0 combined 34 vs 40;
+    W=1.5 combined 33 vs 41 (new as A 15, as B 18-19). The anti-wall-crawl bonus over-restricts normal
+    play. Consistent with ALL prior teammates: food/edge scoring tweaks regress self-play, and
+    self-play CANNOT reproduce/validate the opponent-specific pursuit trap.
+  * REGRESSION PASS (both weights): fix vs opp_straight = 10-0 as A AND 0-10 as B.
+- **DECISION: REVERTED to v26** (main.py == main_backup_v26_tiefix4.py, the proven 249-1 winner).
+  The fix provably flips the exact loss repro but regresses self-play (the only validation proxy for
+  this active opponent), and the loss is a rare (1/250) hard pursuit trap. Not worth the regression
+  risk on a bot at 99.6%. REGRESSION PASS confirmed: main.py (v26) vs opp_straight = 10-0 / 0-10.
+- **TODO next teammate:** re-run /tmp/a0.py (edit d="/logs/rounds/N") + /tmp/tr.py (edit target gid)
+  on the new round. If pursuit-corner losses PERSIST, the tweak above (in git-diff of this round; or
+  reconstruct: trap_food strict-closer flag + _fw softening + dist_to_wall bonus) is directionally
+  correct but needs to NOT regress self-play — try gating it MUCH more narrowly (only when the move
+  cell is ON a wall AND the enemy is within manhattan 3 AND behind us on the corridor), or as a pure
+  tie-break (weight <=0.5). The residual hard mode across ALL opponents is multi-step pursuit/corner
+  traps (last-free-choice ~4 turns before death, all safe moves equal one-step space) — needs
+  territory/multi-step lookahead validated vs the REAL opponent, NOT self-play. Repro: /tmp/mkstate.py
+  <turn> (game 7a0a7be3), /tmp/testmove.py <bot> <state>, /tmp/body.py (body dump). Test: /tmp/rm2.sh
+  <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
