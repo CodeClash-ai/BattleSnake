@@ -4063,3 +4063,59 @@ regression.
   <N> (flooded vs passive.py — MUST stay ~10-2). Repro: /tmp/mk.py <sim> <turn> <out>, /tmp/tm.py
   <bot> <state>, /tmp/eval.py <state> (per-dir space/timed), /tmp/board.py <state> (ascii). ALWAYS
   both A/B orders (position bias). Self-play IS valid for this fix (won both orders); repro confirms it.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs jackisherwood__battlesnake-elon) — KEPT v48
+- Verified results ALL 4 rounds won: round 0 **231-18 (+1t)** (v44), round 1 **233-17** (v47),
+  round 2 **235-13 (+2t)** (v47), round 3 **241-8 (+1t)** (v48). ⭐ v48 (giant food-flee gated on
+  `_flooded=len(food)>=10`, shipped round 3) was the BEST result: losses fell 18->17->13->**8**.
+- **Round-3 loss classification (/tmp/cl.py, last-alive frame): ALL 8 losses = SELFCOIL**, our
+  snake LONGER than opp (leads +3 to +8), high health (67-100), self-coiling (legal=0). Sizes
+  len 14-35. Food counts at death: sim_178 f11/len14, sim_143 f11/len19, sim_181 f7/len29,
+  sim_241 f6/len35, sim_98 f4/len27, others f4-7.
+- **NEW FINDING: 2/8 losses (sim_178, sim_143) are the v48 GIANT FOOD-FLEE MIS-FIRING** on a
+  jackisherwood board that naturally accumulated 11 food (opponent stays tiny len5-6 -> food isn't
+  eaten -> board hits `_flooded>=10`). Our len14/19 lead-+8 snake then triggers `_giant` (line 775)
+  -> the flooded-opponent food-flee (fdist*30 + -1500 anti-eat + density avoidance) drives it AWAY
+  from food and INTO its own coil (sim_178 t127 head (7,8): v48 picks 'up' toward the top wall/coil;
+  a non-giant bot picks 'right' toward open board). The eremetic/gigantic flooded opponents (NOT in
+  this match) flood to 15-40 food; jackisherwood only reaches 10-14, so `_flooded>=10` catches it.
+  The other 6/8 losses have food 4-7 (giant cap OFF) = the documented genuine multi-step coil (no
+  one-step fix). Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/board.py <state>.
+- **Tuning experiments this round — ALL REJECTED (repro flips but self-play REGRESSES/washes):**
+  * v49 (raise `_flooded` threshold 10->13): FLIPS sim_178 repro ('up'->'right', escapes the coil).
+    But self-play vs v48 (3 batches of 16, BOTH orders): v49-A 10/8/8 vs v48 6/8/8; v49-B 6/6/5 vs
+    v48-A 10/10/11. AGGREGATE v49 **43** vs v48 **53** — NET-NEGATIVE (loses the B-side decisively).
+    Also vs passive.py flooded fsc40: v49(>=13) **9-1** vs v48 **10-0** (slight regress of the
+    flooded-opponent protection). REJECTED.
+  * v50 (gate `_giant` on `len(food)>=15 OR my_len>=18`, keeps flooded protection for big snakes):
+    FLIPS sim_178 (len14 exempted). But self-play vs v48 REGRESSED HARD: v50-A 7-9, v50-B 4-12 ->
+    aggregate v50 **11** vs v48 **21** (clear regression both orders). vs passive flooded 8-2 (< v48 10-0). REJECTED.
+  CONCLUSION: the giant food-flee mis-fire is a REAL bug (2/8 losses), but every attempt to gate it
+  either regresses normal self-play (v50) or is net-negative (v49). Self-play doesn't reproduce the
+  mis-fire scenario (both bots grow together -> board rarely hits 10-11 food with a huge lead vs a
+  tiny opponent), so it can't validate the fix and instead surfaces the cost of loosening the cap.
+  Per the iron ship-rule (repro flips AND self-play must NOT regress), do NOT ship.
+- REGRESSION PASS: main.py (v48) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **0.017ms avg, 0.038ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- main.py == main_backup_v48_giantboardgate.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v48) unchanged.** v48 just scored the BEST result of the match (241-8,
+  losses trending down every round). The 2/8 giant-cap mis-fire losses are a real bug, but both fixes
+  (v49 raise threshold, v50 add len gate) regress self-play (the only proxy — self-play can't
+  reproduce the tiny-opponent-food-accumulation mis-fire). No regression risk taken on the match's
+  best-scoring version. This is likely the FINAL round.
+- **TODO (future, if jackisherwood or a similar stay-tiny opponent recurs):** the giant food-flee
+  (`_giant`, line 775) mis-fires on boards that reach 10-14 food when the opponent stays tiny (food
+  accumulates). The fix needs to distinguish "eremetic/gigantic genuinely flooded (15-40 food, our
+  snake ballooning to 40-95)" from "jackisherwood normal game with 10-14 accumulated food, our snake
+  only len 14-19". Ideas that DIDN'T work (regressed self-play): raising `_flooded` to 13 (v49),
+  adding `my_len>=18` gate (v50). Better idea to try: gate `_giant` on the FRACTION of the board our
+  snake+food occupies (the true ballooning signal), OR only flee food when our snake is >~30% of the
+  board — validate ONLY if the repro flips AND self-play does NOT regress both orders (v49/v50 both
+  regressed). The other 6/8 losses are the genuine multi-step coil (no one-step fix — needs a SOFT
+  multi-step self-sim using OUR OWN scoring, never successfully shipped). Repro: /tmp/mk.py <sim>
+  <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/board.py <state>, /tmp/cl.py <round_dir> (loss
+  class), /tmp/tr.py <sim> <startturn> (per-turn trace). Test: /tmp/rm2.sh <A> <B> <N> (recreate:
+  ports 8001/8002, 7s warmup, grep "A/B is/was the winner"), /tmp/rmf15.sh <A> <B> <N> <fsc> vs
+  passive.py (flooded proxy), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over
+  >=3 batches). DON'T ship a self-play regression — v48 (241-8) is the proven best.
