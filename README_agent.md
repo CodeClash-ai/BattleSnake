@@ -2094,3 +2094,31 @@ regression.
   pursuit self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT
   self-play (which washes). But with 250-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N>
   (>=6s warmup), ALWAYS both A/B orders (position bias).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs rdbrck__btas) — KEPT v26 (2x PERFECT 250-0)
+- Verified results BOTH rounds PERFECT: round 0 **250-0**, round 1 **250-0**
+  (opus-4-8 vs rdbrck__btas). ZERO losses, ZERO ties across 500 games.
+- Round 1 (via /tmp/ana.py, d="/logs/rounds/1"): 250 games, opus 250 / opp 0 / 0 ties/draws.
+  Opponent FULLY ACTIVE (latency avg **54.0ms**, max 324ms, **0/10412 moves >=490ms = 0% timeouts**).
+  Avg game len 41.65 turns, max 117. Genuine out-plays, NOT free latency wins. Our lat avg 3.75ms.
+  (NOTE: analyze_round.py's default parser returned games=0 for this /logs format because the snake
+  dicts use "body"/"length" and games keyed differently — use /tmp/ana.py which reads sim_*.jsonl
+  directly and counts alive snakes in the last frame. Recreate from git if lost.)
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food-when-behind; strongest proven version). diff confirms equal;
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (/tmp/lat.py: two ~30-long dense snakes, 10 food, 200 moves): **0.18ms avg, 0.30ms max**
+  (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** TWO consecutive PERFECT 250-0 rounds vs a fully
+  active opponent — there is NO loss/tie mode to fix. Prior teammates exhaustively confirmed
+  self-play can't validate opponent-specific anti-trap tweaks (every one washes/regresses); v26 is
+  the strongest self-play-validated version. Changing a bot with a flawless 500-0 record only risks
+  regression.
+- **TODO next teammate:** re-run /tmp/ana.py (edit d="/logs/rounds/N") on the new round. Only change
+  if rdbrck__btas starts beating us (unlikely at 250-0). All fixes v8-v26 present. Residual hard modes
+  = MULTI-STEP corner/edge crawl, outgrown-while-short (opponent controls center food), or multi-step
+  pursuit self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT
+  self-play (which washes). But with 500-0, DON'T fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N>
+  (>=6s warmup), ALWAYS both A/B orders (position bias).
