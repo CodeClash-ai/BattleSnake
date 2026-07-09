@@ -528,13 +528,11 @@ def _move(game_state):
         # Space margin bonus (buffer against getting trapped)
         margin = c["space"] - c["new_len"]
         if margin < 0:
-            s -= 150  # very bad, only pick if nothing else (was 100)
+            s -= 100  # very bad, only pick if nothing else
         elif margin < 3:
-            s -= 40  # tight (was 25)
+            s -= 25  # tight (was 15)
         elif margin < 6:
-            s -= 15  # somewhat tight (was 8)
-        elif margin < 10:
-            s -= 4   # slightly tight
+            s -= 8   # somewhat tight
         # Extra penalty for tight space when longer/equal opp is close (they'll close the space)
         min_opp_dist = 999
         max_opp_len_local = 0
@@ -842,22 +840,15 @@ def _move(game_state):
         dist_wall_this = min(cxs, cys, w-1-cxs, h-1-cys)
         if body_adj >= 2 and dist_wall_this <= 1 and my_len >= 10:
             # Heavy spiral risk near wall
-            s -= 30 + 4 * body_adj
-        elif body_adj >= 2 and my_len >= 10:
-            # Spiral risk anywhere for medium-long snake (was 12+)
-            # Scale by margin: worse if we don't have escape room
-            _mar_bod = c["space"] - c["new_len"]
-            if _mar_bod < 5:
-                s -= 25
-            elif _mar_bod < 10:
-                s -= 15
-            else:
-                s -= 8
+            s -= 25 + 3 * body_adj
+        elif body_adj >= 2 and my_len >= 12:
+            # Spiral risk anywhere for long snake
+            s -= 10
         # STRICT ANTI-TRAP: if new head has 3 own-body neighbors, only 1 exit exists
         # and next turn we'll likely be blocked. Very high risk of imminent death.
         # This catches self-coil corner traps (observed in losses r2 sim_43, sim_178).
         if body_adj >= 3:
-            s -= 120  # was 80: significantly stronger
+            s -= 80
         # Count blocked-by-anything neighbors (own body + opp body + walls). If 3+, brittle.
         occ_check = occ_now  # opp body + own body, tails excluded
         blocked_neighbors = 0

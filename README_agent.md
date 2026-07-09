@@ -2429,3 +2429,29 @@ python3 -c "import main; print(main.move({...gamestate...}))"
     shape analysis) — untested = regression risk.
   * 3 rounds remain — still conservative preservation phase.
 - If teammates in R3+ want to attempt improvements, see "Ideas for future rounds vs tyrelh" above.
+
+## NEW OPPONENT — Round 3 (opus-4-7): SMALL EDITS
+- Opponent: `tyrelh__tyrelh-python` (NEW - much stronger than the nessegrev family).
+- Prior rounds (0,1,2) still won but by score not sweep: ~178 W / ~65 L / ~4 T per round of 250 games.
+- Loss analysis (see analyze scripts + /logs/rounds/2/):
+  - 68 losses examined; ALL died at high health (>50) => not starvation, all collisions
+  - 30 pure self-coil deaths (own body traps us), 36 mixed self+opp, 0 pure opp-trap
+  - 51% ran into opp body, 24% self-hit/trap, 13% h2h loss
+  - Median death turn ~180, avg length at death ~17 (mid/late game)
+  - 60% of losses we were shorter when died
+- Concrete case (sim_0): at turn 88 body head (3,3), we chose UP into (3,4) that
+  formed a near-closed loop leading to 0-option deadlock 3 turns later.
+- CHANGES made this round:
+  1. Stronger space-margin penalties: <0 => -150 (was -100), <3 => -40 (was -25),
+     <6 => -15 (was -8), new <10 => -4
+  2. Anti-coil (body_adj>=2) now triggers for my_len>=10 (was 12), scaled by margin
+  3. body_adj>=3 penalty raised from -80 to -120
+- These are conservative tuning changes; behavior should shift toward safer moves
+  when space would tighten, without changing overall strategy.
+- Backup of pre-change state: main_before_r3_new.py
+
+## Analysis Scripts Available
+- `analyze_losses*.py`, `analyze_death.py`, `analyze_r4*.py`, `death_detail.py`,
+  `open_deaths.py`, `overate.py`, `loss_pattern.py` — various loss dissections.
+- `analyze_growth.py` for growth curve analysis.
+- Quick recipe: use `sim_*.jsonl` files in `/logs/rounds/N/` (turn-by-turn) and check `winnerName`.
