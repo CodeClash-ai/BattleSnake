@@ -1144,3 +1144,42 @@ regression.
   /tmp/testmove.py <bot.py> (evaluates move on /tmp/state.json), /tmp/eval.py (per-direction
   flood/timed_space). Test tool: /tmp/rm2.sh (>=4s warmup); ALWAYS both A/B orders (position bias
   dominates 40-game runs — repro is the real validator, NOT self-play washes).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs ccSnake2018__ccsnake) — KEPT v18
+- Results so far: round 0 **232-16 (+2 ties)**, round 1 **228-21 (+1 tie)**. Both won, but
+  LOSSES GREW 16->21. Opponent FULLY ACTIVE (round 1 latency avg 42ms, 0/19552 >=490ms;
+  avg game len 78 turns, max 203). Pure out-play.
+- **Root cause of round-1 losses = SELF-TRAP at HIGH health (88-100), dying at corners/edges**
+  ((10,10),(0,0),(0,10),(10,6) etc). Almost all losses are our LONGER snake (len 11-15) coiling
+  itself into a corner pocket. NOT outgrown. (via /tmp/a1.py=analyze_round.py d="/logs/rounds/1".)
+- **DEEP TRACE of game e473ef9e (len15 dies (0,10)):** Last-free-choice = **turn 82**, head (2,8),
+  len13, hp92. Our body coiled x=0 (y1..8), opponent body forms a VERTICAL WALL at x=3 (y0..10).
+  We're in a 3-wide strip (x=0,1,2). Only 2 legal moves: (2,9)['up'] and (1,8)['left'], BOTH show
+  space=100/timed=86 (trap forms as we advance UP into the top pocket -> collapses to 7 at t83).
+  Bot picks (2,9)['up'] into the pocket; (1,8) or heading DOWN toward tail/open end was survival.
+  Repro saved: /tmp/state82.json (also 84,85,88). Test: python3 /tmp/testmove.py main.py.
+- **WHY 'up' wins: (2,9) scores 550.9 vs (1,8) 517.7 — a 33pt gap NOT explained by tail-follow.**
+  space/timed/contested nearly identical (cs 8 vs 7). Investigated aggression (edist*2.0 toward
+  enemy at x=3) — tried disabling it on walls / weakening 2.0->0.4 AND boosting tail-follow
+  (0.35->1.5, threshold 15->10) — **NONE flipped the repro** (still 'up'). The 33pt source is
+  elsewhere in scoring; ran out of steps to isolate it (use /tmp/dbg2.py which prints per-cell
+  sp/ts/cs/score — add a breakdown of EACH score term to find the 33pt component).
+- **DECISION: REVERTED to v18** (main.py == main_backup_v18_pocketfix.py, proven 232-16 / 228-21
+  winner). My tweaks did not flip the repro and I could not run full self-play validation in the
+  remaining steps. No unvalidated regression risk taken on a bot winning every round.
+- **TODO next teammate (HIGH VALUE — the loss mode is clear & repro'd):**
+  1. Instrument /tmp/dbg2.py to print EACH score term separately for (2,9) vs (1,8) on
+     /tmp/state82.json — find which term gives (2,9) its +33 (likely max_timed/max_space bonus,
+     h2h, or center pull). Neutralize it so we prefer moving toward the OPEN end of a strip.
+  2. The general fix: when in a NARROW strip bounded by enemy body on one side + own body on the
+     other, and one direction leads to a closed (wall) end while the other leads to the open end,
+     STRONGLY prefer the open end. A cheap proxy: prefer the move with LARGER *static* flood-fill
+     (all bodies incl. tails as obstacles) — at t82 (1,8) vs (2,9) static space likely differs
+     (the pocket end is smaller). Static flood ignores the over-optimistic tail-vacate that makes
+     both look like 100. Add a static-space term to scoring / survivable().
+  3. Multi-step self-sim (main_backup_v15_multistep.py) is the "correct" fix but regressed
+     self-play before (too conservative) — make it a SOFT penalty, not a filter.
+  Repro tools: /tmp/getstate.py (edit target/want, saves /tmp/stateN.json), /tmp/eval.py
+  (per-dir flood/timed), /tmp/testmove.py <bot>, /tmp/dbg2.py, /tmp/trace.py & /tmp/trace2.py
+  (board dumps). Test: /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders. analyze_round.py: edit
+  d="/logs/rounds/N". Backup of this round's start: main_backup_v18_r1.py (== v18).
