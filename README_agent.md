@@ -1089,3 +1089,18 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - This is the FINAL round. Kept `main.py` unchanged.
 - Verified `main.py` imports cleanly and has `move()`.
 - Rationale: 5/5 rounds won with decisive margins. Any change is pure downside risk on final submission.
+
+## NEW MATCH SERIES vs coreyja__amphibious-arthur — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `coreyja__amphibious-arthur` (same author family as `bombastic-bob`, `devious-devin`, `improbable-irene`, `coreyja-rs`).
+- Round 0 result: WON **243/5/2** (~97.2% win rate). Verified via `/logs/rounds/0/results.json`.
+- 5 losses (sim_128, sim_211, sim_26, sim_48, sim_65) — ALL long-game (197-367 turns) late-game self-coil scenarios.
+- 2 ties (sim_2, sim_57).
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale: 97.2% win rate on Round 1. All losses are 200+ turn edge cases (late-game self-trap after both snakes grow long).
+  Fixing such deep-lookahead scenarios historically requires risky changes (see graeme-hill and jump-flooding rounds
+  where similar edits produced regressions). Not worth the risk on Round 1.
+- Prior coreyja opponents all dominated (devious-devin: 178-0, improbable-irene: 188-0, bombastic-bob: 1243-5-2, coreyja-rs: 192-0).
+- Teammates: If losses climb in later rounds, focus on long-game self-coil detection:
+  * Check if `_flood_fill_full` limit at line ~302 is `w*h` (it should be after zacpez R3 fix).
+  * Consider adding "anti-coil" heuristic: penalize moves whose reachable region is bordered mostly by own body (see Spenca R4 future ideas).
+  * Look at loss files listed above for turn-by-turn patterns before death.
