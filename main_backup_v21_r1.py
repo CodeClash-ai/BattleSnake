@@ -315,7 +315,6 @@ def _choose_move(game_state):
             "contested_space": contested_space,
             "timed_space": timed_space,
             "tail_reachable": tail_reachable,
-            "reaches_food": eating_now,
         })
 
     if not candidates:
@@ -348,28 +347,12 @@ def _choose_move(game_state):
     # an EQUAL-length H2H is at worst a TIE, and the enemy may not even move there.
     # When we are short & hungry, treat equal-length-h2h survivable moves as usable
     # (still exclude moves where a strictly LONGER enemy could take the cell = real loss).
-    # TIE FIX (jump-flooding round 1: 53 ties, mostly turn ~6 equal-len H2H at high
-    # health). A WIN >> a TIE, so NEVER voluntarily take an equal-length H2H when a
-    # genuinely safe move with adequate space exists. Only relax when we are truly
-    # hungry (low health) OR when every safe move is inadequate (would self-trap/flee
-    # into a tiny pocket) -> then a possible tie beats a certain loss/starvation.
-    _lead0 = my_len - max((e["len"] for e in enemies), default=0)
-    _shungry = my_len < 8 and (health < 80 or _lead0 < 1)
-    # is there a safe (non-h2h) move with real breathing room?
-    _safe_ok = [c for c in safe if c["space"] >= min(my_len, 4)]
+    _shungry = my_len < 8 and (health < 80 or (my_len - max((e["len"] for e in enemies), default=0)) < 1)
     if _shungry:
         eq_ok = [c for c in candidates
                  if c["loses_h2h"] and c["h2h_len"] == my_len and c not in safe]
         # keep only survivable-ish ones (won't self-trap)
         eq_ok = [c for c in eq_ok if c["space"] >= min(my_len, 4)]
-        # TIE FIX (jump-flooding round 1: 53 ties, mostly turn ~6 equal-len H2H at
-        # HIGH health). A WIN >> a TIE. If a genuinely safe move with adequate space
-        # exists AND we are healthy, ONLY accept an equal-H2H move when it reaches
-        # food (real growth benefit); otherwise avoid the voluntary tie. When there
-        # is NO adequate safe move (would flee into a tiny pocket / starve later),
-        # keep the equal-H2H moves (a possible tie beats a certain loss/starvation).
-        if _safe_ok and health >= 85:
-            eq_ok = [c for c in eq_ok if c.get("reaches_food")]
         if eq_ok:
             pool = safe + eq_ok if safe else (candidates if not eq_ok else eq_ok + candidates)
 

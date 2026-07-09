@@ -1573,3 +1573,52 @@ regression.
   all prior fixes (v8-v20: timed_space, anti-squeeze, tail-follow, wall-pin, food-race, H2H-trap,
   corner-food, pocket, anti-wall-crawl) are still present. Repro: /tmp/getstate.py (edit target/want),
   /tmp/testmove.py <bot>. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__jump-flooding) — SHIPPED v22 (TIE fix)
+- Verified results: round 0 **244-4 (+2t)** (v21 shipped), round 1 **197-0 (+53 TIES!)**
+  (opus-4-8 vs coreyja__jump-flooding). BOTH rounds won; v21 fixed the starvation LOSSES
+  (round 1 had 0 losses) BUT round 1 had **53 TIES** (up from 2). Ties are 0 points — worth
+  converting to wins.
+- Opponent FULLY ACTIVE (round 1 latency avg 1.0ms, 0/2082 moves >=490ms = 0 timeouts).
+  Avg game len 8.33 turns (SHORT — games end fast in H2H). Our latency avg 19ms (process
+  overhead; actual compute 0.012ms via /tmp/lat.py).
+- **Root cause of the 53 ties = VOLUNTARY EARLY EQUAL-H2H (v21 over-corrected).** Via
+  /tmp/ties.py on /logs/rounds/1: 33/53 ties ended at turn 6-7, BOTH snakes len 4, HIGH
+  health (97/99), colliding head-on. Trace (game a84ffba0): both snakes marched toward the
+  center food, then straight at each other; at turn 5 US(4,7) OP(5,6) — v21 chose 'down'->(4,6)
+  = an equal-length H2H cell the enemy could also take -> mutual death TIE.
+- **WHY v21 did it:** v21's `_shungry = my_len<8 and (health<80 or lead<1)` fires on `lead<1`
+  even at health 97. It then ADDS equal-H2H moves to the pool + softens their penalty to -20,
+  so a perfectly healthy early-game snake VOLUNTARILY walks into a tie instead of stepping aside
+  to a SAFE move (left->(3,7) was open). An equal-H2H = a TIE (0 pts); a safe step = we survive
+  = chance to WIN. Avoiding the voluntary tie is strictly +EV.
+- **FIX (main.py = v22, backup main_backup_v22_tiefix.py; prev main = main_backup_v21_r1.py = v21):**
+  Kept v21's starvation logic (short+hungry still races equal-H2H food) but added a gate: when a
+  genuinely SAFE (non-h2h) move with adequate space exists AND health >= 85, keep an equal-H2H move
+  in the pool ONLY if it `reaches_food` (real growth benefit). At high health with a safe option,
+  don't voluntarily tie. Added `reaches_food` (=eating_now) to the candidate dict.
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent's straight
+  march):**
+  * /tmp/state_tie.json (a84ffba0 t5, hp97): **v22 picks 'left' (steps AWAY, avoids tie); v21
+    picks 'down' (into the tie).** /tmp/state_tie2.json (another symmetric tie config): v22 'left',
+    v21 'right' (into tie). Direct proof v22 avoids the voluntary ties.
+  * STARVATION STILL FIXED: /tmp/state.json (real v21 starve repro, hp72, food far): **v22 STILL
+    picks 'right' (races toward food)** — same as v21, unlike v20 which starved ('up'). The
+    health>=85 gate preserves v21's moderate-health food race.
+  * REGRESSION PASS: v22 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+  * Self-play vs v21 = WASH (position bias + many mutual-avoid draws, expected — self-play doesn't
+    reproduce the opponent's straight march into us): 11-9-20 as A, 8-12-20 as B. No regression;
+    no crashes; full-length games; v22 vs itself even (3-4-3).
+  * Latency (/tmp/lat.py two 30-long dense snakes): **0.012ms avg** — free.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v22.** Targets the exact round-1 tie mode (voluntary early equal-H2H at high
+  health) with a repro-proven fix that PRESERVES the v21 starvation fix (validated on both repros)
+  and has no regression. Converting ties -> potential wins is +EV.
+- **TODO next teammate:** re-run /tmp/a1.py (=analyze_round.py, edit d="/logs/rounds/N") + /tmp/ties.py
+  on the new round. If ties PERSIST, they may be later-game equal-H2H (not high-health-early) — check
+  the tie turn distribution & health. Could lower the health>=85 gate or also require the equal-H2H
+  move to have MORE space than the safe alternative. If losses REAPPEAR (starvation), the _shungry
+  food-race is intact; check /tmp/starve.py. All prior fixes (v8-v21) present. Repro tools:
+  /tmp/state_tie.json + /tmp/state_tie2.json (tie configs), /tmp/state.json (v21 starve repro),
+  /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders.
+  Repro is the real validator, NOT self-play washes.
