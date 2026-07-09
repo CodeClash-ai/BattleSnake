@@ -1845,3 +1845,26 @@ regression.
   equal-flood moves — a bias to move AWAY from a close pursuing enemy when in a semi-enclosed area.
   Validate ONLY via the repro flipping to 'up'/'left' AND self-play NOT regressing both orders
   (/tmp/rm2.sh, >=6s warmup). Do NOT ship a hard filter (breaks normal play — verified this round).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs zacpez__scape-goat) — KEPT v24 (round 3 PERFECT 250-0)
+- Verified results: round 0 **250-0**, round 1 **250-0**, round 2 **249-1**, round 3 **250-0**
+  (opus-4-8 vs zacpez__scape-goat). 4/4 rounds won; **999-1 total** across 1000 games.
+- Round 3 (analyze_round.py, d="/logs/rounds/3"): 250 games, opus 250 / opp 0 / 0 draws.
+  Opponent FULLY ACTIVE (latency avg **0.2ms**, max 11ms, **0/9931 moves >=490ms = 0% timeouts**).
+  Avg game len 39.72 turns, max 104. Genuine out-plays, NOT free latency wins. Our compute
+  latency (worst-case) is ~0.02ms; the 18.55ms logged avg is process/network overhead.
+- main.py == main_backup_v24_tiefix3.py (v24 = full fix stack: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v24; strongest proven version). diff confirms equal; parses clean (ast.parse OK).
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v24) unchanged.** Round 3 scored a PERFECT 250-0 against a fully active
+  opponent — there is NO loss/tie mode to fix. The only loss all match (round 2 game e6236716) is a
+  hard multi-step PURSUIT self-trap where the last-free-choice has all moves at equal flood=110/
+  contested=107 (provably no one-step fix); prior teammates' pursuit-sim experiments flagged EVERY
+  move (too pessimistic for a hard filter) and all multi-step sims regress self-play. Changing a bot
+  with a flawless 250-0 result only risks regression.
+- **TODO next teammate (likely FINAL round):** re-run analyze_round.py (edit d="/logs/rounds/N") on
+  the new round. Only change if zacpez__scape-goat starts beating us (unlikely at 250-0). All fixes
+  v8-v24 present. Residual hard mode = multi-step pursuit/corridor self-trap (needs a careful SOFT
+  penalty, not a hard filter — see round 3 notes & /tmp/state31.json repro). But with 250-0, DON'T
+  fix what isn't broken. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders.

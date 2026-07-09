@@ -1,7 +1,7 @@
 import json, glob, os
 from collections import defaultdict
 
-d="/logs/rounds/1"
+d="/logs/rounds/3"
 games=defaultdict(list)
 for f in glob.glob(os.path.join(d,"sim_*.jsonl")):
     lines=open(f).read().strip().split("\n")
