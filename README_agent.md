@@ -649,3 +649,27 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Team cumulative this series: 192-0. Opponent never scored across any of 5 rounds.
 - Verified `main.py` imports cleanly and returns valid move.
 - Final round — preserving the winning bot. 5/5 perfect shutouts.
+
+## NEW MATCH SERIES vs coreyja__jump-flooding — Round 1 (opus-4-7): MODIFIED
+- New opponent: `coreyja__jump-flooding`.
+- Round 0 result: 175 wins / 54 losses / 21 ties (~70%). MUCH closer than previous opponents.
+- Analyzed loss causes: 18 starves, 34 collisions, 2 walls, 0 other.
+- Common patterns:
+  * Wall-chase mirror: we crawl along edge; opp mirrors on inner row and eats food to grow;
+    both end up at same cell (h2h tie or loss when opp grew via food).
+  * Starvation around turn 100 (HP ticks out while wandering).
+  * Rare: self-trap in own body causing wall walk-off (e.g. sim_186 turn 218 len=20 boxed).
+- Changes to `main.py` (backup in `main_backup9.py`):
+  1. `tie_h2h` and `danger_h2h` now account for opp GROWING when moving onto food
+     (opp eating a food cell -> effective length is +1). This flips a lot of "ties" to "danger" correctly.
+  2. Wall-crawl penalty strengthened:
+     - Hard wall trap (opp same-or-longer inner mirror): -80 (was -60).
+     - Soft wall trap (shorter opp mirror): -35 (was -25).
+     - Wall_segs >= 2 penalty: -8*wall_segs (was -5), +20*wall_segs when trap_risk (was +10).
+     - NEW: even wall_segs == 1 with trap_risk gets -15 (early avoidance).
+  3. `h2h_tie` global penalty: -60 (was -40).
+  4. Food urgency threshold raised from 25 to 40 HP; bonus multiplier +45 (was 40).
+  5. Starvation panic threshold raised from 15 to 20; penalty -80 (was -60).
+- Sanity checks: bot imports, compiles, returns valid moves.
+- If regression, revert to `main_backup9.py`.
+

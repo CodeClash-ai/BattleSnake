@@ -248,13 +248,9 @@ def _move(game_state):
     kill_h2h = set()  # cells where we WIN a head-to-head (strictly longer)
     for oid, info_ in opp_head_moves.items():
         for m_cell in info_["moves"]:
-            # If opp adjacent to food, opp may eat and grow -> len becomes length+1
-            eff_len = info_["length"]
-            if m_cell in food_set:
-                eff_len += 1
-            if eff_len > my_len:
+            if info_["length"] > my_len:
                 danger_h2h.add(m_cell)
-            elif eff_len == my_len:
+            elif info_["length"] == my_len:
                 tie_h2h.add(m_cell)
             else:
                 kill_h2h.add(m_cell)
@@ -477,7 +473,7 @@ def _move(game_state):
         if c["h2h_kill"]:
             s += 50
         if c.get("h2h_tie"):
-            s -= 60  # ties are bad but better than certain death
+            s -= 40  # ties are bad but better than certain death
         if c["near_larger_head"]:
             s -= 30
         # Big bonus for keeping tail reachable
@@ -511,15 +507,15 @@ def _move(game_state):
         # CRITICAL HEALTH: strongly bias toward food. Prevents wandering-to-death.
         # my_health decreases 1/turn; if food_dist > my_health, we cannot survive
         # even in a straight line. Prioritize the closest reachable food.
-        if my_health <= 40 and c["food_dist"] is not None and margin >= 0:
+        if my_health <= 25 and c["food_dist"] is not None and margin >= 0:
             # Huge bonus scaled inversely by distance; overrides most space concerns.
-            urgency = (45 - my_health)  # 5..45
+            urgency = (30 - my_health)  # 5..30
             s += max(0, urgency * 3 - c["food_dist"] * 2)
             if c["eats"]:
-                s += 45
+                s += 40
         # If we're going to starve unless we eat, food_dist == None means bad direction
-        if my_health <= 20 and c["food_dist"] is None:
-            s -= 80
+        if my_health <= 15 and c["food_dist"] is None:
+            s -= 60
         # Corner/edge food-chase penalty: don't take food into a wall trap.
         cx0, cy0 = c["cell"]
         if c["eats"]:
@@ -569,9 +565,9 @@ def _move(game_state):
                         trap_risk_hard = True
                         break
             if trap_risk_hard:
-                s -= 80
+                s -= 60
             elif trap_risk:
-                s -= 35  # shorter opp mirror; still risky (corner-death) but less severe
+                s -= 25  # shorter opp mirror; still risky (corner-death) but less severe
             # Corner is worse
             if (cx in (0, w - 1)) and (cy in (0, h - 1)):
                 s -= 15
@@ -586,12 +582,10 @@ def _move(game_state):
             elif cx == w - 1:
                 wall_segs = sum(1 for seg in my_body[:4] if seg[0] == w - 1)
             if wall_segs >= 2:
-                s -= 8 * wall_segs  # discourage prolonged wall crawl
+                s -= 5 * wall_segs  # discourage prolonged wall crawl
                 # If also being chased/mirrored, extra penalty
                 if trap_risk:
-                    s -= 20 * wall_segs
-            elif wall_segs >= 1 and trap_risk:
-                s -= 15  # early: prevent getting sucked into wall chase
+                    s -= 10 * wall_segs
         # Proactive edge avoidance: when a LONGER opponent is within "chase range",
         # penalize moves that reduce our distance to the nearest wall.
         # This addresses the "gets herded to wall then dies" loss pattern.
