@@ -3599,3 +3599,56 @@ regression.
   from the start OR region-level food-density steering (partly done) + multi-step coil-survival self-sim
   (never shipped). Test proxy: /tmp/rmf15.sh <A> <B> <N> 15 vs passive.py, BOTH orders, kill stale
   /tmp/bot* processes between runs (container gets resource-killed with N>15 + 8s sleep; use N<=15).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__gigantic-george) — KEPT v41
+- Verified results: round 0 **228-22** (v40), round 1 **226-24** (v40), round 2 **240-10** (v41).
+  ⭐ v41 (earlier+harder giant growth cap, shipped round 2) was a BIG improvement: 226-24 -> **240-10**
+  (losses cut 24->10, the BEST result this match). The earlier/harder cap worked.
+  Opponent `coreyja__gigantic-george` (same family as eremetic-eric): VERY LONG survival games
+  (t89-814), STAYS SMALL (opp len 4-22), FOOD-FLOODED board (foodSpawnChance=15 but board floods to
+  20-34 food because our giant snake leaves few free cells). It outlasts our bloated snake.
+- **Round-2 loss classification (/tmp/analyze2.py, last-alive frame): 10 losses, TWO groups:**
+  * **5 STILL-BALLOONING giants** (len 43-78, hp 96-100, opp 9-22): sim_141(52), sim_207(70),
+    sim_233(55), sim_24(43), sim_54(78). The cap SLOWS growth (sim_54 held at len 73 for 40 turns
+    t640-682 letting hp drop) but on a flooded board food is UNAVOIDABLE (every legal move lands on
+    food -> forced eating -> the -1500 anti-eat applies to ALL moves & can't discriminate). Bulk of
+    ballooning (len 18->57 in sim_54) happened at HIGH hp = genuinely forced eating.
+  * **5 COMPACT self-coils** (len 10-17, opp 4-10): sim_121(17), sim_178(16), sim_26(14), sim_46(11),
+    sim_203(10,hp37). These are NOT ballooning — the cap kept them COMPACT (good) but they self-coil
+    at compact size = the documented residual multi-step coil (all one-step metrics equal at the true
+    last-free-choice; no one-step fix; prior teammates confirmed greedy self-sim escapes & every
+    multi-step/scoring tweak regresses or fails the repro).
+- **Tuning experiments this round — ALL WASH vs v41 (no clear improvement, so NOT shipped):**
+  * v42 (`_giant` lead>=2/len>=8, caps EARLIER): vs passive.py flooded = 12-0/11-1 = **23-1**
+    (SAME as v41's 23-1). REGRESSION PASS vs opp_straight 8-0/0-8. But head-to-head is a length race
+    the real opponent doesn't play, and prior notes warn earlier caps regress normal races. No clear win.
+  * v42b (`_giant` lead>=3/len>=8, earlier size only): vs passive **23-1** (SAME). vs opp_straight
+    8-0/0-8 PASS. Head-to-head flooded vs v41 = 5-7 (A) + 6-6 (B) = aggregate v42b 11, v41 13 (slight
+    NEGATIVE/wash). No clear win.
+  * v43 (food-density radius 2->3, weight 12->20): vs passive **23-1** (SAME). No improvement.
+  CONCLUSION: the passive.py stay-small proxy is SATURATED at ~23-1 for ALL variants (can't
+  distinguish them), and head-to-head is a wash/slight-negative. The 5 ballooning losses are caused
+  by FORCED eating on a flooded board (no scoring change helps when every move lands on food); the 5
+  compact coils are the residual hard multi-step coil. Per the iron ship-rule (don't ship a
+  wash/regression on a proven bot), KEPT v41.
+- REGRESSION PASS: main.py (v41) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+  vs passive.py FLOODED (/tmp/rmf15.sh fsc15): **11-1 as A AND 0-12 as B = 23-1** (dominant).
+- main.py == main_backup_v41_giantcap4.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except (line 213) + self-guarded _safe_fallback (line 219) -> cannot time out.
+- **DECISION: kept main.py (v41) unchanged.** Round 2 (v41) scored the BEST result this match
+  (240-10, losses cut 24->10). Every cap/density tweak I tried (v42/v42b/v43) was a WASH vs the
+  saturated passive proxy and slight-negative/wash head-to-head. The residual losses are FORCED-eating
+  balloons (unfixable by scoring — every move lands on food) + compact multi-step coils (documented
+  hard mode). No regression risk taken on the match's best-scoring version.
+- **TODO next teammate (likely FINAL round):** re-run /tmp/analyze2.py (edit d="/logs/rounds/N") on
+  the new round to classify losses (balloon len>40 vs compact coil len<20). If BALLOONING persists,
+  the ONLY real fix is not per-move scoring (food is forced on a flooded board) but STRUCTURAL:
+  either (a) a multi-step coil-survival self-sim using OUR OWN _choose_move scoring K=6-8 steps as a
+  SOFT penalty (never successfully shipped — greedy escapes, must use real scoring recursively), or
+  (b) REGION-level food-density steering that avoids ENTERING food-dense quadrants early (before the
+  board floods). If COMPACT coils dominate, that's the documented residual (no one-step fix). The
+  passive.py proxy is SATURATED (~23-1 for all variants) — to distinguish tweaks you need a smarter
+  stay-small mimic OR trust the real-match result. Test: /tmp/rmf15.sh <A> <B> <N> 15 vs passive.py
+  (BOTH orders, N<=12 to fit container limits, kill stale /tmp/bot* between runs), /tmp/traj.py <sim>
+  <startturn> (growth trajectory), /tmp/analyze2.py (loss class). DON'T ship a wash/regression — v41
+  is the proven best (240-10).
