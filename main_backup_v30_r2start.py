@@ -549,9 +549,6 @@ def _choose_move(game_state):
             score += 6.0
         if c["timed_space"] == max_timed:
             score += 10.0
-        # Anti self-coil for VERY big snakes: bias toward the roomiest move.
-        if my_len >= 15:
-            score -= (max_timed - c["timed_space"]) * 1.0
         # Penalize tight spaces relative to our length (trap risk).
         if c["space"] < my_len + 2:
             score -= (my_len + 2 - c["space"]) * 5.0

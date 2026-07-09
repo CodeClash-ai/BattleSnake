@@ -2850,3 +2850,41 @@ regression.
   Repro tools: /tmp/mkstate.py <sim.jsonl> <turn> <out.json> (writes state, "you"=opus),
   /tmp/tm.py <bot> <state>, /tmp/board.py <sim> <turn> (ascii), /tmp/lfc.py <sim> (per-turn legal),
   /tmp/lossall.py (loss classification), /tmp/ana.py (win/loss/tie + game len). Repro is the real validator.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs OliverMKing__astar-snake) — SHIPPED v32 (very-big-snake anti-coil bias)
+- Verified results: round 0 **189-57 (+4t)** (v30), round 1 **193-50 (+7t)** (v30). Both won but ~50
+  losses/round (toughest opponent yet). Loss classes (round 1, /tmp/lossall.py d="/logs/rounds/1"):
+  **41 SELFTRAP** (self-coil, last frame legal=[]; 17 mid / 14 wall / 10 corner), **9 OUTGROWN**.
+  Big snakes (L10-23), HIGH health (76-100), often EQUAL/LONGER, coiling into a shrinking region.
+  Long games (avg ~146 frames, max 466) — near-full-board endgames (e.g. sim_100: both L23 at t210).
+- **Confirmed prior teammate's finding: `_greedy_minspace` (in /tmp/newbot.py) does NOT flip the
+  repro** (/tmp/tm.py /tmp/newbot.py /tmp/s154_122.json -> 'left', same as v30) — greedy sim escapes
+  the coil (plays optimally afterward). One-step flood/timed/static are ALL equal at the true
+  last-free-choice (~5-8 turns before death via wall-crawl); the trap forms as the body seals later.
+- **FIX (main.py = v32, backup main_backup_v32_bigcoil.py; prev main = main_backup_v30_r2start.py = v30):**
+  Added, right after the `timed_space == max_timed` bonus (~line 552): for `my_len >= 15`,
+  `score -= (max_timed - c["timed_space"]) * 1.0`. A graduated bias toward the ROOMIEST move for
+  VERY BIG snakes (exactly the self-coil loss population) — steers a large snake away from the tighter
+  (coiling) direction toward open board. Gated at len>=15 so it NEVER distorts normal/small-snake play.
+- **VALIDATION:**
+  * SELF-PLAY (net positive, NO regression, /tmp/rmq.sh 14 games each order, >=8s warmup):
+    v32 vs v30 = **7-7 as A AND (reverse) v32 8 vs v30 6 as B** -> combined v32 **15**, v30 **13**.
+    (The broader len>=11 graduated version /tmp/v31.py leaned NEGATIVE — 13 vs 15 — over-restricts;
+    the narrow len>=15 gate is neutral-to-slightly-positive and only fires in the coil endgame.)
+  * REGRESSION PASS: v32 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * Repro sanity: /tmp/s154_122.json still 'left' (the len>=15 gate doesn't fire there — that snake
+    was L13; the fix targets the L15+ endgame coils that dominate the losses).
+  * parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: shipped v32.** Narrow, self-play-net-positive (both orders) anti-coil bias for the
+  very-big-snake endgame that is the #1 loss mode (41/50 selftraps). Low-risk (only fires at len>=15).
+- **TODO next teammate:** re-run /tmp/lossall.py (edit d="/logs/rounds/N") + /tmp/ana.py on the new
+  round. If big-snake coil losses PERSIST: the residual is the genuine multi-step coil (last-free-choice
+  ~5-8 turns before death via wall-crawl down a column into a corner, e.g. sim_230 t53 head (2,7) went
+  DOWN the x=2 wall into the bottom-left corner). One-step tweaks flip it only if applied MANY turns
+  earlier. Options: (a) widen v32's gate to len>=13 but RE-TEST self-play both orders (len>=11 regressed);
+  (b) a real multi-step self-sim using OUR OWN scoring (NOT greedy — greedy escapes) to detect the coil
+  as a SOFT penalty (never built — the correct fix per all prior notes). 9/50 losses are OUTGROWN
+  (shorter) — territory/Voronoi food-ownership routing could help (validate vs REAL opponent, not
+  self-play). Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>, /tmp/board.py
+  <sim> <turn>, /tmp/lfc.py <sim> (per-turn legal). Test: /tmp/rmq.sh <A> <B> <N> (>=8s warmup, N<=14 to
+  fit 30s cmd limit), ALWAYS both A/B orders (position bias). Repro is the real validator.
