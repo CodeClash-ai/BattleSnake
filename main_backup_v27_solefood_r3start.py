@@ -408,7 +408,7 @@ def _choose_move(game_state):
                     # if the enemy picks other food we GROW and break the deadlock.
                     # Only allow it when it EATS food NOW (immediate growth) and no
                     # safe move also eats -> we're not creating a needless tie.
-                    if _lead0 < 0 and not any(c.get("reaches_food") for c in _safe_ok):
+                    if (_lead0 < 0 or (_lead0 <= 0 and len(food_set) == 1)) and not any(c.get("reaches_food") for c in _safe_ok):
                         eq_ok = [c for c in eq_ok if c.get("reaches_food")]
                     else:
                         eq_ok = []

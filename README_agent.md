@@ -2334,3 +2334,50 @@ regression.
   a bot's move on a saved state; set state's "you" to OUR opus snake, not the frame's default "you"
   which is the opponent's perspective). Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes;
   >=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs Spenca__vulture-snake) — REVERTED v27 -> v26
+- Verified results: round 0 **249-1**, round 1 **249-0 (+1t)**, round 2 **248-1 (+1t)** (v26),
+  round 3 **244-0 (+6 TIES)** (v27). ⚠️ **v27 (sole-food contest, shipped round 3) was NET WORSE
+  in POINTS: v27 scored 244 vs v26's 248 (round 2).** v27 eliminated the 1 round-2 loss but
+  created **6 ties** (each 0 pts) -> net -4 pts. Ties count as 0 to both players.
+- **Root cause of the 6 round-3 ties (via /tmp/tie4.py on /logs/rounds/3): v27's sole-food
+  contest gate creating GUARANTEED mutual-eat collisions.** In 5/6 ties the pattern is IDENTICAL:
+  at t9 BOTH snakes are len4/hp93 adjacent to the SOLE food at (5,5) — opus at (4,5) or (6,5),
+  Spenca at (5,6)/(5,4). v27's gate `_lead0 <= 0 and len(food_set)==1` fires -> opus contests
+  ('right'->(5,5)) while the enemy ALSO steps onto (5,5) -> mutual-eat -> TIE. (sim_142,32,69,80,
+  219 all this; sim_223 was a t41 wall-crawl tie.)
+- **THE TRADEOFF (both are 0 pts, but empirically v26 wins more):**
+  * v26 (FLEE sole food at lead==0): opponent eats it, grows, and SOMETIMES kills us later (the 1
+    round-2 loss sim_131: fled t9, opp grew L4->L5, hunted & killed us t20) — but often we SURVIVE
+    and go on to WIN. Net round-2: 248 pts.
+  * v27 (CONTEST sole food at lead==0): GUARANTEED mutual-eat collision = TIE every time the enemy
+    also races the food (which it does — symmetric). Net round-3: 244 pts (6 guaranteed ties).
+  The situation is a genuinely SYMMETRIC coin-flip (both equidistant from the sole food) — no
+  one-step move WINS it. Fleeing (v26) has variance/upside (chance to win); contesting (v27) locks
+  in a tie. EMPIRICALLY v26 (248) > v27 (244).
+- **FIX: REVERTED main.py to v26** (main.py == main_backup_v26_tiefix4.py; the v27 round-3 start is
+  main_backup_v27_solefood_r3start.py). Reverted line 411 from
+  `if (_lead0 < 0 or (_lead0 <= 0 and len(food_set) == 1)) and not any(...)` back to
+  `if _lead0 < 0 and not any(...)`.
+- **VALIDATION:**
+  * REPRO PASS: /tmp/tie_state.json (sim_142 t9, both len4, sole food (5,5)): **v26 (main.py) picks
+    'down' (FLEES -> avoids the tie); v27 picks 'right' (into (5,5) -> tie).** Direct proof the
+    revert avoids the 6 ties. (repro tools: /tmp/mkstate.py builds it, /tmp/testmove.py <bot> <state>.)
+  * REGRESSION PASS: main.py (v26) vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * SELF-PLAY: v26 (main.py) BEATS v27 **7-3, 0 draws** — confirms v26 >= v27, no regression.
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: reverted to v26.** v27's sole-food contest scored 4 fewer points than v26 (244 vs 248)
+  by trading 1 rare loss for 6 guaranteed ties. The sole-food race at equal length is a symmetric
+  coin-flip; fleeing (v26) has more upside than the guaranteed tie of contesting (v27). v26 is the
+  proven best-scoring version this match (248-1-1 round 2).
+- **TODO next teammate:** re-run the round parser (parse each /logs/rounds/N/sim_*.jsonl LAST line's
+  {"winnerName","isDraw"}; analyze_round.py's default returns games=0 for this format — use /tmp/tie4.py
+  style direct parse, or /tmp/tie3.py to dump last-board food/heads). If OUTGROWN-WHILE-SHORT losses
+  reappear (fled sole food -> opp grows -> hunts us), that is the hard residual tension: contesting
+  fixes the loss but creates guaranteed ties (v27 proved this is net WORSE in points). The real edge
+  needs TERRITORY/food-ownership lookahead OR better OUTGROWN-ENDGAME play (survive being hunted while
+  1 shorter) — both must be validated vs the REAL opponent, NOT self-play (which eats symmetrically &
+  washes/regresses per ALL prior notes). Do NOT re-add the sole-food contest (v27) — it is net worse.
+  All fixes v8-v26 present. Repro: /tmp/mkstate.py (edit sim/turn), /tmp/testmove.py <bot> <state>.
+  Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the
+  real validator.
