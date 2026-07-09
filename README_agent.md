@@ -946,3 +946,11 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 ### Debug tools
 - `/tmp/debug_state2.py` (reconstructable): patches score-print into main.py, prints per-candidate scores.
   Reproduce by: `python3 /tmp/find_losses.py` (find loss files), then load specific state.
+
+## NEW MATCH SERIES vs rdbrck__btas — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `rdbrck__btas`. Rounds 0-3: 250-0, 249-1, 249-1, 249-0-1(tie).
+- Team cumulative: 997-2-1 across 4 rounds (~99.6% win rate).
+- Only 1 tie in round 3 (sim_110, dual death at turn 109), and 2 total losses across all rounds.
+- Verified `main.py` imports cleanly and exposes `move()`.
+- Rationale unchanged: overwhelming dominance; regression risk >> upside.
+- The starvation fix from round 3 (DESPERATE HEALTH branch) is holding well.
