@@ -580,11 +580,11 @@ def _move(game_state):
                 if my_len < max_opp_len:
                     # BIGGER urgency: length gap matters
                     gap = max_opp_len - my_len
-                    food_bonus += max(0, 40 - c["food_dist"] * 2) + gap * 5
+                    food_bonus += max(0, 35 - c["food_dist"] * 2) + gap * 4
                 elif my_len == max_opp_len:
                     # Equal length - still important to eat so we dont fall behind.
                     # Especially against nbw-family opponents that systematically out-grow us.
-                    food_bonus += max(0, 30 - c["food_dist"] * 2)
+                    food_bonus += max(0, 25 - c["food_dist"] * 2)
                 s += food_bonus
                 if c["eats"]:
                     if my_len < max_opp_len:

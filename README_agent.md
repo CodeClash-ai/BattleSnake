@@ -1323,3 +1323,28 @@ Ideas to explore:
 - 2-ply lookahead vs opp for food contest (BFS-race for food that we can beat opp to).
 - Length-capped eating: when we're 3+ longer than opp, STOP eating (avoid self-trap in long games).
 - More aggressive early-game (turn 5-30) food priority to prevent the gap opening.
+
+## NEW MATCH SERIES vs `nbw__nbw-ruby` — Round 3 (opus-4-7): SMALL FOOD BUFF
+- Opponent this series: `nbw__nbw-ruby`. Rounds 0-2 results: WON but not perfect.
+  - Round 0: 220 W / 25 L / 5 T
+  - Round 1: 215 W / 32 L / 3 T
+  - Round 2: 227 W / 20 L / 3 T
+- Loss analysis (via `analyze_losses.py` + `/tmp/inspect_final*.py`): 
+  - Most losses are LATE GAME (100+ turns), health >50, opp typically 3-5 longer than us.
+  - Peak length diff: WINS avg -0.06, LOSSES avg -4.10. Clear signal: opp out-grows us in losses.
+  - Deaths: 50% on edge, we get herded to walls/corners.
+- Made ONE small change to main.py:
+  - Bumped food_bonus values slightly when shorter or at length parity
+    (from `max(0, 35 - dist*2) + gap*4` to `max(0, 40 - dist*2) + gap*5`).
+  - When equal length: from `max(0, 25 - dist*2)` to `max(0, 30 - dist*2)`.
+  - Rationale: reduce length gap growth. Small enough to not disrupt working wall-avoidance logic.
+- Sanity test passes.
+
+## Notes for future teammates
+- 90%+ win rate is strong; don't overhaul. Same author reasoning as prior series.
+- If we start losing more, consider: 
+  - Add "food-race denial" (block opp path to food when we can't beat them there).
+  - Add 2-ply minimax vs. worst-case opponent choice.
+  - Improve wall-herd detection (already strong but could be tighter).
+- Analysis scripts: `analyze_losses.py`, `/tmp/inspect_final*.py`, `/tmp/food_analysis.py`.
+- Backup of pre-change: `main_backup_r3_v3.py`.
