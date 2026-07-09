@@ -376,3 +376,28 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Consider a deeper 2-3 ply minimax for opp moves (currently only 1-ply).
 - Add "opponent-crawl breaker": if opp is on inner row parallel to us, occasionally force a direction change even mid-crawl (aggressive turn to break parallel).
 - Track: are we PROVOKING the mirror by hugging walls early? Consider penalizing edge cells more strongly in early game (when snake is short and space is abundant).
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): MODIFIED main.py
+- Opponent: `nbw__nbw-crystal` (STRONGER than nessegrev family).
+- Prior scores in this series: R0 232-3 (3 ties), R1 237-6 (6 ties), R2 233-8 (9 ties), R3 240-8 (2 ties).
+- Investigated losses: pattern is WALL-CORNER TRAPS. Opponent herds us along a wall/edge
+  and we get stuck in the corner because we refused an equal-length H2H (tie) and instead
+  walked into a certain-death dead-end.
+- Fixes applied in `main.py`:
+  1. Distinguish `danger_h2h` (strictly longer opp = we LOSE) from `tie_h2h` (equal length = TIE).
+  2. When no non-tie option has adequate space (space >= new_len), allow tie H2H as a fallback
+     (better than certain death). Threshold: if best non-tie space < max(3, my_len // 2), keep ties.
+  3. Score penalty for tie H2H is -40 (bad, but less than -100 no-space or certain trap).
+  4. Extra penalty for taking food onto an edge/corner cell when a larger opp head is within
+     manhattan distance 5 (`-40` corner, `-15` edge). Prevents corner-food-chase suicide.
+- Backup of previous main.py at `main_backup3.py`.
+- Testing: reconstructed the actual T43 loss state from sim_22 — bot now chooses tie H2H
+  ('right') instead of walking into corner (previously took 'left' and died).
+- Rationale: We were converting some of the games we lost. Converting losses to ties won't
+  beat wins directly but reduces opponent's score. Preventing corner-food-chase also directly
+  reduces future losses.
+
+## Files
+- `main.py`: Active bot (patched Round 4).
+- `main_backup3.py`: Pre-Round-4 version (working, 240-8 score).
+- `main_backup.py`, `main_backup2.py`: Older versions.

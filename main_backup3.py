@@ -186,17 +186,14 @@ def _move(game_state):
             "moves": possible,
         }
 
-    # Danger cells: cells an opponent might move into that would kill us (opp length > my_len for loss, == for tie)
-    danger_h2h = set()   # opp strictly longer: we lose
-    tie_h2h = set()      # opp equal length: mutual death (tie)
+    # Danger cells: cells an opponent might move into that would kill us (opp length >= my_len)
+    danger_h2h = set()
     kill_h2h = set()  # cells where we WIN a head-to-head (strictly longer)
     for oid, info_ in opp_head_moves.items():
         for m_cell in info_["moves"]:
-            if info_["length"] > my_len:
+            if info_["length"] >= my_len:
                 danger_h2h.add(m_cell)
-            elif info_["length"] == my_len:
-                tie_h2h.add(m_cell)
-            else:
+            if info_["length"] < my_len:
                 kill_h2h.add(m_cell)
 
     # Evaluate each possible move
@@ -249,9 +246,8 @@ def _move(game_state):
         food_dist = _bfs_distance(np, food, blocked_post, w, h)
 
         # H2H flags
-        is_h2h_death = np in danger_h2h  # strictly loses
-        is_h2h_tie = np in tie_h2h and np not in danger_h2h  # mutual death (tie) if no larger threat too
-        is_h2h_kill = np in kill_h2h and np not in danger_h2h and np not in tie_h2h  # only sure if no other threat too
+        is_h2h_death = np in danger_h2h
+        is_h2h_kill = np in kill_h2h and np not in danger_h2h  # only sure if no larger opponent could go there too
 
         # Adjacent to opponent head (potential H2H)
         near_larger_head = False
@@ -302,7 +298,6 @@ def _move(game_state):
             "food_dist": food_dist,
             "eats": np in food_set,
             "h2h_death": is_h2h_death,
-            "h2h_tie": is_h2h_tie,
             "h2h_kill": is_h2h_kill,
             "near_larger_head": near_larger_head,
             "tail_reachable": tail_reachable,
@@ -314,43 +309,21 @@ def _move(game_state):
     if not candidates:
         return {"move": "up"}
 
-    # Filter out lethal (losing) H2H if any alternative exists.
-    # Ties are NOT filtered here — they're preferable to certain death.
+    # Filter out lethal H2H if any alternative exists
     safe = [c for c in candidates if not c["h2h_death"]]
     if safe:
         candidates = safe
-
-    # If we have viable non-tie non-trap options, prefer them.
-    # A move is "viable" if space >= new_len (won't self-trap).
-    non_tie_viable = [c for c in candidates
-                      if not c["h2h_tie"] and c["space"] >= c["new_len"]]
-    if non_tie_viable:
-        candidates = non_tie_viable
-    else:
-        # No fully viable non-tie option. Consider all remaining candidates.
-        # If a non-tie option exists at all, prefer max-space ones there;
-        # but if all non-tie options have far less space than a tie, tying might be OK.
-        non_tie = [c for c in candidates if not c["h2h_tie"]]
-        if non_tie:
-            # Best non-tie space
-            best_nontie_space = max(c["space"] for c in non_tie)
-            # Only include ties if non-tie space is drastically small (likely certain death)
-            # e.g. non-tie best space < new_len / 2 -> tying is at least a tie (0 pts) vs loss.
-            if best_nontie_space < max(3, my_len // 2):
-                # keep all candidates (including ties)
-                pass
-            else:
-                candidates = non_tie
 
     # Prefer moves where our tail remains reachable (guarantees survival loop)
     tail_ok = [c for c in candidates if c["tail_reachable"]]
     if tail_ok:
         candidates = tail_ok
-    # Require enough space; prefer moves with space >= new_len, else max space
+    # Require enough space; prefer moves with space >= new_len (post-move length), else max space
     good_space = [c for c in candidates if c["space"] >= c["new_len"]]
     if good_space:
         candidates = good_space
     else:
+        # Choose max space
         max_space = max(c["space"] for c in candidates)
         candidates = [c for c in candidates if c["space"] == max_space]
 
@@ -366,8 +339,6 @@ def _move(game_state):
         s += c["space"] * 1.0
         if c["h2h_kill"]:
             s += 50
-        if c.get("h2h_tie"):
-            s -= 40  # ties are bad but better than certain death
         if c["near_larger_head"]:
             s -= 30
         # Big bonus for keeping tail reachable
@@ -398,20 +369,6 @@ def _move(game_state):
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 5
-        # Corner/edge food-chase penalty when a larger opp is close: don't take food into a trap.
-        cx0, cy0 = c["cell"]
-        if c["eats"]:
-            corner = (cx0 in (0, w-1)) and (cy0 in (0, h-1))
-            on_edge0 = (cx0 == 0 or cx0 == w-1 or cy0 == 0 or cy0 == h-1)
-            # Nearest opp head distance and length
-            for oid_, info__ in opp_head_moves.items():
-                oh__ = info__["head"]
-                dman = abs(oh__[0]-cx0)+abs(oh__[1]-cy0)
-                if info__["length"] >= my_len and dman <= 5:
-                    if corner:
-                        s -= 40
-                    elif on_edge0:
-                        s -= 15
         # Edge/wall penalty. Much stronger when a >=length opponent is on inner adjacent row/col
         # (mirror-chase trap along wall).
         cx, cy = c["cell"]
