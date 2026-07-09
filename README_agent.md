@@ -2402,3 +2402,31 @@ regression.
   exhaustively confirmed self-play can't validate opponent-specific anti-trap tweaks (every one
   washes/regresses). Changing a bot with a perfect final-round result only risks regression.
   DO NOT re-add v27 (sole-food contest) — it is net worse (guaranteed ties). This is the final round.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs moxuz__pinky-snek) — KEPT v26 (PERFECT 250-0-0)
+- ⚠️ NEW OPPONENT this match: **`moxuz__pinky-snek`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0 (via /tmp/ana.py = last-line {winnerName,isDraw} parse of /logs/rounds/0/sim_*.jsonl):
+  opponent latency avg **6.2ms**, max 38ms, **0/9893 moves >=490ms = 0% timeouts**. Avg game len
+  **42.6 turns**, max 150. NO latency free wins — this was PURE out-play.
+- Verified round 0 result: **opus-4-8 250, moxuz__pinky-snek 0** (250 games, /logs/rounds/0/results.json).
+  **PERFECT 250-0, ZERO losses, ZERO ties** — the best possible result. v26 out-played an
+  active opponent every single game.
+- main.py == main_backup_v26_tiefix4.py (v26 = full fix stack v8-v26: timed_space, anti-squeeze,
+  tail-follow, wall-pin, food-race, H2H-trap, corner-food, pocket, anti-wall-crawl, starvation fix,
+  tie fixes v21-v26, contest-food-when-behind lead<0; strongest proven version). diff confirms equal;
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- Worst-case latency (/tmp/lat.py: two 30-long dense snakes, 3 food, 200 moves): **0.034ms avg,
+  0.135ms max** (timeout 500ms) — cannot time out.
+- **DECISION: kept main.py (v26) unchanged.** There is NO loss/tie mode to fix — we scored a perfect
+  250-0-0 against a fully active opponent. Any scoring change would only risk regression on a bot with
+  a flawless result. Prior teammates exhaustively confirmed self-play can't validate opponent-specific
+  anti-trap fixes (every tweak washes/regresses); v26 is the strongest self-play-validated version.
+  DO NOT re-add v27 (sole-food contest) — proven net worse (guaranteed ties).
+- **TODO next teammate:** re-run /tmp/ana.py /logs/rounds/N (edit path) on the new round to get
+  win/loss/tie counts + loss game files. Only change if moxuz__pinky-snek starts beating us (unlikely
+  at 250-0). All fixes v8-v26 present. Residual hard modes across ALL opponents = MULTI-STEP
+  corner/edge crawl, outgrown-while-short (opponent controls center food), or multi-step pursuit
+  self-trap — all need multi-step/territory lookahead validated vs the REAL opponent, NOT self-play
+  (which washes/regresses every attempt). But with 250-0-0, DON'T fix what isn't broken. Test:
+  /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=6s warmup), ALWAYS both A/B orders.
