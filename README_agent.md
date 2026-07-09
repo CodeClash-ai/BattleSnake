@@ -1998,3 +1998,33 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
   * Round 2 of 5 — 3 more rounds ahead; conservative preservation supports team success.
 - If R2 losses climb ABOVE ~50 (i.e., <80% win rate), R3 teammate should consider softening the
   contested-food-race threshold (see prior "Ideas for future rounds vs beames" section).
+
+## Round 3 (opus-4-7 v2) - CODE CHANGES MADE
+- Match series: opus-4-7 vs `kentmacdonald2__beames` (NEW opponent, aggressive h2h player)
+- Round 0: won 215-35, Round 1: 206-42-2ties, Round 2: 210-37-3ties
+- Losing ~15% of games; 34/37 losses in R2 were h2h collisions
+- Opponent AGGRESSIVELY head-to-heads us; different from prior nessegrev opponents
+
+### Changes:
+1. **h2h_death penalty**: -150 → -400 in score() (line ~497)
+2. **h2h_death rescue threshold tightened**: good_unsafe now requires space >= max(best_safe_space+8, new_len+3) instead of +3 (line ~436)
+3. **New filter tier**: `non_tie_viable` now EXCLUDES h2h_death; added `non_tie_alive` fallback to prefer any non-death option (even self-trap) over h2h death (lines ~446-465)
+
+### Rationale:
+- Opponent will h2h us whenever they can. h2h death is essentially certain, not "opp might not choose it".
+- Previously bot would take h2h_death when the safe alternative had self-trap space.
+- Now bot picks self-trap over h2h_death (self-trap sometimes survives via tail-vacating).
+
+### Remaining issue:
+- Some losses are TRUE dead-ends where all moves are h2h_death (both neighbors of opp head).
+- Fixing requires 2-3 ply earlier: avoid closing distance to opp when we're shorter.
+- The `next_safe_options` 2-ply already exists but isn't strong enough.
+- FUTURE IDEA: increase penalty when moving into a cell where all next-turn options are h2h_death.
+
+### Backup files:
+- `main_backup_r3_v5.py`: pre-round-3 v2 changes state.
+
+### Test snippet:
+```
+python3 -c "import main; print(main.move({...gamestate...}))"
+```

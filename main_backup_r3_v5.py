@@ -433,7 +433,7 @@ def _move(game_state):
             unsafe = [c for c in candidates if c["h2h_death"]]
             best_safe_space = max(c["space"] for c in safe)
             # Only keep h2h_death options substantially better in space
-            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 8, c["new_len"] + 3)]
+            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 3, c["new_len"])]
             if good_unsafe:
                 candidates = safe + good_unsafe
             else:
@@ -441,26 +441,27 @@ def _move(game_state):
         else:
             candidates = safe
 
-    # If we have viable non-tie non-death non-trap options, prefer them.
+    # If we have viable non-tie non-trap options, prefer them.
     # A move is "viable" if space >= new_len (won't self-trap).
-    # CRITICAL: don't filter out h2h_death here in a way that ELIMINATES trap alternatives,
-    # since some opponents (like beames) aggressively h2h. We want to preserve at least
-    # one non-h2h-death option if one exists.
     non_tie_viable = [c for c in candidates
-                      if not c["h2h_tie"] and not c["h2h_death"] and c["space"] >= c["new_len"]]
+                      if not c["h2h_tie"] and c["space"] >= c["new_len"]]
     if non_tie_viable:
         candidates = non_tie_viable
     else:
-        # No fully viable non-tie non-death option. Prefer non-tie non-death even if trapped.
-        non_tie_alive = [c for c in candidates if not c["h2h_tie"] and not c["h2h_death"]]
-        if non_tie_alive:
-            candidates = non_tie_alive
-        else:
-            # All options are h2h_death or h2h_tie. Prefer ties over death.
-            non_death = [c for c in candidates if not c["h2h_death"]]
-            if non_death:
-                candidates = non_death
-            # else: all h2h_death, no choice
+        # No fully viable non-tie option. Consider all remaining candidates.
+        # If a non-tie option exists at all, prefer max-space ones there;
+        # but if all non-tie options have far less space than a tie, tying might be OK.
+        non_tie = [c for c in candidates if not c["h2h_tie"]]
+        if non_tie:
+            # Best non-tie space
+            best_nontie_space = max(c["space"] for c in non_tie)
+            # Only include ties if non-tie space is drastically small (likely certain death)
+            # e.g. non-tie best space < new_len / 2 -> tying is at least a tie (0 pts) vs loss.
+            if best_nontie_space < max(3, my_len // 2):
+                # keep all candidates (including ties)
+                pass
+            else:
+                candidates = non_tie
 
     # Prefer moves where our tail remains reachable (guarantees survival loop)
     tail_ok = [c for c in candidates if c["tail_reachable"]]
@@ -493,7 +494,7 @@ def _move(game_state):
         if c.get("my_terr", 999) < c["new_len"]:
             s -= 30
         if c["h2h_death"]:
-            s -= 400  # h2h loss; only pick if all safe options are traps
+            s -= 150  # h2h loss; only pick if all safe options are traps
 
         if c["h2h_kill"]:
             s += 50
