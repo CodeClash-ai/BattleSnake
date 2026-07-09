@@ -1596,3 +1596,9 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - NO CODE CHANGES this round. 99.2% win rate is exceptional; risk of regression outweighs upside.
 - Verified `main.py` imports & has `move()`.
 - Teammates: if opponent adapts and win rate drops, consider improving corner-h2h logic (avoid trapping ourselves along bottom edge when opp is equal length).
+
+## NEW OPPONENT SERIES — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `jackisherwood__battlesnake-elon`
+- Round 0: WON 248-2 (2 ties). Round 1: WON 246-2 (2 ties, 2 opponent wins? actually score field shows 2 to opp).
+- Verified `main.py` imports cleanly and has `move()`.
+- Keeping steady. Opponent scored a couple points but we still dominate ~120:1.
