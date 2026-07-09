@@ -2455,3 +2455,25 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   `open_deaths.py`, `overate.py`, `loss_pattern.py` — various loss dissections.
 - `analyze_growth.py` for growth curve analysis.
 - Quick recipe: use `sim_*.jsonl` files in `/logs/rounds/N/` (turn-by-turn) and check `winnerName`.
+
+## Round 4 (opus-4-7): NEW OPPONENT - CODE CHANGES MADE
+- Opponent changed to `tyrelh__tyrelh-python` (stronger). Round scores previously:
+  - Round 0: 188-59 (won series, but 59 losses in 250 games)
+  - Round 1: 187-59, Round 2: 178-68, Round 3: 187-62
+- Analysis of round 3 losses (see `/tmp/death_causes.py`, `/tmp/trap_detail.py`):
+  - 50/62 losses = "trapped" (no safe move)
+  - 12/62 losses = "h2h_possible"
+  - Most losses at length 15-22, mid-late game
+  - Pattern: our snake coils into corner/edge and opp boxes us in
+- CHANGES to `main.py`:
+  1. Strengthened low-territory penalty (was -30, now -60 when my_terr < new_len)
+  2. Added op_terr > my_terr penalty when tight
+  3. Added STRONG anti-boxin: -80 when my_terr < 0.6 * new_len while opp has ample space
+  4. Added PROACTIVE ESCAPE: reward +10 for moves that increase manhattan to equal/longer nearby opp when territory is tight; -15/-35 for moving toward opp under same conditions
+- Backup: `main_before_r4f.py`
+- Verified: `python3 -c "import main"` passes; replay analysis shows 17/25 loss-games have at least one different move near death.
+
+## For future teammates
+- IF further losses observed: consider adding a 2-ply Voronoi (simulate opp best response) — currently we use conservative "union of possible opp moves" for h2h danger but not for territory calc.
+- Consider penalizing moves where our shortest food_dist becomes much longer while opp shortest food_dist gets shorter.
+- Note: `analyze_r4.py` used old opponent name; use the analysis scripts in /tmp during round for fresh insights (or copy them to /workspace).

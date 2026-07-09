@@ -490,36 +490,8 @@ def _move(game_state):
         terr_diff = c.get("my_terr", 0) - c.get("op_terr", 0)
         s += terr_diff * 0.7
         # Absolute low-territory penalty: if we have very few cells, we're getting boxed in.
-        my_terr_c = c.get("my_terr", 999)
-        op_terr_c = c.get("op_terr", 0)
-        if my_terr_c < c["new_len"]:
-            s -= 60  # was -30: strong penalty for losing Voronoi below our body
-        # Additional penalty when opp controls MORE space than us
-        if op_terr_c > my_terr_c and my_terr_c < c["new_len"] + 5:
-            s -= (op_terr_c - my_terr_c) * 1.5
-        # STRONG anti-boxin: if my_terr is much less than half our length while
-        # opponent has ample space, we are getting cornered. Heavy penalty.
-        if my_terr_c < c["new_len"] * 0.6 and op_terr_c > c["new_len"]:
-            s -= 80
-        # PROACTIVE ESCAPE: when equal/longer opp is close and territory shrinking,
-        # reward moves that INCREASE manhattan distance to that opp.
-        # This helps break out of trap-in-progress patterns before they close.
-        for _oidX, _infoX in opp_head_moves.items():
-            if _infoX["length"] < my_len:
-                continue
-            _ohX = _infoX["head"]
-            _dmanX_before = abs(_ohX[0]-my_head[0]) + abs(_ohX[1]-my_head[1])
-            _dmanX_after = abs(_ohX[0]-c["cell"][0]) + abs(_ohX[1]-c["cell"][1])
-            # Only act when opp is fairly close (within 5) and our territory margin is tight
-            if _dmanX_before <= 5 and my_terr_c < c["new_len"] + 6:
-                if _dmanX_after > _dmanX_before:
-                    s += 10  # escape opp proximity
-                elif _dmanX_after < _dmanX_before:
-                    # moving into the trap
-                    s -= 15
-                    # Extra penalty if we're already tight AND getting closer
-                    if my_terr_c < c["new_len"] + 2:
-                        s -= 20
+        if c.get("my_terr", 999) < c["new_len"]:
+            s -= 30
         if c["h2h_death"]:
             s -= 400  # h2h loss; only pick if all safe options are traps
 
