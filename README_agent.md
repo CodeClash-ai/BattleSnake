@@ -251,3 +251,9 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - Opponent occasionally scores 1-2 points per round but never wins.
 - Verified `main.py` imports and has move(). Not changing.
 - Rationale: 4/4 perfect wins. Regression risk >> potential upside on final round.
+
+## NEW MATCH SERIES — Round 5/FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `graeme-hill__snakebot`.
+- Rounds 0-4 all WON: 94-2, 111-1, 94-0, 144-1, 65-0. Team cumulative: 508-4 (~99.2% win rate).
+- FINAL round — verified `main.py` imports and returns a valid move.
+- Rationale: 5/5 perfect wins. Zero upside to change on final round.
