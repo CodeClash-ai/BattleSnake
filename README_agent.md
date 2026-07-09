@@ -2292,3 +2292,45 @@ regression.
   NOT self-play (which eats symmetrically & washes/regresses). All fixes v8-v26 present. Repro:
   /tmp/mkt.py <turn> (game sim_247), /tmp/testmove.py <bot> <state>, /tmp/trace.py. Test: /tmp/rm2.sh
   <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs Spenca__vulture-snake) — SHIPPED v27 (sole-food contest)
+- Verified results: round 0 **249-1**, round 1 **249-0 (+1t)**, round 2 **248-1 (+1t)**
+  (opus-4-8 vs Spenca__vulture-snake). 3/3 rounds won. Opponent FULLY ACTIVE (0% timeouts,
+  avg game 34.5 turns). Pure out-play.
+- **Root cause of the round-2 loss (game sim_131) = OUTGROWN-WHILE-SHORT via fleeing sole
+  contested food.** At t9 both len4, the ONLY food (5,5) was a contested equal-H2H cell
+  (US(6,5), OP(5,6) both adjacent). v26's contest gate (`_lead0 < 0`) did NOT fire at lead=0,
+  so we fled ('down'), stayed len4 while OP ate & grew to len5, then lost the H2H at t20 (died (1,0)).
+- **KEY DISTINCTION found:** the round-2 LOSS (sim_131) had **exactly 1 food** on the board; the
+  round-2 TIE (sim_107) had **4 foods** (alternatives existed). So: contest the equal-H2H food at
+  lead=0 ONLY when it's the SOLE food (no alternative to grow from) -> fixes the loss WITHOUT
+  recreating the v25-style tie flood (which came from contesting when alternatives existed).
+- **FIX (main.py = v27, backup main_backup_v27_solefood.py; prev main = main_backup_v26_tiefix4.py):**
+  In the equal-H2H contest gate (~line 411), changed `if _lead0 < 0 ...` to
+  `if (_lead0 < 0 or (_lead0 <= 0 and len(food_set) == 1)) and not any safe move eats:`.
+  I.e. also contest at lead==0 when there is only ONE food on the board.
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent racing us):**
+  * LOSS repro (/tmp/loss_t9.json = sim_131 t9, 1 food): **v27 picks 'left' (eats -> breaks the
+    length deadlock); v26 picks 'down' (flees -> outgrown -> dies).** Direct proof v27 fixes it.
+  * TIE repro (/tmp/tie_us_t13.json = sim_107 t13, 4 foods): **v27 STILL picks 'down' (avoids the
+    tie), same as v26** — the sole-food gate does NOT fire when alternatives exist. No new ties.
+  * REGRESSION PASS: v27 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * SELF-PLAY: v27 vs v26 = **20-17-3 as A AND 17-20-3 as B** (WASH/position-bias, draws stayed
+    LOW at 3 -> the narrow sole-food gate does NOT create ties in self-play). No regression.
+  * Latency 0.026ms avg (timeout 500ms) — free. parses clean (ast.parse OK); move() try/except +
+    self-guarded _safe_fallback -> cannot time out.
+- **DECISION: shipped v27.** Narrow, repro-proven fix for the exact round-2 loss (outgrown while
+  short via fleeing SOLE contested food) that PRESERVES the tie-avoidance (only contests when the
+  food is the sole option) and has no self-play regression. Strictly better in expected points.
+- **TODO next teammate:** re-run the round parser (parse each sim_*.jsonl LAST line's
+  {"winnerName","isDraw"}; analyze_round.py default returns games=0 for this format) on the new
+  round to get win/loss/tie counts + the specific loss/tie game files. If outgrown-while-short
+  losses PERSIST with MULTIPLE foods (sole-food gate won't fire), the deeper fix is
+  TERRITORY/food-ownership lookahead (route to food WE reach first via BFS/Voronoi) validated vs
+  the REAL opponent NOT self-play (which eats symmetrically & washes). If TIES reappear, check
+  their food count -- if they had 1 food, the sole-food contest may be too eager (tighten). All
+  fixes v8-v27 present. Repro tools: /tmp/loss_t9.json (sim_131 t9, should pick 'left'),
+  /tmp/tie_us_t13.json (sim_107 t13, should pick 'down'), /tmp/testmove.py <bot> <state> (evaluates
+  a bot's move on a saved state; set state's "you" to OUR opus snake, not the frame's default "you"
+  which is the opponent's perspective). Test: /tmp/rm2.sh <A> <B> <N> (recreate from top notes;
+  >=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
