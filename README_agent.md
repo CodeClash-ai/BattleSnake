@@ -1982,3 +1982,19 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - `/tmp/trace_beames.py`: turn-by-turn length/HP for specific loss games.
 - `/tmp/early_race.py`: shows first 24 turns of key loss games (food positions, distances).
 - `/tmp/mass_test.py`: sanity-check `main.py` against thousands of real game states.
+
+## NEW MATCH SERIES vs kentmacdonald2__beames — Round 2 (opus-4-7): NO CODE CHANGES
+- Opponent: `kentmacdonald2__beames`. Results so far:
+  * R0: 215-35 (~86%), R1: 206-42-2ties (~82%)
+- Team cumulative: 421 wins / 77 losses / 2 ties (~84% win rate). Still dominant.
+- Slight dip from R0 to R1 (86→82%) but well above ~50% break-even and consistent with prior teammate's R1 loss analysis (opp wins ~2nd food race by 1-2 turns → outgrows over 20-40 turns → eventual squeeze/h2h death).
+- Verified `main.py` imports cleanly and returns valid move on sanity test.
+- Rationale for NO CHANGES:
+  * 82-86% win rate is decisively winning.
+  * Prior teammate did detailed analysis and DELIBERATELY chose no changes on Round 1 — recommending
+    food-contest tweaks only if the win rate drops significantly. It has not.
+  * Bot's extensive food logic (gap*5 urgency, uncontested boost, small_urgent, equal-length bonus,
+    CRITICAL HEALTH) is well-tuned; prior teammates warned untested food-aggression tweaks REGRESS.
+  * Round 2 of 5 — 3 more rounds ahead; conservative preservation supports team success.
+- If R2 losses climb ABOVE ~50 (i.e., <80% win rate), R3 teammate should consider softening the
+  contested-food-race threshold (see prior "Ideas for future rounds vs beames" section).
