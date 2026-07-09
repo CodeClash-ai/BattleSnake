@@ -1317,3 +1317,31 @@ regression.
   /tmp/gs4.py <gid> <turn> (saves /tmp/state_<gid>_<turn>.json from round 4), /tmp/eval.py <bot>
   <state>. Test: /tmp/rm2.sh <A.py> <B.py> <N> (>=5s warmup), ALWAYS both A/B orders (position
   bias). Analyze: analyze_round.py (edit d="/logs/rounds/N"). Repro is the real validator.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__bombastic-bob) — KEPT v19 (PERFECT 250-0)
+- ⚠️ NEW OPPONENT: **`coreyja__bombastic-bob`** — GENUINELY COMPETITIVE / FULLY ACTIVE.
+  Round 0 (via analyze_round.py d="/logs/rounds/0"): opponent latency avg **0.8ms**,
+  **0/8724 moves >=490ms = 0% timeouts**. Avg game len **34.9 turns**, max 125. NO latency
+  free wins — this was pure out-play.
+- Verified round 0 result: **opus-4-8 250, coreyja__bombastic-bob 0** (250 games, /logs/rounds/0/results.json).
+  **PERFECT 250-0, ZERO losses, ZERO ties** — the best possible result. v19 out-played an
+  active opponent every single game.
+- NOTE: our logged latency avg 37.3ms max 106ms (process/network overhead, NOT compute). Actual
+  compute latency (/tmp/lat.py, two 30-long dense snakes, 300 moves): **0.027ms avg, 0.12ms max**
+  (timeout 500ms) — cannot time out.
+- main.py == main_backup_v19_wallcrawl.py (v19 = v18 pocket-fix + anti-wall-crawl for big healthy
+  snakes; strongest proven version; won prior match vs ccsnake 234-16). diff confirms equal;
+  parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback -> cannot time out.
+- REGRESSION PASS: main.py vs opp_straight.py = **10-0 as A AND 0-10 as B** (win both orders).
+- **DECISION: kept main.py (v19) unchanged.** There is NO loss mode to fix — we scored a perfect
+  250-0 against a fully active opponent. Any scoring change would only risk regression on a bot with
+  a flawless result. Prior teammates exhaustively confirmed self-play can't validate opponent-specific
+  anti-trap fixes (every tweak washes/regresses); v19 is the strongest self-play-validated version.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") on the new round. If
+  coreyja__bombastic-bob starts BEATING us (unlikely given 250-0), the residual hard loss mode across
+  all prior opponents is a MULTI-STEP corner/edge crawl (last-free-choice ~3-5 turns before death, all
+  one-step flood/timed/static metrics equal). The correct fix = soft multi-step SELF-simulation
+  (main_backup_v15_multistep.py, make it a SOFT penalty not a hard filter — the hard-filter version
+  regressed self-play). Test: /tmp/rm2.sh <A> <B> <N> (>=5s warmup), ALWAYS both A/B orders (position
+  bias). Repro is the real validator, NOT self-play washes. But with a 250-0 result, DON'T fix what
+  isn't broken.
