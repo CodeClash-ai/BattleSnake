@@ -654,8 +654,7 @@ def _choose_move(game_state):
             nearest = min(enemies, key=lambda e: _manhattan(head, e["head"]))
             if my_len > nearest["len"] + 1 and health >= 35 and c["space"] >= my_len + 2:
                 edist = _manhattan(c["cell"], nearest["head"])
-                aw = 0.8 if _length_lead >= 5 else 2.0
-                score -= edist * aw
+                score -= edist * 2.0
 
         # TAIL-FOLLOW tie-breaker: for a very large, healthy snake, gently
         # prefer staying near our own tail so the body stays a compact,
@@ -663,8 +662,7 @@ def _choose_move(game_state):
         # only breaks ties, never overriding space/survival decisions.
         if my_len >= 12 and health >= 50 and not want_food:
             tdist = _manhattan(c["cell"], my_tail)
-            tw = 1.5 if _length_lead >= 4 else 0.6
-            score -= tdist * tw
+            score -= tdist * 0.6
 
         # When every food is a corner-trap lure, soften the pull so we don't
         # dive into the wall-crawl-to-corner death (still eat if health is low).

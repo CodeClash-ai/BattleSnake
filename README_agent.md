@@ -2678,3 +2678,49 @@ regression.
   /tmp/board.py <sim> <turn> (ascii board), /tmp/trace.py <sim> (per-turn legal moves), /tmp/death.py
   <sim> (final blocked neighbors). Test: ./run_match.sh <A> <B> <N> (N<=16 to fit 30s cmd limit,
   >=2s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs coreyja__amphibious-arthur) — SHIPPED v29 (coil-fix: lead-scaled aggression + tail-follow)
+- Verified results: round 0 **247-3** (v27), round 1 **246-4** (v28), round 2 **245-5** (v28).
+  3/3 won but losses GREW 3->4->5 despite v28's tail-follow@len>=12. Opponent FULLY ACTIVE (0%
+  timeouts), LONG games (avg ~91 turns, big snakes fill board). Pure out-play.
+- **Root cause of ALL 5 round-2 losses = LONG-GAME SELF-COIL TRAP while MUCH LONGER than opp.**
+  (via /tmp/ana.py + /tmp/death2.py + /tmp/freechoice.py): every loss our snake L13-18, high health
+  (84-100), MUCH longer than opp (L5-13), coiled into a pocket where ALL 4 neighbors = OUR OWN body
+  (legal=[]). Deaths at (2,6)/(10,3)/(7,5)/(2,4)/(5,8). NOT outgrown, NOT pursuit — pure self-coil.
+- **KEY: the AGGRESSION pull (line 656 `edist*2.0`) is complicit.** When we're FAR longer, aggression
+  lures the big snake toward the (harmless, much-shorter) enemy head, into a region where it coils.
+  The prior teammate found disabling aggression flips all repros but REGRESSED self-play (aggression
+  is a real edge vs an equal opponent). v28's tail-follow@0.6 was too weak to counteract.
+- **FIX (main.py = v29, backup main_backup_v29_coilfix.py; prev main = main_backup_v28_r2start.py = v28):**
+  Made both terms LEAD-SCALED so the self-play edge (modest lead) is preserved while the coil-lure
+  (huge lead) is removed:
+  * Aggression (line ~656): weight `2.0` normally, but `0.8` when `_length_lead >= 5` (far ahead ->
+    don't chase the harmless short enemy into a coil).
+  * Tail-follow (line ~664): weight `0.6` normally, but `1.5` when `_length_lead >= 4` (far ahead ->
+    stronger pull toward own tail/open region to stay a compact unwind-able coil).
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent-specific coil):**
+  * REPRO FLIPS: at the coil-commit turns (~death-5 to death-7) v29 flips v28's move toward OPEN space:
+    sim_45 t106/107 ->'down' (open), sim_107 t174/175 ->'up'/'right' (toward tail/open top-right, away
+    from the coil), sim_227 t129 ->'right', sim_208 t281 ->'left'. Verified via /tmp/board.py the flipped
+    direction is the open-board escape (e.g. sim_107 t174 head (5,5): v28 'down' into coil, v29 'up'
+    toward the open top-right where the tail sits).
+  * SELF-PLAY EVEN (no regression): v29 vs v28, BOTH orders (16 each): v29-A 7-8-1, v29-B 8-7-1 ->
+    combined 15-15. The lead>=5/>=4 gating keeps aggression full at modest leads (the self-play case)
+    so it does NOT regress, unlike the prior teammate's full aggression-gate (which regressed 19-24).
+  * REGRESSION PASS: v29 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v29.** Targets the ONLY loss mode this match (long-game self-coil while far
+  longer) by removing the aggression coil-lure + strengthening tail-follow ONLY at large leads, so it
+  flips the loss repros toward open space WITHOUT regressing self-play (the modest-lead aggression edge
+  is preserved). First fix to satisfy the iron ship-rule (repro flips AND self-play does NOT regress)
+  for this coil mode (v28's plain tail-follow was too weak; the prior aggression-gate regressed).
+- **TODO next teammate:** re-run /tmp/ana.py /logs/rounds/N (win/loss/tie + loss files) + /tmp/death2.py
+  <lossgame> + /tmp/freechoice.py <lossgame> + /tmp/board.py <game> <turn> on the new round. If self-coil
+  losses PERSIST: (a) lower the aggression-off / tail-follow-strong lead thresholds (>=5/>=4 -> >=3),
+  RE-TEST self-play both orders (too aggressive removal regresses — keep it even); (b) raise tail-follow
+  weight (1.5->2.0) at large lead. The residual deep mode is the multi-step coil where all one-step
+  metrics are equal at the true last-free-choice (~6 turns before death); the pursuit-aware flood-fill
+  (_enemy_reach/_pursuit_space in git history) is the "correct" metric but regressed self-play as-is
+  (needs narrow gating). Repro: /tmp/mkstate.py <sim.jsonl> <turn> <out.json>, /tmp/tm.py <bot> <state>,
+  /tmp/board.py <sim> <turn>, /tmp/lfc.py <sim> (last-free-choice turn). Test: /tmp/rm2.sh <A> <B> <N>
+  (N<=16 to fit 30s limit, >=8s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator.
