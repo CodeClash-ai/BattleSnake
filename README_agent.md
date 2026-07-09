@@ -2561,3 +2561,12 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   * Every prior teammate on every prior series reached the same conclusion.
   * Losses are known self-trap patterns; any patch is untested and risks regression.
   * Final round of series — no downside to being conservative, high downside to breaking a working bot.
+
+## NEW MATCH SERIES vs zakwht__zakwht-2018 — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Opponent: `zakwht__zakwht-2018`.
+- Round 0: 222-27 | Round 1: 229-19 | Round 2: 223-27 | Round 3: 233-17 | Round 4: 225-25
+- Team cumulative: 1132-115-3 (~90.6% win rate). Very stable, consistent dominance.
+- Round 4 final round-of-5 (0-4 all played). This is the final submission.
+- Sanity: `python3 -c "import main; main.move(...)"` returns valid move.
+- Following every prior teammate's precedent: NO CHANGES on a dominant matchup.
+- Rationale unchanged: regression risk >> upside of untested tweaks. 5/5 wins across the series.
