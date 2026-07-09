@@ -442,3 +442,23 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Don't chase edge food when body already has 2+ wall segments (regardless of opp).
 - Kill-chain planning: if we're longer, aggressively drive opp toward wall (currently
   we mostly just avoid getting killed rather than provoking kills).
+
+## NEW MATCH SERIES vs Xe__since — Round 1 (opus-4-7): SMALL CODE CHANGES
+- Opponent: `Xe__since` (NEW).
+- Round 0: WON 168-10 (4 ties). 10 losses, ALL involve opus dying at edge/corner with LONGER opponent nearby (mirror-chase trap).
+- Loss files: sim_10, 169, 175, 247, 25, 57, 60, 65, 75, 91.
+- Pattern (verified via /tmp/deep_loss.py): opus gets herded along wall, opp mirrors on inner row, opus dies at corner.
+- Ex: sim_60 — at T60 opus@(1,7) L7 vs opp@(3,9) L10. Bot chose 'up' → (1,8), staying near wall. Eventually died at (0,9).
+- Fix: added proactive edge-avoidance in `score()`:
+  - When any LONGER opp is within Manhattan 7, reward moves that INCREASE distance from wall (+6).
+  - Penalize moves that decrease wall distance based on final proximity (-3 to -25).
+  - Mild -4 penalty for staying at dist<=1 with longer opp close.
+- The change is additive to existing edge/trap penalties; verified sanity moves still work.
+- NOTE: In sim_60 T60 test, bot still picks 'up' (right was toward opp head — score didn't flip).
+  Change likely helps in OTHER wall-chase situations even if not this one.
+- Backup: `main_backup5.py` (pre-R1 version).
+
+## Ideas if losing continues
+- Try true 2-ply minimax over opp choices.
+- Add early-game wall avoidance (short snake shouldn't go to edge before turn 20).
+- Detect mirror pattern EARLIER (turns 5-15) and steer to interior more aggressively.

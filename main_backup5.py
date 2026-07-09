@@ -468,37 +468,6 @@ def _move(game_state):
                 # If also being chased/mirrored, extra penalty
                 if trap_risk:
                     s -= 10 * wall_segs
-        # Proactive edge avoidance: when a LONGER opponent is within "chase range",
-        # penalize moves that reduce our distance to the nearest wall.
-        # This addresses the "gets herded to wall then dies" loss pattern.
-        head_before = my_head
-        dist_wall_before = min(head_before[0], head_before[1], w-1-head_before[0], h-1-head_before[1])
-        dist_wall_after = min(cx, cy, w-1-cx, h-1-cy)
-        # Reward moves that INCREASE distance from wall when longer opp is close (chase avoidance).
-        # Penalize moves that stay near wall (dist<=1) when longer opp is within chase range.
-        longer_opp_close = False
-        for oid_pe, info_pe in opp_head_moves.items():
-            if info_pe["length"] < my_len:
-                continue
-            oh_pe = info_pe["head"]
-            dman_pe = abs(oh_pe[0]-my_head[0]) + abs(oh_pe[1]-my_head[1])
-            if dman_pe <= 7:
-                longer_opp_close = True
-                break
-        if longer_opp_close:
-            if dist_wall_after > dist_wall_before:
-                s += 6  # reward escape from wall
-            elif dist_wall_after < dist_wall_before:
-                if dist_wall_after == 0:
-                    s -= 25
-                elif dist_wall_after == 1:
-                    s -= 10
-                else:
-                    s -= 3
-            elif dist_wall_after <= 1 and dist_wall_before <= 1:
-                # Staying near wall with longer opp close -> mild penalty (encourages escape)
-                s -= 4
-
         # Second-order trap: even one step from a wall while opp mirrors, is risky
         # This especially matters when body is trailing along wall.
         # Check if my new body is aligned along the wall for 2+ segments AND opp of >= length is on inner row
