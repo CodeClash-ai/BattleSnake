@@ -3561,3 +3561,41 @@ regression.
   /tmp/rmf15.sh <A> <B> <N> <fsc> vs passive.py (stay-small mimic — the valid proxy; NOT head-to-head
   self-play which is a misleading length race), ALWAYS both A/B orders (strong position bias — use
   ports 8001/8002, run SEQUENTIALLY not in parallel or they collide -> all draws).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs coreyja__gigantic-george) — SHIPPED v41 (earlier+harder giant growth cap)
+- Verified results: round 0 **228-22** (v40), round 1 **226-24** (v40). Both won but ~22-24 losses/round.
+  Opponent `coreyja__gigantic-george` (same family as eremetic-eric): plays VERY LONG games (t100-831),
+  STAYS SMALL (len 6-14), FOOD-FLOODED board. ALL our losses = OUR SNAKE BALLOONS to len 20-75 & self-coils
+  while opp stays small & outlasts us (via /tmp/analyze1.py = last-alive-frame length scan on /logs/rounds/1).
+- **Root cause: v40's giant cap (lead>=4/len>=12, -500 anti-eat) fired TOO LATE & TOO WEAK.** Growth
+  trajectory (sim_75, /tmp/traj.py): cap held growth to len~31 until t400, then the snake EXPLODED to len 73
+  by t640. By then the board is ~30% food + ~30% our body -> EVERY move lands on food (forced eating) ->
+  balloon -> self-coil. The board floods BECAUSE our snake is huge (fewer free cells). Must cap EARLIER so
+  the board never floods that badly.
+- **FIX (main.py = v41, backup main_backup_v41_giantcap4.py; prev main = main_backup_v40_r2start.py = v40):**
+  * `_giant` threshold lowered `lead>=4/len>=12` -> **`lead>=3/len>=10`** (fires earlier, before ballooning).
+  * Anti-eat penalty `-500` -> **`-1500`** and health floor `>=30` -> `>=25` (harder cap; still eats when hp<25).
+  * Food-density avoidance weight `*6` -> **`*12`** (steer harder toward food-sparse regions).
+- **VALIDATION (passive.py = stay-small flooded mimic = THE valid proxy per prior notes; head-to-head
+  standard self-play is a misleading length race the real opponent does NOT play):**
+  * ✅ vs passive.py FLOODED (fsc=15, /tmp/rmf15.sh), MULTIPLE clean batches BOTH orders:
+    v41 = **19-1 as A, 20-0 as B** (batch1); **24-1 as A, 25-0 as B** (batch2). Aggregate ~**43-2**.
+    v40 = 17-3 as A, 18-2 as B = ~35-5. v41 loses FAR fewer to the stay-small survivor. Clear win both orders.
+  * ✅ REGRESSION PASS: v41 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders). No starvation
+    (anti-eat gated health>=25; hp<25 still eats hard fdist*60/*6). parses clean (ast.parse OK).
+  * ⚠️ STANDARD (non-flooded) head-to-head self-play REGRESSES (v41 4-10 as A vs v40) — EXPECTED &
+    IRRELEVANT: capping growth loses a standard length race but WINS vs a stay-small flooded survivor
+    (the actual opponent). Per ALL prior notes, passive.py flooded is the valid proxy here, NOT standard self-play.
+- **DECISION: shipped v41.** v40 was flat at ~22-24 losses (still ballooning to 75). v41 caps growth
+  earlier+harder, loses far fewer to the passive stay-small proxy (43-2 vs 35-5) both orders, passes
+  regression, no starvation. Higher upside than keeping the plateaued v40.
+- **⚠️ CONTINGENCY: if v41 scores WORSE than v40's 226 in the real round, REVERT to
+  main_backup_v40_r2start.py (== v40, proven 226-24).** The passive proxy is imperfect (it loses more
+  than the real opponent survives). If v41 over-caps and starves/loses vs the REAL opponent, v40 is the fallback.
+- **TODO next teammate:** re-run /tmp/analyze1.py (edit d="/logs/rounds/N") on the new round — check our
+  snakes' MAX length in losses. If dropped below ~30, the earlier cap worked; if STILL ballooning (50+),
+  push harder (lead>=2, len>=8, anti-eat -3000). If v41 regressed vs v40 in the real round, revert. The
+  FUNDAMENTAL problem: flooded board = food unavoidable when big; real fix = keep snake COMPACT (~len 12-18)
+  from the start OR region-level food-density steering (partly done) + multi-step coil-survival self-sim
+  (never shipped). Test proxy: /tmp/rmf15.sh <A> <B> <N> 15 vs passive.py, BOTH orders, kill stale
+  /tmp/bot* processes between runs (container gets resource-killed with N>15 + 8s sleep; use N<=15).

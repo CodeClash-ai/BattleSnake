@@ -720,7 +720,7 @@ def _choose_move(game_state):
         # A GIANT snake massively ahead on a food-flooded board must STOP growing
         # (eremetic-eric loss mode: grows to len 55-95, self-coils; opp stays small
         # & outlasts us). When hugely ahead, only eat to avoid true starvation.
-        _giant = _length_lead >= 3 and my_len >= 10
+        _giant = _length_lead >= 4 and my_len >= 12
         if food_set:
             if _giant:
                 # Cap growth: eat ONLY when about to starve; otherwise flee food HARD
@@ -740,15 +740,15 @@ def _choose_move(game_state):
                     # (gigantic-george/eremetic-eric loss mode). Heavily penalize
                     # the move that STEPS ONTO food, and steer toward food-SPARSE
                     # regions so the giant snake actively stops growing.
-                    if c["reaches_food"] and health >= 25:
-                        score -= 1500.0
+                    if c["reaches_food"] and health >= 30:
+                        score -= 500.0
                     # Food-density avoidance: fewer nearby food cells = safer for a
                     # giant that must stop growing. Count food within radius 2 of
                     # the destination and push away from dense clusters.
                     _cxg, _cyg = c["cell"]
                     _fd_near = sum(1 for fx, fy in food_set
                                    if abs(fx - _cxg) + abs(fy - _cyg) <= 2)
-                    score -= _fd_near * 12.0
+                    score -= _fd_near * 6.0
             elif health < 25:
                 score -= fdist * 100.0
             elif health < 40:
