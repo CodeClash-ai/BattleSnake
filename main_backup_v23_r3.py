@@ -380,30 +380,10 @@ def _choose_move(game_state):
             # to WIN. Only when getting hungry (health < 50) do we allow an
             # equal-H2H that makes real food progress (closer than any safe move)
             # -> preserves the anti-starvation fix without needless ties.
-            # A WIN >> a TIE. With a genuinely safe move available, only accept an
-            # equal-H2H that EATS food NOW (immediate growth that breaks the length
-            # deadlock). We never voluntarily walk INTO a tie just to shave a couple
-            # cells off the food route -- the food-race scoring (fdist*20 when
-            # short_hungry) already pulls us toward food from the SAFE cell over the
-            # next turns, so we still eat without the needless collision.
-            # A WIN >> a TIE. Accept an equal-H2H only if it EATS food NOW, OR if
-            # (short & hungry) NO safe move makes any food progress -- i.e. fleeing
-            # the h2h moves us strictly FARTHER from all food than staying put would
-            # (genuine anti-starvation: the h2h is the only route to food). In the
-            # needless-tie games a safe move DID make food progress, so we avoid the
-            # collision and let the food-race scoring route us there safely.
-            _cur_fmd = min((_manhattan(head,(fx,fy)) for fx,fy in food_set), default=999)
-            best_safe_fmd = min((c.get("food_md", 999) for c in _safe_ok), default=999)
-            if health >= 30 and best_safe_fmd <= _cur_fmd + 1:
-                # a safe move at least holds/improves food distance -> no tie needed.
-                # When HEALTHY (>=70) with a safe option we don't even need contested
-                # food -> avoid the equal-H2H entirely (high-health early ties were
-                # both snakes racing the SAME food cell into a mutual-eat collision).
-                if health >= 70:
-                    eq_ok = []
-                else:
-                    eq_ok = [c for c in eq_ok if c.get("reaches_food")]
+            if health >= 60:
+                eq_ok = [c for c in eq_ok if c.get("reaches_food")]
             else:
+                best_safe_fmd = min((c.get("food_md", 999) for c in _safe_ok), default=999)
                 eq_ok = [c for c in eq_ok
                          if c.get("reaches_food") or c.get("food_md", 999) < best_safe_fmd]
         if eq_ok:

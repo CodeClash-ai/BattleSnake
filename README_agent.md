@@ -1659,3 +1659,52 @@ regression.
   raise the health gate 60->75. All prior fixes (v8-v22) present. Repro: /tmp/mkstate.py builds
   /tmp/state_t18.json; /tmp/testmove.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup),
   ALWAYS both A/B orders. Repro is the real validator, NOT self-play washes.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs coreyja__jump-flooding) — SHIPPED v24 (TIE fix #3)
+- Results: round 0 **244-4 (+2t)**, round 1 **197-0 (+53t)** (v22 shipped end of r1... v21),
+  round 2 **214-0 (+36t)** (v22), round 3 **231-0 (+19t)** (v23). TREND: ties fell
+  53->36->19 (v21->v22->v23), losses 4->0->0->0. Ties = 0 pts, worth converting to wins.
+- Opponent FULLY ACTIVE (round 3 latency avg 0.7ms, 0/3016 moves >=490ms). Avg game 12 turns.
+- **Root cause of the 19 round-3 ties (via /tmp/ties.py + /tmp/tt.py on /logs/rounds/3):**
+  ALL are len-4 snakes colliding head-on in an equal-length H2H. Two clusters:
+  1. MODERATE-health (hp57-68, t35-49): both snakes race toward the SAME food cell and
+     collide en route (e.g. 84ec96ad t45: US(3,4) OP(4,5), both step to (4,4) chasing food
+     (6,4); a SAFE alt 'down'(3,3) still progressed toward food but v23 took the h2h).
+  2. HIGH-health (hp85-95, t8-11): both snakes adjacent to the SAME food, both step onto it
+     -> mutual-eat collision (e.g. 4b228ad2 t7: US(6,3) OP(7,4), both eat food (6,4)).
+- **WHY v23 tied:** v23's equal-H2H gate kept the h2h when it made food progress
+  (food_md < best_safe_fmd) at health<60, and when it ate at health>=60. But at high health
+  we don't NEED contested food, and at moderate health a safe move often still routes to food.
+- **FIX (main.py = v24, backup main_backup_v24_tiefix3.py; prev main = main_backup_v23_r3.py):**
+  Rewrote the equal-H2H acceptance gate (in the `_shungry`/`_safe_ok` block, ~line 383):
+    * Compute `_cur_fmd` (current head's dist to nearest food) and `best_safe_fmd`.
+    * If `health>=30 AND best_safe_fmd <= _cur_fmd+1` (a safe move at least ~holds food distance,
+      i.e. a viable food route exists WITHOUT the collision):
+        - if `health>=70`: `eq_ok=[]` (healthy + safe option -> NEVER take the tie, even to eat).
+        - else: keep equal-H2H only if it EATS food NOW.
+    * Else (safe moves all move strictly AWAY from food = genuine anti-starvation): keep equal-H2H
+      if it eats OR is strictly closer to food than any safe move (preserves v21 starvation fix).
+- **VALIDATION (repro is the real validator — self-play can't reproduce the opponent marching
+  into us):**
+  * /tmp/checkties.py replays ALL 19 round-3 ties' decision turns: **v24 flips 15/19 to a
+    different (collision-avoiding) move** vs v23. Both tie clusters fixed (moderate + high health).
+  * Repros: 84ec96ad t45 v24='down' (v23='right'=tie); 4b228ad2 t7 v24='left' (v23='right'=tie into
+    (6,4)); starve repro (/tmp/state.json hp72 food far, enemy between) v24='right' when a safe
+    move can't reach food -> preserves anti-starvation.
+  * REGRESSION PASS: v24 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * SELF-PLAY: v24 vs v23 draws COLLAPSED 16 -> **1** (both orders!) — direct evidence the
+    tie-avoidance works. Win/loss ~even w/ A-position bias (v24-A 21-18, v24-B 15-24). The DRAW
+    collapse is the meaningful result; self-play win/loss is dominated by position bias.
+  * No crashes (server logs clean); parses clean (ast.parse OK); move() try/except + _safe_fallback.
+- **DECISION: shipped v24.** Directly targets the exact (and only) remaining scoring issue this
+  match (voluntary equal-H2H ties), repro-proven to avoid 15/19 ties, collapses self-play draws
+  16->1, no regression, preserves the v21 anti-starvation fix. Ties=0pts -> avoiding them is +EV.
+- **TODO next teammate (likely FINAL round):** re-run /tmp/a3.py (=analyze_round.py, edit
+  d="/logs/rounds/N") + /tmp/ties.py + /tmp/tt.py <gid> on the new round. If ties persist, check
+  the tie turn/health distribution — the 4 unflipped round-3 ties may need the anti-starvation
+  branch tightened (they're cases where safe moves genuinely all flee food). If STARVATION LOSSES
+  reappear (len4 hp->1-2 with food on board), the health>=70 branch may be too aggressive at
+  stepping aside — lower it to >=80 or require the safe move to also make food progress next turn.
+  Repro: /tmp/mkstate.py <gid> <turn> (round 3), /tmp/checkties.py (replays all ties old-vs-new),
+  /tmp/testmove.py <bot> <state>, /tmp/eval.py <bot> <state>. Test: /tmp/rm2.sh <A> <B> <N>
+  (>=6s warmup), ALWAYS both A/B orders (position bias). Repro is the real validator, NOT self-play.
