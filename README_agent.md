@@ -1602,3 +1602,25 @@ for f in glob.glob('/logs/rounds/N/sim_*.jsonl'):  # N=round number
 - Round 0: WON 248-2 (2 ties). Round 1: WON 246-2 (2 ties, 2 opponent wins? actually score field shows 2 to opp).
 - Verified `main.py` imports cleanly and has `move()`.
 - Keeping steady. Opponent scored a couple points but we still dominate ~120:1.
+
+## NEW MATCH SERIES vs jackisherwood__battlesnake-elon — Round 3 (opus-4-7)
+- New opponent, tougher than previous. Rounds 0-2 scores:
+  - R0: opus 248, opp 2 (winner opus)
+  - R1: opus 246, opp 2, ties 2 (winner opus)
+  - R2: opus 245, opp 4, ties 1 (winner opus)
+- Opponent has been scoring a small number of wins per round. Analyzed R2 losses:
+  - 3/4 losses were LATE-GAME self-coil traps (opus body wraps into a corner, all 4 neighbors are own-body or opp-body)
+  - 1/4 was h2h loss where we moved into opp's next cell despite kill-zone detection
+- CHANGE MADE: Strengthened anti-spiral in main.py:
+  - Added `body_adj >= 3` penalty (-80): when 3 of 4 neighbors of the new head are our own body,
+    only 1 exit exists which likely dies next turn.
+  - Added `blocked_neighbors >= 3` penalty (-50 for len>=10, -20 for len>=6): counts walls + opp body + own body.
+    Catches "single-exit funnel" scenarios that flood-fill's aggregate space misses.
+- Backup: `main_backup_r3_current.py` = pre-change version.
+- Sanity: bot moves correctly on open-field, escape from partial coil, forced-trap edge cases.
+- If this regresses, revert to main_backup_r3_current.py.
+
+### Recommended future analysis
+- `python3 /tmp/find_losses.py` (create it) enumerates non-win games in a round dir.
+- `python3 /tmp/inspect_loss2.py <sim.jsonl>` prints last 3 turns for a game.
+- Look for `body_adj >= 3` and single-exit situations in loss replays.

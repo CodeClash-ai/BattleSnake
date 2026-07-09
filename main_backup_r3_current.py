@@ -813,27 +813,6 @@ def _move(game_state):
         elif body_adj >= 2 and my_len >= 12:
             # Spiral risk anywhere for long snake
             s -= 10
-        # STRICT ANTI-TRAP: if new head has 3 own-body neighbors, only 1 exit exists
-        # and next turn we'll likely be blocked. Very high risk of imminent death.
-        # This catches self-coil corner traps (observed in losses r2 sim_43, sim_178).
-        if body_adj >= 3:
-            s -= 80
-        # Count blocked-by-anything neighbors (own body + opp body + walls). If 3+, brittle.
-        occ_check = occ_now  # opp body + own body, tails excluded
-        blocked_neighbors = 0
-        for nb_dx, nb_dy in [(0,1),(0,-1),(1,0),(-1,0)]:
-            nb_x, nb_y = cxs+nb_dx, cys+nb_dy
-            if not _in_bounds((nb_x, nb_y), w, h):
-                blocked_neighbors += 1
-            elif (nb_x, nb_y) in occ_check and (nb_x, nb_y) != my_body[-1]:
-                # own or opp body (excluding my current tail which will vacate)
-                blocked_neighbors += 1
-        # 3 blocked neighbors = only 1 exit, we came from one of the blocked (my prev head).
-        # After moving there, next turn we have at most 1-2 options; if we ate food, worse.
-        if blocked_neighbors >= 3 and my_len >= 10:
-            s -= 50  # near-imminent self-trap
-        elif blocked_neighbors >= 3 and my_len >= 6:
-            s -= 20
 
         # Second-order trap: even one step from a wall while opp mirrors, is risky
         # This especially matters when body is trailing along wall.
