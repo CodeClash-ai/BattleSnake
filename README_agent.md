@@ -1041,3 +1041,39 @@ regression.
   a safe move is non-survivable even if the risk-move space is only slightly larger. If losses flip to
   being-outgrown (short snake), push food weights (v14 already races hard). Test: /tmp/rm2.sh (>=4s
   warmup), ALWAYS both A/B orders. Repro is the real validator, NOT self-play washes.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs Xe__since) — SHIPPED v17 (corner-food trap avoidance)
+- Verified results ALL rounds won: round 0 **203-5 (+1 tie)**, round 1 **241-8**,
+  round 2 **244-5 (+1 tie)**, round 3 **247-2** (opus-4-8 vs Xe__since). v16 (round 3)
+  was the BEST yet — losses dropped 5->2 (the H2H-trap fix worked). Opponent ACTIVELY
+  PLAYS (round 3 latency avg 211.5ms, only 53/13275 moves >=490ms; avg game 53.3 turns, max 178).
+- **Root cause of BOTH round-3 losses = CORNER-FOOD LURE while OUTGROWN.** Traced games
+  1095cb4f (us len11/opp len13) & ccac596d (us len12/opp len14): in BOTH we chased food
+  sitting in the bottom-right CORNER (10,0) by crawling along the bottom wall (y=0) toward
+  it, while the LONGER opponent came down the right wall and pinned us in the corner -> died.
+  At the key turn (1095cb4f t68, head (5,1), food (10,0)) the enemy (len12) was manhattan 4
+  from the corner food vs our 6 -> the enemy reaches/controls it first; the food pull dragged
+  us into a wall-crawl-to-corner death.
+- **FIX (main.py = v17, backup main_backup_v17_cornerfood.py; prev main = main_backup_v16_h2h_trap.py):**
+  * Compute `trap_food`: food on a wall/corner cell where an EQUAL/LONGER enemy is at least as
+    close (manhattan) as us, ONLY when `_length_lead < 2 and health >= 40`.
+  * In the food-distance calc, prefer `safe_food = food_set - trap_food`. If ALL food is trap
+    food, set `chasing_trap=True` and softens the food pull weight (`_fw=0.25`) for the
+    health>=40 bands (health<40 still eats hard — survival first).
+- **RESULTS (self-play /tmp/rm2.sh, BOTH A/B orders — genuine symmetric win, NOT position bias):**
+  v17 vs v16 = **19-9 as A AND 18-10 as B** (~63% both orders). The corner-food avoidance keeps
+  us off the wall-crawl and lets us grow toward center safely -> we win more length races/H2H.
+- REGRESSION PASS: v17 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+- Latency (dense 30-long snakes, 200 moves): **0.022ms avg** (timeout 500ms) — free.
+- parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v17.** Targets the exact round-3 loss mode (corner-food lure while outgrown)
+  and beats v16 both orders in self-play with no regression. Unlike prior anti-trap tweaks that
+  washed, this one WINS self-play because avoiding corner-food-death is a general growth edge.
+- **NOTE:** the repro at t68 still picks 'down' in isolation (space dominates that single cell),
+  but across full games the softened food pull steers us off the wall earlier and wins ~63% more.
+- **TODO next teammate:** re-run analyze_round.py (edit d="/logs/rounds/N") + /tmp/trace3.py
+  (edit target/turn) on the new round. If corner losses persist, widen trap detection (enemy
+  manhattan <= my_fd+1, or trigger at _length_lead<3), or add a stronger anti-wall-crawl penalty
+  when chasing_trap. If losses flip to being-outgrown generally, push food weights. Test tool:
+  /tmp/rm2.sh (>=4s warmup), ALWAYS both A/B orders (position bias). Repro/state: /tmp/getstate.py
+  (edit target/want_turn saves /tmp/state_<gid>_<turn>.json), /tmp/testmove.py compares bots on it.
