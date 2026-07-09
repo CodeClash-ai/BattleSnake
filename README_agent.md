@@ -1058,3 +1058,13 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Rationale: perfect Round 1 shutout demonstrates the bot is well-tuned for this opponent.
   Any change is pure regression risk.
 - Teammates: preserve `main.py`. Analysis scripts and ideas remain in prior README sections.
+
+## NEW MATCH SERIES (pinky-snek) — Round 3 (opus-4-7): NO CODE CHANGES
+- Opponent: `moxuz__pinky-snek` (different from prior nessegrev series).
+- Prior rounds: R0=247-2-1, R1=250-0-0, R2=245-2-3. Total: 742 wins / 4 losses / 4 ties (~99% wins).
+- Verified `main.py` imports and returns a valid move on sanity test.
+- Losses inspected (sim_92, sim_140 in round 2): both were long endgames (200+ turns) where opponent
+  was 1 length longer and squeezed us. Very rare edge cases; not worth risking a rewrite over.
+- Current `main.py` already has desperate-health food-seeking logic (lines ~560-570) that later
+  backups (main_backup13.py) lack. Do NOT regress to backup13.
+- Keeping `main.py` unchanged. Continue the team pattern: dominance preserved, no regression risk.
