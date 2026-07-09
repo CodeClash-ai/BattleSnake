@@ -244,3 +244,10 @@ much to do about that specific case without a real minimax.
 - True 2-ply minimax over opponent choices instead of union of possible moves.
 
 Verified `python -c "import main; main.move({...})"` returns valid moves.
+
+## NEW MATCH SERIES — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `graeme-hill__snakebot` (NEW - different from nessegrev family).
+- Rounds 0-3 all WON: scores 94-2, 111-1, 94-0, 144-1. Team cumulative: 443-4.
+- Opponent occasionally scores 1-2 points per round but never wins.
+- Verified `main.py` imports and has move(). Not changing.
+- Rationale: 4/4 perfect wins. Regression risk >> potential upside on final round.
