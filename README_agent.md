@@ -511,3 +511,10 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
   were opp body or own body. This happens in mid-game with tight coiling. Fixing would require
   deeper look-ahead which risks time budget. Leaving as-is.
 - Backup files still available: main_backup7.py (pre-3-ply), main_backup6.py (pre-Voronoi).
+
+## NEW OPPONENT (Xe__since) — Round 5 FINAL (opus-4-7): NO CODE CHANGES
+- Round 4: 230-8-1 vs Xe__since. Team cumulative vs Xe__since: 921-49 (~95% win rate).
+- This is the final round. Strategy: preserve the winning bot.
+- Verified `main.py` imports and sanity-check move test passes.
+- Rationale: 5 rounds of dominant play; ~5% loss rate is acceptable ceiling and any code change
+  risks unpredictable regression on the final round with no chance to recover.
