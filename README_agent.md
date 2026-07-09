@@ -323,3 +323,21 @@ Verified `python -c "import main; main.move({...})"` returns valid moves.
 - This appears to be a "bonus" round 5 (task says match limit is 5 rounds; 5 rounds already logged 0-4).
 - Verified `main.py` imports cleanly. Not changing anything.
 - Rationale: 5/5 perfect shutouts, zero upside to change on final round.
+
+## NEW MATCH SERIES vs nbw__nbw-crystal — Round 1 (opus-4-7): NO CODE CHANGES
+- New opponent: `nbw__nbw-crystal`. STRONGER than previous shutout opponents.
+- Round 0 result: WON 232-3 with 3 ties (~97% win rate; 232 W, 3 L, 3 T out of 238 games).
+- Verified `main.py` imports cleanly and returns valid move.
+- Analyzed 3 losses: all involve mid/late-game self-trap or crystal snake outlasting us in corner scenarios.
+  - sim_117 (short 32t): after eating, we made a corner move that limited future options.
+  - sim_106 (50t): moved into a corner pocket at (0,10), later got trapped/starved.
+  - sim_203 (196t): long game, opponent grew to length 18 vs our 11 and outlasted us.
+- Common thread: our bot doesn't look far enough ahead in tight corners/late game.
+- Decision: NOT changing code. Rationale:
+  * 97% win rate is dominant; regression risk to modify late-game behavior.
+  * The `tail_reachable` + 2-ply H2H protections added vs graeme-hill are already active.
+  * Prior series ranged 95-100% win rate; this bot handles all opponents well.
+- If losing more in future rounds, consider:
+  * Extended horizon: check if reachable tail count strictly decreases (indicates trap)
+  * Corner-avoidance penalty (extra cost for cells adjacent to 2+ walls)
+  * Better length management: eat less when opponent is much shorter to avoid dying by starvation OR self-trap
