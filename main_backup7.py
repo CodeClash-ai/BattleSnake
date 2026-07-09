@@ -349,25 +349,6 @@ def _move(game_state):
             # We use conservative danger set opp_2step_danger built above.
             if nb in opp_2step_danger:
                 continue  # dangerous
-            # 3-ply check: does nb have at least one non-blocked, non-danger neighbor? 
-            # Avoids counting dead-end next moves as "safe".
-            # blocked_post_after_nb: assume we move to np then to nb (both occupy body head positions).
-            # For rough check, use blocked_post plus nb, minus my new tail (which will vacate again).
-            has_escape = False
-            blocked_after_nb = set(blocked_post)
-            blocked_after_nb.add(nb)
-            # Old tail (my_new_body[-1]) vacates; drop it if not eating on nb move
-            if nb not in food_set and len(my_new_body) >= 1:
-                blocked_after_nb.discard(my_new_body[-1])
-            for nb2 in _neighbors(nb):
-                if not _in_bounds(nb2, w, h):
-                    continue
-                if nb2 in blocked_after_nb:
-                    continue
-                has_escape = True
-                break
-            if not has_escape:
-                continue  # dead-end, don't count as safe
             next_safe_options += 1
 
         # Voronoi territory: how many cells we control faster than opps.
@@ -489,9 +470,9 @@ def _move(game_state):
         nso = c.get("next_safe_options", 999)
         nto = c.get("next_options_total", 999)
         if nto > 0 and nso == 0:
-            s -= 200  # heavy penalty: next turn we'd have no safe move (near-certain death)
+            s -= 60  # heavy penalty: next turn we'd have no safe move
         elif nto > 0 and nso == 1:
-            s -= 20  # only one safe option, brittle
+            s -= 10  # only one safe option, brittle
         if want_food and c["food_dist"] is not None:
             # Closer food is better, but only if space margin is healthy
             if margin >= 3:

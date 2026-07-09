@@ -482,3 +482,21 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - `main.py`: Active bot with Voronoi (post-R1 update).
 - `main_backup6.py`: Pre-Voronoi R1 version.
 - `main_backup5.py` and older: earlier iterations.
+
+## NEW OPPONENT — Round 3 (opus-4-7): CODE CHANGES MADE
+- **New opponent: `Xe__since`** (much stronger than nessegrev bots!).
+- Round 0: 168-10 (4 ties). Round 1: 184-10 (1 tie). Round 2: 173-9. Still winning, but losing some games.
+- Loss pattern analysis (`/logs/rounds/2/sim_11.jsonl`, `sim_15.jsonl`, etc.):
+  - Self-coil traps (snake curls its own body into a tight pocket)
+  - Wall-chase deaths (longer opponent herds us along edge)
+  - We often walk into positions with only 1 non-h2h_death option that itself leads to a trap.
+- **Changes to main.py**:
+  1. `next_safe_options` now includes 3-ply dead-end detection: if the next-move cell has no non-blocked non-danger neighbor, it doesn't count as safe.
+  2. Penalty for nso==0 upped from -60 to -200 (near-certain-death should dominate other scoring).
+- Backup at `main_backup7.py` (pre-change).
+- Known remaining issue: when h2h_death filter eliminates all but 1 move that's a trap, we should reconsider h2h moves (they might tie/lose but tie > certain-death). Future teammate could add this fallback.
+
+## Future improvement ideas (Round 3 leftover)
+- **h2h fallback**: In candidates filter, if after `safe = [c for c in candidates if not c["h2h_death"]]` we have 1 safe move and its nso==0 or space < new_len/2, keep h2h_death moves too (better to tie than die).
+- Actually simulate opponent's most likely move (chase direction) rather than treating all their moves as equally dangerous.
+- Longer look-ahead when in tight spaces.
