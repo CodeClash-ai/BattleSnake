@@ -3077,3 +3077,53 @@ regression.
   the real validator for opponent-specific traps; self-play IS valid for general survival/growth
   edges (like anti-wall-crawl v19/v33 & food-race v34, which won both orders). DON'T ship a self-play
   regression.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs nbw__nbw-ruby) — KEPT v35
+- Verified results: round 0 **245-4 (+1t)** (v35), round 1 **240-5 (+5t)** (v35).
+  2/2 rounds won. Losses grew 4->5, ties grew 1->5 (still 98%+ win rate). Opponent FULLY
+  ACTIVE (LONG games, big snakes). Pure out-play.
+- **Round-1 loss classification (via /tmp/classify2.py, last-alive frame): 5 losses =
+  1 SELFCOIL + 4 OUTGROWN.**
+  * sim_140: SELFCOIL — our L12 hp96 snake coiled mid-board (legal=0, all 4 neighbors = OWN body).
+    Documented hard multi-step coil (no one-step fix).
+  * sim_123/181/230/244: OUTGROWN — the opponent OUT-ATE us. Deep trace (sim_181, /tmp/tr.py):
+    both spawned L3; opp grew steadily to L12 while we grew slower to L10; opp was ahead from t18
+    on. Our snake STAYED L8 from t23->t50 (wandering, health 96->73) while opp kept eating, then
+    lost the late H2H. The opponent controls/reaches food first -> outgrows us -> wins H2H.
+- **Round-1 TIE classification (via /tmp/classifyties.py): 5 ties = equal-length H2H collisions.**
+  Mostly long-game endgame (t200+, both L20-22) or mid-game equal-length; largely forced/symmetric
+  (both snakes equidistant from the last food). Not readily fixable without regression.
+- **Tuning experiments this round — ALL REJECTED (self-play regression, /tmp/rm2.sh, BOTH orders):**
+  * v36 (behind: fdist*18 UN-softened, was 14*_fw): combined v36 13 vs v35 17 (lost BOTH orders).
+    The un-softened pull disables trap-food avoidance -> chases into traps. REJECTED.
+  * v37 (_short_hungry len<7 -> len<9, dominant pull for mid-size behind): 5-10 as A (clear
+    regression — dominant food pull overrides space/trap terms -> traps). REJECTED.
+  * v38 (center-pull cpull=2.0 when _length_lead<0): aggregate over 4 batches (16 each, both orders)
+    v38 **28** vs v35 **32** — net negative. Consistent w/ ALL prior notes: cpull/food tweaks
+    wash/regress; strong center pulls hurt. REJECTED.
+  CONFIRMS all prior teammates: v35 is at a self-play local optimum; the OUTGROWN losses are the
+  opponent out-eating us (opponent controls food) which self-play CANNOT reproduce (both bots eat
+  symmetrically) -> every food/center one-step tweak regresses self-play. The real fix needs
+  TERRITORY/Voronoi food-ownership routing validated vs the REAL opponent, NOT self-play.
+- REGRESSION PASS: main.py (v35) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- main.py == main_backup_v35_bigwallfood.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v35) unchanged.** 240-5 is a strong result (98%+ win rate) vs a fully
+  active opponent. The dominant OUTGROWN loss mode is the opponent controlling food (self-play
+  can't validate a fix); every food/center tweak I tried regressed self-play both orders. v35 is
+  the strongest self-play-validated version (full fix stack v8-v35). No regression risk taken.
+- **TODO next teammate:** re-run /tmp/classify2.py (edit d="/logs/rounds/N") + /tmp/tr.py <lossgame>
+  on the new round. If OUTGROWN losses dominate (opp out-eats us early — nbw-ruby did: opp L12 vs
+  our L10 by t56): the food-race is already max-aggressive (v14/v34/v35); pushing it further
+  REGRESSES self-play (v36/v37/v38 all confirmed this round). The real edge is TERRITORY/Voronoi
+  food-ownership routing (route to food WE reach first via BFS-distance ownership so we grow
+  without a contested collision) — MUST be validated vs the REAL opponent (self-play eats
+  symmetrically & washes). If SELFCOIL (big-snake coil) dominates: the never-shipped fix is a
+  multi-step self-sim using OUR OWN scoring K steps (NOT greedy — greedy escapes) as a SOFT penalty.
+  Analysis tools: /tmp/classify2.py (loss class, last-alive frame legal-count/wall/outgrown),
+  /tmp/classifyties.py (tie class), /tmp/tr.py <sim> (per-turn US/OP len/hp/head/food). Test:
+  /tmp/rm2.sh <A> <B> <N> (recreate from top notes; >=8s warmup, N<=16 to fit 30s cmd limit),
+  ALWAYS both A/B orders (position bias dominates 16-game runs — use aggregate over multiple batches).
+  Repro is the real validator for opponent-specific traps; self-play IS valid for general
+  growth/survival edges (anti-wall-crawl v19/v33, food-race v34 won both orders). DON'T ship a
+  self-play regression.
