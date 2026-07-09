@@ -3511,3 +3511,53 @@ regression.
   <turn> <out.json> (round 4, "you"=opus), /tmp/tm.py <bot> <state>, /tmp/evalg.py <state> (per-dir
   eats/OOB), /tmp/findeat.py (finds giant states with adjacent food). Loss class: /tmp/cll.py,
   /tmp/ourlen.py. DON'T ship a wash/regression on v39 (the match's best version).
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__gigantic-george) — SHIPPED v40 (direct anti-eat + food-density avoidance for giants)
+- ⚠️ NEW OPPONENT: **`coreyja__gigantic-george`** — SAME family/behavior as coreyja__eremetic-eric.
+  Plays VERY LONG survival games (final turns 109-831!) on a FOOD-FLOODED board (foodSpawnChance=15
+  but board floods to 19-36 food because our giant snake leaves few free cells). It STAYS SMALL
+  (~len 14) and OUTLASTS our bloated snake. Round 0: **opus-4-8 228, gigantic-george 22** (22 losses).
+- **Root cause of ALL 22 losses = OUR SNAKE BALLOONS to len 48-81 & SELF-COILS** (via /tmp/cll.py +
+  the per-frame length scan): every loss our snake grew to len 48-81, hp 100 (never hungry), opp
+  stayed len 14, then we self-coiled to death. Same mode as eremetic-eric. v39's fdist*30 flee is
+  USELESS on a flooded board: nearest food is ~1 cell away in EVERY direction so fdist~1 everywhere,
+  the gradient is near-zero, and the snake eats INCIDENTALLY on every path -> balloons to 81.
+- **FIX (main.py = v40, backup main_backup_v40_gigantcap3.py; prev main = main_backup_v39_giantcap2.py):**
+  In the `_giant` (lead>=4, len>=12) healthy branch (line ~736), ADDED (keeping the fdist*30 flee):
+  1. **DIRECT anti-eat penalty:** `if c["reaches_food"] and health >= 30: score -= 500.0` — heavily
+     penalize the move that STEPS ONTO food. This is what actually caps growth (the fdist gradient
+     can't, on a flooded board).
+  2. **Food-density avoidance:** count food within manhattan radius 2 of the destination cell and
+     `score -= _fd_near * 6.0` -> steer the giant toward food-SPARSE regions so it stops incidental
+     eating.
+- **VALIDATION (passive.py = stay-small mimic of gigantic-george; the accurate proxy — head-to-head
+  self-play is NOT the right proxy here because both bots grow together, a length race the real
+  opponent does NOT play):**
+  * ✅ vs passive.py flooded (/tmp/rmf15.sh main.py passive.py N 15), BOTH orders + multiple batches:
+    **v40 = 11-1, 11-1, 15-1 = 37-3** vs **v39 = 9-3, 15-1 = 24-4**. v40 net-better vs the stay-small
+    mimic. (One later batch was 15-1 for both = noisy, but aggregate favors v40.)
+  * ✅ REGRESSION PASS: v40 vs opp_straight (flooded) = **6-0 as A AND 0-6 as B** (win both orders).
+  * NOTE: v40 vs v39 head-to-head flooded self-play LOSES (11-17) — EXPECTED & IRRELEVANT: it's a
+    length race between two growing bots; the real opponent stays SMALL & outlasts a bloated snake
+    (that's why passive.py is the valid proxy, and v40 wins it). Capping growth is FATAL to win a
+    length race but WINNING vs a stay-small survivor.
+  * NO STARVATION: the anti-eat penalty needs health>=30; a hungry giant (hp<15) still eats hard
+    (fdist*60). parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v40.** v39 lost 22 games this round to exactly the ballooning self-coil; the
+  fdist gradient provably can't cap growth on a flooded board (snake reached len 81). v40's direct
+  anti-eat + food-density avoidance caps growth harder and wins the passive.py stay-small proxy
+  net-better both orders with a passing regression. Higher-upside than keeping v39 (which was flat at
+  ~22 losses). NOTE: prior teammate's "v40 was a wash" was tested WITHOUT the food-density term at
+  fsc=40; this version adds density avoidance and shows a clearer passive-proxy win at fsc=15 (the
+  real match condition).
+- **TODO next teammate:** re-run /tmp/cll.py (edit d="/logs/rounds/N") + the per-frame length scan on
+  the new round. If our snakes are now SMALLER (max len dropping below ~40) -> the direct anti-eat
+  worked; if losses persist they're the residual moderate-length multi-step coil. If STILL ballooning,
+  raise the anti-eat penalty (500->1000) or lower _giant thresholds (lead>=4->3, len>=12->10) or widen
+  the density radius (2->3, weight 6->10). If v40 turns out WORSE than v39's 228 in the real round,
+  REVERT to main_backup_v39_giantcap2.py (proven 228). The FUNDAMENTAL problem: on a flooded board
+  food is unavoidable; the real long-term fix is REGION-level food-density steering (done here) + a
+  multi-step self-sim using OUR OWN scoring as a SOFT penalty (never successfully shipped). Test:
+  /tmp/rmf15.sh <A> <B> <N> <fsc> vs passive.py (stay-small mimic — the valid proxy; NOT head-to-head
+  self-play which is a misleading length race), ALWAYS both A/B orders (strong position bias — use
+  ports 8001/8002, run SEQUENTIALLY not in parallel or they collide -> all draws).

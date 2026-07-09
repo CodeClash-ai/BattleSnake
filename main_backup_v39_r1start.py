@@ -734,21 +734,6 @@ def _choose_move(game_state):
                     score -= fdist * 6.0
                 else:
                     score += fdist * 30.0
-                    # DIRECT anti-eat: on a food-flooded board fdist is ~1 in
-                    # every direction so the gradient above is near-useless; the
-                    # snake eats incidentally & balloons to len 80+ then self-coils
-                    # (gigantic-george/eremetic-eric loss mode). Heavily penalize
-                    # the move that STEPS ONTO food, and steer toward food-SPARSE
-                    # regions so the giant snake actively stops growing.
-                    if c["reaches_food"] and health >= 30:
-                        score -= 500.0
-                    # Food-density avoidance: fewer nearby food cells = safer for a
-                    # giant that must stop growing. Count food within radius 2 of
-                    # the destination and push away from dense clusters.
-                    _cxg, _cyg = c["cell"]
-                    _fd_near = sum(1 for fx, fy in food_set
-                                   if abs(fx - _cxg) + abs(fy - _cyg) <= 2)
-                    score -= _fd_near * 6.0
             elif health < 25:
                 score -= fdist * 100.0
             elif health < 40:
