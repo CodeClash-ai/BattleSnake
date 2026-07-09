@@ -443,3 +443,34 @@ regression.
   positioned between us and center. Self-play does NOT reproduce these squeezes, so tune/validate
   by re-running /tmp/loss.py on the NEW /logs/rounds/N and checking if losses are still
   wall-corner squeezes. Do NOT trust self-play washes as improvements. Always test BOTH A/B orders.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs graeme-hill__snakebot) — KEPT v8
+- Verified results ALL 3 rounds won: round 0 **241-4 (+1 tie)**, round 1 **245-4**,
+  round 2 **199-1** (opus-4-8 vs graeme-hill__snakebot). ~99% game win rate.
+- Round 2 stats (analyze_round.py, d="/logs/rounds/2"): 200 games, opus 199 / opp 1.
+  Avg game len 30.2 turns, max 135. Opp latency avg 339ms, only 688/6040 moves >=490ms (11%)
+  -> it ACTIVELY PLAYS, does NOT reliably time out. Our latency avg 0.53ms, max 24ms.
+- **Analyzed the SINGLE round-2 loss (game 3f019c13, /tmp/inspect.py):** classic
+  WALL-CORNER SQUEEZE. Small snake (len 4->5) chased food at (8,10) straight along the
+  TOP wall (y=10) into the corner (10,10). By turn 8 the ONLY legal move was right; the
+  opponent's body occupied (9,9)/(8,9) sealing the perpendicular escape. Trap was set
+  ~turn 6-7 by the food lure pulling us right along the wall while we were too small.
+- **Tuning experiments (ALL tested vs v8, self-play /tmp/rm2.sh, BOTH A/B orders) — ALL WASH/REGRESSION:**
+  * corner+edge penalty (edist<=4): 16-24 A, 17-23 B = LOSS. REJECTED.
+  * corner-only penalty (edist<=4): 25-14 A but 13-26 B = wash/asymmetric. REJECTED.
+  * edge "no open perpendicular escape" penalty (-7 edge/-14 corner): 22-28 A, 25-25 B = net negative. REJECTED.
+  * flat edge/corner penalty (-1.5/-2.5): 13-27 A, 20-20 B = LOSS. REJECTED.
+  * reduce want_food fdist pull 5.0->3.0: 22-26 A, 26-20 B = wash. REJECTED.
+  CONFIRMS prior notes: v8 is at a self-play local optimum; self-play does NOT reproduce
+  the real opponent's wall-squeeze, so it can't validate an anti-squeeze fix (every attempt washes).
+- REGRESSION PASS: main.py (v8) vs opp_straight = **15-0 as A AND 0-15 as B** (win both orders).
+- Latency (/tmp/lat.py two 30-long snakes, dense 11x11, 10 food, 200 moves): **0.34ms avg, 1.57ms max**
+  (timeout 500ms) — cannot time out. move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: kept v8 unchanged.** 99% win rate; every attempted anti-squeeze tuning was a self-play
+  wash/regression and can't be validated vs the real opponent. Not worth regression risk on a proven bot.
+- **TODO next teammate:** the ONLY losses are wall-corner squeezes (small snake chases edge food into a
+  corner, enemy seals the exit). Self-play does NOT reproduce this. The real fix likely needs a
+  2-3 ply lookahead of the ENEMY sealing our escape, OR simply NOT chasing food that sits on a wall
+  when we're small and an enemy is on the same wall-side. Re-run analyze_round.py (edit d="/logs/rounds/N")
+  + /tmp/inspect.py (edit target gid) on the NEW round to see if losses stay wall-squeezes. Do NOT trust
+  self-play washes as improvements. Always test BOTH A/B orders (/tmp/rm2.sh, position bias exists).
