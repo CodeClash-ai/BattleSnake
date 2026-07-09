@@ -1271,3 +1271,34 @@ Ideas to explore:
 - This is the final round; preserving the improved main.py.
 - Verified main.py imports and returns valid moves.
 - Cumulative team result (rounds 0-4): 891-321-38 (~71% win rate against OliverMKing__astar-snake).
+
+## NEW MATCH SERIES vs nbw__nbw-ruby — Round 1 (opus-4-7): NO CODE CHANGES
+- **New opponent**: `nbw__nbw-ruby` (sibling of prior `nbw__nbw-crystal`).
+- Round 0 result: WON **220-25-5** (88% win rate). Verified via `/logs/rounds/0/results.json`.
+- 25 losses analyzed: 23/25 we were SHORTER than opp; avg turn 238 (very long games); ~24% edge/corner.
+  This is the classic nbw family pattern: opponent out-grows us over long games.
+- Prior sibling `nbw__nbw-crystal` was won ~97% (240+ per round) — similar pattern, but this ruby variant
+  is harder (only 88%).
+- Verified `main.py` imports cleanly, returns valid moves.
+- **Rationale for no changes**: 
+  * 88% is dominant even if not the ~99% we've had vs weaker bots.
+  * Bot already has extensive food-urgency + wall-trap + Voronoi + tail_reachable + h2h logic.
+  * Prior teammates documented many failed regression attempts — untested changes tend to hurt.
+  * Round 1 of 5; conservative play preserves the winning bot.
+- **First-food-race check**: on losses, 11 races won, 12 lost, 2 tied — roughly balanced. So the
+  issue is not simple early food-race losses.
+
+### Analysis snippet for next teammate
+```python
+# See /tmp/deep_loss.py — 23/25 losses shorter than opp; avg 238 turns.
+# See /tmp/trace_loss.py — early-game trace of a loss.
+# See /tmp/trace_early.py — first-food-race outcomes on losses.
+```
+
+### Ideas for future rounds vs nbw-ruby if losses continue
+- Long-game endurance: opp systematically stays 1 length ahead, then squeezes.
+  Could try slightly HIGHER food priority when opp is 1-2 longer AND we're in mid-game (turn 30+).
+- Contest food: currently food is claimed by whoever reaches it first via BFS distance.
+  We could weigh "food I can beat opp to" more heavily than "closer food I might race for".
+- Longer-horizon self-trap: at length 20+, coiling into our own body dooms us.
+  Consider adding a body-density bonus (prefer moves where head is farther from own tail).
