@@ -400,18 +400,7 @@ def _choose_move(game_state):
                 # food -> avoid the equal-H2H entirely (high-health early ties were
                 # both snakes racing the SAME food cell into a mutual-eat collision).
                 if health >= 70:
-                    # OUTGROWN-WHILE-SHORT FIX (tim-hub loss f588c585): when we are
-                    # BEHIND on length (lead <= 0) and the ONLY way to eat this turn
-                    # is a contested equal-H2H food cell, take it. Fleeing keeps us
-                    # short while the opponent grows and eventually wins the H2H (a
-                    # certain LOSS). A tie (0 pts) is no worse than a loss (0 pts), and
-                    # if the enemy picks other food we GROW and break the deadlock.
-                    # Only allow it when it EATS food NOW (immediate growth) and no
-                    # safe move also eats -> we're not creating a needless tie.
-                    if _lead0 <= 0 and not any(c.get("reaches_food") for c in _safe_ok):
-                        eq_ok = [c for c in eq_ok if c.get("reaches_food")]
-                    else:
-                        eq_ok = []
+                    eq_ok = []
                 else:
                     eq_ok = [c for c in eq_ok if c.get("reaches_food")]
             else:

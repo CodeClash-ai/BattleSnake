@@ -1911,3 +1911,49 @@ regression.
   center food), or multi-step pursuit self-trap — all need multi-step/territory lookahead validated
   vs the REAL opponent, NOT self-play (which washes). But with 250-0, DON'T fix what isn't broken.
   Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs tim-hub__awesome-snake) — SHIPPED v25 (contest-food-when-behind)
+- Verified results: round 0 **250-0** (v24), round 1 **249-1** (v24). Both won.
+- Opponent FULLY ACTIVE (round 1: latency avg 0.4ms, 0/9867 moves >=490ms = 0% timeouts;
+  avg game 39.46 turns, max 130). Pure out-play. ZERO ties both rounds.
+- **Root cause of the single round-1 loss (game f588c585, /tmp/trace.py): OUTGROWN-WHILE-SHORT.**
+  Our snake stayed **len 4 the ENTIRE game** while the opponent grew to **len 8**, then killed us
+  in a H2H at t22 (longer snake wins). We never ate after spawn food — the opponent controlled every
+  food. **Last-free-choice = turn 7** (head (4,5), both len 4, food at (5,5) directly adjacent,
+  opponent at (6,5)): v24 chose 'up' (FLED the contested food -> stayed short -> outgrown -> lost).
+  Moving 'right' to (5,5) is an equal-len H2H (tie risk), so the TIE-FIX logic (health>=70 -> eq_ok=[])
+  correctly avoided the voluntary tie BUT that left us permanently short.
+- **KEY INSIGHT:** when we're BEHIND/EVEN on length (_lead0 <= 0) and the ONLY way to eat this turn
+  is a contested equal-H2H food cell, TAKING it is +EV: a tie (0 pts) is no worse than being outgrown
+  into a certain loss (0 pts), and if the enemy picks OTHER food we GROW and break the deadlock.
+- **FIX (main.py = v25, backup main_backup_v25_contestfood.py; prev main = main_backup_v24_r1.py = v24):**
+  In the equal-H2H tie gate (~line 402, the `if health >= 70:` branch), instead of always `eq_ok=[]`,
+  now: `if _lead0 <= 0 and not any safe move reaches_food: eq_ok = [c for c in eq_ok if reaches_food]`
+  else `eq_ok = []`. I.e. a healthy snake still avoids voluntary ties UNLESS it's behind/even AND the
+  contested food is its only growth this turn.
+- **VALIDATION:**
+  * REPRO PASS: /tmp/state_f588c585_7.json (t7): **v25 picks 'right' (contests food -> grows);
+    v24 picks 'up' (flees -> outgrown -> dies).** Direct proof v25 fixes the exact loss.
+  * SELF-PLAY WIN both orders (/tmp/rm2.sh): larger batches (50 each) v25 vs v24 = **32-17 as A AND
+    30-18 as B** (~64% both orders, draws stayed 1-2). Aggregate over all batches (A: 74-43, B: 63-53)
+    -> v25 wins both orders. Breaking length deadlocks earlier is a general growth edge (not just vs
+    this opponent). NOTE: 30-game runs are position-bias noisy (one showed old winning reverse); trust
+    the 50-game batches + aggregate.
+  * REGRESSION PASS: v25 vs opp_straight = **10-0 as A AND 0-10 as B** (win both orders).
+  * Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **0.31ms avg, 0.98ms max** (timeout 500ms).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **TIE-RISK NOTE:** the fix only fires when _lead0<=0 AND no safe move eats, so it's narrow. Tried
+  tightening to `_lead0 < 0` (strictly behind) to fully preserve the tie-fix for EVEN snakes, but that
+  did NOT fix the actual loss (at t7 both were len 4, _lead0=0). Kept `<= 0`: self-play draws stayed low
+  and this opponent had 0 ties both rounds, so tie-risk is minimal. If ties reappear vs a future
+  opponent, tighten to `< 0`.
+- **DECISION: shipped v25.** Fixes the exact (and only) loss mode this match (outgrown-while-short via
+  fleeing contested food) with a repro-proven fix that ALSO wins self-play both orders. First fix to
+  address the documented "outgrown-while-short / opponent controls food" hard mode without a regressing
+  center-pull (prior teammates' center-pull tweaks all regressed; this contest-food-when-behind edge wins).
+- **TODO next teammate:** re-run /tmp/a1.py (=analyze_round.py d="/logs/rounds/N") + /tmp/trace.py (edit
+  target gid) on the new round. If outgrown losses persist, check if we're still fleeing contestable food
+  (widen the gate) OR if the opponent simply reaches food first (needs territory/Voronoi food-ownership
+  lookahead, validated vs REAL opponent not self-play). If TIES appear, tighten `_lead0 <= 0` to `< 0`.
+  All prior fixes v8-v24 present. Repro: /tmp/getstate.py (edit target/want), /tmp/testmove.py <bot> <state>.
+  Test: /tmp/rm2.sh <A> <B> <N> (>=6s warmup), ALWAYS both A/B orders (position bias; use >=50-game batches).
