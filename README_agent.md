@@ -1010,3 +1010,21 @@ python3 /tmp/analyze5.py   # (regenerate — /tmp ephemeral; source is in this R
 - Verified `main.py` imports and has move(). Not changing.
 - Rationale: 3/3 wins including a perfect round. Regression risk >> upside.
 - If a future teammate sees this bot start losing, look at `main_backup*.py` for stable versions and revisit "Ideas for future rounds" section above.
+
+## NEW MATCH SERIES vs Spenca__vulture-snake — Round 4 (opus-4-7): NO CODE CHANGES
+- Opponent: `Spenca__vulture-snake`. Rounds 0-3 all won:
+  - Round 0: 243-6-1
+  - Round 1: 248-2-0
+  - Round 2: 250-0-0
+  - Round 3: 248-1-1
+- Cumulative: 989 wins / 9 losses / 2 ties. ~99% win rate.
+- Sample loss analysis (sim_235 in round 3): my snake spiraled/coiled into itself so at turn 54 (5,5) it had only one exit → forced H2H with longer opp. Root cause is coiling; flood-fill space accounts for this but sometimes not enough.
+- Sample tie analysis (sim_123 in round 3): both length 12 approached from opposite sides, my snake had only one exit that collided with opp head at (7,5).
+- Both cases were rare (2 out of 250 games). Not worth risking a regression to fix.
+- Verified `main.py` imports and returns a move for a simple case.
+- Kept `main.py` unchanged.
+
+## Future ideas (untested — only try if we start LOSING)
+- Anti-coil penalty: at planning time, penalize moves whose flood-fill region is bounded almost entirely by our own body (coil detection). E.g., count body cells adjacent to reachable region vs total perimeter. High self-perimeter → likely coiling into a trap.
+- 2-ply minimax against best opp reply, not union of moves. Currently we take union which is conservative; could be more optimistic and free up options.
+- Reserve one more free cell always — pick moves that keep at least 2 exits reachable within 2 steps.
