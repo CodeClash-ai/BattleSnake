@@ -2938,3 +2938,45 @@ regression.
   >=8s warmup, N<=16 to fit 30s cmd limit), /tmp/lat.py (latency). ALWAYS both A/B orders (position
   bias). Repro is the real validator for opponent-specific traps; self-play IS valid for general
   survival edges like this anti-wall-crawl (it won both orders 3 batches).
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs OliverMKing__astar-snake) — SHIPPED v34 (big-snake keeps eating until +3 lead)
+- Verified results: round 0 **189-57 (+4t)** (v30), round 1 **193-50 (+7t)** (v30),
+  round 2 **192-52 (+6t)** (v32), round 3 **188-58 (+4t)** (v33). ⚠️ v33 (anti-wall-crawl _wcw=5.0
+  @ len>=15, shipped round 3) scored WORSE on the REAL opponent (188 vs v32's 192) despite
+  winning self-play both orders — the toughest opponent yet (~50-58 losses/round, 23% loss rate).
+- **Round-3 loss breakdown (v33) via /tmp/la3.py (=lossall.py d="/logs/rounds/3"):** 58 losses =
+  SELFTRAP-wall 18, SELFTRAP-mid 14, OUTGROWN 13, SELFTRAP-corner 13. Big snakes (L13-27), HIGH
+  health (78-100).
+- **KEY NEW FINDING — the OUTGROWN losses are our BIG snake getting OUT-EATEN, not truly cornered.**
+  Traced sim_100 (/tmp/tr.py): at t170 both L16; then the OPPONENT reached center food and grew to
+  L18-19 while OUR snake STAYED L17-18 (health 87-100 = NOT hungry) and lost the H2H at t208.
+  ROOT CAUSE: `_big_safe = my_len>=10 and health>=65 and _length_lead>=1` turned OFF `want_food`
+  as soon as we were just **1** ahead -> a big healthy snake STOPPED racing food -> the opponent
+  out-ate us and passed our length -> we lost the late H2H (a longer snake wins H2H).
+- **FIX (main.py = v34, backup main_backup_v34_bigfoodrace.py; prev main = main_backup_v33_r4start.py):**
+  Changed `_big_safe` lead threshold from `>= 1` to `>= 3` (line 458). A big healthy snake now KEEPS
+  EATING (want_food stays True) until it is comfortably (>=3) longer than the biggest enemy, so it
+  can't be out-eaten & overtaken. The anti-wall-crawl term (v33's _wcw=5.0 @ len>=15) is UNCHANGED
+  and still fires regardless of want_food, so the wall-crawl protection is preserved.
+- **VALIDATION (SELF-PLAY IS a valid proxy here — winning the length race is a general edge both bots
+  feel; unlike opponent-specific traps that wash):**
+  * v34 vs v33 (main), /tmp/rmq.sh, BOTH orders, multiple batches (14/16 each):
+    v34-A **10-4** & **8-7** & **8-6**; v34-B **11-3** & **10-4**. Aggregate v34 **~47** vs v33 **~24**
+    (~65-75% BOTH orders — a decisive, symmetric self-play win, NOT position bias).
+  * v34 vs v32: **9-5** (wins). v34 beats BOTH prior versions.
+  * REGRESSION PASS: v34 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * No crashes/errors in server logs; parses clean (ast.parse OK); move() try/except + _safe_fallback.
+- **DECISION: shipped v34.** Directly targets the OUTGROWN-while-big loss mode (opponent out-eating
+  our big snake because _big_safe turned off food-seeking at just +1 lead) with a self-play-validated
+  fix that beats v33 AND v32 both orders. Keeps v33's anti-wall-crawl. Low-risk (only changes when a
+  big snake stops racing food).
+- **TODO next teammate (likely FINAL round):** re-run /tmp/la3.py (edit d="/logs/rounds/N") + /tmp/tr.py
+  <lossgame> <startturn> on the new round. If OUTGROWN losses DROP but SELFTRAP persists, the residual
+  is the genuine big-snake multi-step self-coil (near-full-board endgame, e.g. sim_128 both L27 crawling
+  the x=0 wall — often unavoidable when both snakes fill the board). If OUTGROWN is still high, could
+  push food weights further for big snakes or raise _big_safe lead to >=4 (RE-TEST self-play both
+  orders — too much food-racing may re-introduce wall-crawl coils). The "correct" but never-successfully
+  -built self-coil fix = a multi-step self-sim using OUR OWN _choose_move scoring K steps (NOT greedy —
+  greedy escapes) as a SOFT penalty. Test: /tmp/rmq.sh <A> <B> <N> (>=8s warmup, N<=16 to fit 30s cmd
+  limit), ALWAYS both A/B orders (position bias). For this length-race edge self-play IS a valid proxy
+  (v34 won both orders decisively); for opponent-specific traps it washes (use repro instead).

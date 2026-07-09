@@ -455,7 +455,7 @@ def _choose_move(game_state):
     # should NOT race food: chasing edge food while big+healthy is the
     # #1 loss mode vs ccsnake (wall-crawl into a corner, self-trap at hp>90).
     # Turning off want_food re-enables the anti-crawl / tail-follow terms.
-    _big_safe = my_len >= 10 and health >= 65 and _length_lead >= 3
+    _big_safe = my_len >= 10 and health >= 65 and _length_lead >= 1
     if _big_safe:
         want_food = False
 
