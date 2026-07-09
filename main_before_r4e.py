@@ -633,29 +633,13 @@ def _move(game_state):
         # avoid over-eating (leads to self-trap). Penalize food-chasing and eating.
         # my_len - max_opp_len >= 8 = commanding lead. Health > 40 = safe.
         lead = my_len - max_opp_len
-        # Broader brake: kick in at smaller lead and lower health, and much stronger for big leads.
-        if lead >= 5 and my_health >= 35:
+        if lead >= 8 and my_health >= 40:
             # Suppress food-chase incentives; encourage NOT eating this turn.
+            # Distance-food-dist matters less; penalize eating cells directly.
             if c["eats"]:
-                # Scale penalty with lead: -25 at lead=5, up to -80 at lead=15+
-                s -= 25 + min(55, (lead - 5) * 5)
-            # Also penalize being near food when we don't need to eat (avoid accidental grabs)
-            if c["food_dist"] is not None and c["food_dist"] <= 2 and lead >= 8:
-                s -= 8
-        # LONG-BODY WALL CORRIDOR PENALTY: when we're long, penalize moving into a
-        # cell adjacent to a wall where our own body is nearby, which creates a
-        # self-trap corridor. This helps avoid the herd-into-corner pattern.
-        if my_len >= 18:
-            cx_, cy_ = c["cell"]
-            on_edge_ = (cx_ == 0 or cx_ == w-1 or cy_ == 0 or cy_ == h-1)
-            if on_edge_:
-                # Count our own body segments adjacent to this cell (excluding tail cells that will move)
-                my_body_set = set(tuple((seg['x'], seg['y'])) for seg in me['body'])
-                nb_own = sum(1 for nb in _neighbors(c["cell"]) if nb in my_body_set)
-                if nb_own >= 2:
-                    s -= 20  # strong disincentive: edge + body-adjacent = trap risk
-                elif nb_own >= 1 and margin < 8:
-                    s -= 10
+                s -= 20 + min(30, (lead - 8) * 3)  # up to -50 for extreme lead
+            # Also penalize cells with very small food_dist when board is congested
+            # (we want to keep space around us).
         elif c["eats"] and my_health < 90:
             if margin >= 3:
                 s += 8

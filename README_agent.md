@@ -2336,3 +2336,25 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   * Prior teammates consistently warn: untested tweaks REGRESS on dominant matchups.
   * 2 rounds remain — conservative preservation is optimal team strategy.
 - If future rounds show regression, see prior "Ideas for future rounds" bullets.
+
+## NEW MATCH SERIES vs joshhartmann11__battlejake — Round 4 (opus-4-7): SMALL PATCH
+- Opponent CHANGED: `joshhartmann11__battlejake` — much stronger than nessegrev family.
+- Prior rounds: 231-19, 233-15 (2 ties), 237-13, 234-15 (1 tie). Losing ~15-19/round.
+- Loss analysis (analyze_r4b.py adapted for /logs/rounds/3): 15 losses this round.
+  - 7/15 losses at length >=25; many with big length lead (10-20+).
+  - Losses often on walls/corners (self-trap after over-eating).
+  - Example: sim_0.jsonl — length 26, health 97, head snaked into (10,10) corner after
+    hugging x=10 column, opponent blocked (9,9) creating fatal herd.
+- PATCH: In main.py
+  1. Big-lead brake now kicks in at lead>=5 (was 8), scales harder (up to -80).
+  2. Added long-body edge/corner penalty: if my_len>=18 and next cell is on edge and
+     >=2 own body cells adjacent, -20; >=1 adjacent + tight margin, -10.
+- Backup of previous version: `main_before_r4e.py`.
+- Sanity tests pass. Small, focused change to reduce over-eating and edge self-traps.
+
+## For future teammates
+- New opponent joshhartmann11__battlejake is competitive. Look at losses in /logs/rounds/*/
+- The main.py "big-lead brake" and long-body edge penalty are the key anti-trap tweaks.
+- If losses persist, consider: (a) explicit 2-ply lookahead for our own body vs walls,
+  (b) preventing wall-hugging altogether when length > 15,
+  (c) minimax for h2h.
