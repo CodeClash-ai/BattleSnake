@@ -4476,3 +4476,52 @@ regression.
   <bot> <state>. Test: /tmp/rm2.sh <A.py> <B.py> <N> (recreate: ports 8001/8002, 7s warmup, grep
   "A/B is/was the winner", N<=16), ALWAYS both A/B orders (STRONG position bias). Self-play IS valid
   for off-wall/survival edges (v53/v50/v47 won both orders); it WASHES for opponent-specific food-routing.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs ChaelCodes__cornelius) — KEPT v53
+- Verified results: round 0 **227-23** (v51), round 1 **217-31 (+2t)** (v52, reverted),
+  round 2 **227-22 (+1t)** (v53). 3/3 rounds won; v53 (shipped end of round 2) scored 227-22,
+  slightly BETTER than v51's 227-23. main.py == main_backup_v53_strongwallcrawl.py (diff confirms).
+- **Round-2 loss classification (/tmp/cl2.py <round_dir>): 22 losses.** DOMINANT mode = big-longer
+  snake WALL-CRAWL self-coil: ~14/22 our snake LONGER than opp (leads +2 to +8), ~13/22 die on
+  walls/corners (LEFT wall x=0 dominates: 7 of them). ~5/22 OUTGROWN (opp longer: sim_165/202/206/213/40).
+- **DEEP REPRO (sim_61, CLEANEST left-wall coil): len11 hp94-97, lead+7, chases LONE corner food
+  at (0,2), wall-crawls (2,1)->(1,1)->(1,0)->(0,0)->(0,1) into corner & self-coils.** Last-free-choice
+  t37 head (2,1): v53 picks 'left' (toward corner food) not 'down' (open). At t37 both legal moves
+  (left/down) have IDENTICAL space=108/timed=117; left wins by ~21pts (fdist 2 vs 4 + contested 5 vs 4
+  + residual). This is the documented HARD deep coil — one-step metrics equal at the free choice.
+  Repro: /tmp/mk.py sim_61 37 /tmp/s61_37.json /logs/rounds/2 ; /tmp/tm.py <bot> <state>.
+- **Tuning experiments this round — ALL REJECTED (self-play wash/regression, /tmp/rm2.sh BOTH orders):**
+  * v54a: HUGE-LEAD CORNER-FOOD avoidance (push AWAY from food, `score += fdist*2.0` for
+    `not _giant and lead>=5 and hp>=45 and len>=10`, an `elif` after the len>=15 huge-lead rule at
+    line 869). Did NOT flip the sim_61 repro (still 'left' — the ~21pt gap isn't from fdist). Self-play
+    vs v53: 7-9 as A, 8-8 as B -> aggregate new 15 vs v53 17 = slight NEGATIVE. REJECTED (reverted).
+  * v54b: anti-wall-crawl `_wcw` for len 10-11 tier `3.5 -> 5.0` (line ~728). Self-play vs v53:
+    8-8 as A AND 8-8 as B = EXACT WASH (16-16). No improvement. REJECTED.
+  * v54c: `_wcw` len 10-11 tier `-> 6.5`. Self-play vs v53: 7-9 as A, 7-9 as B -> aggregate new 14
+    vs v53 18 = REGRESSES both orders. REJECTED.
+  CONFIRMS all prior teammates: v53 is at a self-play local optimum; the anti-wall-crawl/_wcw &
+  food-avoidance levers are already well-tuned; pushing them further washes/regresses. The sim_61-style
+  deep coil (last-free-choice many turns before death, all one-step metrics equal) has NO one-step fix.
+- VERIFIED v53 IS the strongest: vs v51 self-play = **8-8 as A AND 10-6 as B** (aggregate v53 18, v51 14
+  — net-positive, confirms v53 > v51). REGRESSION PASS: v53 vs opp_straight = **8-0 as A AND 0-8 as B**.
+- main.py == main_backup_v53_strongwallcrawl.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+  (This round's start backup: main_backup_v53_r3start.py == v53.)
+- **DECISION: kept main.py (v53) unchanged.** v53 is the proven best-scoring version (227-22, better
+  than v51's 227-23) and beats v51 net-positive in self-play. Every tweak I tried (huge-lead corner-food
+  avoidance, _wcw 5.0/6.5 for len 10-11) washed or regressed self-play both orders. Iron ship-rule:
+  don't ship a wash/regression on a proven bot. No regression risk taken.
+- **TODO next teammate:** check /logs/rounds/3/results.json FIRST. Re-run /tmp/cl2.py <round_dir>.
+  The dominant loss is big-longer wall-crawl self-coil (LEFT wall x=0). The anti-wall-crawl (_wcw)
+  and huge-lead food terms are TUNED OUT (5.0/6.5 & fdist*2 all wash/regress — do NOT re-try).
+  The residual is the genuine DEEP multi-step coil (sim_61: last-free-choice ~4+ turns before death,
+  all one-step flood/timed/contested/static metrics EQUAL at the free choice; greedy self-sim escapes;
+  NO one-step fix). The correct fix = a SOFT multi-step self-sim advancing OUR body using OUR OWN
+  _choose_move scoring K>=6 steps (NOT greedy — greedy escapes) as a soft penalty (NEVER successfully
+  shipped across the whole match history — regresses as a hard filter). Only ship if a loss repro flips
+  AND self-play does NOT regress both orders. DON'T re-ship v52 (contested_space/food-flee, proven
+  net-negative 217 vs 227). Repro: /tmp/mk.py <sim> <turn> <out.json> <round_dir>, /tmp/tm.py <bot>
+  <state>, /tmp/tr.py <sim> <startturn> <round_dir> (per-turn trace), /tmp/cl2.py <round_dir> (loss class).
+  Test: /tmp/rm2.sh <A.py> <B.py> <N> (ports 8001/8002, 7s warmup, grep "A/B is/was the winner", N<=16),
+  ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric). Self-play IS valid for
+  off-wall/survival edges; it WASHES for opponent-specific food-routing/deep-coil traps.
