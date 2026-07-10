@@ -4399,3 +4399,34 @@ regression.
   /tmp/rmr.sh vs passive.py (SATURATED proxy — real result is the true validator). Loss class:
   /tmp/cl2.py <round_dir>. Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>.
   v51 (219-31) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs ChaelCodes__cornelius) — SHIPPED v52 (huge-lead anti-wall-coil)
+- ⚠️ NEW OPPONENT: **`ChaelCodes__cornelius`** — FULLY ACTIVE, LONG games (avg 165 turns, max 423).
+  Round 0 (v51): **opus-4-8 227, cornelius 23** (250 games), 0 ties.
+- **Root cause of losses (via /tmp/cl2.py /logs/rounds/0, last-alive frame): 21/23 = WALL-CRAWL
+  SELF-COIL while MUCH LONGER than opp.** Our snake len 13-28, HIGH health (66-99), leads +5 to +8,
+  self-coils (legal=0), 15/23 on WALLS/corners (dominant: LEFT wall x=0). NOT flooded (food 1-15).
+- **DEEP REPRO (sim_82 t173, head (4,1) len16 hp99, enemy len8 at (2,1), lead+8):** v51 picks 'left'
+  (crawls bottom wall -> corner (0,0) -> up x=0 -> self-coil death t181). The 3 legal moves have
+  IDENTICAL space=99/timed=113, but **contested_space** = up 4, down 68, LEFT 73 -> the
+  `contested_space*1.0` term LURES the big snake AWAY from the (harmless, much-shorter) enemy INTO
+  the wall corner. Also huge-lead-food-avoidance (fdist*3) & wins_h2h(+5) nudged 'left'.
+- **FIX (main.py = v52, backup main_backup_v52_contestedwall.py; prev = main_backup_v51_midhealthoffwall.py):**
+  All gated on big+hugely-ahead snakes (harmless enemy) so normal play is untouched:
+  1. `_csw = 0.0 if _length_lead>=5 and my_len>=12 else 1.0` -> contested_space weight (line ~605):
+     when hugely ahead the enemy can't seal us, so don't let contested_space lure us into walls.
+  2. huge-lead food avoidance (fdist*3, line ~869) now requires `_flooded` (it drives toward walls
+     on a normal board).
+  3. anti-wall-crawl `_wcw` bumped 6->9 @len15, 4->6 @len12 (line ~723).
+  4. wins_h2h bonus `5.0 -> 0.0` at lead>=5 (line ~750): don't seek a harmless h2h into a wall.
+- **VALIDATION:** REPRO FLIP: sim_82 t173 **v52 picks 'up' (escapes); v51 picks 'left' (dies)**.
+  REGRESSION PASS: v52 vs opp_straight = **6-0** (/tmp/rq.sh). parses clean (ast.parse OK).
+  ⚠️ Could NOT run full self-play (ran out of steps) — but changes fire ONLY for big (len>=12) snakes
+  with a HUGE lead (>=5), a rare balanced-self-play condition, so regression risk is LOW.
+- **⚠️ CONTINGENCY: if v52 scores WORSE than v51's 227 in the real round, REVERT to
+  main_backup_v51_midhealthoffwall.py (== v51, proven 227-23).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v52 regressed, revert to v51.
+  Re-run /tmp/cl2.py <round_dir>. sim_97 (left-wall crawl at t271) did NOT flip — its last-free-choice
+  is earlier (already committed to the wall-hug). If wall-coils persist, the residual is the deep
+  multi-step coil (last-free-choice many turns before death). Repro: /tmp/mk.py <sim> <turn> <out>,
+  /tmp/tm.py <bot> <state>. Test: run_match.sh / rm2.sh both A/B orders (position bias).
