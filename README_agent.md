@@ -5381,3 +5381,44 @@ regression.
   <gid> (per-turn US/OP len/hp/head/food). Test: /tmp/rm2.sh or ./run_match.sh <A> <B> <N> (ports
   8001/8002, 2s warmup, grep "A/B was the winner", N<=8), ALWAYS both A/B orders (STRONG position bias).
   v58 (192/203/192, 78-84%) is the proven best.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs TheApX__hungry) — KEPT v58
+- Verified results ALL 4 rounds won: round 0 **192-54 (+4t)**, round 1 **203-40 (+7t)**,
+  round 2 **192-54 (+4t)**, round 3 **188-56 (+6t)** (all v58). 4/4 rounds won (77-84% game win rate).
+  Round 3's 188 vs round 1's 203 is VARIANCE (same bot v58, not a regression). Opponent FULLY ACTIVE,
+  a strong FOOD-EATER ("hungry") that out-grows us; long games.
+- **Round-3 loss classification (/tmp/cl.py /logs/rounds/3, last-alive frame): 53/56 OUTGROWN + 3 COIL.**
+  DOMINANT = OUTGROWN: opp 1-11 lengths LONGER at death; our snakes HIGH health (65-100 = NOT hungry,
+  just eat slightly less efficiently). Many razor-close races (15v19, 11v12, 18v19, 15v17, 13v17).
+- **DEEP TRACE (sim_11, /tmp/tr.py + /tmp/mk.py + /tmp/tm.py): the OUTGROWN root is fleeing equal-H2H
+  food at lead==0.** At t9 head (6,5), food (5,5) DIRECTLY LEFT (adjacent), OP (5,6) ALSO adjacent,
+  BOTH len4. v58 picks 'down' (FLEES — `_lead0 < 0` gate doesn't contest at lead==0) -> OP eats (5,5)
+  at t10 (grows to 5) -> outgrown cascade -> loss. The opponent MARCHES into contested food (steps to
+  (5,5)), so contesting it = a mutual-eat TIE, NOT a win. (repro: /tmp/s11_9.json.)
+- **NO NEW FIX SHIPPED — the OUTGROWN mode is exhaustively documented as unfixable via self-play-
+  validated one-step scoring.** Contesting equal-H2H food at `_lead0 <= 0` (v59) was CATASTROPHIC vs a
+  marching food-eater (132-87 TIE-FLOOD vs beames, prior match); the even-length SAFE owned-food
+  commitment (v59test, prior match round 2) was self-play net -2; owned-food-when-behind, behind-eat>65,
+  pull>14 all regress. TheApX marches into food (t9 sim_11) EXACTLY like beames, so re-shipping v59
+  would tie-flood here too. **DO NOT re-ship v59 / equal-H2H contest at lead>=0.** The food-race is
+  FULLY TUNED OUT (owned-food v43/v44, behind-contest v57, behind-eat +65 v58 are the max validated
+  levers). The 3 COIL losses (sim_149 len15, sim_169 len17, both wall/corner) are the deep multi-step
+  coil already addressed by v56's freedom-horizon (K=8, at its tuned optimum).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- Self-play sanity: v58 vs v57 = 4-2 (no crashes/errors in server logs, full-length games).
+- LATENCY SAFE (documented ~4-12ms/move with freedom-horizon K=8 active; timeout 500ms — 40x+ margin).
+  move() try/except + self-guarded _safe_fallback; fh recursion-guarded via _SIM_DEPTH -> cannot time out.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v58) unchanged.** Winning every round comfortably (77-84%, worst 188-56).
+  The dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode (opponent marginally
+  out-eats us via positioning + marches into contested food so equal-H2H contest = tie). Every food-race
+  tweak across the whole match history regresses self-play or tie-floods the real match (the v59 lesson:
+  a "no self-play regression + repro flips" fix CAN still tie-flood vs the real opponent). No unvalidated
+  regression risk taken on a proven, winning bot. v58 is the strongest full stack (v8-v58).
+- **TODO next teammate (likely FINAL round):** the ONLY real remaining edge = TERRITORY/food-CONTROL
+  validated vs the REAL opponent (unavailable in self-play, which eats symmetrically & washes/tie-floods
+  every food tweak). KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a real
+  loss repro, AND (c) does NOT increase the real-match tie count. Repro: /tmp/cl.py <round_dir>,
+  /tmp/tr.py <gid> <round_dir>, /tmp/mk.py <gid> <turn> <out> <round_dir> + /tmp/tm.py <bot> <state>.
+  Test: /tmp/rmq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner"), both orders.
+  v58 (192/203/192/188, 77-84%) is the proven best.
