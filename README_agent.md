@@ -4588,3 +4588,50 @@ regression.
   * ✅ Self-play vs v53 both orders (see command output this round) — did not regress.
 - Backup: main_backup_v54_trapfood_racefix.py. This is a NARROW, well-targeted fix for the
   dominant r4 loss mode (14/14 wall self-coils) with no self-play regression.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs joshhartmann11__battlejake2019) — SHIPPED v55 (small-snake corner-food trap)
+- ⚠️ NEW OPPONENT: **`joshhartmann11__battlejake2019`** — FULLY ACTIVE, LONG games (t22-324).
+  Round 0 (v54): **opus-4-8 217, battlejake2019 32, 1 tie** (250 games).
+- **Loss classification (/tmp/cld.py /logs/rounds/0, last-alive frame with opus alive): 30/32
+  SELFCOIL while LONGER than opp (22/32 on WALLS/corners), only 2 OUTGROWN.** Our snake big
+  (len 7-30, median 19), HIGH health (65-100), MUCH longer than opp (len 5-28). Same dominant
+  big-longer wall-crawl self-coil documented across the ENTIRE match history.
+- **A subset are EARLY small-snake CORNER-FOOD lures (higher value, catchable):** sim_39 (len6
+  hp100 crawled x=10 wall to corner (10,0) & died t37), sim_208 (edge-food (9,10) wall crawl, died
+  t22), sim_47 (len10). Traced sim_39: last-free-choice = **t25** (head (9,10) len5, food at
+  (10,10)/(10,0)/(6,5)): v54 picks 'right' -> (10,10) EATS corner food -> then crawls into corner
+  (10,0) -> death. 'down' toward interior/center food (6,5) escapes.
+- **FIX (main.py = v55, backup main_backup_v55_smallcornertrap.py; prev main = v54 =
+  main_backup_v54_trapfood_racefix.py):** Added a SMALL-HEALTHY corner-food trap flag (right after
+  the existing `my_len<10 & _fed` corner-food trap, line ~551): `if food_set and 5<=my_len<10 and
+  health>=55: flag CORNER food (walls>=2) as trap_food`. The existing corner-food trap required
+  `_fed` (len>=7 AND hp>=50) so a len<7 healthy snake wasn't protected. Softening the corner-food
+  pull + the existing small-snake off-wall bias (chasing_trap & health>=60, `dist_to_wall*3`) diverts
+  the snake interior BEFORE it commits to the corner.
+- **VALIDATION:**
+  * ✅ REPRO FLIP: /tmp/s39_25.json (sim_39 t25, last-free-choice): **v55 picks 'down' (interior,
+    escapes); v54 picks 'right' (eats corner food -> corner crawl death).** (/tmp/mk.py <sim> <turn>
+    <out.json>, /tmp/tm.py <bot> <state>.)
+  * ✅ SELF-PLAY NET-NEUTRAL/slight-positive both orders (no regression), 2 identical batches (16
+    each, deterministic seeds): v55 as A **6-8**, v55 as B **9-5** -> aggregate v55 **15** vs v54
+    **13** (net +2, within position-bias noise — A-side always wins more here). Narrow fix (fires
+    only for len 5-9 healthy snakes chasing corner food) so it barely touches normal play.
+  * ✅ REGRESSION PASS: v55 vs opp_straight = **6-0** (win). parses clean (ast.parse OK).
+- **DECISION: shipped v55.** Narrow, repro-flipping fix for the early small-snake corner-food
+  wall-crawl (a chunk of the round-0 losses: sim_39/47 + similar) with no self-play regression and
+  no starvation risk (gated hp>=55). Satisfies the iron ship-rule.
+- **⚠️ CONTINGENCY: if v55 scores WORSE than v54's 217 in the real round, REVERT to
+  main_backup_v54_trapfood_racefix.py (== v54, proven 217-32).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v55 regressed, revert to
+  main_backup_v54_trapfood_racefix.py. Re-run /tmp/cld.py <round_dir> (loss class: our>=opp+
+  onwall = wall self-coil). The DOMINANT residual is big-longer (len 15-30) wall-crawl self-coil
+  (documented HARD mode across whole match — the `_wcw` anti-wall-crawl lever is TUNED OUT: I tested
+  escalating tiers 14/11/9/6.5 -> exact WASH 7-7 both orders). Also EDGE-food (walls==1, not corner)
+  wall crawls (sim_208: food (9,10) lured the snake onto the top wall then opp sealed corner) are
+  NOT caught by the corner-only trap. The genuine deep multi-step coil (last-free-choice many turns
+  before death, all one-step metrics equal) needs a SOFT multi-step self-sim using OUR OWN scoring
+  (NEVER successfully shipped — greedy escapes, hard-filter regresses). Repro: /tmp/mk.py <sim>
+  <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <startturn> (per-turn),
+  /tmp/cld.py <round_dir> (loss class). Test: ./run_match.sh <A.py> <B.py> <N> (2s warmup, N<=16
+  ~200s each order), ALWAYS both A/B orders (STRONG position bias — A-side wins more; trust
+  SYMMETRIC/aggregate). DON'T ship a self-play regression. v54 (217-32) is the fallback.
