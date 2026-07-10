@@ -5054,3 +5054,50 @@ regression.
   head/len/hp/nearfood), /tmp/cl.py <round_dir> (loss class). Test: /tmp/rm2.sh <A> <B> <N> (recreate:
   ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=10 to fit ~30s cmd limit), ALWAYS both A/B
   orders (STRONG position bias — A wins ~7/10; trust AGGREGATE/symmetric). v58 (190-52) is the proven best.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs kentmacdonald2__beames) — KEPT v58
+- Verified results: round 0 **190-52 (+8t)** (v58), round 1 **196-52 (+2t)** (v58). 2/2 rounds won;
+  losses stuck at 52 both rounds. Opponent FULLY ACTIVE, a strong FOOD-EATER that out-grows us.
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1): 49/52 OUTGROWN + 3 else.** Every
+  OUTGROWN loss = opp 1-11 lengths LONGER at death; our snakes HIGH health (85-100 = NOT hungry,
+  just not eating fast enough). MANY die on WALLS/corners (heads at (10,10),(0,0),(2,2),(0,7)).
+- **DEEP TRACE (sim_195, sim_16, sim_120): the opponent OUT-EATS us from t0** (opp len5-6 by t10
+  while we're len4) AND we then WALL-CRAWL toward contested EDGE/CORNER food into a corner where the
+  LONGER opponent cuts us off. sim_195: at t14 sole food (10,9) is on the top-right edge, opp longer
+  & positioned right -> we crawl (7,9)->(7,10)->right along top wall to corner (10,10) & die. Classic
+  OUTGROWN + corner-cutoff combo.
+- **Tuning experiments this round — ALL REJECTED (don't flip repro AND/OR regress self-play):**
+  * v59 (avoid contested_lose WALL/CORNER food even when behind, -30*walls): did NOT flip sim_195
+    (the wall-crawl commit is turns before the food cell; my one-step penalty only hits the eating
+    cell). Self-play WASH (aggregate v59 9 vs main 7 over 16 games — within noise). Not shippable
+    (repro doesn't flip). REJECTED.
+  * v60 (small-snake len5-9 EDGE-food trap: flag edge food a longer+closer enemy controls, incl sole
+    edge food at hp>=75, to trigger the off-wall bias): did NOT flip sim_195 t14 (still 'up' onto the
+    wall) AND **REGRESSED self-play BOTH orders: v60 as A 3-5, as B 2-6 -> aggregate v60 5 vs main 11.**
+    Clear regression. REJECTED.
+  CONFIRMS ALL prior teammates: the OUTGROWN mode (opponent out-eats us early via better positioning /
+  Voronoi food control + cuts us off at corners) is NOT fixable via self-play-validated one-step food/
+  trap scoring. The food-race is fully TUNED OUT (owned-food v43/v44, behind-contest v57, behind-eat
+  +65 v58 are the max validated levers; every further tweak washes/regresses). The corner-cutoff is a
+  MULTI-STEP opponent-squeeze (last-free-choice turns before death, food cell reached later) that the
+  one-step trap penalty can't catch and self-play can't reproduce (both bots eat symmetrically).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal); parses clean (ast.parse OK); move()
+  wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v58) unchanged.** 196-52 is a clear win (79%) vs a strong food-eating
+  opponent. The dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode; both my
+  fixes (v59 wall-food-when-behind, v60 small-snake edge-food trap) either didn't flip the target
+  repro or regressed self-play both orders. Iron ship-rule: don't ship an unvalidated/regressing
+  change on a proven bot. v58 is the strongest full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN). The DOMINANT loss is OUTGROWN (beames out-eats us early + corners us at walls).
+  Food-race is TUNED OUT (v59/v60 this round both failed — do NOT re-try wall-food-when-behind or
+  small-snake edge-food traps; they don't flip the repro & v60 regressed). The ONLY plausible real
+  edge = TERRITORY/food-CONTROL validated vs the REAL opponent (unavailable): position to reach food
+  FIRST / cut the opponent off from the 1-2 board food. The corner-cutoff needs a MULTI-STEP
+  self+enemy squeeze detector (the freedom-horizon at line 712 is gated len>=12 & uses STATIC enemies
+  -> doesn't cover the short-snake active-cutoff losses). KEEP v58 unless a fix WINS self-play both
+  orders (not a wash) AND flips a real loss repro. Repro: /tmp/mk.py <gid> <turn> <out.json>
+  <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> (per-turn US/OP len/hp/head/food),
+  /tmp/cl.py <round_dir>. Test: /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002, 8s warmup, grep
+  "A/B is/was the winner", N<=8 to fit ~240s), ALWAYS both A/B orders (STRONG position bias).
