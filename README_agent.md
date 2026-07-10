@@ -5790,3 +5790,59 @@ regression.
   /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup,
   grep "A/B is/was the winner", N<=8), ALWAYS both A/B orders (STRONG position bias). v58
   (221-29/203-47, 81-88%) is the proven best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs joshhartmann11__battlejake) — KEPT v58
+- Verified results ALL 3 rounds won: round 0 **221-29**, round 1 **203-47**, round 2 **209-40 (+1t)**
+  (all v58). 3/3 rounds won (81-88% game win rate). Opponent FULLY ACTIVE, LONG games, big snakes.
+- **Round-2 loss classification (/tmp/cl.py /logs/rounds/2, last-alive frame): ALL 40 = DEEP
+  multi-step SELF-COIL while LONGER than opp** (our snakes len 7-35, HIGH health 28-100, opp 4-21;
+  MANY die on WALLS/corners: x=0 left wall, (0,0),(10,10) corners). 0 OUTGROWN. The documented hard mode.
+- **DEEP TRACE (sim_204, len35 died corner (0,0)): a full-PERIMETER wall-crawl + FORCED-EAT balloon
+  on a normal board that FLOODED.** The snake grew len 26->35 over t340-388 while wall-crawling
+  right->top->left walls. At t345 (head (6,1)) the ONLY legal move was 'down' onto FOOD (up/right/left
+  all blocked by OWN body) -> FORCED to eat -> ballooned. At t384 (head (0,4)) the ONLY legal move was
+  'down' (up/right blocked, left OOB) -> already in a 1-move corridor -> the trap was set MANY turns
+  earlier. This is essentially the eremetic/gigantic flooded-balloon mode happening on a NORMAL board
+  because our snake grew so big (len 35 = 29% of the 121-cell board + 12-15 food cells -> board floods).
+- **VERIFIED the freedom-horizon (v56, K=8) IS working correctly and the coil is genuinely unfixable
+  at the last free choice.** At t340 (head (5,5), len26): the ONLY two LEGAL moves ('down' & 'left';
+  up/right BLOCKED by own body) BOTH have fh=1 (both lead into shrinking corridors) — there is NO fh=2
+  alternative. So no fh penalty magnitude (tested 22/60/200) can flip it; the body already sealed the
+  good exits several turns before. K=14 gave identical fh (same result). (Repro: /tmp/mk.py <gid> <turn>
+  <out.json> <round_dir>, /tmp/hz.py <bot> <state> <K> = per-move fh, /tmp/tm.py <bot> <state>.)
+- **Investigated the _giant growth cap (line 799-922): it's firing but CAN'T prevent forced-eat.**
+  `_flooded=food>=10`, `_giant=lead>=3 & len>=10 & _flooded` -> `fdist*30` flee + `-1500` anti-eat +
+  density*12. But when EVERY legal move steps onto food (t345), -1500 applies to ALL equally -> can't
+  avoid eating. The `fdist*30` flee also PULLS toward far/perimeter food (high-fdist cells are on the
+  wall) -> feeds the perimeter crawl. Tested removing `fdist*30` (rely on -1500 + density + off-wall):
+  did NOT flip the t370 repro (snake already on the wall). REJECTED (neutral, unvalidated).
+- **NO NEW FIX SHIPPED.** ALL losses are the documented deep-coil / forced-eat-balloon where the
+  last-free-choice is MANY turns before death (whole region shrinking / body seals exits). Confirmed
+  (yet again) no one-step OR K=8/K=14 freedom-horizon fix distinguishes the moves at the commit turn
+  (both legal moves fh=1). Every food-race / anti-wall / giant-cap / deeper-fh tweak across the ENTIRE
+  match history washes or regresses self-play (see the exhaustive prior notes). The forced-eat on a
+  flooded board is unfixable by per-move scoring (every move eats).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, two ~20-long dense snakes, freedom-horizon K=8 active, 50 moves):
+  **8.56ms avg, 17.40ms max** (timeout 500ms — 29x margin). move() try/except + self-guarded
+  _safe_fallback; fh recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout. parses clean.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** Winning every round comfortably (81-88%, ~200-221 wins/
+  round). ALL losses are the documented deep multi-step self-coil / forced-eat balloon where the
+  last-free-choice is many turns before death and both legal moves at the commit turn have equal fh=1
+  (no fixable signal). No unvalidated regression risk taken on a proven, winning bot. v58 is the
+  strongest full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL — recreate /tmp/cl.py from this round's git if missing).
+  ALL joshhartmann losses are DEEP self-coil / perimeter wall-crawl / forced-eat balloon. The residual
+  is unfixable by one-step OR K<=14 freedom-horizon (both legal moves fh=1 at the commit turn; the body
+  seals the good exits several turns earlier). The correct fix (never successfully shipped) would keep a
+  big snake COMPACT & CENTRAL much EARLIER so it never wanders into the body-sealed forced-eat position
+  AND so the board never floods to 12-15 food (our own len-35 body causes the flood). But every
+  compactness/center/cap tweak has regressed self-play (documented exhaustively). Validate ONLY if a
+  loss repro flips AND self-play does NOT regress both orders. Repro: /tmp/mk.py <gid> <turn> <out.json>
+  <round_dir>, /tmp/tm.py <bot> <state>, /tmp/hz.py <bot> <state> <K> (per-move fh), /tmp/tr.py <gid>
+  <round_dir> <startturn> (per-turn US/OP len/hp/head/food), /tmp/cl.py <round_dir> (loss class).
+  Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8;
+  it rm-cleans botA/botB & pkills stale procs), ALWAYS both A/B orders (STRONG position bias).
+  v58 (221-29/203-47/209-40, 81-88%) is the proven best.
