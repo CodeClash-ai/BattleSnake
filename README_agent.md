@@ -4430,3 +4430,49 @@ regression.
   is earlier (already committed to the wall-hug). If wall-coils persist, the residual is the deep
   multi-step coil (last-free-choice many turns before death). Repro: /tmp/mk.py <sim> <turn> <out>,
   /tmp/tm.py <bot> <state>. Test: run_match.sh / rm2.sh both A/B orders (position bias).
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs ChaelCodes__cornelius) — REVERTED v52 -> v51, then SHIPPED v53 (stronger anti-wall-crawl)
+- Verified results: round 0 **227-23** (v51), round 1 **217-31 (+2t)** (v52). ⚠️ **v52
+  (huge-lead anti-wall-coil: contested_space=0/food-flee-flooded-gate/wins_h2h=0 @lead>=5, shipped
+  round 1) scored WORSE than v51: 217-31 vs v51's 227-23** (losses 23->31). Per the prior teammate's
+  EXPLICIT CONTINGENCY note, first REVERTED main.py to v51 (`cp main_backup_v51_midhealthoffwall.py main.py`).
+- **Round-1 loss classification (v52, /tmp/cl2.py d="/logs/rounds/1"): 31 losses.** SAME dominant
+  mode as round 0 (v51): big snake (len 12-27), HIGH health (66-100), LONGER than opp (leads +2 to +8),
+  self-coiling (legal=0), MANY on WALLS/corners — especially the LEFT wall x=0 ((0,0),(0,2),(0,3),
+  (0,8),(0,10)). Boards flood in these long games (avg 165 turns, food accumulates to 10-15). v52's
+  contested_space/food-flee tweaks did NOT reduce the wall-crawl coils and net-regressed.
+- **NEW FIX SHIPPED: v53 (main_backup_v53_strongwallcrawl.py; built on the reverted v51).** Since the
+  dominant loss is big-longer-snake wall-crawl self-coil, STRENGTHENED the anti-wall-crawl `_wcw` tiers
+  (line ~721, the `my_len>=10 and health>=60` block that fires on BOTH normal & flooded boards):
+    `_wcw = 9.0->11.0 @len>=25, 6.0->8.0 @len>=15, 4.0->6.0 @len>=12, 2.5->3.5 (<12)`.
+  This pulls big healthy snakes OFF the perimeter harder so they don't crawl into corners & self-coil.
+  (Nothing else changed from v51; the _giant off-wall pull weight 25 & everything else unchanged.)
+- **VALIDATION (self-play IS a valid proxy — off-wall survival is a general edge both bots feel):**
+  * ✅ SELF-PLAY WIN BOTH ORDERS, 2 batches (16 each), via /tmp/rm2.sh (>=7s warmup):
+    v53 as A: **10-6, 9-7**; v53 as B: **8-8, 11-5**. AGGREGATE (64 games): v53-A **19-13**,
+    v53-B **19-13** -> v53 **38** vs v51 **26** (~59% BOTH orders — symmetric win, NOT position bias).
+  * ✅ REGRESSION PASS: v53 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders; also 5-0/0-5).
+  * ✅ Latency (/tmp/lat.py two 30-long dense snakes, 200 moves): **0.0094ms avg, 0.022ms max**
+    (timeout 500ms) — free. parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback.
+  * NOTE: the specific left-wall loss repros (sim_36/sim_206 t217+) are in FLOODED late-game states
+    (food 10-13) where _giant's off-wall pull (25) already dominates -> v53 doesn't differ there; v53's
+    win comes from the MANY non-flooded/early wall-crawl cases where only _wcw applies.
+- **DECISION: reverted v52 -> v51, then shipped v53.** v52 regressed the real round (227->217);
+  v51 is the proven baseline. v53 strengthens the anti-wall-crawl term that targets the #1 loss mode
+  (big-longer wall-crawl self-coil) and beats v51 in self-play BOTH orders (38-26) with no regression.
+  Satisfies the iron ship-rule (self-play net-positive both orders + regression pass).
+- **⚠️ CONTINGENCY: if v53 scores WORSE than v51's 227 in the real round, REVERT to
+  main_backup_v51_midhealthoffwall.py (== v51, proven 227-23).**
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST. If v53 regressed vs 227, revert to
+  main_backup_v51_midhealthoffwall.py. Re-run /tmp/cl2.py <round_dir> (loss class: our>=opp longer +
+  legal=0 = self-coil; head x=0/10 or y=0/10 = wall death). If wall-crawls PERSIST but DROP, could
+  push _wcw further (11->13 @25, 8->10 @15) but RE-TEST self-play both orders in AGGREGATE over >=2
+  batches (position bias dominates single 16-game batches — trust the SYMMETRIC both-order win). If
+  losses flip to OUTGROWN (opp longer at death), the owned-food routing (v43/v44) is the lever (present,
+  tuned — widening regresses). The residual HARD mode is the genuine DEEP multi-step coil (last-free-
+  choice many turns before death, all one-step metrics equal — needs a SOFT multi-step self-sim using
+  OUR OWN scoring, never successfully shipped). DON'T re-ship v52 (contested_space/food-flee tweaks —
+  proven net-negative 217 vs 227). Repro: /tmp/mk.py <sim> <turn> <out.json> <round_dir>, /tmp/tm.py
+  <bot> <state>. Test: /tmp/rm2.sh <A.py> <B.py> <N> (recreate: ports 8001/8002, 7s warmup, grep
+  "A/B is/was the winner", N<=16), ALWAYS both A/B orders (STRONG position bias). Self-play IS valid
+  for off-wall/survival edges (v53/v50/v47 won both orders); it WASHES for opponent-specific food-routing.
