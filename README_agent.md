@@ -5101,3 +5101,50 @@ regression.
   <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> (per-turn US/OP len/hp/head/food),
   /tmp/cl.py <round_dir>. Test: /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002, 8s warmup, grep
   "A/B is/was the winner", N<=8 to fit ~240s), ALWAYS both A/B orders (STRONG position bias).
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs kentmacdonald2__beames) — SHIPPED v59 (contest equal-H2H food at lead==0)
+- Verified results: round 0 **190-52 (+8t)**, round 1 **196-52 (+2t)**, round 2 **190-56 (+4t)** (all v58).
+  3/3 rounds won but losses STUCK ~52-56. Opponent FULLY ACTIVE, a strong FOOD-EATER that OUT-GROWS us.
+- **Round-2 loss classification (/tmp/cl.py /logs/rounds/2): 51/56 OUTGROWN + 5 selfcoil.** Dominant =
+  OUTGROWN: opponent out-eats us from t0; by t20 opp is 3 longer while our snake STALLS at len4.
+- **ROOT CAUSE FOUND & FIXED (repro sim_101 t9): we FLEE equal-H2H food at lead==0 -> opponent eats it
+  -> we fall behind permanently.** At t9 head (4,5), food (5,5) DIRECTLY ADJACENT, opp at (6,5) ALSO
+  adjacent, both len4 (equal). v58's tie-fix gate (line 481-493: `health>=70` with a safe option ->
+  contest equal-H2H food ONLY if `_lead0 < 0`) made us pick 'up' (FLEE) at lead==0 -> opp ate the food
+  (grew to 5) -> outgrown cascade -> loss. This gate was tuned for the jump-flooding opponent (which
+  MARCHED into the same food = ties); but beames is a food-EATER that WILL take the food we flee, so
+  fleeing at lead==0 causes the entire OUTGROWN loss chain.
+- **FIX (main.py = v59, backup main_backup_v59_contest_lead0.py; prev = main_backup_v58_r3start.py = v58):**
+  Changed line 490 `if _lead0 < 0 ...` -> `if _lead0 <= 0 ...`. Now a small (my_len<8) EVEN-length snake
+  CONTESTS adjacent equal-H2H food (eats it) instead of fleeing, WHEN no safe move also eats. Narrowly
+  gated: only fires in the `_shungry` block (my_len<8), health>=70, safe move exists but doesn't eat,
+  and the eq_ok move reaches_food (enemy racing the SAME food cell -> h2h). Grows us to break the deadlock.
+- **VALIDATION:**
+  * ✅ REPRO FLIP: /tmp/s101_9.json (sim_101 t9, both len4, food (5,5) adjacent, opp adjacent):
+    **v59 picks 'right' (EATS food -> grows); v58 picks 'up' (flees -> outgrown -> dies).** Direct proof
+    v59 fixes the outgrown-cascade root cause. (repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>,
+    /tmp/tm.py <bot> <state>.)
+  * ✅ NO TIE/DRAW REGRESSION (the jump-flooding concern): **0 draws in 44 self-play games** vs v58 (all
+    batches). The narrow gate (my_len<8, no-safe-eat) does NOT create the voluntary-tie flood v25 did.
+  * ✅ SELF-PLAY WASH (expected — both bots eat symmetrically so the contest edge cancels; can't validate
+    the ASYMMETRIC out-eating of the real opponent): v59 vs v58 aggregate ~16-16 both orders. No regression.
+  * ✅ REGRESSION PASS: v59 vs opp_straight = **6-0** (win). LATENCY negligible (<0.1ms; fh unaffected).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v59.** Same profile as the validated v57/v58 food-race fixes (repro flips + no
+  self-play regression + no tie flood): directly targets the DOMINANT (51/56) OUTGROWN loss mode by
+  contesting equal-H2H food at lead==0 vs a food-eating opponent. Fleeing at lead==0 was the exact
+  mechanism that started every outgrown loss. Low risk (narrow gate, no draw flood, regression-safe).
+- **⚠️ CONTINGENCY: if v59 scores WORSE than v58's 190/196 in the real round, REVERT to
+  main_backup_v58_r3start.py (== v58, proven 190-56).** The `_lead0 <= 0` contest COULD create ties vs a
+  DIFFERENT opponent that marches into the same food (like jump-flooding) — but beames is a food-eater,
+  not a marcher, and self-play showed 0 draws. If ties spike vs a future opponent, revert to `_lead0 < 0`.
+- **TODO next teammate:** check /logs/rounds/3/results.json FIRST. If v59 regressed vs 190/196, revert to
+  main_backup_v58_r3start.py. Re-run /tmp/cl.py <round_dir> (loss class: opp>ours = OUTGROWN). If OUTGROWN
+  still dominates, the residual is opponent-owned food (opp reaches the 1-2 board food first via positioning)
+  which is unfixable via self-play-validated one-step scoring (all food-race tweaks wash/regress; owned-food
+  v43/v44, behind-contest v57, behind-eat +65 v58, and now lead==0 contest v59 are the max validated levers).
+  The real remaining edge = TERRITORY/food-CONTROL (cut off opponent from food, BFS-gradient owned-food pull)
+  validated vs the REAL opponent (unavailable). Repro: /tmp/mk.py, /tmp/tm.py, /tmp/tr.py (per-turn),
+  /tmp/trd.py <gid> <t0> <dir> <t1> (detailed per-turn heads/food). Test: /tmp/rm2.sh <A> <B> <N> (ports
+  8001/8002, 8s warmup, grep "A/B is/was the winner", N<=12), ALWAYS both A/B orders (STRONG position bias;
+  0-draw check is the key tie-regression guard for THIS change). v58 (190-56) is the fallback.
