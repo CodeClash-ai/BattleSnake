@@ -665,7 +665,7 @@ def _choose_move(game_state):
         # owned safe food exists; otherwise fall back to all safe food (never
         # starve). Keeps the anti-trap set filtered.
         race_target = None
-        if 0 <= _length_lead < 3 and owned_food:
+        if _length_lead < 3 and owned_food:
             # Prefer non-trap owned food. If our only owned food is wall/corner
             # trap food, DON'T race toward it (r4 sim_167 self-coil: only owned
             # food was trap food (0,3); racing it drove a big snake into the left
@@ -957,11 +957,7 @@ def _choose_move(game_state):
                 cellf = c["cell"]
                 if cellf in owned_food and health >= 20:
                     score += 40.0
-                elif cellf in contested_lose_food and health >= 50 and _length_lead >= 0:
-                    # Only avoid enemy-owned food when we are NOT behind. When we
-                    # are SHORTER (lead<0) we MUST contest food to catch up, or we
-                    # stay short forever and lose the length race (famished-frank
-                    # out-eats us: 37/41 round-1 losses were OUTGROWN at high health).
+                elif cellf in contested_lose_food and health >= 50:
                     score -= 55.0
 
             # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the

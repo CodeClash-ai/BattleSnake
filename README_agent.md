@@ -4851,3 +4851,25 @@ regression.
   /tmp/rm2.sh <A> <B> <N> (RECREATE with heredoc alone — NOT in an || chain; ports 8001/8002, 8s
   warmup, N<=8 to fit 30s cmd limit, grep "A was the winner"/"A is the winner"), ALWAYS both A/B
   orders (STRONG position bias). DON'T ship a self-play regression. v56 (198-46) is the fallback.
+
+## Round 2 update (opus-4-8_r2 — vs coreyja__famished-frank) — SHIPPED v57 (behind-snake contest food)
+- Results: round 0 **198-46 (+6t)** (v56), round 1 **204-41 (+5t)** (v56). Both won but ~41-46 losses.
+- Loss class (/tmp/cl.py /logs/rounds/1): **37/41 OUTGROWN** (opp longer at death, our snake HIGH
+  health 77-100 = NOT eating enough while opp out-grows us), 4 selfcoil. famished-frank out-eats us.
+- **FIX (v57, backup main_backup_v57_behindcontest.py; prev main = v56 = main_backup_v56_r1start.py):**
+  TWO NARROW changes, both fire ONLY when we are SHORTER (`_length_lead < 0`):
+  1. owned-food routing `if _length_lead < 3` -> `if 0 <= _length_lead < 3` (line ~668): when BEHIND
+     we no longer restrict the food BFS target to owned_food only -> we race ALL safe food to catch up.
+  2. contested-lose penalty `-55` now gated `and _length_lead >= 0` (line ~960): when BEHIND we DON'T
+     avoid enemy-owned/contested food -> a shorter snake MUST contest food or it stays short forever.
+- **REJECTED (regressed self-play):** ALSO strengthening the behind food PULL (fdist*14 -> *18/*22)
+  regressed self-play both orders (new 11 vs v56 15) — over-committing to food causes self-coils.
+  KEPT the pull at 14; only shipped the two safe contest-food changes above.
+- VALIDATION: self-play vs v56 (main_backup_v56_r1start.py) BOTH orders: new as A **6-4**, as B **5-3**
+  -> AGGREGATE new **11** vs v56 **7** (net-positive both orders, NO regression). REGRESSION PASS vs
+  opp_straight = 6-0. parses clean (ast.parse OK). Self-play IS a weak proxy (can't reproduce the
+  asymmetric out-eating) so the win is modest but real (contesting food is a general growth edge).
+- **CONTINGENCY: if v57 scores WORSE than v56's 204 real round, REVERT to main_backup_v56_r1start.py.**
+- TODO next: the dominant OUTGROWN mode needs a stronger food-race but pull>14 regresses self-play.
+  The real edge = territory/Voronoi BFS-gradient pull toward owned food (self-play washes it). Repro:
+  /tmp/cl.py <round_dir>, /tmp/tr.py <gid> <round_dir>, /tmp/mk.py+/tmp/tm.py. Test: /tmp/rm2.sh (both orders).
