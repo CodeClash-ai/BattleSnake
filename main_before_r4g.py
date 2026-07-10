@@ -790,7 +790,7 @@ def _move(game_state):
             if trap_risk_hard:
                 s -= 80
             elif trap_risk:
-                s -= 55  # shorter opp mirror; still risky (corner-death, even shorter opp can herd)
+                s -= 35  # shorter opp mirror; still risky (corner-death) but less severe
             # CORNER-HEADING PENALTY: when we're on the wall AND opp mirrors on inner-parallel,
             # moves that continue toward the nearer corner-along-that-wall are corner-death traps.
             # (Observed in sim_1, sim_101, sim_100: opp mirrors inner-parallel, we go straight
@@ -816,9 +816,9 @@ def _move(game_state):
                     dist_corner_after = abs(cy - corner_y)
                     if dist_corner_after < dist_corner_before and dist_corner_after <= 3:
                         if trap_risk_hard:
-                            s -= 70
+                            s -= 60
                         else:
-                            s -= 40
+                            s -= 25
             # BREAK-MIRROR REWARD: if we can move perpendicular to the mirror axis (off the wall),
             # this breaks the mirror-chase. Reward it.
             if trap_risk:
@@ -827,9 +827,9 @@ def _move(game_state):
                 if dist_wall_after2 > dist_wall_before2:
                     # Moving off the wall while mirror-chased = big reward.
                     if trap_risk_hard:
-                        s += 35
+                        s += 25
                     else:
-                        s += 22
+                        s += 12
 
             # Corner is worse
             if (cx in (0, w - 1)) and (cy in (0, h - 1)):
@@ -886,25 +886,9 @@ def _move(game_state):
                 s -= 3
         else:
             # No longer opp near — but still nudge interior at mid/late game.
-            # Also handle shorter opponent that could herd us (bountysnake-style traps).
-            # Check if any opp (any length) is within herd range near a wall.
-            shorter_opp_near = False
-            for oid_sp, info_sp in opp_head_moves.items():
-                oh_sp = info_sp["head"]
-                dman_sp = abs(oh_sp[0]-my_head[0]) + abs(oh_sp[1]-my_head[1])
-                if dman_sp <= 6:
-                    shorter_opp_near = True
-                    break
-            if my_len >= 8 and shorter_opp_near:
-                # Even shorter opps can herd us; boost interior pull
-                if dist_wall_after > dist_wall_before:
-                    s += 8
-                elif dist_wall_after < dist_wall_before:
-                    if dist_wall_after == 0:
-                        s -= 20
-                    elif dist_wall_after == 1:
-                        s -= 8
-            elif my_len >= 10:
+            # This addresses losses where opus voluntarily walked into walls
+            # even with no immediate threat, then got squeezed later.
+            if my_len >= 10:
                 if dist_wall_after > dist_wall_before:
                     s += 4  # mild pull inward
                 elif dist_wall_after < dist_wall_before and dist_wall_after <= 1:

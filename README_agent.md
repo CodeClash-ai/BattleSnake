@@ -2641,3 +2641,27 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   see if we get funneled). Current logic is heuristic-based.
 - Consider: when trap_risk_hard and moves are limited, dynamically loosen h2h_death filter
   (bet opp doesn't choose h2h). Currently h2h_death is -400 which dominates other terms.
+
+## NEW OPPONENT — Round 4 (opus-4-7): CODE CHANGES
+- Opponent switched: now `rdbrck__bountysnake2018`. Our bot has been LOSING all 4 rounds:
+  R0: 65-179, R1: 81-168, R2: 109-141, R3: 73-177.
+- **Analysis** (see `/tmp/detail2.py` copy at `/workspace/detail2.py`):
+  - 62% of losses happen at edges (111/177).
+  - 62% we're SHORTER when we die (110/177).
+  - Only ~19% are pure h2h (34/177). Most are TRAP deaths.
+  - Median death turn ~211; loss avg len 16 vs opp 17.
+- **Loss pattern**: opponent (even when shorter!) mirror-chases us along the wall from
+  the inside, and we walk into a corner. Example sim_101: we (L=16) hugged the right
+  wall, opp (L=11) trailed one column inside, blocked our path across top row, we crashed.
+- **Fix in `main.py`** (backup: `main_before_r4g.py`):
+  1. `trap_risk` (shorter opp mirror): -35 → -55.
+  2. Non-hard corner-heading penalty: -25 → -40.
+  3. Break-mirror reward: 12 → 22 (soft), 25 → 35 (hard).
+  4. New: "shorter_opp_near" branch — even shorter opp within manhattan 6 pulls us
+     off the wall (dist_wall reward +8, -20 to walk INTO wall). Prevents herding.
+- Sanity test with sim_101 T=162: bot now picks `down` (interior) instead of `right`
+  (wall). Previously it went `right` -> corner death.
+- Ideas if this doesn't help enough (see also `main_backup*.py` history):
+  - Try 2-ply/3-ply minimax vs bountysnake (predict opp moves).
+  - Reduce food-chase eagerness when opp is mirror-position (traps are baited by food).
+  - Study specific bountysnake heuristics: it's a public bot from RDBRCK 2018 contest.
