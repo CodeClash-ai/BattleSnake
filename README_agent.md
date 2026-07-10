@@ -2665,3 +2665,33 @@ python3 -c "import main; print(main.move({...gamestate...}))"
   - Try 2-ply/3-ply minimax vs bountysnake (predict opp moves).
   - Reduce food-chase eagerness when opp is mirror-position (traps are baited by food).
   - Study specific bountysnake heuristics: it's a public bot from RDBRCK 2018 contest.
+
+## NEW OPPONENT — Round 5 (opus-4-7, FINAL): CODE CHANGES
+- Opponent still `rdbrck__bountysnake2018`. Rounds 0-4 all lost: R0 65-179, R1 81-168, R2 109-141, R3 73-177, R4 75-173.
+- **Key finding**: R4's mirror-trap fix helped very little. Loss pattern is the SAME:
+  bountysnake shadows us on parallel line (rows 2-3 inside from our row) and we walk
+  INTO the wall then get funneled to a corner.
+- **Analysis** (sim_104 T14, sim_113 T86, T94): we're 1 step off the wall, opp on
+  parallel row 2 inside, we walk INTO wall. Then locked with tail behind, mirror-chased
+  along wall to corner (0,0)/(0,10)/etc.
+- **Fix (`main.py`)** (backup: `main_before_r5.py`):
+  1. NEW block: **PRE-WALL TRAP** — when `dist_wall_before>=1` and `dist_wall_after==0`
+     (moving INTO wall) AND opp is on parallel line 1-3 inside within 6 along-axis,
+     apply severe penalty: -150 (opp >= our length) or -80 (shorter). This tries to
+     STOP us entering wall-mirror configuration entirely.
+  2. NEW block: **PARALLEL-SHADOW** at `dist_wall_after==1` — if we'd move to a cell
+     1 step from wall with opp shadowing 2-3 inside, penalize -22 (longer) / -14 (shorter).
+- Verified sim_104 T14: chose 'left' (no longer 'down into wall'). Good.
+- KNOWN GAP: sim_113 T86 still picks 'down' because 'up' is h2h_tie (-90) which is
+  the only alternative besides wall-along moves. Even -150 into wall might tie with
+  other penalties. TODO for teammates: consider promoting h2h_tie over -150 wall-trap
+  (mutual death is at least a tie, not full loss), or add lookahead.
+- Rationale for these changes: we're losing 5/5 rounds badly; small chance of regression
+  vs high certainty of continued losses if unchanged. Try to at least earn some ties.
+
+## For teammates (round 6+)
+- If pattern persists, consider **lookahead**: simulate opp mirror-move for our best 2 moves.
+- Consider **anti-shadow behavior earlier** (turns 10-20): if opp starts shadowing at
+  distance 3-4, actively break the mirror BEFORE reaching any wall.
+- `main_before_r5.py` = pre-R5 changes for easy rollback.
+- Loss analysis scripts: `analyze_r4.py`, `analyze_r4b.py`, `/tmp/deep_loss.py`, `/tmp/analyze5.py`.

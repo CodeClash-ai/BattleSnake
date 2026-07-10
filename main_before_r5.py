@@ -929,65 +929,6 @@ def _move(game_state):
                     if abs(oh_mt[0] - cx) <= 2 and abs(oh_mt[1] - cy) <= 3:
                         s -= 12
 
-        # PRE-WALL TRAP: catch the loss pattern where we're 1 step from wall (or near wall),
-        # opp shadows on parallel line, and we move INTO the wall (dist_wall_after==0).
-        # Then we're locked on the wall and mirror-chased into a corner.
-        # This fires regardless of edge/on_wall state and independent of opp length
-        # (bountysnake herds even when shorter). Observed in sim_104, sim_113.
-        if dist_wall_before >= 1 and dist_wall_after == 0:
-            # Which wall are we entering?
-            entering_bottom = (cy == 0)
-            entering_top = (cy == h - 1)
-            entering_left = (cx == 0)
-            entering_right = (cx == w - 1)
-            for oid_pw, info_pw in opp_head_moves.items():
-                oh_pw = info_pw["head"]
-                opp_len_pw = info_pw["length"]
-                # Detect "parallel-shadow" geometry: opp is 1-3 rows/cols inside the wall
-                # we're entering, and within 6 along the wall axis.
-                shadow = False
-                if entering_bottom and 1 <= oh_pw[1] <= 3 and abs(oh_pw[0] - cx) <= 6:
-                    shadow = True
-                elif entering_top and h-4 <= oh_pw[1] <= h-2 and abs(oh_pw[0] - cx) <= 6:
-                    shadow = True
-                elif entering_left and 1 <= oh_pw[0] <= 3 and abs(oh_pw[1] - cy) <= 6:
-                    shadow = True
-                elif entering_right and w-4 <= oh_pw[0] <= w-2 and abs(oh_pw[1] - cy) <= 6:
-                    shadow = True
-                if shadow:
-                    # Severe penalty: this is the LOSS pattern. Stronger than h2h_tie (-90)
-                    # so we prefer even a tie over walking into a corner-trap.
-                    if opp_len_pw >= my_len:
-                        s -= 150
-                    else:
-                        s -= 80  # even shorter opp herds us; still very bad
-                    break
-
-        # PARALLEL-SHADOW awareness at 1 step from wall (dist_wall_after == 1):
-        # If we're moving to a cell 1 step from wall AND opp shadows us on parallel line
-        # 2-3 rows/cols inside, discourage moves that also reduce dist to nearest along-wall
-        # corner (i.e., getting funneled by parallel chaser).
-        if dist_wall_after == 1:
-            for oid_ps, info_ps in opp_head_moves.items():
-                oh_ps = info_ps["head"]
-                opp_len_ps = info_ps["length"]
-                # near bottom wall (cy==1)
-                near_wall_ax = None
-                if cy == 1 and 2 <= oh_ps[1] <= 4 and abs(oh_ps[0] - cx) <= 5:
-                    near_wall_ax = 'h'
-                elif cy == h-2 and h-5 <= oh_ps[1] <= h-3 and abs(oh_ps[0] - cx) <= 5:
-                    near_wall_ax = 'h'
-                elif cx == 1 and 2 <= oh_ps[0] <= 4 and abs(oh_ps[1] - cy) <= 5:
-                    near_wall_ax = 'v'
-                elif cx == w-2 and w-5 <= oh_ps[0] <= w-3 and abs(oh_ps[1] - cy) <= 5:
-                    near_wall_ax = 'v'
-                if near_wall_ax:
-                    # Penalize being here at all; extra if longer opp
-                    if opp_len_ps >= my_len:
-                        s -= 22
-                    else:
-                        s -= 14
-                    break
 
         # ANTI-SPIRAL: detect coiling. If new head cell has 2+ own-body neighbors AND
         # is on/near a wall, we're likely spiraling into a self-trap.
