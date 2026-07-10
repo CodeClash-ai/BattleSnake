@@ -4399,3 +4399,55 @@ regression.
   /tmp/rmr.sh vs passive.py (SATURATED proxy — real result is the true validator). Loss class:
   /tmp/cl2.py <round_dir>. Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot> <state>.
   v51 (219-31) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs ChaelCodes__cornelius) — SHIPPED v52 (stronger anti-wall-crawl _wcw)
+- ⚠️ NEW OPPONENT: **`ChaelCodes__cornelius`** — GENUINELY COMPETITIVE / plays LONG survival games.
+  Round 0 result (v51): **opus-4-8 219, cornelius 30 (+1 tie)** (250 games). 30 losses (~12%).
+  NOT a stay-tiny/flooded opponent (our loss lengths 11-27; opp grows to len 7-35). Pure out-play.
+- **Loss classification (/tmp/cl2.py d="/logs/rounds/0"): 30 losses = 17 WALL/CORNER selfcoil +
+  6 mid selfcoil + 7 OUTGROWN.** DOMINANT mode = big/mid snake (len 11-27) WALL-CRAWL into a
+  CORNER while LONGER than opp (leads +2 to +9), HIGH health (mostly 84-100 = not hungry), then
+  self-coils. Heads dying at (0,10),(10,10),(0,0),(10,3),(0,2), etc. (/tmp/cl.py lists all 30).
+- **Two sub-modes traced (/tmp/tr.py <sim> <startturn>):**
+  * sim_105 (len17, food13): FLOODED-ish board — the `_giant` cap (food>=10) fired but the
+    `fdist*30` food-flee still drove the snake up the left wall x=0 into corner (0,10). The `_giant`
+    off-wall pull (25) can't beat fdist*30 even raised to 40 (candg tested — did NOT flip). Hard.
+  * sim_60 (len25, food2): mid-board DEEP multi-step self-coil (head (8,5), NOT on wall) — the
+    documented residual hard mode (no one-step fix; greedy self-sim escapes).
+- **FIX (main.py = v52, backup main_backup_v52_strongerwcw.py; prev = main_backup_v51_r0start.py = v51):**
+  Bumped the anti-wall-crawl `_wcw` tiers (line ~722, fires my_len>=10 & health>=60, non-giant):
+  `25+: 9.0->11.0`, `15+: 6.0->8.0`, `12+: 6.0` (was 4.0), `<12: 3.5` (was 2.5). Steers mid/big
+  healthy snakes (the len 11-27 wall-crawl loss population on NON-flooded cornelius boards) OFF the
+  perimeter harder so they don't crawl into corners & self-coil.
+- **VALIDATION (self-play IS a valid proxy — off-wall survival is a general edge both bots feel):**
+  * ✅ SELF-PLAY NET-POSITIVE (~54%, never a regression), 5 batches (16/16/16/16/20 each), BOTH
+    orders, via ./run_match.sh: v52-as-A EVEN (42-42), v52-as-B POSITIVE (49-35). AGGREGATE v52
+    **91** vs v51 **77**. Never loses an order; wins the B-side decisively.
+  * ✅ REGRESSION PASS: v52 vs opp_straight = **8-0 as A AND 0-8 as B** (win both orders).
+  * ⚠️ Does NOT flip the sim_105 flooded-board giant wall-crawl repro (both pick 'left' — that's the
+    fdist*30 giant food-flee, a different lever; raising the giant off-wall pull to 40 didn't flip it
+    either). v52 wins by reducing wall-crawls in the MANY non-giant cases (the majority).
+  * parses clean (ast.parse OK); move() try/except (line 213) + self-guarded _safe_fallback (219).
+- **DECISION: shipped v52.** Directly targets the dominant round-0 loss mode (mid/big wall-crawl
+  self-coil while longer, 23/30 selfcoils) with a self-play-net-positive-both-orders fix and no
+  regression. Modest but genuine edge; the anti-wall-crawl weight was too weak for cornelius's
+  len 11-27 wall-crawlers.
+- **⚠️ CONTINGENCY: if v52 scores WORSE than v51's 219 in the real round, REVERT to
+  main_backup_v51_r0start.py (== v51, proven 219-30).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v52 regressed, revert to
+  main_backup_v51_r0start.py. Re-run /tmp/cl2.py <round_dir> (loss class: outgrown vs wall/mid
+  selfcoil) + /tmp/cl.py (all losses w/ US len/hp/head vs OP len) + /tmp/tr.py <sim> <startturn>.
+  If wall-crawl selfcoils PERSIST but DROP, could bump _wcw further (test both orders — prior
+  jackisherwood notes warn stronger _wcw eventually regresses). Two residual hard modes:
+  (1) FLOODED-board giant wall-crawl (sim_105: `_giant` cap active but fdist*30 flee drives to
+      corners; the giant off-wall pull 25/40 can't beat it — consider reducing the fdist*30 flee
+      weight near walls, or the flooded threshold interaction, but RE-TEST self-play + passive.py
+      flooded proxy both orders so eremetic/gigantic protection isn't broken);
+  (2) DEEP multi-step interior self-coil (sim_60: len25, last-free-choice many turns before death,
+      all one-step metrics equal — needs a SOFT multi-step self-sim using OUR OWN _choose_move
+      scoring K>=10 steps, NEVER successfully shipped; greedy escapes).
+  7/30 losses are OUTGROWN (opp out-eats us) — owned-food routing (v43/v44) is present; widening it
+  regresses (prior Flipez notes). Repro: /tmp/mk.py <sim> <turn> <out.json> (writes state,
+  "you"=opus), /tmp/tm.py <bot> <state>. Test: ./run_match.sh <A> <B> <N> (2s warmup, N<=20),
+  ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over >=3 batches). Self-play IS
+  valid for off-wall/survival edges; it WASHES for opponent-specific food-routing.

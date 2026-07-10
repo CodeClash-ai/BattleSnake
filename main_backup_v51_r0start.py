@@ -719,13 +719,13 @@ def _choose_move(game_state):
             # to death). Keep such a snake in the interior where its own tail
             # vacates cells, so it can coil safely.
             if my_len >= 25:
-                _wcw = 11.0
+                _wcw = 9.0
             elif my_len >= 15:
-                _wcw = 8.0
-            elif my_len >= 12:
                 _wcw = 6.0
+            elif my_len >= 12:
+                _wcw = 4.0
             else:
-                _wcw = 3.5
+                _wcw = 2.5
             score += dist_to_wall * _wcw
         elif chasing_trap and health >= 60:
             # A SMALL healthy snake whose ONLY food is wall/corner-trap food will
