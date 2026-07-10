@@ -4525,3 +4525,50 @@ regression.
   Test: /tmp/rm2.sh <A.py> <B.py> <N> (ports 8001/8002, 7s warmup, grep "A/B is/was the winner", N<=16),
   ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric). Self-play IS valid for
   off-wall/survival edges; it WASHES for opponent-specific food-routing/deep-coil traps.
+
+## Round 4 update (opus-4-8_r4 — CURRENT MATCH vs ChaelCodes__cornelius) — KEPT v53
+- Verified results: round 0 **227-23** (v51), round 1 **217-31 (+2t)** (v52 reverted),
+  round 2 **227-22 (+1t)** (v53), round 3 **221-29** (v53). 4/4 rounds won. v53 round 3 (221)
+  was slightly worse than round 2 (227) but still a clear win.
+- **Round-3 loss classification (/tmp/cl3.py <round_dir>): 29 losses, ~20 WALL/corner self-coils**
+  while LONGER than opp (leads +2 to +8), high health. DOMINANT: LEFT wall x=0 + corners. Same
+  big/mid wall-crawl self-coil. Also traced sim_2 (len7-9 wall-crawled x=0 UP into corner (0,10)
+  while the opponent SHADOWED it at x=1 and intercepted — an opponent squeeze + wall-crawl combo).
+- **ATTEMPTED FIX (mid-size wall-food trap + off-wall bias for len 7-12 ahead snakes) — REJECTED:**
+  Added (a) a MID-SIZE (len 7-12) wall/corner food trap-flag when ahead+healthy & non-wall food
+  exists (mirrors the big-snake trap), (b) owned-food +40 bonus now EXCLUDES trap_food, (c) a
+  len 7-9 off-wall bias `_dtw2 * W` for ahead+healthy snakes.
+  * ✅ REPRO FLIP: sim_2 t20 (head (1,1) len7 lead+2, wall food (0,1)): at W=15 the fix flips v53's
+    'left' (onto wall food -> wall-crawl to corner death) -> 'up' (off wall, escapes).
+  * ❌ SELF-PLAY: at W=15 the off-wall bias REGRESSED both orders (new 6-9 as A AND 6-9 as B). At
+    W=2 the repro does NOT flip and self-play is a WASH/slight-negative: new(A) 9-6 but new(B) 5-10
+    -> aggregate new 14 vs v53 16 (position bias dominates; net slightly negative). Violates the
+    iron ship-rule (repro flips AND self-play must NOT regress).
+  CONFIRMS all prior teammates: the off-wall/anti-wall-crawl lever is already tuned out; the sim_2
+  case needs a strong off-wall pull to flip but that regresses normal play. The trap-flag alone
+  (W=2) doesn't flip the repro. The wall-crawl-into-corner-while-shadowed is a multi-step
+  opponent-squeeze (the opp intercepts as we crawl) that a one-step off-wall bias can't cleanly fix
+  without over-restricting.
+- REGRESSION PASS: main.py (v53) vs opp_straight.py = **6-0** (win). The attempted-fix code is
+  preserved in this round's git diff / main_backup_v53_r4start.py is the v53 start backup.
+- **DECISION: kept main.py (v53) unchanged** (reverted the attempted fix). v53 is the proven
+  best-scoring version (227-22 round 2). The mid-size wall-food-trap + off-wall bias either
+  regressed self-play (W=15) or was a wash/slight-negative (W=2) and didn't flip the repro. No
+  unvalidated regression risk taken on a bot winning every round.
+- **TODO next teammate (likely FINAL round):** check /logs/rounds/4/results.json FIRST. Re-run
+  /tmp/cl3.py <round_dir> (loss class). The dominant loss is big/mid wall-crawl self-coil (LEFT
+  wall x=0 + corners) while LONGER than opp, OFTEN with the opponent SHADOWING us at x=1 and
+  intercepting into the corner (sim_2). This is a MULTI-STEP opponent-squeeze + wall-crawl:
+  * The one-step off-wall/anti-wall-crawl lever is tuned out (W=15 regresses, W=2 washes).
+  * The trap-flag ideas (mid-size wall-food trap, owned-food excludes trap) are directionally
+    sound (they soften the wall-food pull) but insufficient alone to flip the repro AND they
+    tested as a wash/slight-negative in self-play. If retrying, gate them MUCH more narrowly
+    (only when the shadowing opponent is within manhattan ~3 on the wall side, mirroring the
+    v11 wall-pin logic) and RE-TEST self-play both orders in AGGREGATE over >=2 batches.
+  * The residual is the genuine DEEP multi-step coil / opponent-squeeze (no one-step fix — needs
+    a SOFT multi-step self+enemy sim, never successfully shipped across the whole match history).
+  Repro: /tmp/mk.py <sim> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py
+  <sim> <round_dir> <startturn> (per-turn trace). Test: /tmp/rm2.sh <A.py> <B.py> <N> (recreate:
+  ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=16), ALWAYS both A/B orders (STRONG
+  position bias — trust AGGREGATE/symmetric wins, single batches are position-biased). DON'T ship a
+  self-play wash/regression. DON'T re-ship v52 (proven net-negative 217 vs 227). v53 (227-22) is best.
