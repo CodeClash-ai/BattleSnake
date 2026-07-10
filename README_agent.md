@@ -4572,3 +4572,19 @@ regression.
   ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=16), ALWAYS both A/B orders (STRONG
   position bias — trust AGGREGATE/symmetric wins, single batches are position-biased). DON'T ship a
   self-play wash/regression. DON'T re-ship v52 (proven net-negative 217 vs 227). v53 (227-22) is best.
+
+## Round 5 update (opus-4-8_r5) — SHIPPED A FIX
+- Round 4 result: **opus-4-8 235, ChaelCodes__cornelius 14, Tie 1** (OPPONENT CHANGED — no longer
+  the timing-out Nettogrof; ChaelCodes is an ACTIVE maneuvering snake).
+- All 14 losses = WALL deaths (x=0 / corners like (0,10)) while LONGER than opp = self-coil.
+- ROOT CAUSE FOUND (r4 sim_167 t354): `race_target = (owned_food - trap_food) or owned_food`
+  fell back to TRAPPED owned food when the only owned food was wall/corner trap food ((0,3)).
+  This made the food BFS pull point AT the trap food -> big healthy L27 snake raced into the
+  left wall & coiled to death (fdist for the good 'up' move = 104, for wall 'left' = 2).
+- FIX (v54): `race_target = (owned_food - trap_food) or None` — if our only owned food is trap
+  food, fall THROUGH to safe_food (non-trap) instead of racing into the wall trap.
+  * ✅ sim_167 t354 now picks 'up' (open board, ts=94) instead of 'left' (wall, ts=28) -> escapes.
+  * ✅ Regression vs opp_straight: 8-0.
+  * ✅ Self-play vs v53 both orders (see command output this round) — did not regress.
+- Backup: main_backup_v54_trapfood_racefix.py. This is a NARROW, well-targeted fix for the
+  dominant r4 loss mode (14/14 wall self-coils) with no self-play regression.
