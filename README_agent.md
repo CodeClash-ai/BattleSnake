@@ -4770,3 +4770,45 @@ regression.
   <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/horizon.py <bot> <state> <K> (shows per-move
   min_legal), /tmp/cld.py <round_dir> (loss class). Test: /tmp/rm2.sh <A.py> <B.py> <N> (ports
   8001/8002, 8s warmup, N<=14 to fit ~200s, grep "A/B is/was the winner"), ALWAYS both A/B orders.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs joshhartmann11__battlejake2019) — FINAL, KEPT v56
+- Verified results ALL 5 rounds won: round 0 **217-32 (+1t)** (v54), round 1 **221-29** (v55),
+  round 2 **228-22** (v55), round 3 **222-28** (v55), round 4 **226-23 (+1t)** (v56).
+  ⭐ v56 (freedom-horizon anti-deep-coil, shipped round 4) IMPROVED r3's 222-28 -> r4 226-23
+  (losses 28->23). Per the round-4 CONTINGENCY note ("if v56 scores WORSE than v55's 222, revert")
+  — v56 scored BETTER (226 > 222), so KEPT v56. main.py == main_backup_v56_freedomhorizon.py (diff confirms).
+- **Round-4 loss classification (/tmp/cl4.py /logs/rounds/4, last-alive frame): 23 losses = 21
+  SELFCOIL (16 on WALLS) + 2 OUTGROWN.** Our snake big (len 6-33, median ~18), HIGH health (56-100),
+  MUCH longer than opp (leads +2 to +9), self-coiling (legal=0). The documented DEEP multi-step
+  wall-crawl coil (dominant mode across the ENTIRE match history). v56's freedom-horizon already cut
+  it (28->23); the residual last-free-choices are many turns before death.
+- **Tuning experiments this round — ALL REJECTED (self-play wash/regression, /tmp/rm2.sh BOTH orders,
+  4 batches of 14, aggregate — position bias STRONG so trust the aggregate/symmetric):**
+  * K=10 (deeper horizon, from K=8): AGGREGATE **27-27 EXACT WASH** vs v56 (K10-A 9+6, K10-B 6+6=27;
+    v56-A 8+8, v56-B 4+7=27). No improvement — the coil is caught at K=8; deeper adds cost not benefit.
+  * gate len>=10 (from len>=12): NET-NEGATIVE **13-15** vs v56 (gate10-A 8, gate10-B 5). The extra fh
+    cost on shorter snakes that don't benefit hurts. REJECTED.
+  * penalty 40.0 (from 22.0): CLEAR LOSS **5-9 as A**. Stronger penalty over-restricts normal play. REJECTED.
+  CONFIRMS: v56's freedom-horizon params (K=8, gate len>=12, penalty 22, health>=40, enemies static)
+  are at a self-play local optimum. Every param tweak washes or regresses.
+- REGRESSION PASS: main.py (v56) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- LATENCY SAFE: with the fh self-sim ACTIVE (len20 snake, health90): **9.9ms avg, 13.5ms max**
+  (timeout 500ms — 37x margin). The K=8 recursive self-sim is _SIM_DEPTH-guarded (no nesting) and
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot crash into a timeout.
+- main.py == main_backup_v56_freedomhorizon.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v56) unchanged.** v56 is the BEST-scoring version this match (226-23,
+  improving trend 217->221->228->222->226) and the FIRST fix across the whole match history to flip
+  the deep-multi-step-self-coil repro AND not regress self-play (the recursive-self-sim-with-own-
+  scoring approach the README long identified as the "correct but never-shipped" fix). Every param
+  tweak I tried this round washed or regressed. No unvalidated regression risk taken on the match's
+  best, still-improving version on the FINAL round.
+- **TODO (future, if this opponent recurs):** the ONLY residual loss mode is the DEEP big-longer
+  wall-crawl self-coil (last-free-choice many turns before death). v56's freedom-horizon (K=8) catches
+  a chunk; the residual needs (a) advancing ENEMIES in the fh self-sim (currently static = conservative)
+  to catch opponent-squeeze combos, or (b) a WIDER fh trigger (fh<=2 not just <=1) as a smaller soft
+  penalty — but every param change this round washed/regressed, so validate ONLY if a loss repro FLIPS
+  AND self-play does NOT regress both orders in AGGREGATE. Repro: /tmp/mk.py <sim> <turn> <out.json>
+  <round_dir>, /tmp/tm.py <bot> <state>, /tmp/horizon.py <bot> <state> <K>, /tmp/cl4.py (loss class).
+  Test: /tmp/rm2.sh <A.py> <B.py> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
+  N<=14 to fit ~200s), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric).
+  v56 (226-23) is the proven best — DON'T ship an unvalidated change.
