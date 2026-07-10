@@ -838,48 +838,6 @@ def _move(game_state):
                 # Still uncomfortably close to wall
                 s -= 3
 
-        # AGGRESSIVE ANTI-WALL for EQUAL/LONGER opp (r2 fix - wall-mirror losses):
-        # If opp is within 5 manhattan AND is on the same wall-perpendicular line (shadow position),
-        # NEVER go closer to the wall. This addresses the classic mirror-chase loss pattern.
-        # Also strong when opp is same length (tie == loss for us if forced).
-        for _oid_ws, _info_ws in opp_head_moves.items():
-            if _info_ws["length"] < my_len - 1:
-                continue  # much shorter opp not a shadow threat
-            _oh_ws = _info_ws["head"]
-            _same_or_longer_ws = _info_ws["length"] >= my_len
-            _dm_ws = abs(_oh_ws[0]-my_head[0]) + abs(_oh_ws[1]-my_head[1])
-            if _dm_ws > 6:
-                continue
-            # Shadow geometry: opp is on a line parallel to wall we would approach.
-            # For each wall, check if approaching that wall + opp shadow.
-            _pen_ws = 0
-            # Left wall (x=0)
-            if cx <= 2 and _oh_ws[0] > cx and _oh_ws[0] <= 3 and abs(_oh_ws[1] - cy) <= 4:
-                if dist_wall_after < dist_wall_before:
-                    _pen_ws -= 30 if _same_or_longer_ws else 15
-                elif dist_wall_after == 0:
-                    _pen_ws -= 40 if _same_or_longer_ws else 20
-            # Right wall
-            if cx >= w-3 and _oh_ws[0] < cx and _oh_ws[0] >= w-4 and abs(_oh_ws[1] - cy) <= 4:
-                if dist_wall_after < dist_wall_before:
-                    _pen_ws -= 30 if _same_or_longer_ws else 15
-                elif dist_wall_after == 0:
-                    _pen_ws -= 40 if _same_or_longer_ws else 20
-            # Bottom wall
-            if cy <= 2 and _oh_ws[1] > cy and _oh_ws[1] <= 3 and abs(_oh_ws[0] - cx) <= 4:
-                if dist_wall_after < dist_wall_before:
-                    _pen_ws -= 30 if _same_or_longer_ws else 15
-                elif dist_wall_after == 0:
-                    _pen_ws -= 40 if _same_or_longer_ws else 20
-            # Top wall
-            if cy >= h-3 and _oh_ws[1] < cy and _oh_ws[1] >= h-4 and abs(_oh_ws[0] - cx) <= 4:
-                if dist_wall_after < dist_wall_before:
-                    _pen_ws -= 30 if _same_or_longer_ws else 15
-                elif dist_wall_after == 0:
-                    _pen_ws -= 40 if _same_or_longer_ws else 20
-            s += _pen_ws
-
-
         # MIRROR-TRAP detection: longer opp is exactly parallel to us near a wall.
         # If we're heading to a cell where opp is mirror-adjacent (perpendicular to wall)
         # AND opp is longer, this is a wall-chase setup.

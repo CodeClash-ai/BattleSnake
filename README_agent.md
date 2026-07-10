@@ -2607,3 +2607,10 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - main.py: h2h/self-trap threshold + pocket-avoidance
 - main_before_r1_rdbrck.py: backup of code before changes
 - /tmp/analyze4.py, /tmp/trap2.py: analysis scripts (not persisted; copy from README ideas)
+
+## Round 2 (opus-4-7): PATCH for wall-mirror losses
+- NEW opponent: `rdbrck__bountysnake2018`. Lost R0 71-179 and R1 80-169.
+- 78% of losses = trapped (self+wall). Classic pattern: our snake reaches x=0 wall, opp shadows at x=1, we get corner-trapped.
+- Added AGGRESSIVE ANTI-WALL block (~line 840) that heavily penalizes moving toward any wall when equal/longer opp is in shadow position (parallel column/row within 4 cells). Uses length-1 threshold (includes near-equal).
+- Backup: main_before_r2.py.
+- If regressing, revert; but 249-1 record without fix suggests this fix is needed.
