@@ -5200,3 +5200,36 @@ regression.
   turn/length distribution). Test: /tmp/rm2.sh <A> <B> <N> (ports 8001/8002, 8s warmup, N<=8, grep
   "A/B is/was the winner"), ALWAYS both A/B orders (STRONG position bias). **v58 (190-56) is the proven
   best; v59 tie-flooded to 132 — reverting is unambiguously correct.**
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs kentmacdonald2__beames) — FINAL, KEPT v58
+- Verified results ALL 5 rounds won: round 0 **190-52 (+8t)** (v58), round 1 **196-52 (+2t)** (v58),
+  round 2 **190-56 (+4t)** (v58), round 3 **132-31 (+87 TIES!)** (v59 — CATASTROPHIC tie-flood,
+  reverted), round 4 **200-43 (+7t)** (v58, after the revert). 5/5 rounds won.
+  ⭐ Round 4 (v58) scored **200-43-7 — the BEST result of the match** — directly validating the
+  round-3 revert of v59 back to v58 (v59's `_lead0 <= 0` equal-H2H food contest turned ~60 wins into
+  ties; reverting recovered them: 132 -> 200 wins).
+- **Round-4 loss classification (/tmp/cl.py d="/logs/rounds/4"): 200 wins / 43 losses / 7 ties;
+  41/43 losses = OUTGROWN + 2 selfcoil.** The DOMINANT mode is OUTGROWN (beames out-eats us via
+  better positioning / Voronoi food control; usually 1-2 board food, opp reaches it first & shadows
+  us so nearby food is H2H-loss-contested). This is the documented UNFIXABLE-via-self-play mode.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0** (win). parses clean (ast.parse OK);
+  move() wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** v58 just scored the BEST result of the match (200-43-7);
+  the round-3 v59 tie-flood (132-87t) was already reverted and round 4 confirmed v58 is far superior.
+  The dominant OUTGROWN loss mode is exhaustively documented as unfixable via self-play-validated
+  one-step scoring — EVERY food-race tweak tried across rounds 1-4 (v59 `_lead0<=0` tie-flood,
+  owned-food-when-behind, behind-eat>65, pull>14, contest-when-behind, wall-food-when-behind,
+  small-snake edge-food traps v60) either regressed self-play or tie-flooded the real match. The
+  real edge (TERRITORY/food-CONTROL) can only be validated vs the REAL opponent (unavailable).
+  No unvalidated regression risk taken on the FINAL round of a bot with the match's best result.
+- **KEY LESSON (from v59): a "no self-play regression + repro flips" fix CAN still tie-flood vs the
+  real opponent.** self-play (both bots avoid ties symmetrically) canNOT reproduce a real food-eater
+  MARCHING into contested food. For ANY equal-H2H-contest change, the 0-draw self-play check is
+  NECESSARY but NOT SUFFICIENT — the real-match tie count is the true guard. DO NOT re-ship v59.
+- **TODO (future, if beames recurs):** the ONLY dominant loss mode is OUTGROWN. Food-race is FULLY
+  TUNED OUT (see round 1-4 notes: every tweak regresses/tie-floods). The only real remaining edge is
+  TERRITORY/food-CONTROL (cut opponent off from food; stronger BFS-gradient pull toward owned_food /
+  contested_lose_food computed line ~548) validated vs the REAL opponent — self-play washes/tie-floods
+  it. KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a real loss repro,
+  AND (c) does NOT increase the real-match tie count. v58 (200-43-7, match's best) is the proven best.
