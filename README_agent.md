@@ -5748,3 +5748,62 @@ regression.
   <round_dir> <startturn>, /tmp/cl.py <round_dir>, /tmp/foodcheck.py. Test: bash /tmp/rq.sh <A.py>
   <B.py> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=10 to fit ~30s), ALWAYS
   both A/B orders (STRONG position bias — trust AGGREGATE). v58 (207-42) is the fallback.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs joshhartmann11__battlejake) — KEPT v59
+- Verified results: round 0 **207-42 (+1t)** (v58), round 1 **219-31** (v59). ⭐ v59 (giant-size-gate,
+  raised `_giant` len threshold 10->20, shipped end of round 0) was VALIDATED: 207-42 -> **219-31**
+  (losses 42->31, wins 207->219). Per the round-0 CONTINGENCY note (v59 219 > v58 207), KEPT v59.
+  2/2 rounds won (~88% game win rate). main.py == main_backup_v59_giantsizegate.py (diff confirms).
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1, last-alive frame): 29 SELFCOIL + 2 OUTGROWN;
+  24/31 die on WALLS/corners.** Our snake LONGER than opp (leads +2 to +14), high health (64-100 = NOT
+  hungry). /tmp/foodcheck.py: the giant-cap misfire is FIXED (only 2 len-17 cases at food 12-14 which
+  are just deep coils, not misfires — the len>=20 gate doesn't fire there). Residual = big deep coils
+  (27), small corner coils (2, len 11: sim_133/55), 2 len-17 coils.
+- **Root of the remaining losses = deep multi-step self-coil + moderate ballooning on a FOOD-ACCUMULATING
+  board.** joshhartmann__battlejake STAYS SMALL (opp len 3-17) and lets food pile up (board floods to
+  10-20 food). Our snake grows huge (sim_170: len 25->31 over a 396-turn game) while the opp stays
+  len 14-17, then self-coils near a wall. The giant cap (len>=20, food>=10) DOES fire on the len>=20
+  balloons but on a heavily-flooded board food is UNAVOIDABLE (fdist ~1 everywhere -> the fdist*30 flee
+  gradient is near-useless; the -1500 anti-eat only helps when a non-eating alternative exists, and on
+  a flooded board sometimes ALL moves eat -> FORCED eating). This is the documented flooded-board
+  forced-eating self-coil (same as eremetic/gigantic/tantilla), unfixable via per-move scoring.
+- **Tuning experiment this round — cand16 (lower `_giant` len gate 20 -> 16, cap growth EARLIER to
+  prevent the len 16-31 balloons) — REJECTED (wash + no repro flip):**
+  * vs passive.py FLOODED (fsc15, the stay-small proxy): cand16 **10-0 as A, 8-0 as B = 18-0** ~=
+    v59 **9-1 as A, 10-0 as B = 19-1** (proxy SATURATED — can't distinguish; both dominant).
+  * STANDARD self-play vs v59: batch1 cand16 net +2 (8-6), batch2 EXACT WASH (15-15 aggregate over
+    both batches, both orders). Not a clear both-orders win.
+  * ❌ REPRO: at sim_170 t202 (len16, food10, lead+9) AND t384 (len25) cand16 picks the SAME move as
+    v59 ('left'/'down') — the flee is fdist-based and on a flooded board fdist~1 everywhere, so lowering
+    the gate does NOT change the eating behavior (forced eating). cand16 doesn't flip the loss repro AND
+    risks re-introducing the jackisherwood misfire (len 16-19 driven into walls on moderately-flooded
+    normal boards vs a DIFFERENT opponent — the exact reason v59 raised the gate to 20). REJECTED.
+  CONFIRMS ALL prior teammates: the flooded-board forced-eating self-coil is NOT fixable by per-move
+  food/cap tweaks (fdist gradient useless when food is everywhere; -1500 anti-eat can't discriminate
+  when all moves eat). The deep multi-step coil is at the freedom-horizon ceiling (K=8; K=10 washes,
+  gate<12 regressed vs joshhartmann-earlier-match, penalty>22 lost self-play).
+- REGRESSION PASS: main.py (v59) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- main.py == main_backup_v59_giantsizegate.py (diff confirms equal); parses clean (ast.parse OK);
+  move() wrapped in try/except (line 292) + self-guarded _safe_fallback (line 295); freedom-horizon
+  recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout.
+- **DECISION: kept main.py (v59) unchanged.** v59 is the VALIDATED best (219-31, improved over v58's
+  207-42). The residual losses are the documented flooded-board forced-eating balloon self-coil + deep
+  multi-step coil, neither fixable via per-move scoring (cand16 lowering the gate was a wash + didn't
+  flip the repro + risks the jackisherwood misfire). No unvalidated regression risk taken on the
+  validated best version.
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL) + /tmp/foodcheck.py <round_dir> (giant-cap-band vs
+  small vs big-deep-coil). The DOMINANT loss is the flooded-board balloon/deep self-coil vs a
+  stay-small food-accumulating opponent. Per-move food/cap tweaks are TUNED OUT: cand16 (gate 16)
+  washes + doesn't flip; the fdist flee is useless on a flooded board (forced eating). The REAL fix
+  is STRUCTURAL (never successfully shipped): (a) a SOFT multi-step coil-survival self-sim using OUR
+  OWN _choose_move scoring K>=10 steps (the freedom-horizon is K=8, gate len>=12 — extending it deeper
+  washes self-play), OR (b) REGION-level food-density steering that keeps the snake OUT of food-dense
+  quadrants BEFORE the board floods (partial density term at line ~918). DON'T lower the giant gate
+  below 20 (re-introduces the jackisherwood misfire). KEEP v59 unless a fix (a) WINS self-play both
+  orders (not a wash), (b) flips a real loss repro, AND (c) does NOT re-introduce the misfire. Repro:
+  /tmp/mk.py <sim> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <sim>
+  <round_dir> <startturn>, /tmp/cl.py <round_dir>, /tmp/foodcheck.py <round_dir>. Test: bash /tmp/rq.sh
+  <A> <B> <N> (standard, ports 8001/8002, 8s warmup, N<=8 to fit 30s cmd limit, grep "A/B is/was the
+  winner"), bash /tmp/rmf.sh <A> <B> <N> <fsc> (flooded vs passive.py — SATURATED proxy), ALWAYS both
+  A/B orders (STRONG position bias). v59 (219-31, validated best) is the proven best.
