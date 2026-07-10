@@ -964,16 +964,6 @@ def _choose_move(game_state):
                     # out-eats us: 37/41 round-1 losses were OUTGROWN at high health).
                     score -= 55.0
 
-            # BEHIND-EAT COMMITMENT (v58): when we are SHORTER and healthy, the
-            # space terms (space*2 + timed*3 ~= 400+) dominate the food pull
-            # (fdist*14 ~= 100) so we pick the roomiest move over the food move
-            # and get out-eaten (famished-frank: 43/47 losses OUTGROWN at high
-            # health). Add a large flat bonus for actually STEPPING ONTO food when
-            # behind so we commit to eating & win the length race. Gated on
-            # reaches_food + lead<0 so it never fires when ahead/normal.
-            if not _giant and _length_lead < 0 and c["reaches_food"] and health >= 25:
-                score += 65.0
-
             # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the
             # opponent, growing further only risks self-coil (eremetic-eric loss
             # mode: our snake grew to len 55-91 on a 121-cell board flooded with
