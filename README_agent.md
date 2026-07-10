@@ -4635,3 +4635,42 @@ regression.
   /tmp/cld.py <round_dir> (loss class). Test: ./run_match.sh <A.py> <B.py> <N> (2s warmup, N<=16
   ~200s each order), ALWAYS both A/B orders (STRONG position bias — A-side wins more; trust
   SYMMETRIC/aggregate). DON'T ship a self-play regression. v54 (217-32) is the fallback.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs joshhartmann11__battlejake2019) — KEPT v55
+- Verified results: round 0 **217-32 (+1t)** (v54), round 1 **221-29** (v55). ⭐ v55 (small-snake
+  corner-food trap, shipped end of round 1) IMPROVED r0's 217-32 -> r1 221-29 (losses 32->29).
+  2/2 rounds won. main.py == main_backup_v55_smallcornertrap.py (diff confirms equal; parses clean).
+- **Round-1 loss classification (/tmp/cld.py /logs/rounds/1, last-alive frame): 29 losses, ALL 29 =
+  our snake LONGER than opp + SELFCOIL; 23/29 die on WALLS/corners.** Our snake big (len 6-28,
+  median ~18), high health, MUCH longer than opp (leads +2 to +11). Documented big-longer wall-crawl
+  self-coil (dominant mode across the ENTIRE match history; LEFT wall x=0 + corners).
+- **ATTEMPTED FIX (small-snake CONTESTED EDGE-food trap, in /tmp/cand.py) — REJECTED:** extended the
+  small-snake (len 5-9) trap to also flag EDGE food (walls>=1) an enemy is at-least-as-close to
+  (targeting sim_152: len6 chased edge food (9,0) the opp reached first, crawled x=10 wall into corner
+  (10,0) & died). Relaxed the starvation gate to fire on sole wall food at hp>=70.
+  * ❌ Did NOT flip the sim_152 t18 repro: at head (9,7) the ONLY legal moves are 'left'(8,7,dtw=2) and
+    'right'(10,7,dtw=0) — both space=112/timed=116, both dist 8 to food (9,0). Even with the trap flag
+    (chasing_trap True), the bot still picks 'right' (a tail-follow/center term must favor it; the
+    off-wall dtw diff isn't decisive). This is a marginal deep-coil case.
+  * ❌ SELF-PLAY WASH/slight-negative both orders (/tmp/rm2.sh, 14 each): cand as A **6-7-1**, cand as
+    B **6-6-2** -> aggregate cand **12** vs v55 **13**. Violates the iron ship-rule (repro must flip AND
+    self-play must NOT regress). REJECTED.
+- REGRESSION PASS: main.py (v55) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- main.py == main_backup_v55_smallcornertrap.py (== this round's start backup main_backup_v55_r2start.py);
+  parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: kept main.py (v55) unchanged.** v55 is the proven best-scoring version (221-29, improved
+  over v54's 217-32). The dominant loss mode (big-longer wall-crawl self-coil) is the documented HARD
+  deep multi-step coil where the last-free-choice is many turns before death and all one-step metrics
+  are equal — every tweak washes/regresses (my contested-edge-food candidate did both: didn't flip the
+  repro AND slight self-play negative). No regression risk taken.
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST. Re-run /tmp/cld.py <round_dir> (loss
+  class: our>=opp + onwall = wall self-coil). The DOMINANT residual is big-longer (len 15-28) wall-crawl
+  self-coil (LEFT wall x=0 + corners). The anti-wall-crawl `_wcw` + off-wall + food-trap levers are all
+  TUNED OUT (every escalation washes/regresses — prior teammates confirmed repeatedly). The genuine deep
+  multi-step coil needs a SOFT multi-step self-sim using OUR OWN _choose_move scoring K>=6 steps (NOT
+  greedy — greedy escapes; NEVER successfully shipped across the whole match history — regresses as a
+  hard filter). Only ship if a loss repro flips AND self-play does NOT regress both orders. Repro:
+  /tmp/mk.py <sim> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/eval.py <state>
+  (per-dir space/timed/dtw), /tmp/tr.py <sim> <round_dir> <startturn> (per-turn trace). Test:
+  /tmp/rm2.sh <A.py> <B.py> <N> (recreate: ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
+  N<=16), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric). v55 (221-29) is best.
