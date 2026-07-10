@@ -5548,3 +5548,58 @@ regression.
   len/hp/head/food), /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rmq.sh <A> <B> <N> (ports
   8001/8002, 8s warmup, N<=7 to fit 30s cmd limit, grep "A/B is/was the winner"; all-draws = warmup
   too short, rerun), ALWAYS both A/B orders (STRONG position bias). v58 (204-43/197-52, 79-82%) is best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs xtagon__nagini) — KEPT v58
+- Verified results ALL 3 rounds won: round 0 **204-43 (+3t)**, round 1 **197-52 (+1t)**,
+  round 2 **205-42 (+3t)** (all v58). 3/3 rounds won (79-82% game win rate). Opponent FULLY
+  ACTIVE, plays LONG games with big snakes; a strong food-eater that controls the 1-3 board food
+  via positioning (Voronoi).
+- **Round-2 loss classification (/tmp/cl.py /logs/rounds/2, last-alive frame): 34 OUTGROWN + 8 SELFCOIL.**
+  * OUTGROWN (34, DOMINANT): opp 1-8 lengths LONGER at death; our snakes HIGH health (67-100 = NOT
+    hungry). MANY razor-close (us11/op12, us10/op11, us13/op14, us16/op19, us5/op6). Opponent
+    out-eats us via positioning. The documented UNFIXABLE-via-self-play mode.
+  * SELFCOIL (8): mix of small (sim_192 len11 bottom-wall corner-food crawl, sim_106 len11, sim_134
+    len10, sim_192 len11 died (7,0)) & mid (sim_105 len27, sim_136 len14, sim_181 len15) deep coils,
+    mostly wall/corner. DEEP TRACE (sim_192, /tmp/tr.py): our len9-11 snake wall-crawled the BOTTOM
+    wall (y=0) chasing/after corner food (10,0), ate it t50, kept crawling LEFT along y=0 and
+    self-coiled at (7,0) t53 while LONGER than opp (len11 vs 9). The freedom-horizon deep-coil
+    detector (v56, K=8) is gated len>=12 so it did NOT fire (snake was len 11). The corner-food
+    trap (line 634, small-snake) DOES flag (10,0) but the snake still crawls after eating it (no
+    corner food left -> only the weak len<12 _wcw anti-wall-crawl applies).
+- **NO NEW FIX SHIPPED.** The dominant OUTGROWN mode is exhaustively documented as unfixable via
+  self-play-validated one-step scoring (both bots eat symmetrically -> every food-race tweak washes/
+  regresses; and v59's `_lead0<=0` equal-H2H contest = CATASTROPHIC 132-87 TIE-FLOOD vs beames, and
+  nagini is also a food-eater that would tie-flood the same way). The food-race is FULLY TUNED OUT
+  (owned-food v43/v44, behind-contest v57, behind-eat +65 v58 = max validated levers; stronger
+  lead+1 pull / owned-food-when-behind / behind-eat>65 / pull>14 all regress — see rounds 1-2 of the
+  prior TheApX/nagini notes). The SELFCOIL residual is the freedom-horizon ceiling (K=10 washes,
+  gate<12 regressed vs joshhartmann, penalty>22 lost self-play). The sim_192-style small-snake
+  (len 10-11) wall-crawl coil is BELOW the freedom-horizon gate (len>=12); lowering the gate to
+  len>=10 regressed self-play in a prior match (joshhartmann) so I did NOT change it.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, len20 snake, freedom-horizon K=8 active): **4.57ms avg, 15.1ms max**
+  (timeout 500ms — 33x margin). move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot crash into a timeout. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** Winning every round comfortably (79-82%, ~200 wins/
+  round). The dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode; the SELFCOIL
+  residual is at the freedom-horizon ceiling. Every food-race / deep-coil tweak across the entire
+  match history regresses self-play or tie-floods the real match. No unvalidated regression risk taken
+  on a proven, winning bot. v58 is the strongest full stack (v8-v58).
+- **KEY LESSON (from v59, prior match): a "no self-play regression + repro flips" fix CAN still
+  tie-flood vs the real opponent.** self-play (both bots avoid ties symmetrically) canNOT reproduce a
+  food-eater MARCHING into contested food. For ANY equal-H2H-contest change, the 0-draw self-play
+  check is NECESSARY but NOT SUFFICIENT — the real-match tie count is the true guard. DO NOT re-ship v59.
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL — recreate /tmp/cl.py from this round's git if missing;
+  parses each sim_*.jsonl last line {winnerName,isDraw} + the last-alive frame US/OP len/hp/head).
+  The DOMINANT loss is OUTGROWN (nagini out-eats us via positioning; razor-close races). The ONLY
+  real remaining edge = TERRITORY/food-CONTROL validated vs the REAL opponent (self-play washes/
+  tie-floods it): grab CENTRAL food EARLY, or a stronger BFS-gradient pull toward OWNED food
+  (owned_food/contested_lose_food computed line ~548). KEEP v58 unless a fix (a) WINS self-play both
+  orders (not a wash), (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count.
+  Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid>
+  <round_dir> <startturn> (per-turn US/OP len/hp/head/food), /tmp/cl.py <round_dir> (loss class).
+  Test: bash /tmp/rmq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, N<=7 to fit 30s cmd limit, grep
+  "A/B is/was the winner"; all-draws = warmup too short, rerun), ALWAYS both A/B orders (STRONG
+  position bias). v58 (204-43/197-52/205-42, 79-82%) is the proven best.
