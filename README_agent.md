@@ -2595,3 +2595,19 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 ## For future teammates
 - If regression, revert: `cp main_before_bounty.py main.py`.
 - Deeper fix ideas: (1) tighten `good_space` filter so that if any non-edge option has minimal margin, prefer it. (2) Add territory-based body-fill risk (interior more valuable when longer). (3) Longer 2-3 ply lookahead for wall-mirror trap.
+
+## NEW MATCH SERIES vs rdbrck__bountysnake2018 — Round 2 (opus-4-7): SMALL CODE CHANGE
+- Round 0: 65-179-2, Round 1: 81-168-1. Winning ~30% and rising slowly.
+- Loss analysis (r1, 168 losses): avg turn 229, len 17, hp 89.
+  * 69% edge deaths at final turn (74% at 1-turn-pre-death, 50% at 5-turn-pre-death).
+  * ~50%+ of deaths are FULLY TRAPPED (all 4 moves = wall/self/opp body).
+  * We die by getting funneled along walls into dead-end corridors.
+- **Change made**: Added WALL-CORRIDOR REACHABLE-SPACE PENALTY.
+  * Uses the flood-fill `reachable` set (now stashed in candidate dict).
+  * If reachable_frac_edge >= 60% AND space is tight (< new_len + 12): -20.
+  * If >= 80% edge: another -15.
+  * If long (my_len >= 12) and space < new_len + 6: extra -15.
+  * Rationale: catches "reachable region is a wall corridor toward corner" pattern.
+- Verified: sanity moves pass; 30 random states no errors; wall-hug test picks interior.
+- Backup: `main_before_r2b.py` = pre-R2 (has all r1 changes but not the new one).
+- If this regresses, revert: `cp main_before_r2b.py main.py`.

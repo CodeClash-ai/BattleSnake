@@ -400,7 +400,6 @@ def _move(game_state):
         candidates.append({
             "dir": d,
             "cell": np,
-            "reachable": reachable,
             "space": space,
             "food_dist": food_dist,
             "eats": np in food_set,
@@ -994,25 +993,6 @@ def _move(game_state):
                 s += 4  # slight pull toward center
             elif dist_center_after > dist_center_before and dist_wall_this <= 2:
                 s -= 3  # pushing further out toward wall
-
-        # WALL-CORRIDOR REACHABLE-SPACE PENALTY
-        # If our reachable space is heavily on the edge (>=60% edge cells) AND small,
-        # we're being funneled into a wall corridor/corner. This catches the
-        # "chased along wall" pattern that ends in corner death.
-        _reach = c.get("reachable")
-        if _reach and my_len >= 6 and c["space"] <= 3 * c["new_len"]:
-            edge_reach = 0
-            for (rx, ry) in _reach:
-                if rx == 0 or rx == w-1 or ry == 0 or ry == h-1:
-                    edge_reach += 1
-            frac_edge = edge_reach / max(1, c["space"])
-            if frac_edge >= 0.6 and c["space"] < c["new_len"] + 12:
-                s -= 20
-                if frac_edge >= 0.8:
-                    s -= 15
-                # Extra when we're long and closing our own space
-                if my_len >= 12 and c["space"] < c["new_len"] + 6:
-                    s -= 15
 
         return s
 
