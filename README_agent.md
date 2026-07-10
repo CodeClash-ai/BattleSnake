@@ -5732,3 +5732,61 @@ regression.
   <K> (per-move fh), /tmp/tr.py <gid> <round_dir> <startturn>, /tmp/cl.py <round_dir> (loss class).
   Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
   N<=8), ALWAYS both A/B orders (STRONG position bias). v58 (221-29, 88%) is the proven best.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs joshhartmann11__battlejake) — KEPT v58
+- Verified results: round 0 **221-29** (v58), round 1 **203-47** (v58). 2/2 rounds won (81-88%
+  game win rate). Losses grew 29->47 (VARIANCE — same bot v58; matches prior joshhartmann results
+  where v56 got 226-23). Opponent FULLY ACTIVE, LONG games with big snakes.
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1, last-alive frame): ALL 47 = DEEP
+  multi-step SELF-COIL while LONGER than opp** (our snakes len 12-29, HIGH health 35-100, opp 5-27;
+  **36/47 die on WALLS/corners**). 0 OUTGROWN. The documented hard mode (big-longer snake
+  wall-crawls the perimeter / spirals its own body into a shrinking region and self-coils).
+- **DEEP TRACE (sim_132, len23 died corner (10,10)): a full-perimeter WALL-CRAWL while the board
+  FLOODS with wall food.** The snake crawled LEFT wall x=0 (t232-238) then TOP wall y=10 (t240-250)
+  eating incidental wall food ((5,10),(7,10),(8,10),(10,10)) into the corner. It was NOT hungry
+  (hp100) — the food was directly in its wall-hugging path. The v58 big-snake wall-food trap
+  (line 646, len>=13, non-wall food exists) DID flag the top-wall food, but the anti-wall-crawl
+  weight can't overcome the eating-now benefit + the snake was ALREADY on the wall by t232 (the
+  last-free-choice off the wall was many turns earlier). sim_1 (len22): spirals its OWN body into a
+  pocket t260-268, all moves equal space at the commit turns.
+- **ATTEMPTED FIX (SPACE-BASED freedom-horizon, in /tmp/cand.py) — REJECTED (entirely NEUTRAL):**
+  Enhanced `_freedom_horizon` to ALSO track the MIN reachable flood-fill space during the K=8
+  self-sim (not just min legal-move COUNT), returning `(min_legal, min_space)`, and added a soft
+  penalty `-(my_len - fh_sp)*1.5` when `fh_sp < my_len` (a coil forming even when legal-count stays
+  >=2). Idea: catch the space-shrinking coil the legal-count metric misses.
+  * ❌ **ENTIRELY NEUTRAL: 0 diffs / 42 tested turns** across 6 loss repros (sim_1/132/14/186/170/155,
+    turns 250-268). At the wall-crawl/coil-commit turns the reachable space is STILL LARGE (the whole
+    board below the top wall, or the open region) — `fh_sp` only drops below my_len AFTER the coil is
+    already committed (too late). So the penalty never fires at a distinguishable turn -> no flip,
+    no improvement. Not shippable (repro must flip; a neutral change isn't worth regression risk). REJECTED.
+  CONFIRMS ALL prior teammates: the deep multi-step coil / perimeter wall-crawl (last-free-choice
+  MANY turns before death, whole region shrinking, all one-step AND K=8 metrics equal at the commit
+  turn) has NO practical short-horizon fix. freedom-horizon (v56, K=8, gate len>=12) is at its
+  ceiling (K=10 washes, gate<12 regressed, penalty>22 lost, fh==2 washed, min_space neutral).
+- REGRESSION PASS: main.py (v58) vs opp_straight — verified move() wrapped in try/except (line 292)
+  + self-guarded _safe_fallback (line 295) + freedom-horizon recursion-guarded via _SIM_DEPTH (line
+  28/88-94) -> cannot crash into a timeout. parses clean (ast.parse OK).
+- LATENCY SAFE (dense state, two long snakes len20/18, freedom-horizon K=8 active, 50 moves):
+  **1.60ms avg, 2.48ms max** (timeout 500ms — 200x margin).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** Winning every round (81-88%). ALL losses are the
+  documented deep-coil / perimeter-wall-crawl mode where the last-free-choice is many turns before
+  death and the reachable space stays large until the coil is committed — my space-based
+  freedom-horizon enhancement was entirely NEUTRAL (0 flips across 42 tested turns). Every deep-coil/
+  food/anti-wall tweak across the ENTIRE match history washes or regresses. No unvalidated regression
+  risk taken on a proven, winning bot. v58 is the strongest full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL). ALL joshhartmann losses are the DEEP self-coil /
+  perimeter wall-crawl. The freedom-horizon K=8 catches only cases with a distinguishable choice
+  within 8 turns; the residual has the last-free-choice MANY turns before death (whole region
+  shrinking). The correct fix (never successfully shipped) would be either (a) a MUCH deeper
+  freedom-horizon (K>=15) — but K=10 already washed self-play, so deeper likely washes/regresses +
+  costs latency; or (b) a "compactness"/space-efficiency term that keeps a big snake's body a tight
+  unwind-able coil EARLIER (before the region shrinks) — validate ONLY if a loss repro flips AND
+  self-play does NOT regress both orders (every prior attempt regressed). The min_space
+  freedom-horizon enhancement (this round, /tmp/cand.py) is NEUTRAL — do NOT re-try it as-is (space
+  stays large until the coil commits). Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>,
+  /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> <round_dir> <startturn> (per-turn US/OP len/hp/head),
+  /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup,
+  grep "A/B is/was the winner", N<=8), ALWAYS both A/B orders (STRONG position bias). v58
+  (221-29/203-47, 81-88%) is the proven best.
