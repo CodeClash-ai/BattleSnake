@@ -4451,3 +4451,55 @@ regression.
   "you"=opus), /tmp/tm.py <bot> <state>. Test: ./run_match.sh <A> <B> <N> (2s warmup, N<=20),
   ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE over >=3 batches). Self-play IS
   valid for off-wall/survival edges; it WASHES for opponent-specific food-routing.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs ChaelCodes__cornelius) — SHIPPED v53 (giant food-flee gated to lead>=6)
+- Verified results: round 0 **219-30 (+1t)** (v51), round 1 **225-25** (v52). ⭐ v52 (stronger
+  anti-wall-crawl _wcw, shipped round 1) IMPROVED r0's 219-30 -> r1 225-25 (losses 30->25). main.py started this round == v52.
+- **Round-1 loss classification (/tmp/cl2.py d="/logs/rounds/1"): 25 losses = 13 WALL + 6 MID + 6 OUTGROWN.**
+  DOMINANT = big/mid snake (len 9-30) WALL/CORNER selfcoil while LONGER than opp (leads +3 to +6),
+  HIGH health. Many die at corners (0,10),(0,0),(10,10),(10,4). cornelius is NOT stay-tiny — it GROWS
+  (opp reaches len 9-31; in losses opp len 7-31, our leads only +3 to +6).
+- **ROOT CAUSE FOUND (real bug): the `_giant` food-flee mis-fires on cornelius.** `_giant =
+  _length_lead>=3 and my_len>=10 and _flooded(food>=10)`. In LONG cornelius games the board floods
+  (17+ food) at MODEST leads (+4-6, since opp grows too). The giant food-flee then does `fdist*30`
+  (flee food toward food-SPARSE cells = the perimeter/corners) -> drives our compact snake INTO the
+  corner and self-coils. DEEP TRACE sim_46 t221 (head (3,0), len13 lead+4, food17): v52 picks 'left'
+  (toward food-sparse LEFT corner -> crawled (2,0)->(1,0)->(0,0)->up x=0->corner (0,10) death t234);
+  'right' (toward open board) was safe. The `_giant` cap is meant for STAY-TINY opponents
+  (tantilla/eremetic/gigantic: opp stays len 3-9, we balloon to 40-90, lead +30-80) — NOT for a
+  growing opponent at a modest lead.
+- **FIX (main.py = v53, backup main_backup_v53_giantleadgate.py; prev = main_backup_v52_r2start.py = v52):**
+  Raised the `_giant` lead threshold `_length_lead >= 3` -> **`_length_lead >= 6`** (BOTH occurrences,
+  lines ~698 and ~792). Now the giant food-flee/anti-eat/off-wall only fires at a genuinely large lead
+  (stay-tiny opponent), NOT at cornelius's modest +3-5 leads where flooding happens from long games.
+- **VALIDATION:**
+  * ✅ REPRO FLIP: sim_46 t221 (/tmp/s46_221.json): **v53 picks 'right' (open board, escapes); v52
+    picks 'left' (into the corner-drive -> death).** /tmp/tm.py /tmp/cand6.py<-now main.py.
+  * ✅ STAY-TINY PROTECTION PRESERVED: synthetic flooded state (/tmp/giant.json, us len20 vs opp len5,
+    lead+15, 25 food): v53 AND v52 pick the SAME move ('up', away from food-dense side) — the giant
+    flee still fires identically at large leads. So tantilla/eremetic/gigantic protection is intact.
+  * ✅ REGRESSION PASS: v53 vs opp_straight = **5-0 as A AND 0-5 as B** (win both orders, no crash/timeout).
+  * ✅ NORMAL SELF-PLAY NO REGRESSION: v53 vs v52 (/tmp/rmq.sh, 8 each order): v53-A 5-3, v52-A 6-2
+    -> position-bias WASH (A-side won both, expected — v53 only differs in flooded modest-lead cases
+    self-play rarely reaches). No crashes, full-length games. parses clean (ast.parse OK).
+- **DECISION: shipped v53.** Genuine bugfix: the giant food-flee (built for STAY-TINY flooded
+  opponents) was mis-firing on cornelius (a GROWING opponent) at modest leads when the board floods
+  from a long game, driving our compact snake into corners (the #1 loss mode, 13/25 WALL selfcoils).
+  Gating it to lead>=6 flips the repro toward open board, preserves the stay-tiny protection (identical
+  at lead+15), and doesn't regress normal play or opp_straight. Continues the improving trend (30->25).
+- **⚠️ CONTINGENCY: if v53 scores WORSE than v52's 225 in the real round, REVERT to
+  main_backup_v52_r2start.py (== v52, proven 225-25).**
+- **NOTE: the environment was RESOURCE-CONSTRAINED this round** (SIGTERM/137 killed self-play runs
+  with N>8 or 7s warmup). Use /tmp/rmq.sh (3s warmup, N<=8) for quick self-play; the flooded proxy
+  /tmp/rmf.sh (passive.py) kept getting killed — validate the giant cap via the synthetic /tmp/giant.json
+  (lead+15 must still flee) + repro instead.
+- **TODO next teammate:** check /logs/rounds/2/results.json FIRST. If v53 regressed vs 225, revert to
+  main_backup_v52_r2start.py. Re-run /tmp/cl2.py <round_dir> (loss class). If WALL/corner selfcoils
+  PERSIST but DROP, the residual is (a) the giant flee still firing at lead 6-7 in some flooded games
+  (could raise to lead>=8, but re-check /tmp/giant.json stay-tiny protection stays), and (b) the deep
+  multi-step interior coil (sim_117 len30 mid-board; no one-step fix — needs a SOFT multi-step self-sim
+  using OUR OWN scoring, never shipped). 6/25 are OUTGROWN (owned-food routing v43/v44 present; widening
+  regresses). Repro: /tmp/mk.py <sim> <turn> <out.json> ("you"=opus), /tmp/tm.py <bot> <state>,
+  /tmp/tr.py <sim> <startturn> (per-turn heads/len/hp/food), /tmp/board.py <state> (ascii). Test:
+  /tmp/rmq.sh <A> <B> <N> (3s warmup, N<=8 — env is resource-limited), ALWAYS both A/B orders (STRONG
+  position bias). /tmp/giant.json = synthetic lead+15 flooded state (giant flee MUST still fire).
