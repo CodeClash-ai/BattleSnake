@@ -5283,3 +5283,53 @@ regression.
   (per-turn US/OP len/hp/head/food; edit dir), /tmp/cl.py <round_dir> (loss class). Test: /tmp/rm2.sh
   <A> <B> <N> (recreate: ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8), ALWAYS both
   A/B orders (STRONG position bias). v58 (192-54, 78%) is the proven best.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs TheApX__hungry) — KEPT v58
+- Verified results: round 0 **192-54 (+4t)** (v58), round 1 **203-40 (+7t)** (v58). 2/2 rounds won;
+  IMPROVING trend (192->203, losses 54->40). Opponent FULLY ACTIVE, a strong FOOD-EATER ("hungry")
+  that out-grows us; games run long (t16-321).
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1, last-alive frame): 39/40 OUTGROWN + 1
+  selfcoil.** DOMINANT = OUTGROWN: opp 1-11 lengths LONGER at death; our snakes HIGH health (76-100
+  = NOT hungry, we just don't eat fast enough). MANY losses are CLOSE races (11v14, 12v15, 15v17,
+  19v20, 12v13). The opponent controls the 1-3 board food via positioning (Voronoi) + marches into
+  contested food.
+- **Tuning experiment this round — REJECTED (self-play slight-negative, iron ship-rule):**
+  * v59test: EVEN-LENGTH OWNED-FOOD COMMITMENT — a flat +35 bonus for stepping onto OWNED food (food
+    we reach STRICTLY first via BFS -> NO equal-H2H collision, so NO tie-flood like v59's `_lead0<=0`)
+    at `_length_lead == 0`, to secure growth & pull ahead before the opponent out-eats us.
+    - ✅ REGRESSION PASS: v59test vs opp_straight = 6-0 as A AND 0-6 as B.
+    - ✅ NO tie-flood: 0 draws in 24 self-play games (owned food = we reach first -> no mutual-eat tie).
+    - ❌ SELF-PLAY SLIGHT-NEGATIVE both orders: v59test vs v58 = 4-8 as A, 7-5 as B -> aggregate
+      v59test 11 vs v58 13 (net -2). The owned-food commitment washes/slightly-regresses self-play
+      (both bots eat symmetrically -> the owned-food edge cancels). Violates the iron ship-rule
+      (don't ship a self-play wash/regression on a proven bot). REJECTED (removed).
+  CONFIRMS ALL prior teammates: the OUTGROWN mode (opponent out-eats us via positioning) is
+  fundamentally unfixable via self-play-validated one-step scoring (both bots eat symmetrically ->
+  every food-race tweak washes/regresses; and v59's equal-H2H contest tie-floods vs a food-eater).
+  The food-race is FULLY TUNED OUT: owned-food v43/v44, behind-contest v57, behind-eat +65 v58 are
+  the max validated levers.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, len20 snake, freedom-horizon K=8 active): **4.44ms avg, 6.44ms max**
+  (timeout 500ms — 78x margin). move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot time out. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 203-40 is a clear win (84%) with an IMPROVING trend
+  (192->203). The dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode; my
+  even-length owned-food commitment (v59test) washed/slightly-regressed self-play both orders (0-draw,
+  so no tie-flood, but net -2). Iron ship-rule: don't ship a self-play wash/regression on a proven,
+  improving bot. No regression risk taken. v58 is the strongest proven full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN). The DOMINANT loss is OUTGROWN (TheApX__hungry out-eats us via positioning &
+  marches into contested food). The food-race is TUNED OUT — DO NOT re-ship v59 (`_lead0<=0` equal-H2H
+  contest = tie-flood vs a marching food-eater, proven catastrophic 132-87t vs beames), owned-food-
+  when-behind, behind-eat>65, pull>14, or the even-length owned-food commitment (v59test this round,
+  self-play net-negative). The ONLY real remaining edge = TERRITORY/food-CONTROL validated vs the REAL
+  opponent (unavailable in self-play): grab CENTRAL food EARLY before the opponent, or a stronger
+  BFS-gradient pull toward OWNED food (owned_food/contested_lose_food computed line ~548) — but
+  self-play WASHES/regresses it. KEEP v58 unless a fix (a) WINS self-play both orders (not a wash),
+  (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count (the v59 lesson).
+  Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/cl.py
+  <round_dir> (loss class — recreate from git if missing; parses each sim_*.jsonl last line
+  {winnerName,isDraw} + last-alive frame US/OP len/hp/head). Test: /tmp/rm2.sh <A> <B> <N> (recreate:
+  ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=12), ALWAYS both A/B orders (STRONG
+  position bias). v58 (203-40, improving) is the proven best.
