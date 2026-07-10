@@ -5456,3 +5456,44 @@ regression.
   OWNED food (owned_food/contested_lose_food computed line ~548). KEEP v58 unless a fix (a) WINS
   self-play both orders (not a wash), (b) flips a real loss repro, AND (c) does NOT increase the
   real-match tie count. v58 (192/203/192/188/198, 77-84%) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs xtagon__nagini) — KEPT v58
+- ⚠️ NEW OPPONENT this match: **`xtagon__nagini`** — FULLY ACTIVE (0/1218 sampled opp moves >=490ms
+  = 0% timeouts), plays LONG games (avg 104 turns, max 214) with big snakes. NO latency free wins —
+  pure out-play. Round 0 (v58): **opus-4-8 204, xtagon__nagini 43, 3 ties** (250 games, 82% win).
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): 32 OUTGROWN + 11 SELFCOIL,
+  26/43 die on WALLS/corners.** Two documented hard modes:
+  * OUTGROWN (32): opponent out-eats us, 1-8 lengths LONGER at death; our snakes HIGH health
+    (73-100 = NOT hungry). MANY razor-close (sim_157 14v15, sim_165 10v12, sim_226 16v17, sim_46
+    15v16). Opponent controls the 1-3 board food via positioning (Voronoi).
+  * SELFCOIL (11): big-longer snake deep multi-step coil (e.g. sim_233 len17 wandered center loops
+    t25-155 then self-coiled at t156; sim_55 len19, sim_30 len13). freedom-horizon (v56, K=8, gate
+    len>=12) is active for these but the coil forms >8 turns ahead in the long games.
+- **Tuning experiment this round — REJECTED (self-play wash, iron ship-rule):**
+  * candK10 (freedom-horizon K=8 -> K=10, deeper lookahead for the long-game deep coils):
+    candK10 as A vs v58 = **6-5-1** then **3-2-1**; candK10 as B (v58 as A) = **2-4** then **2-4**.
+    AGGREGATE ~ candK10 wash/slight-negative (position bias dominates). Consistent with prior notes
+    (K=10 washed vs joshhartmann too). Not a clear both-orders win -> NOT shipped. Removed.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal; also backed up as
+  main_backup_v58_r1_nagini.py); parses clean (ast.parse OK); move() try/except + self-guarded
+  _safe_fallback; freedom-horizon recursion-guarded via _SIM_DEPTH -> cannot time out.
+- **DECISION: kept main.py (v58) unchanged.** 204-43 (82%) is a clear win vs a fully-active opponent
+  that controls food + plays long games. The dominant OUTGROWN mode is the documented
+  unfixable-via-self-play mode (every food-race tweak washes/regresses/tie-floods — see the
+  exhaustive beames/famished-frank/TheApX notes above; DO NOT re-ship v59 `_lead0<=0` equal-H2H
+  contest = tie-flood vs a food-eater). The SELFCOIL mode is at the freedom-horizon ceiling (K=10
+  washes). No unvalidated regression risk taken on the strongest proven full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; legal=0 = SELFCOIL). If OUTGROWN dominates (nagini out-eats us via positioning):
+  food-race is TUNED OUT — the ONLY real edge = TERRITORY/food-CONTROL validated vs the REAL opponent
+  (self-play washes/tie-floods it; grab CENTRAL food early or a stronger BFS-gradient pull toward
+  owned_food/contested_lose_food computed line ~548). If SELFCOIL dominates (long-game deep coil):
+  freedom-horizon K=8 is the lever (K=10 washes; penalty>22 lost self-play; gate<12 regressed).
+  KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a real loss repro, AND
+  (c) does NOT increase the real-match tie count (the v59 lesson: "no self-play regression + repro
+  flips" CAN still tie-flood vs the real opponent). Repro: /tmp/mk.py <gid> <turn> <out.json>
+  <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> <round_dir> <startturn> (per-turn US/OP
+  len/hp/head/food), /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rmq.sh <A> <B> <N> (ports
+  8001/8002, 8s warmup — use N<=6 to fit the 30s cmd limit; all-draws = warmup too short, rerun),
+  ALWAYS both A/B orders (STRONG position bias). v58 (204-43, 82%) is the proven best.
