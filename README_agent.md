@@ -4674,3 +4674,54 @@ regression.
   (per-dir space/timed/dtw), /tmp/tr.py <sim> <round_dir> <startturn> (per-turn trace). Test:
   /tmp/rm2.sh <A.py> <B.py> <N> (recreate: ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
   N<=16), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric). v55 (221-29) is best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs joshhartmann11__battlejake2019) — KEPT v55
+- Verified results ALL 3 rounds won: round 0 **217-32 (+1t)** (v54), round 1 **221-29** (v55),
+  round 2 **228-22** (v55). ⭐ v55 (small-snake corner-food trap) is the BEST result & IMPROVING
+  trend (217->221->228). main.py == main_backup_v55_smallcornertrap.py (diff confirms; parses clean;
+  move() try/except line 213 + self-guarded _safe_fallback line 219 -> cannot time out).
+- **Round-2 loss classification (/tmp/cld.py /logs/rounds/2, last-alive frame): 22 losses, 21/22 =
+  SELFCOIL while LONGER than opp (16/22 on WALLS/corners), only 1 OUTGROWN (sim_165).** Our snake
+  big (len 11-34, median ~18), HIGH health (67-100), MUCH longer than opp (leads +2 to +13),
+  self-coiling (legal=0). Same DOMINANT big-longer wall-crawl deep self-coil documented across the
+  ENTIRE match history (LEFT wall x=0 + corners the worst).
+- **DEEP TRACE (sim_52, len11->17): the snake WANDERS tight center loops for ~180 turns** (t65-236,
+  circling x=3-8 y=3-7, occasionally eating, health cycling 60-100), food accumulating to 8-10, then
+  at t237-241 crawls into the LEFT wall (0,0)->(0,1)->(0,2)->(0,3) & self-coils. NOT outgrown, NOT
+  flooded. This is the genuine DEEP multi-step coil: the last-free-choice is MANY turns before death
+  and all one-step metrics are equal.
+- **ATTEMPTED FIX (v56, /tmp/v56.py — the documented "correct" SOFT multi-step self-coil detector)
+  — REJECTED (does NOT distinguish moves):** Added `_coil_minspace(first, body, enemy_cells, food,
+  w, h, K=8)` — a K-step greedy self-sim that advances our body picking the neighbor with the FEWEST
+  open neighbors (models the wall-hugging/coiling tendency) and records the MIN reachable flood-fill
+  space. Wired as a per-candidate `coil_min` field + a SOFT penalty `-(my_len-coil_min)*2.0` for
+  len>=15 when `coil_min<my_len AND best_coil_min>=coil_min+6`.
+  * ❌ At sim_52 t235 (and t228-237) `_coil_minspace` returns **0 for ALL THREE legal moves** — the
+    greedy hug-tightest sim collapses every path on a crowded board, so the penalty subtracts EQUALLY
+    from all candidates -> NO divergence (v56 == v55 at every traced turn). This is EXACTLY the
+    documented failure: greedy self-sim can't distinguish the fatal move from the safe one at the
+    true last-free-choice (either it escapes optimally, or — with a hugging heuristic — it collapses
+    everything). CONFIRMS ALL prior teammates: the multi-step self-sim as a hug-greedy min-space
+    metric does NOT work; the correct version must advance the body using OUR OWN _choose_move
+    scoring recursively (expensive, never successfully shipped), NOT a fixed heuristic.
+  * REVERTED to v55 (main.py == main_backup_v55_smallcornertrap.py).
+- REGRESSION PASS: main.py (v55) vs opp_straight.py = **8-0 as A AND 0-6 as B** (win both orders).
+- **DECISION: kept main.py (v55) unchanged.** v55 is the proven best-scoring version (228-22,
+  improving trend 217->221->228). The dominant residual loss (big-longer wall-crawl DEEP self-coil,
+  last-free-choice many turns before death, all one-step metrics equal) has no one-step fix; my
+  soft multi-step detector (v56, hug-greedy min-space) returned 0 for ALL moves at the free choice
+  -> couldn't distinguish them (documented failure). Iron ship-rule: don't ship a wash/non-flip.
+  No regression risk taken on the match's best, still-improving version.
+- **TODO next teammate:** check /logs/rounds/3/results.json FIRST. Re-run /tmp/cld.py <round_dir>
+  (loss class: our>=opp + legal=0 = self-coil; head x=0/10 or y=0/10 = wall). The residual is the
+  genuine DEEP multi-step coil. The ONLY untried approach that MIGHT work is a soft multi-step
+  self-sim that advances our body using OUR OWN _choose_move SCORING recursively (K=6-8 steps) —
+  a FIXED heuristic (greedy-max-space escapes; greedy-min-space/hug collapses ALL moves = v56 this
+  round) provably can't distinguish. This is expensive & never successfully shipped; only ship if a
+  loss repro FLIPS AND self-play does NOT regress both orders. All simpler levers (anti-wall-crawl
+  _wcw, off-wall, food-trap, contested_space, corner-food) are TUNED OUT (every escalation washes/
+  regresses — documented repeatedly). Repro: /tmp/mk.py <sim> <turn> <out.json> <round_dir>,
+  /tmp/tm.py <bot> <state>, /tmp/tr.py <sim> <round_dir> <startturn> (per-turn trace), /tmp/cld.py
+  <round_dir> (loss class). Test: /tmp/rm2.sh <A.py> <B.py> <N> (recreate: ports 8001/8002, 8s
+  warmup, grep "A/B is/was the winner", N<=16), ALWAYS both A/B orders (STRONG position bias).
+  v55 (228-22, improving) is the proven best — DON'T ship an unvalidated change.
