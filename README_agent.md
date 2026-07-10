@@ -4812,3 +4812,42 @@ regression.
   Test: /tmp/rm2.sh <A.py> <B.py> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
   N<=14 to fit ~200s), ALWAYS both A/B orders (STRONG position bias — trust AGGREGATE/symmetric).
   v56 (226-23) is the proven best — DON'T ship an unvalidated change.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs coreyja__famished-frank) — KEPT v56 (behind-food-race regressed self-play)
+- ⚠️ NEW OPPONENT: **`coreyja__famished-frank`** — FULLY ACTIVE (0/20644 moves >=490ms = 0% timeouts),
+  LONG games (avg 82.4 turns, max 213). A STRONG FOOD-EATER ("famished"=hungry). Round 0 (v56):
+  **opus-4-8 198, famished-frank 46, 6 ties** (250 games) — 46 losses (18%), the most in a while.
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): 39 OUTGROWN + 7 SELFCOIL.**
+  DOMINANT mode = **OUTGROWN**: the opponent OUT-EATS us and is 1-8 lengths LONGER at death, then
+  wins the H2H / corners us. Our snakes have HIGH health (77-100 = we're NOT eating enough) while the
+  opponent grows faster. Trace (/tmp/tr.py sim_33): opp len5 vs our 4 by t10, opp len12 vs our 8 by
+  t50, opp len22 vs our 14 by t122 — it out-eats us from the very start (reaches food first / Voronoi).
+- **ATTEMPTED FIX (v57, main_backup_v57_r0start.py is the v56 START not v57) — REJECTED (self-play regression):**
+  Added `_behind = _length_lead <= -2` -> force want_food; a DOMINANT un-softened food pull
+  `fdist*22` at lead<=-2 (and fdist*16 at lead<0, up from 14); optionally use ALL food (skip
+  trap-food avoidance) when behind. Goal: out-race the hungry opponent.
+  * ❌ SELF-PLAY REGRESSED both attempts: full version (with trap-suppression) = v57 as A 7-7, as B
+    5-9 -> combined 12 vs v56 16. Narrowed (pull-only, no trap-suppression) = v57b as A **5-9** (clear
+    loss). Both net-negative in self-play. The stronger behind-pull + eating trap food causes more
+    self-coils and loses the symmetric self-play race. Violates the iron ship-rule.
+  CONFIRMS ALL prior teammates: food-race tweaks WASH/REGRESS in self-play (both bots eat symmetrically
+  -> can't reproduce the ASYMMETRIC out-eating of the real opponent). The ONLY validated food improvement
+  ever was owned-food routing (v43/v44, already present, tuned out — widening regresses).
+- **DECISION: REVERTED to v56** (main.py == main_backup_v56_freedomhorizon.py, diff confirms equal;
+  parses clean; REGRESSION PASS vs opp_straight = 5-0). Both behind-food-race attempts regressed
+  self-play meaningfully (-4, and 5-9), and self-play can't validate the fix vs the real asymmetric
+  opponent. No unvalidated regression risk taken. v56 is the strongest proven version (won prior match
+  vs joshhartmann 226-23 with the freedom-horizon anti-deep-coil fix).
+- **TODO next teammate:** check /logs/rounds/1/results.json. The DOMINANT loss mode is OUTGROWN
+  (famished-frank out-eats us early, reaches food first). The food-race is already aggressive
+  (fdist*14 behind, owned-food +40) and pushing it further REGRESSES self-play (v57/v57b confirmed).
+  The REAL edge would be a stronger TERRITORY/Voronoi food-ownership routing (a BFS-GRADIENT pull
+  toward the nearest OWNED food, not just a flat +40 on the eating cell) — but self-play washes it
+  (both bots eat symmetrically). Since we can't test vs the real opponent, the safe move is KEEP v56
+  unless a fix WINS self-play both orders (not a wash/regression). Also consider: the opponent may
+  reach food first because we take safer/longer paths — a shorter-path food commitment when behind
+  could help but needs validation. Repro: /tmp/mk.py <sim> <turn> <out.json>, /tmp/tm.py <bot>
+  <state>, /tmp/tr.py <sim> (per-turn US/OP len/hp), /tmp/cl.py <round_dir> (loss class). Test:
+  /tmp/rm2.sh <A> <B> <N> (RECREATE with heredoc alone — NOT in an || chain; ports 8001/8002, 8s
+  warmup, N<=8 to fit 30s cmd limit, grep "A was the winner"/"A is the winner"), ALWAYS both A/B
+  orders (STRONG position bias). DON'T ship a self-play regression. v56 (198-46) is the fallback.
