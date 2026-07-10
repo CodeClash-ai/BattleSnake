@@ -5697,3 +5697,38 @@ regression.
   Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8;
   RECREATE from this round — it rm-cleans botA/botB & pkills stale procs), ALWAYS both A/B orders
   (STRONG position bias). v58 (204-43/197-52/205-42/199-49/190-59, 76-82%) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs joshhartmann11__battlejake) — KEPT v58
+- ⚠️ OPPONENT is the joshhartmann family (README has extensive v54-v56 history vs it, where v56's
+  freedom-horizon anti-deep-coil got 226-23). Round 0 (v58): **opus-4-8 221, joshhartmann11__battlejake 29**
+  (88% win rate). Fully active, LONG games, big snakes.
+- **Loss classification (/tmp/cl.py /logs/rounds/0): ALL 29 = DEEP multi-step SELF-COIL while
+  LONGER than opp** (our snakes len 14-35, HIGH health 37-100, opp 8-28; mostly wall/corner deaths).
+  0 OUTGROWN. The documented hard mode.
+- **VERIFIED the freedom-horizon (v56, K=8, gate len>=12) IS firing correctly** on a real loss repro
+  (sim_2, len19 deep coil, /tmp/tr.py + /tmp/hz.py): at t277-282 (where a real choice exists) it
+  actively picks the roomier fh=2 move over the fh=1 coil direction. The snake still coils because
+  the WHOLE region is shrinking — at the coil-commit turns (t288+) ALL legal moves have EQUAL fh
+  (1 or forced), so no K-step metric can distinguish them. This is the genuine deep-coil (the whole
+  neighborhood collapses; not a single fatal turn). Consistent with all prior notes: K=10 washes,
+  gate<12 regresses, penalty>22 lost — freedom-horizon is at its tuned ceiling.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, len20 snake, freedom-horizon K=8 active): **8.85ms avg, 11.84ms max**
+  (timeout 500ms — 42x margin). move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot time out. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 221-29 (88%) is a strong win, matching prior
+  joshhartmann results (v56 got 226-23). All losses are the documented deep-coil at the
+  freedom-horizon ceiling (verified fh fires correctly; the residual coils have all moves equal at
+  the commit turn). Every deep-coil/food-race tweak across the entire match history regresses/washes
+  self-play. No unvalidated regression risk taken on a proven, winning bot.
+- **TODO next teammate:** the ONLY loss mode is the DEEP multi-step self-coil (big-longer snake,
+  last-free-choice many turns before death, whole region shrinking). freedom-horizon K=8 catches the
+  cases with a distinguishable choice; the residual has all moves equal at the commit turn (no
+  K-step fix). The correct fix would be a "compactness"/space-efficiency term keeping a big snake's
+  body a tight unwind-able coil EARLIER (before the region shrinks) — but validate ONLY if a loss
+  repro flips AND self-play does NOT regress both orders (every prior attempt regressed). Repro:
+  /tmp/mk.py <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/hz.py <bot> <state>
+  <K> (per-move fh), /tmp/tr.py <gid> <round_dir> <startturn>, /tmp/cl.py <round_dir> (loss class).
+  Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner",
+  N<=8), ALWAYS both A/B orders (STRONG position bias). v58 (221-29, 88%) is the proven best.
