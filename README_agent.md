@@ -4969,3 +4969,42 @@ regression.
   <bot> <state>, /tmp/tr.py <gid> <round_dir> (per-turn US/OP len/hp), /tmp/cl.py <round_dir>. Test:
   /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=12),
   ALWAYS both A/B orders (STRONG position bias). Self-play WASHES opponent-specific food-routing.
+
+## Round 5 update (opus-4-8_r5 — CURRENT MATCH vs coreyja__famished-frank) — FINAL, KEPT v58
+- Verified results ALL 5 rounds won: round 0 **198-46 (+6t)** (v56), round 1 **204-41 (+5t)** (v56),
+  round 2 **210-36 (+4t)** (v57), round 3 **200-47 (+3t)** (v57), round 4 **205-42 (+3t)** (v58).
+  v58 (behind-eat +65, shipped end of round 3) scored 205-42 — BETTER than v57's round-3 200-47,
+  roughly a wash with v57's overall (v57 avg ~205). Per the round-4 CONTINGENCY note ("revert if
+  WORSE than v57's round-3 200"), v58 (205) > 200 so KEPT v58. main.py == main_backup_v58_behindeat.py.
+- **Round-4 loss classification (/tmp/cl.py /logs/rounds/4): 39/42 OUTGROWN + ~2 selfcoil.**
+  DOMINANT = OUTGROWN: famished-frank out-eats us from the very start (trace sim_36: by t20 opp7 vs
+  us4; t100 opp15 vs us9; t230 opp29 vs us16). Our snakes stay HIGH health (79-100 = NOT hungry, we
+  just don't eat aggressively enough) while the opponent grows ~2x faster (reaches food first / Voronoi).
+- **Tuning experiments this round — REJECTED (self-play regression, /tmp/rmq.sh BOTH orders):**
+  * cand (behind food pull fdist*14*_fw -> fdist*18, no _fw softening): cand as A **3-5**, as B **4-4**
+    -> aggregate cand 7 vs v58 9 = NET-NEGATIVE. Stronger pull causes self-coils (matches ALL prior
+    notes: pull>14 regresses). REJECTED.
+  * Reducing space weight when behind (to let food navigation matter more): NOT tried — space is the
+    primary survival driver; weakening it risks self-coils/deaths that net-worsen (documented repeatedly).
+  CONFIRMS: the OUTGROWN mode (opponent controls food via better positioning/faster eating) is
+  fundamentally unfixable via self-play-validated one-step scoring (both bots eat symmetrically ->
+  every food-race tweak washes/regresses). v58's +65 behind-eat commitment is the last validated lever.
+- CONFIRMED v58 >= v57: v58 vs v57 self-play = **5-3 as A, 4-4 as B** (aggregate v58 9, v57 7,
+  net-positive, no regression).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, len20 snake freedom-horizon K=8 active): **12.2ms avg, 15.4ms max**
+  (timeout 500ms — 30x margin). move() try/except + self-guarded _safe_fallback; freedom-horizon
+  self-sim recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** v58 is the proven best/tied version (205-42, beats v57
+  in self-play, better than v57's round-3 200). The dominant OUTGROWN loss mode (opponent out-eats us)
+  is the documented unfixable-via-self-play mode — my stronger-pull tweak regressed self-play both
+  orders and can't be validated vs the real asymmetric opponent. No unvalidated regression risk taken
+  on the FINAL round of a bot winning every round.
+- **TODO (future, if this opponent recurs):** the ONLY dominant loss mode is OUTGROWN (famished-frank
+  out-eats us; reaches food first via positioning). The food-race is fully TUNED OUT: pull>14 regresses
+  self-play, contest-when-behind regresses, +65 behind-eat is the max validated lever. The real edge
+  needs TERRITORY/food-CONTROL: position to CUT OFF the opponent from the single food (deny growth) OR
+  a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food computed line ~548) —
+  but self-play WASHES it (eats symmetrically). Validate ONLY vs the REAL opponent (unavailable here)
+  or if a fix WINS self-play both orders (not a wash). v58 (205-42) is the proven best.
