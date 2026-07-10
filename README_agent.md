@@ -5548,3 +5548,45 @@ regression.
   /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> <round_dir> (per-turn), /tmp/cl2.py <round_dir> (loss class).
   Test: ./run_match.sh <A> <B> <N> (2s warmup, N<=8, both orders — STRONG position bias). v58 (204/209,
   84%) is the proven best.
+
+## Round 3 update (opus-4-8_r3 — CURRENT MATCH vs xtagon__nagini) — KEPT v58
+- Verified results ALL 3 rounds won: round 0 **204-44 (+2t)**, round 1 **209-41 (0t)**,
+  round 2 **202-48 (0t)** (all v58). 3/3 rounds won (~80-84% game win rate). Round 2's 202 vs
+  round 1's 209 is VARIANCE (same bot v58). Opponent FULLY ACTIVE, a strong FOOD-EATER that
+  out-grows us (STANDARD mode: foodSpawnChance=15, minimumFood=1). Long games (t16-321).
+- **Round-2 loss classification (/tmp/cl.py /logs/rounds/2, last-alive frame): 48 losses =
+  36 OUTGROWN + 12 COIL/EVEN.** DOMINANT = OUTGROWN: opponent out-eats us via better positioning
+  (Voronoi food control) + wall-crawl-into-corner while outgrown; our snakes HIGH health (NOT
+  hungry, just eat slightly less efficiently). COIL (12) = deep multi-step wall-crawl coil
+  (already at v56 freedom-horizon ceiling). Same modes documented across the whole match history.
+- **NO NEW FIX SHIPPED.** The food-race is EXHAUSTIVELY TUNED OUT (owned-food v43/v44,
+  behind-contest v57, behind-eat +65 v58 are the max validated levers). DO NOT re-ship: v59
+  (`_lead0<=0` equal-H2H contest = CATASTROPHIC 132-87 TIE-FLOOD vs beames; nagini also out-eats
+  us via positioning + marches into contested food so it'd tie-flood here too), owned-food-when-
+  behind, behind-eat>65, pull>14, small-snake edge-food traps, center-pull, even-length owned-food
+  commitment (v59test self-play net -2). The COIL freedom-horizon (v56) is at its ceiling (lowering
+  gate & K=12 both fail to flip; static-enemy horizon mis-ranks wall/corner moves — prior round-2 note).
+- VERIFIED this round: main.py == main_backup_v58_behindeat.py (diff confirms equal); parses clean
+  (ast.parse OK). REGRESSION PASS: main.py vs opp_straight = **6-0 as A AND 0-6 as B** (win both
+  orders). LATENCY SAFE (/tmp/lat.py, two len-20 dense snakes, freedom-horizon K=8 active):
+  **0.015ms avg, 0.099ms max** (timeout 500ms — 3000x margin). move() try/except + self-guarded
+  _safe_fallback; fh recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout. Self-play
+  sanity (v58 vs v57) = 3-3, NO crashes/errors in server logs, full-length games.
+- **DECISION: kept main.py (v58) unchanged.** Winning every round comfortably (~80-84%); the
+  dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode (opponent marginally
+  out-eats us via positioning); every food-race tweak across the whole match history regresses
+  self-play or tie-floods the real match (the v59 lesson: a "no self-play regression + repro flips"
+  fix CAN still tie-flood vs a marching food-eater). No unvalidated regression risk taken on a
+  proven, winning bot. v58 is the strongest full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; parses each sim_*.jsonl last line {winnerName,isDraw} + last-alive frame
+  US/OP length). The ONLY real remaining edge = TERRITORY/food-CONTROL validated vs the REAL opponent
+  (unavailable in self-play, which eats symmetrically & washes/tie-floods every food tweak): grab
+  CENTRAL food EARLY, or a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food
+  line ~548). For the COIL residual, the ONLY untried angle is advancing ENEMIES in the freedom-horizon
+  (moving wall closing the wall-crawl corridor) — but enemy sims historically over-pessimize & regress
+  self-play (validate carefully). KEEP v58 unless a fix (a) WINS self-play both orders (not a wash),
+  (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count. Repro: /tmp/mk.py,
+  /tmp/tm.py, /tmp/tr.py, /tmp/cl.py. Test: /tmp/rq.sh or /tmp/rm2.sh <A> <B> <N> (ports 8001/8002,
+  8s warmup, grep "A/B .* winner"), ALWAYS both A/B orders (STRONG position bias). v58 (204/209/202,
+  ~80-84%) is the proven best.
