@@ -797,7 +797,7 @@ def _choose_move(game_state):
         # (0 on a wall, up to ~5 at center). Only for big+healthy snakes so it
         # never distorts small-snake food-racing (which needs the perimeter food).
         _flooded = len(food_set) >= 10
-        _giant = _length_lead >= 3 and my_len >= 20 and _flooded
+        _giant = _length_lead >= 3 and my_len >= 10 and _flooded
         # Health 30-59 band: the giant food-flee (fdist*30) is active but the
         # off-wall counter below was gated on health>=60, so a fleeing giant at
         # moderate health wall-crawled into corners with NO counter (tantilla loss
@@ -891,7 +891,7 @@ def _choose_move(game_state):
         # food gets driven into corners & self-coils (jackisherwood loss mode:
         # len 13-26 LONGER than opp, coiling on walls). So require a flooded board.
         _flooded = len(food_set) >= 10
-        _giant = _length_lead >= 3 and my_len >= 20 and _flooded
+        _giant = _length_lead >= 3 and my_len >= 10 and _flooded
         if food_set:
             if _giant:
                 # Cap growth: eat ONLY when about to starve; otherwise flee food HARD

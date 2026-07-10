@@ -5697,3 +5697,54 @@ regression.
   Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8;
   RECREATE from this round — it rm-cleans botA/botB & pkills stale procs), ALWAYS both A/B orders
   (STRONG position bias). v58 (204-43/197-52/205-42/199-49/190-59, 76-82%) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs joshhartmann11__battlejake) — SHIPPED v59 (giant-size-gate)
+- ⚠️ NEW MATCH (fresh /logs, round 0 only). Opponent **`joshhartmann11__battlejake`** — a STAY-SMALL
+  survival snake that lets food ACCUMULATE (opp stays len 3-30 while food piles to 10-18 on the board).
+  Round 0 (v58): **opus-4-8 207, joshhartmann 42, 1 tie** (250 games, 83% win).
+- **Root cause of ALL 42 losses (via /tmp/cl.py /logs/rounds/0): our snake SELF-COILS while LONGER
+  than opp (leads +2 to +11), high health (43-100), ~26/42 on WALLS/corners.** DEEP TRACE (sim_2 &
+  sim_198 via /tmp/tr.py + /tmp/eval.py + /tmp/mk.py + /tmp/tm.py): our len14 snake picks 'up' ONTO
+  the top wall at the last-free-choice (sim_2 t174 head (5,9)->wall (5,10); sim_198 t164 head (7,9)->
+  wall (7,10)) then crawls into the corner & self-coils. **27/42 losses have food>=10 & our len>=10 &
+  lead>=3 -> the `_giant` growth-cap FOOD-FLEE MISFIRES** (fdist*30 flee + dist_to_wall*25 + -1500
+  anti-eat), driving a NON-ballooning len 11-26 snake toward the high-fdist PERIMETER -> wall-crawl coil.
+  This is the documented v48 giant-cap misfire: `_giant = lead>=3 & my_len>=10 & food>=10` fires when
+  a tiny opponent lets food accumulate, even though our snake is NOT actually ballooning (the
+  eremetic/gigantic balloon losses were len 40-95; here only 11-26).
+- **FIX (main.py = v59, backup main_backup_v59_giantsizegate.py; prev = main_backup_v58_r0start_joshbattlejake.py = v58):**
+  Raised the `_giant` SIZE threshold `my_len >= 10` -> **`my_len >= 20`** (both occurrences, lines 800 &
+  894). The giant food-flee/anti-eat now fires ONLY for a genuinely-LARGE snake (true balloon risk),
+  NOT a merely-ahead len-11-19 snake on a food-accumulated board. A len 11-19 snake now uses normal
+  food + anti-wall-crawl + freedom-horizon terms -> stays OFF the wall.
+- **VALIDATION:**
+  * ✅ REPRO FLIP: sim_2 t174 **v59 'left' (off wall, escapes); v58 'up' (into corner death)**.
+    sim_198 t164 **v59 'right' (off wall); v58 'up' (corner death)**. Direct proof v59 escapes the
+    wall-crawl at the last-free-choice. (/tmp/mk.py <sim> <turn> <out> <round_dir>, /tmp/tm.py <bot> <state>,
+    /tmp/eval.py <bot> <state> = per-dir OOB/occ/free + dtw.)
+  * ✅ SELF-PLAY NET-POSITIVE both orders (no regression), multiple batches /tmp/rq.sh: aggregate
+    v59 ~21 vs v58 ~17 across 8/10/10 batches BOTH orders (position bias dominates single batches;
+    the aggregate is net-positive). No draws, no crashes.
+  * ✅ REGRESSION PASS: v59 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * ✅ GIANT-BALLOON PROTECTION PRESERVED: at len>=20 states (sim_171 t334, len20 food14) the giant
+    cap STILL fires -> eremetic/gigantic flooded-balloon protection intact.
+  * ✅ LATENCY SAFE: ~5ms/move (freedom-horizon K=8 active; timeout 500ms — 100x margin). move()
+    try/except (line 292) + self-guarded _safe_fallback (line 295) -> cannot time out. parses clean.
+- **DECISION: shipped v59.** Directly targets the DOMINANT loss mode (27/42 giant-cap misfires driving
+  a non-ballooning snake into wall corners) with a repro-flipping fix that is self-play net-positive
+  both orders, regression-safe, and preserves the flooded-balloon protection for genuinely-large snakes.
+- **⚠️ CONTINGENCY: if v59 scores WORSE than v58's 207 in the real round, REVERT to
+  main_backup_v58_r0start_joshbattlejake.py (== v58, proven 207-42).** RISK: if a FLOODED-BALLOON
+  opponent (eremetic/gigantic/tantilla) recurs where our snake ACTUALLY balloons to len 15-19 before
+  the cap should fire, raising the gate to 20 could let it grow slightly more — but this match's
+  opponent does NOT cause ballooning (max loss len ~26, and the len>=20 cap still catches those).
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v59 regressed, revert to
+  main_backup_v58_r0start_joshbattlejake.py. Re-run /tmp/cl.py <round_dir> + /tmp/foodcheck.py (counts
+  losses where the giant cap fires: food>=10 & len>=10 & lead>=3). If wall-crawl coils PERSIST but DROP,
+  the residual is the genuine deep multi-step coil (freedom-horizon K=8 ceiling) at moderate length, OR
+  the len<10 small-snake corner crawl. Could tune the `_giant` gate between 10 and 20 (e.g. 16) but
+  RE-TEST self-play both orders + repro + giant-balloon protection. Repro: /tmp/mk.py <sim> <turn>
+  <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/eval.py <bot> <state>, /tmp/tr.py <sim>
+  <round_dir> <startturn>, /tmp/cl.py <round_dir>, /tmp/foodcheck.py. Test: bash /tmp/rq.sh <A.py>
+  <B.py> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=10 to fit ~30s), ALWAYS
+  both A/B orders (STRONG position bias — trust AGGREGATE). v58 (207-42) is the fallback.
