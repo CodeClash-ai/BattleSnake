@@ -5497,3 +5497,54 @@ regression.
   len/hp/head/food), /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rmq.sh <A> <B> <N> (ports
   8001/8002, 8s warmup — use N<=6 to fit the 30s cmd limit; all-draws = warmup too short, rerun),
   ALWAYS both A/B orders (STRONG position bias). v58 (204-43, 82%) is the proven best.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs xtagon__nagini) — KEPT v58
+- Verified results: round 0 **204-43 (+3t)** (v58), round 1 **197-52 (+1t)** (v58). 2/2 rounds won
+  (79-82% game win rate). Losses grew 43->52 (variance; same bot v58). Opponent FULLY ACTIVE, plays
+  LONG games with big snakes; a strong food-eater that controls the 1-3 board food via positioning.
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1, last-alive frame): 36 OUTGROWN + 16 SELFCOIL.**
+  * OUTGROWN (36, DOMINANT): opp 1-9 lengths LONGER at death; our snakes HIGH health (72-100 = NOT
+    hungry). MANY razor-close (14v15, 16v17, 17v18, 26v27). DEEP TRACE (sim_164): we were AHEAD
+    (len12 vs opp6-10) t20-t70, then COASTED at lead+2 t80-t90 (health 98->78, stayed len12) while
+    the opponent surged len12->17 and overtook us -> lost. Root: at lead+1/+2 the food pull is only
+    fdist*7 (want_food branch), which is WEAK vs space*2+timed*3 (~400pts), so a slightly-ahead snake
+    stops eating & gets overtaken by a growing opponent.
+  * SELFCOIL (16): mix of small (len7-11: sim_218/151/228) & big (len12-20) deep multi-step coils,
+    mostly wall/corner deaths. Big ones handled by v56 freedom-horizon (K=8, gate len>=12).
+- **Tuning experiments this round — ALL REJECTED (self-play wash/slight-regression, /tmp/rmq.sh BOTH orders):**
+  * cand (stronger food pull at lead+1: NEW fdist*9 tier at `_length_lead<2`; + owned-food +30 flat
+    bonus at lead 0-1 for stepping onto OWNED food = no equal-H2H so NO tie-flood): targets the
+    sim_164 coast-then-overtaken mode. Self-play: cand-A 4-6 & 3-3, cand-B 3-4 -> net SLIGHT-NEGATIVE
+    (main wins ~net +2). 0 draws (no tie-flood, safe on that axis). But not a both-orders win -> REJECTED.
+  * cand2 (freedom-horizon: add soft -8 penalty at fh==2, widening the anti-deep-coil trigger from
+    fh<=1): self-play cand2-A 3-4, cand2-B 3-4 -> SLIGHT-NEGATIVE both orders. REJECTED.
+  CONFIRMS ALL prior teammates: the OUTGROWN mode (opponent out-eats us via positioning) is
+  unfixable via self-play-validated one-step scoring (both bots eat symmetrically -> every food-race
+  tweak washes/regresses; and v59's equal-H2H contest tie-floods vs a food-eater). The food-race is
+  FULLY TUNED OUT (owned-food v43/v44, behind-contest v57, behind-eat +65 v58 are max validated levers).
+  freedom-horizon is at its tuned optimum (K=10 washes, gate<12 regresses, penalty>22/fh==2 washes).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A** (win). parses clean (ast.parse OK).
+- LATENCY SAFE: freedom-horizon K=8 active ~2-12ms/move (timeout 500ms — 40x+ margin, prior measured);
+  synthetic dense state 0.01ms avg. move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot crash into a timeout.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 197-52 (79%) is a clear win. The dominant OUTGROWN mode
+  is the documented unfixable-via-self-play mode; both my tweaks (stronger lead+1 food pull, wider
+  freedom-horizon) washed/slightly-regressed self-play both orders. Iron ship-rule: don't ship a
+  self-play wash/regression on a proven bot. No regression risk taken. v58 is the strongest full stack.
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL). The DOMINANT loss is OUTGROWN (nagini out-eats us via
+  positioning; we COAST at lead+1/+2 and get overtaken — root: fdist*7 want_food pull too weak vs
+  space terms). The food-race is TUNED OUT — DO NOT re-ship: v59 (`_lead0<=0` equal-H2H contest =
+  tie-flood vs a food-eater, catastrophic 132-87t vs beames), stronger lead+1 pull (cand this round,
+  self-play net-negative), owned-food-when-behind, behind-eat>65, pull>14, wider freedom-horizon
+  (cand2 this round, wash). The ONLY real remaining edge = TERRITORY/food-CONTROL validated vs the
+  REAL opponent (self-play washes/tie-floods it): grab CENTRAL food EARLY before the opponent
+  overtakes us, or a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food
+  computed line ~548). KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a
+  real loss repro, AND (c) does NOT increase the real-match tie count (the v59 lesson: "no self-play
+  regression + repro flips" CAN still tie-flood vs the real opponent). Repro: /tmp/mk.py <gid> <turn>
+  <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> <round_dir> (per-turn US/OP
+  len/hp/head/food), /tmp/cl.py <round_dir> (loss class). Test: bash /tmp/rmq.sh <A> <B> <N> (ports
+  8001/8002, 8s warmup, N<=7 to fit 30s cmd limit, grep "A/B is/was the winner"; all-draws = warmup
+  too short, rerun), ALWAYS both A/B orders (STRONG position bias). v58 (204-43/197-52, 79-82%) is best.
