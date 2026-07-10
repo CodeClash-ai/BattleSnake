@@ -5233,3 +5233,53 @@ regression.
   contested_lose_food computed line ~548) validated vs the REAL opponent — self-play washes/tie-floods
   it. KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a real loss repro,
   AND (c) does NOT increase the real-match tie count. v58 (200-43-7, match's best) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs TheApX__hungry) — KEPT v58
+- ⚠️ NEW OPPONENT this match: **`TheApX__hungry`** — FULLY ACTIVE, a STRONG FOOD-EATER (name says
+  it: "hungry") that OUT-GROWS us. Round 0 (v58): **opus-4-8 192, TheApX__hungry 54, 4 ties**
+  (250 games) — 78% win rate. Games run long (t16-321).
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): ~46/54 OUTGROWN + ~6 SELFCOIL.**
+  DOMINANT = OUTGROWN: the opponent out-eats us and is 1-11 lengths LONGER at death; our snakes have
+  HIGH health (86-100 = NOT hungry, we just don't eat fast enough) while the opponent grows faster.
+  Trace (/tmp/tr.py sim_7): at t7 head (5,6), food (5,5) DIRECTLY ADJACENT, opp at (5,4) ALSO adjacent,
+  BOTH len4 (equal). v58 flees 'up' (equal-H2H = TIE risk, `_lead0 < 0` gate doesn't contest at lead==0)
+  -> opp eats the food at t8 (grows to 5) -> outgrown cascade -> we wall-crawl perimeter food & lose.
+  The opponent controls the 1-3 board food via positioning (Voronoi) + marches into contested food.
+- **⚠️ CRITICAL: this is the SAME scenario as v59's catastrophic tie-flood (prior match vs beames).**
+  Contesting equal-H2H food at `_lead0 <= 0` (v59) turned ~60 wins into TIES vs a food-eater that
+  MARCHES into the same food (132-87t vs v58's 190). TheApX__hungry ALSO marches into contested food
+  (t7: both step to (5,5) = mutual-eat TIE). So the v59 `_lead0 <= 0` contest would tie-flood here too.
+  **DO NOT re-ship v59.** The food-race is FULLY TUNED OUT: owned-food v43/v44, behind-contest v57,
+  behind-eat +65 v58 are the max validated levers; every further tweak (pull>14, owned-food-when-behind,
+  contest-when-behind, `_lead0<=0` equal-H2H contest, small-snake edge-food traps) washes/regresses
+  self-play OR tie-floods the real match (documented exhaustively across the beames/famished-frank matches).
+- The ~6 SELFCOIL losses (sim_60 len23, sim_103 len21, sim_224 len18, sim_247 len17) are the big-longer
+  deep multi-step coil — already addressed by v56's freedom-horizon (K=8, gate len>=12), at its ceiling.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **8-0 as A AND 0-8 as B** (win both orders).
+- Self-play: v58 vs v57 = **4-4** (even, expected — food fixes only matter vs asymmetric opponents).
+- LATENCY SAFE (/tmp/lat.py, len20 snake, freedom-horizon K=8 active): **5.61ms avg, 6.74ms max**
+  (timeout 500ms — 74x margin). move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot crash into a timeout. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 192-54 is a clear win (78%) vs a strong food-eating
+  opponent that controls food via positioning + marches into contested food. The dominant OUTGROWN
+  loss mode is the documented UNFIXABLE-via-self-play mode: contesting equal-H2H food (v59) tie-floods
+  vs a food-eater (proven catastrophic 132-87t vs beames), and every other food-race tweak
+  washes/regresses. The KEY LESSON from v59: a "no self-play regression + repro flips" fix CAN still
+  tie-flood vs the real opponent (self-play both bots avoid ties symmetrically -> can't reproduce a
+  food-eater marching into contested food). No unvalidated regression risk taken. v58 is the strongest
+  proven full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN). The DOMINANT loss is OUTGROWN (TheApX__hungry out-eats us; opp controls the
+  1-3 board food via positioning & marches into contested food -> nearby food is equal/loss-H2H).
+  The food-race is TUNED OUT — DO NOT re-ship v59 (`_lead0<=0` contest = tie-flood vs a marching
+  food-eater), owned-food-when-behind, behind-eat>65, or pull>14 (all regress/tie-flood). The ONLY
+  real remaining edge = TERRITORY/food-CONTROL validated vs the REAL opponent (unavailable in
+  self-play, which washes/tie-floods every food tweak): e.g. grab CENTRAL food EARLY before the
+  opponent, or a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food
+  computed line ~548). KEEP v58 unless a fix (a) WINS self-play both orders (not a wash),
+  (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count (the v59 lesson).
+  Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr.py <gid>
+  (per-turn US/OP len/hp/head/food; edit dir), /tmp/cl.py <round_dir> (loss class). Test: /tmp/rm2.sh
+  <A> <B> <N> (recreate: ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8), ALWAYS both
+  A/B orders (STRONG position bias). v58 (192-54, 78%) is the proven best.
