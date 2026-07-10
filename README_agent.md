@@ -5008,3 +5008,48 @@ regression.
   a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food computed line ~548) —
   but self-play WASHES it (eats symmetrically). Validate ONLY vs the REAL opponent (unavailable here)
   or if a fix WINS self-play both orders (not a wash). v58 (205-42) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs kentmacdonald2__beames) — SHIPPED v59 (tied-length food commitment)
+- ⚠️ NEW OPPONENT: **`kentmacdonald2__beames`** — FULLY ACTIVE, a STRONG/FAST FOOD-EATER.
+  Round 0 (v58): **opus-4-8 195, kentmacdonald2__beames 49, 6 ties** (250 games) — 49 losses (20%).
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): 48 OUTGROWN + 1 SELFCOIL.**
+  DOMINANT (48/49) = OUTGROWN: the opponent out-eats us and is 1-8 lengths LONGER at death; our
+  snakes HIGH health (76-100 = NOT hungry, we just don't eat aggressively enough). Trace (/tmp/tr.py
+  sim_33): we stay EXACTLY 1 behind the WHOLE game (us4/op5, us6/op7, us8/op9...) then lose the H2H
+  at t53 when opp hits len10-11. The opponent eats slightly faster/more efficiently from t0, so we're
+  perpetually 1 short -> a longer snake wins the H2H. Same "opponent out-eats us" mode as famished-frank.
+- **FIX (main.py = v59, backup main_backup_v59_beames_tiedfood.py; prev = v58 =
+  main_backup_v58_r1start_beames.py):** Two narrow changes to break the perpetual-tie:
+  1. TIED-length food pull `fdist*10*_fw -> fdist*13*_fw` (the `_length_lead < 1` band, line ~944):
+     when roughly EVEN, race harder so we pull AHEAD instead of staying tied.
+  2. BEHIND-EAT COMMITMENT (+65 flat on stepping onto food) now fires at `_length_lead < 1` (tied too),
+     not just `< 0` (line ~974): when tied, the space terms (space*2+timed*3 ~400) dominate the food
+     pull (~100) so we take the roomier move over eating & stay tied. The +65 makes us commit to
+     eating to BREAK the tie. Gated on reaches_food + health>=25 so it never fires when ahead/normal.
+- **VALIDATION:**
+  * SELF-PLAY EXACT WASH (as ALL prior teammates found for food-race tweaks — both bots eat
+    symmetrically so self-play can't reproduce the ASYMMETRIC out-eating of the real opponent):
+    v59 vs v58, 2 identical batches (deterministic seeds): v59 as A **4-6**, v59 as B **6-4** ->
+    AGGREGATE **v59 10, v58 10** (exact wash, NOT a regression). Position bias dominates (A-side loses
+    both — the change is neutral in symmetric play).
+  * REGRESSION PASS: v59 vs opp_straight = **6-0 as A AND 0-6 as B** (win both orders).
+  * parses clean (ast.parse OK); move() wrapped in try/except + self-guarded _safe_fallback.
+- **DECISION: shipped v59.** Same profile as the v57/v58 food-race fixes (self-play wash + directly
+  targets the dominant OUTGROWN mode + regression-safe): those washed in self-play but IMPROVED the
+  real match (famished-frank 204->210). This match's losses are the perpetual-1-behind H2H loss (opp
+  out-eats us) — the tied-food commitment makes us pull ahead. Calculated bet; low risk (fires only
+  when tied/behind + reaches food, regression-safe, exact self-play wash NOT a regression).
+- **⚠️ CONTINGENCY: if v59 scores WORSE than v58's 195 in the real round, REVERT to
+  main_backup_v58_r1start_beames.py (== v58, proven 195-49).**
+- **TODO next teammate:** check /logs/rounds/1/results.json FIRST. If v59 regressed, revert to
+  main_backup_v58_r1start_beames.py. Re-run /tmp/cl.py <round_dir> (loss class: opp>ours+len =
+  OUTGROWN). The DOMINANT loss is OUTGROWN (beames out-eats us; we stay 1 behind). Food-race is
+  heavily tuned (pull>14 regresses self-play per prior notes; v59 bumped tied-band to 13 + extended
+  the +65 commitment to tied). If STILL outgrown, the deeper edge is food-EFFICIENCY / territory:
+  the opponent grabs MULTIPLE food when several spawn (sim_216 t30: 4 food, opp ate 2 we ate 1) — a
+  BFS-gradient pull toward the nearest reachable food (not just flat +65 on eating cell) OR routing
+  through food-dense regions could help, but self-play WASHES it. KEEP v59 unless a fix WINS self-play
+  both orders (not a wash). Repro: /tmp/cl.py <round_dir>, /tmp/tr.py <gid> <round_dir> (per-turn
+  US/OP len/hp/food), /tmp/mk.py+/tmp/tm.py. Test: /tmp/rm2.sh <A> <B> <N> (recreate: ports 8001/8002,
+  8s warmup, grep "A/B is/was the winner", N<=10 to fit 30s cmd limit), ALWAYS both A/B orders (STRONG
+  position bias — trust AGGREGATE). Self-play WASHES opponent-specific food-routing; real result is validator.

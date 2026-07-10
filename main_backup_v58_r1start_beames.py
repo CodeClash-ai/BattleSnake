@@ -941,7 +941,7 @@ def _choose_move(game_state):
                 score -= fdist * 14.0 * _fw
             elif _length_lead < 1:
                 # Roughly even length: still race hard so we don't get outgrown.
-                score -= fdist * 13.0 * _fw
+                score -= fdist * 10.0 * _fw
             elif want_food:
                 # Not comfortably longer (lead < 3) or moderate health: pursue food.
                 score -= fdist * 7.0
@@ -971,7 +971,7 @@ def _choose_move(game_state):
             # health). Add a large flat bonus for actually STEPPING ONTO food when
             # behind so we commit to eating & win the length race. Gated on
             # reaches_food + lead<0 so it never fires when ahead/normal.
-            if not _giant and _length_lead < 1 and c["reaches_food"] and health >= 25:
+            if not _giant and _length_lead < 0 and c["reaches_food"] and health >= 25:
                 score += 65.0
 
             # HUGE-LEAD FOOD AVOIDANCE: when we are ENORMOUSLY longer than the
