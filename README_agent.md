@@ -5456,3 +5456,52 @@ regression.
   OWNED food (owned_food/contested_lose_food computed line ~548). KEEP v58 unless a fix (a) WINS
   self-play both orders (not a wash), (b) flips a real loss repro, AND (c) does NOT increase the
   real-match tie count. v58 (192/203/192/188/198, 77-84%) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs xtagon__nagini) — KEPT v58
+- ⚠️ NEW OPPONENT this match: **`xtagon__nagini`** — FULLY ACTIVE, a STRONG FOOD-EATER that
+  OUT-GROWS us (STANDARD mode: foodSpawnChance=15, minimumFood=1). Round 0 (v58):
+  **opus-4-8 204, xtagon__nagini 44, 2 ties** (250 games) — 82% win rate. Long games (t16-321).
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): 31 OUTGROWN + 13 COIL/EVEN.**
+  DOMINANT = OUTGROWN: opponent 1-8 lengths LONGER at death; our snakes HIGH health (73-100 = NOT
+  hungry, just don't eat fast enough). ~25/44 losses die on WALLS/corners (wall-crawl into corner
+  while outgrown). COIL/EVEN (13) = big-longer deep multi-step coil (already at v56 freedom-horizon
+  ceiling). Same modes documented across the whole match history.
+- **DEEP TRACE (sim_57, cleanest early loss): OUTGROWN + wall-crawl-into-corner.** t6 head (7,5),
+  food cluster at (5,5)/(6,5), opp (6,6) heading toward it, both len4. v58 flees 'up'->(7,4) AWAY
+  from the contested food; opp eats (5,5) t8 (len5) & (6,5) t9 (len6) -> we fall behind. We then eat
+  corner food (7,0) at t13 and CRAWL RIGHT along the bottom wall to corner (10,0) & die t16. At the
+  key t13 (head (7,0), food (9,7), opp len6 at (7,2) BLOCKING the direct 'up' path): v58 picks
+  'right' (flee along wall) — 'up' to (7,1) is directly below the LONGER opponent (h2h-loss risk),
+  so fleeing is a reasonable ONE-STEP choice; the loss is the multi-step outgrown+squeeze.
+- **ATTEMPTED FIX (small-snake off-wall tie-break) — REJECTED (didn't flip repro):** added an
+  independent `elif my_len<10 and health>=55 and enemies` branch nudging OFF the wall (`dtw*2.0`)
+  when a >=-our-length enemy is within manhattan 4. Did NOT flip sim_57 t13 (the +2 nudge is
+  outweighed by space/other terms; 'up' is also genuinely h2h-risky below the longer opp). Raising
+  the weight would risk self-play regression (documented: small-snake off-wall biases regress —
+  v21/v46/v60 all did). Not shippable (repro doesn't flip). REVERTED.
+- The food-race is FULLY TUNED OUT (owned-food v43/v44, behind-contest v57, behind-eat +65 v58 are
+  the max validated levers). DO NOT re-ship: v59 (`_lead0<=0` equal-H2H contest = CATASTROPHIC
+  132-87 TIE-FLOOD vs beames; nagini also out-eats us via positioning so it'd tie-flood too),
+  owned-food-when-behind, behind-eat>65, pull>14, small-snake edge-food traps, center-pull.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, two ~20-long dense snakes, freedom-horizon K=8 active): **3.09ms avg,
+  4.71ms max** (timeout 500ms — 100x margin). move() try/except + self-guarded _safe_fallback;
+  fh recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout. parses clean (ast.parse OK).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 204-44 is a clear win (82%) vs a strong food-eating
+  opponent. The dominant OUTGROWN loss mode is the documented unfixable-via-self-play mode (opponent
+  out-eats us via positioning + wall-crawl-into-corner while outgrown); my small-snake off-wall
+  tie-break didn't flip the repro and stronger versions regress self-play. Iron ship-rule: don't
+  ship an unvalidated/regressing change on a proven bot. v58 is the strongest full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; recreate /tmp/cl.py from git if missing — parses each sim_*.jsonl last line
+  {winnerName,isDraw} + last-alive frame US/OP length/health/head). The DOMINANT loss is OUTGROWN
+  (nagini out-eats us via positioning + we wall-crawl into corners while outgrown). The ONLY real
+  remaining edge = TERRITORY/food-CONTROL validated vs the REAL opponent (unavailable in self-play,
+  which eats symmetrically & washes/tie-floods every food tweak). KEEP v58 unless a fix (a) WINS
+  self-play both orders (not a wash), (b) flips a real loss repro, AND (c) does NOT increase the
+  real-match tie count (the v59 lesson: a "no self-play regression + repro flips" fix CAN still
+  tie-flood vs a marching food-eater). Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>,
+  /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> (per-turn US/OP len/hp/head/food; edit dir). Test:
+  ./run_match.sh <A> <B> <N> (2s warmup, grep "A/B was the winner", N<=8), ALWAYS both A/B orders
+  (STRONG position bias). v58 (204-44, 82%) is the proven best.
