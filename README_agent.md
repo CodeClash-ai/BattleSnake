@@ -5233,3 +5233,59 @@ regression.
   contested_lose_food computed line ~548) validated vs the REAL opponent — self-play washes/tie-floods
   it. KEEP v58 unless a fix (a) WINS self-play both orders (not a wash), (b) flips a real loss repro,
   AND (c) does NOT increase the real-match tie count. v58 (200-43-7, match's best) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs TheApX__hungry) — KEPT v58
+- ⚠️ NEW OPPONENT this match: **`TheApX__hungry`** — FULLY ACTIVE, a strong FOOD-EATER that OUT-GROWS us
+  (same family behavior as coreyja__famished-frank / kentmacdonald2__beames). Round 0 (v58):
+  **opus-4-8 201, TheApX__hungry 46, 3 ties** (250 games) — 81% win.
+- **Loss classification (/tmp/cl.py /logs/rounds/0, last-alive frame): 42 OUTGROWN + 4 SELFCOIL, 31/46
+  die on WALLS/corners.** DOMINANT = OUTGROWN: the opponent out-eats us via better positioning/Voronoi
+  food control; it SHADOWS us (sits between us & food) so nearby food is equal/longer-H2H-contested.
+  Trace (/tmp/tr.py sim_143): at t9 both len4, food (5,5) adjacent to BOTH -> we (correctly, v58 gate
+  `_lead0<0`) flee the equal-H2H -> opp eats it (grows to 5) -> outgrown cascade. Then t18-21 we chase
+  food (8,3) but opp shadows in front & grabs it first. Classic outgrown-via-positioning.
+- **Loss GAP distribution (/tmp/gap.py): 22/46 losses are CLOSE (opp-us gap +0/+1/+2)** — the winnable
+  ones (a bit more growth / better H2H survival would flip them). But food-race is fully tuned out.
+- **Tuning experiments this round — ALL WASH (NOT shipped, /tmp/rm2.sh BOTH orders, aggregate):**
+  * v59 (freedom-horizon widen: add `elif fh==2: score-=8`): aggregate v59 13 vs v58 11 = WASH (within
+    position bias; B-side won more this run). REJECTED.
+  * v60 (freedom-horizon K=8->11, deeper): aggregate v60 9 vs v58 10 = WASH/slight-neg. REJECTED.
+  * v61 (freedom-horizon drop the `health>=40` gate): 3 batches BOTH orders -> aggregate **v61 12,
+    v58 12 = EXACT WASH**. REJECTED.
+  CONFIRMS ALL prior teammates: v58's freedom-horizon params (K=8, gate len>=12/health>=40, penalty 22,
+  fh<=1) are at a self-play local optimum — every param tweak washes. And the DOMINANT outgrown mode is
+  the documented unfixable-via-self-play mode (both bots eat symmetrically -> food-race tweaks wash/
+  regress). **DID NOT re-try the equal-H2H contest (v59 `_lead0<=0`)** — it CATASTROPHICALLY tie-flooded
+  vs the beames match (132-87t); the real-match tie count is the only guard and we can't test it here.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0** (win). parses clean (ast.parse OK).
+- LATENCY SAFE (/tmp/lat.py, len20 snake, freedom-horizon K=8 active): **7.18ms avg, 10.28ms max**
+  (timeout 500ms — 50x margin). move() try/except + self-guarded _safe_fallback; fh recursion-guarded
+  via _SIM_DEPTH -> cannot crash into a timeout.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal).
+- **DECISION: kept main.py (v58) unchanged.** 201-46 is a clear win (81%) vs a strong food-eating
+  opponent. The dominant OUTGROWN loss mode is unfixable via self-play-validated one-step scoring (every
+  food-race tweak across the whole match history washes/regresses/tie-floods); the freedom-horizon (the
+  best anti-deep-coil, already in v58) is tuned out (v59/v60/v61 all wash). No unvalidated regression
+  risk taken on the strongest proven full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; head x=0/10 or y=0/10 = wall self-coil). The DOMINANT loss is OUTGROWN
+  (TheApX__hungry out-eats us via positioning + shadows us). Food-race is FULLY TUNED OUT — DO NOT
+  re-try: v59 `_lead0<=0` equal-H2H contest (tie-floods vs food-eaters), owned-food-when-behind,
+  behind-eat>65, pull>14, freedom-horizon param changes (K/health-gate/fh<=2 all wash this round). The
+  ONLY real remaining edge = TERRITORY/food-CONTROL (cut opponent off from the 1-2 board food; stronger
+  BFS-gradient pull toward owned_food/contested_lose_food computed line ~548) validated vs the REAL
+  opponent — self-play washes/tie-floods it. KEEP v58 unless a fix (a) WINS self-play both orders (not a
+  wash), (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count. Repro: /tmp/mk.py
+  <gid> <turn> <out.json> <round_dir> (may need to recreate), /tmp/tm.py <bot> <state>, /tmp/tr.py <gid>
+  (per-turn US/OP len/hp/head/food), /tmp/cl.py <round_dir> (loss class), /tmp/gap.py (loss gap dist).
+  Test: /tmp/rm2.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8 to fit
+  the 30s cmd limit — larger N times out the bash tool), ALWAYS both A/B orders (STRONG position bias).
+  v58 (201-46) is the proven best.
+
+## Analysis tools saved to /workspace/tools/ (round 1 vs TheApX__hungry)
+- `tools/cl.py <round_dir>` — loss classification (W/L/T, OUTGROWN vs SELFCOIL, wall deaths, per-loss detail).
+- `tools/gap.py` — loss length-gap distribution (opp-us length at death; edit d= for the round).
+- `tools/tr.py <sim.jsonl> [startturn]` — per-turn trace of US vs OP head/len/hp/food (reads /logs/rounds/0).
+- `tools/rm2.sh <A.py> <B.py> <N>` — self-play harness (ports 8001/8002, 8s warmup, both-order testing).
+- `tools/lat.py` — worst-case compute latency of /workspace/main.py (freedom-horizon active).
+  NOTE: these read /logs/rounds/0 by default — edit the `d=` path for other rounds.
