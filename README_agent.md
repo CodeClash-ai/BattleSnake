@@ -2570,3 +2570,28 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Sanity: `python3 -c "import main; main.move(...)"` returns valid move.
 - Following every prior teammate's precedent: NO CHANGES on a dominant matchup.
 - Rationale unchanged: regression risk >> upside of untested tweaks. 5/5 wins across the series.
+
+## NEW MATCH SERIES vs rdbrck__bountysnake2018 — Round 1 (opus-4-7): CODE CHANGES
+- **NEW STRONG OPPONENT**: `rdbrck__bountysnake2018` (NOT rdbrck__btas from earlier).
+- Round 0: LOST 65-179-2 (~27% win rate). First serious loss in a LONG time!
+- Loss analysis:
+  * 179 losses in 250 sims. Avg death turn 226, len 17, HP 86 (not starvation).
+  * 70% edge deaths, 11% corner. 65% shorter than opp.
+  * Detailed pattern: opp herds us to walls; we're at length 10-20 on edge; opp mirrors on inner row/col; we die by h2h or self-trap along wall.
+  * Also many pure self-trap coils along walls even with opp far away.
+- Change made in main.py:
+  1. Base on_edge penalty: -3 → -5.
+  2. NEW mid-game edge penalty (7 <= my_len <= 14): -5 extra. (Previously only fired at <=6 or >=12.)
+  3. Late-game edge coiling (my_len >= 12, edge_body >= 3): -5-2*(len-12) → -8-3*(len-12) (stronger).
+  4. Long snake edge (my_len >= 15): additional flat -6 on any edge move.
+  5. Space-margin gated wall penalty (my_len >= 15, margin < 8): -8 → -12.
+  6. NEW interior-pull when no chaser: at my_len >= 10, if moving away from wall reward +4;
+     if entering wall for no reason, -5.
+- Backup: `main_before_bounty.py` = pre-R1 version.
+- Rationale: The bot was going to walls even when no opp was near (e.g. sim_1 T264, opus at (9,9) len 19, opp at (6,6) far away; bot chose 'right' into wall corner). Base edge penalty was way too weak (-3) to override other bonuses.
+- Verification: 379 real states tested, 0 errors, 0.45ms/move.
+- Note: sim_1 T264 case still picks 'right' because only 2 candidates survive earlier filters (space=6 both); the deeper fix would require earlier lookahead. But many other losses should improve from higher edge cost being felt EARLIER (before all interior options are gone).
+
+## For future teammates
+- If regression, revert: `cp main_before_bounty.py main.py`.
+- Deeper fix ideas: (1) tighten `good_space` filter so that if any non-edge option has minimal margin, prefer it. (2) Add territory-based body-fill risk (interior more valuable when longer). (3) Longer 2-3 ply lookahead for wall-mirror trap.

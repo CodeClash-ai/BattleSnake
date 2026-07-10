@@ -738,28 +738,22 @@ def _move(game_state):
         cx, cy = c["cell"]
         on_edge = (cx == 0 or cx == w - 1 or cy == 0 or cy == h - 1)
         if on_edge:
-            s -= 5  # was -3; base edge penalty raised (vs bountysnake-style opponents)
-            # MID-GAME edge penalty: at length 7-14 we're big enough to matter but not fully coiled.
-            # Losses vs rdbrck__bountysnake2018 show median death turn 226, avg len 17 on edge/wall.
-            if 7 <= my_len <= 14:
-                s -= 5  # extra: don't skulk on walls at medium length
+            s -= 3
             # LATE-GAME (long snake) edge penalty: coiling risk grows with length.
+            # We lose ~10% of games by spiraling into wall traps around length 15-25.
             if my_len >= 12:
                 # Count how many of my body segments (head-side, first 8) are on ANY edge
                 edge_body = sum(1 for seg in my_body[:8]
                                 if seg[0]==0 or seg[0]==w-1 or seg[1]==0 or seg[1]==h-1)
                 # If already have 3+ body segs near walls, extra penalty on more edge moves
                 if edge_body >= 3:
-                    s -= 8 + 3 * (my_len - 12)  # grows with length (was 5+2*)
+                    s -= 5 + 2 * (my_len - 12)  # grows with length
                 # Space-margin gated: if margin < 6 and long, edge is very risky
                 margin_here = c["space"] - c["new_len"]
                 if margin_here < 8 and my_len >= 15:
-                    s -= 12  # was 8
-                # NEW: extra penalty at length 15+ for ANY edge move when interior is available
-                # (raw penalty to push us off walls in long games)
-                if my_len >= 15:
-                    s -= 6
+                    s -= 8
             # EARLY-GAME edge penalty: short snakes shouldn't skulk on walls unnecessarily.
+            # (Wall-mirror trap risk is compounded before we've grown large enough to survive it.)
             if my_len <= 6:
                 s -= 6
             # Detect wall-chase trap: opp head on/near inner adjacent row/col.
@@ -843,15 +837,6 @@ def _move(game_state):
             elif dist_wall_after <= 2 and dist_wall_before <= 2:
                 # Still uncomfortably close to wall
                 s -= 3
-        else:
-            # No longer opp near — but still nudge interior at mid/late game.
-            # This addresses losses where opus voluntarily walked into walls
-            # even with no immediate threat, then got squeezed later.
-            if my_len >= 10:
-                if dist_wall_after > dist_wall_before:
-                    s += 4  # mild pull inward
-                elif dist_wall_after < dist_wall_before and dist_wall_after <= 1:
-                    s -= 5  # discourage walking to wall for no reason
 
         # MIRROR-TRAP detection: longer opp is exactly parallel to us near a wall.
         # If we're heading to a cell where opp is mirror-adjacent (perpendicular to wall)
