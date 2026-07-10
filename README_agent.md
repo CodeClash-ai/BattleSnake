@@ -5008,3 +5008,49 @@ regression.
   a stronger BFS-gradient pull toward OWNED food (owned_food/contested_lose_food computed line ~548) —
   but self-play WASHES it (eats symmetrically). Validate ONLY vs the REAL opponent (unavailable here)
   or if a fix WINS self-play both orders (not a wash). v58 (205-42) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs kentmacdonald2__beames) — KEPT v58
+- ⚠️ NEW OPPONENT: **`kentmacdonald2__beames`** — FULLY ACTIVE, a STRONG FOOD-EATER that OUT-GROWS us.
+  Round 0 (v58): **opus-4-8 190, beames 52, 8 ties** (250 games) — 52 losses (~21%), the most in a while.
+- **Loss classification (/tmp/cl.py /logs/rounds/0): 49 OUTGROWN + 3 SELFCOIL.** DOMINANT = OUTGROWN:
+  the opponent out-eats us and is 1-10 lengths LONGER at death; our snakes have HIGH health (82-100 =
+  NOT hungry, we just don't eat aggressively enough). Trace (/tmp/tr2.py sim_234): early game we eat
+  fine (len 3->6 by t14 wall-crawling corner food), but from t14 on we STAY len 6 while health drops
+  94->54 and the opponent grows 7->14 taking CENTRAL food. Usually only 1-2 food on the board; the
+  opponent Voronoi-controls it via better positioning. Deep dive (t39-40): our len6 head was ADJACENT
+  to food (3,4) but the len10 enemy at (4,4) was equidistant -> the food is an H2H-LOSS cell (enemy
+  much longer) -> correctly pruned -> we can't take it. The opponent SHADOWS us & controls food.
+- **Tuning experiments this round — ALL REJECTED (self-play regression, /tmp/rm2.sh BOTH orders):**
+  * cand (owned-food routing extended to lead<3 INCLUDING behind, `0 <= _length_lead < 3` -> `_length_lead < 3`
+    at line 668): as A 3-7, as B 5-5 -> aggregate cand 8 vs v58 12 = NET NEGATIVE. Routing to
+    owned-food when far behind makes us avoid contested food we could sometimes win -> regresses. REJECTED.
+  * cand (behind-eat commitment +65 -> +110, line 975): as A 4-6, as B 5-5 -> aggregate cand 9 vs v58 11
+    = NET NEGATIVE. Over-committing to food causes deaths (self-coil/H2H) that lose more than they save. REJECTED.
+  CONFIRMS ALL prior teammates: the OUTGROWN mode (opponent controls food via positioning) is
+  fundamentally UNFIXABLE via self-play-validated one-step scoring (both bots eat symmetrically -> every
+  food-race tweak washes/regresses). The food-race is fully TUNED OUT (owned-food v43/v44, behind-contest
+  v57, behind-eat +65 v58 are the max validated levers).
+- **v58 vs v57 self-play (2 batches, BOTH orders): WASH** (combined v58 19, v57 21 — within STRONG
+  A-position bias, A wins ~7/10 regardless). v58 is the currently-deployed version and scored 205 in the
+  prior match's round 4 (> v57's 200); kept it to avoid churn. Both are proven match-winners.
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- main.py == main_backup_v58_behindeat.py (diff confirms equal); parses clean (ast.parse OK); move()
+  wrapped in try/except + self-guarded _safe_fallback -> cannot time out.
+- **DECISION: kept main.py (v58) unchanged.** 190-52 is a clear win (76%) vs a strong food-eating
+  opponent that controls central food. The dominant OUTGROWN loss mode is the documented
+  unfixable-via-self-play mode — both my tweaks (owned-food-when-behind, stronger behind-eat) regressed
+  self-play both orders and can't be validated vs the real asymmetric opponent. No unvalidated regression
+  risk taken. v58 is the strongest proven full stack (v8-v58).
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class: opp>ours
+  = OUTGROWN). The DOMINANT loss is OUTGROWN (beames out-eats us; opp controls the 1-2 board food via
+  positioning + shadows us so nearby food is H2H-loss-contested). The food-race is TUNED OUT (owned-food-
+  when-behind regresses, behind-eat>65 regresses). The ONLY real remaining edge = TERRITORY/food-CONTROL:
+  position to CUT OFF the opponent from food (deny growth) OR a stronger BFS-gradient pull toward OWNED
+  food (owned_food/contested_lose_food computed line ~548) — but self-play WASHES it (eats symmetrically).
+  Since round 0's early game DOES eat well (len 3->6) but then stalls at len 6, another angle: grab CENTRAL
+  food EARLY (before outgrown) instead of wall-crawling perimeter corner food — but center-pull historically
+  regresses self-play. KEEP v58 unless a fix WINS self-play both orders (not a wash). Repro: /tmp/mk.py
+  <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/tr2.py <gid> <t0> <t1> (per-turn
+  head/len/hp/nearfood), /tmp/cl.py <round_dir> (loss class). Test: /tmp/rm2.sh <A> <B> <N> (recreate:
+  ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=10 to fit ~30s cmd limit), ALWAYS both A/B
+  orders (STRONG position bias — A wins ~7/10; trust AGGREGATE/symmetric). v58 (190-52) is the proven best.
