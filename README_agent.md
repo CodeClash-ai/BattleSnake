@@ -5505,3 +5505,46 @@ regression.
   /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> (per-turn US/OP len/hp/head/food; edit dir). Test:
   ./run_match.sh <A> <B> <N> (2s warmup, grep "A/B was the winner", N<=8), ALWAYS both A/B orders
   (STRONG position bias). v58 (204-44, 82%) is the proven best.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs xtagon__nagini) — KEPT v58
+- Verified results: round 0 **204-44 (+2t)** (v58), round 1 **209-41 (0t)** (v58). 2/2 rounds won;
+  IMPROVING trend (204->209, losses 44->41), ~84% game win rate. Opponent FULLY ACTIVE, a strong
+  FOOD-EATER that out-grows us (STANDARD mode). Long games (t16-321).
+- **Round-1 loss classification (/tmp/cl2.py /logs/rounds/1, last-alive frame): 28 OUTGROWN + 13 COIL.**
+  * OUTGROWN (28): opp 1-11 longer at death; our snakes HIGH health (54-100 = NOT hungry, just
+    out-eaten via positioning). Many die on WALLS (wall-crawl-into-corner while outgrown).
+  * COIL (13): EQUAL length (us==op), dying on WALLS with legal=0 — the deep multi-step wall-crawl
+    coil. Sizes span len 5-23. Notably SEVERAL are len 5-11 (BELOW the v56 freedom-horizon len>=12 gate):
+    sim_9(us6), sim_58(us5), sim_205(us10), sim_166(us11), sim_35(us11).
+- **Tuning experiments this round — ALL REJECTED (repros DON'T flip):**
+  * cand (lower freedom-horizon gate len>=12 -> len>=8, /tmp/cand.py): latency SAFE (3.66ms). But did
+    NOT flip the small-snake wall coil repros (sim_205 t78-81 all still 'down' into the wall; sim_9 is
+    len6 so even <8). The freedom-horizon with STATIC enemies finds "escapes" that don't materialize
+    in play -> doesn't catch these.
+  * candk12 (freedom-horizon K=8 -> K=12): changed sim_16 t110 ('down'->'left') but NOT the escape
+    direction (both pick 'left' into the corner at t111, the forced turn). No clean help.
+  * **KEY DIAGNOSTIC (sim_16 t111, head (3,0)): the freedom-horizon is BACKWARDS here** —
+    `_freedom_horizon(gs,'left',8)=2` (INTO the corner) vs `'right'=1` (toward OPEN board). Because
+    enemies are STATIC, going 'right' hits the enemy's static body while 'left' can loop -> the horizon
+    PREFERS the fatal corner move. This is exactly why the wall-crawl coil is unfixed: the static-enemy
+    horizon actively mis-ranks the moves. (It's a soft -22 tie-break so it doesn't dominate, but it
+    can't help either.) The correct fix would advance ENEMIES in the horizon (moving wall) — but that
+    risks over-pessimism/self-play regression (documented: enemy-reachability sims regress).
+- REGRESSION PASS: main.py (v58) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, two len-10 dense snakes): **0.30ms avg, 0.59ms max** (timeout 500ms).
+  move() try/except + self-guarded _safe_fallback; fh recursion-guarded via _SIM_DEPTH -> cannot time out.
+- main.py == main_backup_v58_behindeat.py (diff confirms equal); parses clean (ast.parse OK).
+- **DECISION: kept main.py (v58) unchanged.** 209-41 (84%, improving). The OUTGROWN mode is the
+  documented unfixable-via-self-play mode (every food-race tweak regresses/tie-floods; DO NOT re-ship
+  v59 `_lead0<=0` = 132-87 tie-flood vs beames). The COIL mode is the deep wall-crawl coil; the
+  freedom-horizon (v56) is at its ceiling (lowering the gate & K=12 both fail to flip; the static-enemy
+  horizon mis-ranks wall moves). No unvalidated regression risk taken on a proven, improving bot.
+- **TODO next teammate:** the COIL residual needs the freedom-horizon to advance ENEMIES (a moving wall
+  that closes the wall-crawl corridor) — currently static enemies make it mis-rank corner moves (sim_16
+  t111: horizon prefers 'left' into the corner). Try advancing the nearest enemy toward US (or its
+  nearest food) in `_freedom_horizon` and RE-TEST self-play both orders (enemy sims historically
+  over-pessimistic & regress — validate carefully). The OUTGROWN mode needs TERRITORY/food-CONTROL
+  validated vs the REAL opponent (self-play washes). Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>,
+  /tmp/tm.py <bot> <state>, /tmp/tr.py <gid> <round_dir> (per-turn), /tmp/cl2.py <round_dir> (loss class).
+  Test: ./run_match.sh <A> <B> <N> (2s warmup, N<=8, both orders — STRONG position bias). v58 (204/209,
+  84%) is the proven best.
