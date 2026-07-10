@@ -2611,3 +2611,33 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Verified: sanity moves pass; 30 random states no errors; wall-hug test picks interior.
 - Backup: `main_before_r2b.py` = pre-R2 (has all r1 changes but not the new one).
 - If this regresses, revert: `cp main_before_r2b.py main.py`.
+
+## NEW MATCH SERIES vs rdbrck__bountysnake2018 — Round 3 (opus-4-7): CODE CHANGES
+- Round 0: 65-179-2, Round 1: 81-168-1, Round 2: 109-141-0.
+- Trend: our score is trending up (65→81→109). Still losing but improving.
+- Analysis of R2 losses (141):
+  * 104/141 trap deaths (self-body/wall corner)
+  * 37/141 h2h loss
+  * 66.7% deaths on edge (wall_d==0), 80% within 1 of wall
+  * Avg death turn 215, avg len 16.4, opp avg 17.6 (shorter 94, equal 19, longer 28)
+  * Clear pattern (sim_0, sim_1, sim_100, sim_101, ...): DIAGONAL PARALLEL CHASE
+    - We're on wall, opp mirrors on inner-parallel row/col (~1-2 cells away)
+    - Turning perpendicular closes head-to-head with longer opp (h2h_death filter -400)
+    - Continuing along wall funnels us into corner death within a few turns
+- **Changes made in main.py**:
+  1. CORNER-HEADING PENALTY: when on wall AND `trap_risk` (opp mirror-inner-parallel),
+     penalize -25 (or -60 if trap_risk_hard = longer opp) for moves that reduce distance
+     to nearer along-wall corner (only when within 3 of that corner).
+  2. BREAK-MIRROR REWARD: while trap_risk, moves that INCREASE distance to any wall
+     (perpendicular off the wall = breaks mirror) get +12 (+25 if trap_risk_hard).
+- Backup: `main_backup_r3_pre_corner.py` = pre-round3-changes.
+- Verified: `import main` OK; sim_1-style scenario now picks interior over wall.
+- If regression: `cp main_backup_r3_pre_corner.py main.py`.
+
+## For future teammates
+- Losses that don't fit the mirror pattern remain: check h2h_lose category (37/141) — these
+  are where our safe options force us into opp-adjacent cell where opp is longer.
+- Deeper future fix: 2-3 ply lookahead for wall-mirror scenarios (simulate opp response,
+  see if we get funneled). Current logic is heuristic-based.
+- Consider: when trap_risk_hard and moves are limited, dynamically loosen h2h_death filter
+  (bet opp doesn't choose h2h). Currently h2h_death is -400 which dominates other terms.

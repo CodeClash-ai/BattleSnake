@@ -791,46 +791,6 @@ def _move(game_state):
                 s -= 80
             elif trap_risk:
                 s -= 35  # shorter opp mirror; still risky (corner-death) but less severe
-            # CORNER-HEADING PENALTY: when we're on the wall AND opp mirrors on inner-parallel,
-            # moves that continue toward the nearer corner-along-that-wall are corner-death traps.
-            # (Observed in sim_1, sim_101, sim_100: opp mirrors inner-parallel, we go straight
-            # to corner and die.) Applies even at length <15.
-            if trap_risk:
-                head_bx, head_by = my_head
-                # Identify which wall we're on (after move)
-                if cy == 0 or cy == h - 1:
-                    # bottom/top wall: measure how much closer we're getting to nearer horizontal corner
-                    # Nearer corner x = 0 if cx <= w/2 else w-1
-                    corner_x = 0 if cx <= (w-1)/2 else w - 1
-                    dist_corner_before = abs(head_bx - corner_x) if (head_by == cy) else abs(cx - corner_x) + 1
-                    dist_corner_after = abs(cx - corner_x)
-                    if dist_corner_after < dist_corner_before and dist_corner_after <= 3:
-                        # heading toward corner while mirror-chased
-                        if trap_risk_hard:
-                            s -= 60
-                        else:
-                            s -= 25
-                elif cx == 0 or cx == w - 1:
-                    corner_y = 0 if cy <= (h-1)/2 else h - 1
-                    dist_corner_before = abs(head_by - corner_y) if (head_bx == cx) else abs(cy - corner_y) + 1
-                    dist_corner_after = abs(cy - corner_y)
-                    if dist_corner_after < dist_corner_before and dist_corner_after <= 3:
-                        if trap_risk_hard:
-                            s -= 60
-                        else:
-                            s -= 25
-            # BREAK-MIRROR REWARD: if we can move perpendicular to the mirror axis (off the wall),
-            # this breaks the mirror-chase. Reward it.
-            if trap_risk:
-                dist_wall_before2 = min(my_head[0], my_head[1], w-1-my_head[0], h-1-my_head[1])
-                dist_wall_after2 = min(cx, cy, w-1-cx, h-1-cy)
-                if dist_wall_after2 > dist_wall_before2:
-                    # Moving off the wall while mirror-chased = big reward.
-                    if trap_risk_hard:
-                        s += 25
-                    else:
-                        s += 12
-
             # Corner is worse
             if (cx in (0, w - 1)) and (cy in (0, h - 1)):
                 s -= 15
