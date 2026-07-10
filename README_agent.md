@@ -5729,3 +5729,56 @@ regression.
   RE-TEST self-play both orders (aggregate over >=2 batches, STRONG position bias). Repro: /tmp/cl.py
   <round_dir>, /tmp/rq.sh <A.py> <B.py> <N> (ports 8001/8002, 8s warmup, N<=7 to fit 30s cmd limit,
   grep "A/B .* the winner"). v58 (206-43) is the fallback; v59 self-play-validated to beat it both orders.
+
+## Round 2 update (opus-4-8_r2 — CURRENT MATCH vs joshhartmann11__battlejake) — KEPT v59
+- Verified results: round 0 **206-43 (+1t)** (v58), round 1 **209-40 (+1t)** (v59). ⭐ v59
+  (corner-avoid for big far-ahead snakes, shipped end of round 1) IMPROVED r0's 206-43 -> r1
+  209-40 (losses 43->40). The corner-avoid works. 2/2 rounds won. main.py == main_backup_v59_corneravoid.py.
+- **Round-1 loss classification (/tmp/cl.py /logs/rounds/1): 39 SELFCOIL (corner=21, wall=8, mid=10)
+  + 1 OUTGROWN.** Our snake LONGER than opp (leads +2 to +11), HIGH health (mostly 90-100 = NOT
+  hungry), self-coils — heavily on CORNERS ((10,10),(0,0)) despite v59's -30 corner penalty.
+- **DEEP TRACE (sim_16, len26 died (10,10)): FLOODED-BOARD GIANT wall-crawl coil.** The snake crawled
+  the RIGHT wall (x=10/x=9) t342-t351 while eating (hp stayed ~100) then went into corner (10,10) t352.
+  At t348-350 the board had **26 food** (>=10 -> `_flooded` True -> `_giant` active). The giant
+  food-flee (fdist*30) pushes toward high-fdist PERIMETER cells (walls); the `_giant` off-wall pull
+  (dist_to_wall*25) + corner-avoid (-30) counter it but the flee gradient toward corner FOOD (10,10)
+  wins. This is the documented eremetic/gigantic/tantilla giant-balloon-on-flooded-board mode: the
+  board floods to 26 food BECAUSE our snake is len26 on 121 cells; food is unavoidable when big; per-move
+  tweaks provably can't cap growth (exhaustively confirmed across those matches).
+- **Tuning experiments this round — ALL REJECTED (self-play net-negative/wash, /tmp/rq.sh BOTH orders):**
+  * cand (NEAR-CORNER avoid: penalize cells within manhattan 2 of any corner, `-(3-cd)*8`, for big
+    far-ahead snakes, to divert BEFORE committing to the corner): AGGREGATE cand **14** vs v59 **16**
+    (cand-A 3+3=6, main-A 4+5=9; cand-B 5+3=8, main-B 2+5=7) = NET NEGATIVE. Over-restricts. REJECTED.
+  * cand2 (freedom-horizon gate len>=12 -> len>=11, to catch the len 11-14 corner coils): AGGREGATE
+    cand2 **10** vs v59 **12** = NET NEGATIVE, AND adds latency (K=8 sim on more candidates ->
+    2 self-play batches exceed the 30s cmd limit). REJECTED. Consistent with prior notes (gate<12
+    regressed vs joshhartmann; K=10 washes).
+  CONFIRMS ALL prior teammates: the corner/deep self-coil is at the freedom-horizon ceiling (K=8,
+  gate len>=12, fh<=1; every widening regresses/washes), and the flooded-board giant balloon is
+  unfixable via per-move scoring. v59's corner-avoid (-30 on the final corner cell) is the max
+  validated corner lever; extending it (near-corner) or the freedom-horizon (len>=11) both regress.
+- REGRESSION PASS: main.py (v59) vs opp_straight.py = **6-0 as A AND 0-6 as B** (win both orders).
+- LATENCY SAFE (/tmp/lat.py, len13 snake near wall, freedom-horizon K=8 active): **0.62ms avg,
+  1.06ms max** (timeout 500ms — 470x margin). move() try/except + self-guarded _safe_fallback;
+  fh recursion-guarded via _SIM_DEPTH -> cannot crash into a timeout. parses clean (ast.parse OK).
+- main.py == main_backup_v59_corneravoid.py (diff confirms equal).
+- **DECISION: kept main.py (v59) unchanged.** v59 is the proven best-scoring version (209-40,
+  improved over v58's 206-43). The dominant CORNER/deep self-coil is at the freedom-horizon ceiling;
+  the len26 corner losses are the flooded-board giant balloon (unfixable per-move). Both my tweaks
+  (near-corner avoid, freedom-horizon len>=11) net-regressed self-play both orders. Iron ship-rule:
+  don't ship a self-play net-negative/wash on a proven, improving bot. No regression risk taken.
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL; head 2-wall = corner). The DOMINANT loss is big-longer
+  CORNER self-coil, split between (a) freedom-horizon-ceiling deep coils (len 11-14, gate<12 & K=10
+  both regress — DON'T re-try), and (b) flooded-board GIANT balloon (len 20-26 crawling walls while
+  eating on a 26-food board — `_flooded`/`_giant` giant-cap active but the flee gradient toward corner
+  food wins; unfixable per-move, documented across eremetic/gigantic/tantilla). Near-corner avoid
+  (this round) net-regressed — DON'T re-try. The ONLY structural fix ever identified is a SOFT
+  multi-step self-sim using OUR OWN scoring (freedom-horizon IS that, at its ceiling) or region-level
+  food-density steering to keep the snake OUT of food-dense quadrants BEFORE the board floods (never
+  successfully shipped without regression). KEEP v59 unless a fix (a) WINS self-play both orders
+  (not a wash), (b) flips a real loss repro, AND (c) does NOT increase the real-match tie count.
+  Repro: /tmp/mk.py <gid> <turn> <out.json> <round_dir>, /tmp/tm.py <bot> <state>, /tmp/cl.py
+  <round_dir> (loss class). Test: bash /tmp/rq.sh <A.py> <B.py> <N> (ports 8001/8002, 8s warmup,
+  N<=8, grep "A/B .* the winner"; it pkills stale procs & rm-cleans botA/botB), ALWAYS both A/B
+  orders (STRONG position bias — trust AGGREGATE). v59 (206-43/209-40) is the proven best.
