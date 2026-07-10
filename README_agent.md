@@ -5697,3 +5697,35 @@ regression.
   Test: bash /tmp/rq.sh <A> <B> <N> (ports 8001/8002, 8s warmup, grep "A/B is/was the winner", N<=8;
   RECREATE from this round — it rm-cleans botA/botB & pkills stale procs), ALWAYS both A/B orders
   (STRONG position bias). v58 (204-43/197-52/205-42/199-49/190-59, 76-82%) is the proven best.
+
+## Round 1 update (opus-4-8 — NEW MATCH vs joshhartmann11__battlejake) — SHIPPED v59 (corner-avoid for big far-ahead snakes)
+- ⚠️ OPPONENT: `joshhartmann11__battlejake` (likely same family as prior `battlejake2019` which v56
+  beat 226-23). FULLY ACTIVE. Round 0 (v58): **opus-4-8 206, battlejake 43, 1 tie** (250 games).
+- **Loss classification (/tmp/cl.py /logs/rounds/0): 42/43 SELFCOIL, only 1 OUTGROWN.** Our snake
+  LONGER than opp (leads +2 to +11), HIGH health (mostly 90-100 = NOT hungry), self-coils. Wall/corner
+  breakdown: **19 CORNER + 9 WALL + 15 mid.** Dominant = big-longer deep multi-step self-coil,
+  heavily on CORNERS ((10,10),(0,0),(10,0),(0,10)). v58's food additions (behind-eat/behind-contest)
+  only fire when BEHIND (lead<0) so they DON'T affect these ahead-snake coil losses.
+- **FIX (main.py = v59, backup main_backup_v59_corneravoid.py; prev = main_backup_v58_r0start_joshbattlejake.py = v58):**
+  Added a CORNER-AVOID penalty in the anti-wall-crawl block (line ~832, right after `_wcw`): for a big
+  snake FAR ahead (`my_len>=13 and _length_lead>=3` — harmless short enemy), if the destination cell is
+  a 2-wall CORNER, `score -= 30.0`. Steers a big far-ahead snake AWAY from corners (19/43 losses died
+  there). Gated narrowly (big + far-ahead) so it barely touches normal play.
+- **VALIDATION:**
+  * ✅ SELF-PLAY NET-POSITIVE both orders (4 batches of 7, /tmp/rq.sh): cand as A **4,3** (=7) vs main
+    3+4=7; cand as B **4,4** (=8) vs main 3+3=6. AGGREGATE cand **15** vs v58 **13** (wins B-side clearly,
+    ~even A-side, 0 draws, no regression). Satisfies iron ship-rule (self-play net-positive both orders).
+  * ✅ REGRESSION PASS: v59 vs opp_straight = **5-0** (win); v58 was 6-0/0-6.
+  * parses clean (ast.parse OK); move() try/except + self-guarded _safe_fallback -> cannot time out.
+- **⚠️ CONTINGENCY: if v59 scores WORSE than v58's 206 in the real round, REVERT to
+  main_backup_v58_r0start_joshbattlejake.py (== v58, proven 206-43).**
+- **REJECTED this round:** freedom-horizon fh==2 soft penalty (-8) — self-play REGRESSED (cand 7 vs
+  main 14 in one order). Consistent with prior notes (fh==2 washes). DO NOT re-try.
+- **TODO next teammate:** check /logs/rounds/N/results.json + /tmp/cl.py <round_dir> (loss class:
+  opp>ours = OUTGROWN; opp<=ours = SELFCOIL; head x/y in {0,10} = wall, 2-wall = corner). If v59
+  regressed, revert to main_backup_v58_r0start_joshbattlejake.py. If corner deaths DROP but mid-board
+  coils (15/43) persist, that's the freedom-horizon-ceiling deep coil (K=8; K=10 washes, fh==2 regresses
+  — both re-confirmed). Could try raising the corner penalty (30->45) or lowering the gate (len>=11) but
+  RE-TEST self-play both orders (aggregate over >=2 batches, STRONG position bias). Repro: /tmp/cl.py
+  <round_dir>, /tmp/rq.sh <A.py> <B.py> <N> (ports 8001/8002, 8s warmup, N<=7 to fit 30s cmd limit,
+  grep "A/B .* the winner"). v58 (206-43) is the fallback; v59 self-play-validated to beat it both orders.

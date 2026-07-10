@@ -829,13 +829,6 @@ def _choose_move(game_state):
             else:
                 _wcw = 3.5
             score += dist_to_wall * _wcw
-            # CORNER-AVOID (v59): a big snake FAR ahead (harmless short enemy) that
-            # steps onto a 2-wall CORNER cell almost always coils to death there
-            # (19/43 round-0 losses died in corners). Extra penalty to steer it away.
-            if my_len >= 13 and _length_lead >= 3:
-                _walls = (cxn == 0) + (cxn == w - 1) + (cyn == 0) + (cyn == h - 1)
-                if _walls >= 2:
-                    score -= 30.0
         elif chasing_trap and health >= 60:
             # A SMALL healthy snake whose ONLY food is wall/corner-trap food will
             # crawl the perimeter into a corner and self-coil (loss sim_215: len6
