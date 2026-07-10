@@ -433,7 +433,7 @@ def _move(game_state):
             unsafe = [c for c in candidates if c["h2h_death"]]
             best_safe_space = max(c["space"] for c in safe)
             # Only keep h2h_death options substantially better in space
-            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 3, c["new_len"] - 1)]
+            good_unsafe = [c for c in unsafe if c["space"] >= max(best_safe_space + 8, c["new_len"] + 3)]
             if good_unsafe:
                 candidates = safe + good_unsafe
             else:
@@ -981,33 +981,8 @@ def _move(game_state):
 
         return s
 
-    # POCKET-AVOIDANCE: compare candidate spaces to the best alternative. If a move
-    # heads into a much smaller pocket than others, add a heavy penalty. This fights
-    # the "walk into shrinking corner" pattern which is our leading loss cause.
-    _scored = [(score(c), c) for c in candidates]
-    if len(_scored) > 1:
-        _max_space = max(c["space"] for c in candidates)
-        # Recompute scores with pocket penalty
-        _adjusted = []
-        for _s, _c in _scored:
-            _sp = _c["space"]
-            _nl = _c["new_len"]
-            _pen = 0.0
-            # Relative pocket: how much less space than the best?
-            _diff = _max_space - _sp
-            # Only penalize if this move goes to substantially less space AND is tight for our length
-            if _diff >= 5 and _sp < _nl + 4:
-                _pen -= min(100.0, _diff * 3.0 + max(0, _nl - _sp) * 5.0)
-            # Extreme: if space is much smaller than our length AND best alt has room, this is near-certain trap
-            if _sp < _nl and _max_space >= _nl + 2:
-                _pen -= 120.0
-            # If space equals our length exactly, it's a trap loop with no growth
-            if _sp <= _nl and my_len >= 10 and _max_space > _sp + 3:
-                _pen -= 60.0
-            _adjusted.append((_s + _pen, _c))
-        _scored = _adjusted
-    _scored.sort(key=lambda x: x[0], reverse=True)
-    return {"move": _scored[0][1]["dir"]}
+    candidates.sort(key=score, reverse=True)
+    return {"move": candidates[0]["dir"]}
 
 
 if __name__ == "__main__":

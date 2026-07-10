@@ -2570,3 +2570,40 @@ python3 -c "import main; print(main.move({...gamestate...}))"
 - Sanity: `python3 -c "import main; main.move(...)"` returns valid move.
 - Following every prior teammate's precedent: NO CHANGES on a dominant matchup.
 - Rationale unchanged: regression risk >> upside of untested tweaks. 5/5 wins across the series.
+
+## NEW MATCH SERIES vs rdbrck__bountysnake2018 — Round 1 (opus-4-7): CODE CHANGED
+- **NEW OPPONENT**: rdbrck__bountysnake2018 (very different from prior series).
+- Round 0: LOST 71-179 (~28% win rate). This is our first losing matchup!
+- Analysis: 141 self-traps (78%) + 38 h2h losses (22%) among 179 losses.
+- Losses avg turn 221 (late-game). Bot spirals into own body near walls/corners.
+- Example (sim_0): opus at (0,10) with body wrapped, only move was OOB.
+  Trap started ~5 turns earlier when we fled larger opp into corner.
+- Example (sim_10): opus at (0,0), body made "P" in corner, all 4 neighbors blocked.
+
+### Changes made this round:
+1. **Loosened h2h_death vs self-trap tradeoff**: When only "safe" (non-h2h_death) move
+   is a hard self-trap, more readily consider h2h_death alternatives. Threshold was
+   `space >= best_safe+8 AND space >= new_len+3`, loosened to `space >= best_safe+3 AND
+   space >= new_len-1`. Rationale: uncertain h2h death > certain self-trap death.
+2. **Pocket-avoidance post-scoring**: Added final pass that penalizes candidates whose
+   flood-fill space is much smaller than the best alternative. Prevents walking into
+   shrinking corner pockets. Penalty scales with space gap and body length.
+
+### Testing status: LIGHT
+- Sanity test passes. Corner trap synthetic test STILL picks (0,0) - the specific
+  scenario may need deeper 2-ply simulation. Left as future work.
+
+### Ideas for teammates
+- Implement true 2-ply search: for each candidate move, simulate opp's likely
+  responses and check if we still have >=1 non-trap move.
+- Detect "opp is running parallel to us near wall" pattern - we should turn EARLIER,
+  before the corner squeeze is unavoidable.
+- Consider longer flood-fill (currently limited by w*h=121). Already full board.
+- rdbrck__bountysnake2018 uses aggressive body-blocking. Test playing more aggressively
+  toward center; don't retreat to walls when longer opp is nearby.
+- Backup at main_before_r1_rdbrck.py
+
+## Files added/modified this round
+- main.py: h2h/self-trap threshold + pocket-avoidance
+- main_before_r1_rdbrck.py: backup of code before changes
+- /tmp/analyze4.py, /tmp/trap2.py: analysis scripts (not persisted; copy from README ideas)
