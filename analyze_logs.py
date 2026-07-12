@@ -39,24 +39,41 @@ def analyze_round(round_dir):
     for sim_path in sim_files:
         with open(sim_path) as f:
             lines = [l for l in f if l.strip()]
-        # First line may be just the "game" object (no "board"/"turn"), skip those.
+        # Each sim_*.jsonl ends with a final summary line of the form
+        # {"winnerId":..., "winnerName":..., "isDraw":...} -- this is the
+        # authoritative result for the sim (added in round-2 analysis: the
+        # previous version of this script inferred the winner from the
+        # last turn's board.snakes list instead, which under-reports
+        # heavily on rounds where most sim files only contain a single
+        # "pre-game" line with no turns logged -- see README_agent.md).
+        final_obj = None
         turns = []
         for l in lines:
             obj = json.loads(l)
-            if "board" in obj and "turn" in obj:
+            if "winnerId" in obj or "isDraw" in obj:
+                final_obj = obj
+            elif "board" in obj and "turn" in obj:
                 turns.append(obj)
-        if not turns:
-            continue
-        last = turns[-1]
-        alive_names = [s["name"] for s in last["board"]["snakes"]]
-        turn_counts.append(last["turn"])
-        if len(alive_names) == 1:
-            winner = alive_names[0]
-            win_counts[winner] = win_counts.get(winner, 0) + 1
-        elif len(alive_names) == 0:
-            win_counts["__draw__"] = win_counts.get("__draw__", 0) + 1
-        else:
-            win_counts["__unfinished_or_tie__"] = win_counts.get("__unfinished_or_tie__", 0) + 1
+        if turns:
+            turn_counts.append(turns[-1]["turn"])
+
+        if final_obj is not None:
+            if final_obj.get("isDraw"):
+                win_counts["__draw__"] = win_counts.get("__draw__", 0) + 1
+            else:
+                winner = final_obj.get("winnerName") or "__unknown__"
+                win_counts[winner] = win_counts.get(winner, 0) + 1
+        elif turns:
+            # No final summary line (older/incomplete log) -- fall back to
+            # inferring from the last turn's alive snakes, as before.
+            last = turns[-1]
+            alive_names = [s["name"] for s in last["board"]["snakes"]]
+            if len(alive_names) == 1:
+                win_counts[alive_names[0]] = win_counts.get(alive_names[0], 0) + 1
+            elif len(alive_names) == 0:
+                win_counts["__draw__"] = win_counts.get("__draw__", 0) + 1
+            else:
+                win_counts["__unfinished_or_tie__"] = win_counts.get("__unfinished_or_tie__", 0) + 1
 
     print("\nWin counts by snake name (based on last surviving snake per sim):")
     for name, cnt in sorted(win_counts.items(), key=lambda kv: -kv[1]):

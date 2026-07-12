@@ -456,3 +456,67 @@ revisiting then rather than risking the current bot's strong, verified
 performance against a weaker opponent now. If next round's
 `/logs/rounds/1/results.json` shows anything other than a clean sweep,
 that's the signal to actually invest in the minimax/lookahead upgrade.
+
+## Round 2 (this session)
+
+Confirmed via `/logs/rounds/{0,1}/results.json` that both prior real scored
+rounds were clean sweeps for sonnet-5 against `Nettogrof__nessegrev-java`
+(round 0: 39-0, round 1: 20-0). No code changes to `main.py`'s decision
+logic this round -- re-ran a fresh local benchmark (6 games, current
+`main.py` vs freshly-extracted `Nettogrof/nessegrev-java` opponent code via
+the `battlesnake` CLI, see recipe further up this file) and got **6/6
+clean wins**, games ranging 7-113 turns, zero errors/exceptions in either
+bot's server log. This is consistent with the two real round scores and
+*not* the closer 5-2/3-0 splits earlier notes reported against the
+`-julia` port -- the actual opponent we've faced both real rounds so far
+is the weaker `-java` port, and our current heuristic beats it
+comfortably and reproducibly.
+
+Also ran a battery of synthetic edge-case tests directly against
+`main.move()` (no server) to confirm no crashes on: empty food list,
+fully-cornered snake with no safe moves (0-move fallback path), empty
+snakes list, and a completely malformed/empty `game_state` dict (the
+top-level `try/except` in `move()` catches it and returns `{"move":
+"up"}`). All passed cleanly.
+
+### Fixed `analyze_logs.py` this round
+
+Per a prior round's noted TODO: the script previously inferred each sim's
+winner from the *last logged turn's* `board.snakes` list, which
+drastically under-reports because most `sim_*.jsonl` files in
+`/logs/rounds/*` only contain a single "pre-game" line with no turns
+logged at all (confirmed by direct inspection: round 0 has 250 sim files
+but only 39 contain any turn data at all -- and that 39 exactly matches
+the `results.json` score of 39! Same story for round 1: 20 files with
+turns == score of 20). `analyze_logs.py` now parses each sim file's final
+summary line (`{"winnerId":..., "winnerName":..., "isDraw":...}`) directly
+instead, with a fallback to the old last-turn-based inference for any sim
+file that lacks that final line. Verified output for both existing rounds
+now matches `results.json` scores exactly (39 and 20 respectively) --
+previously it reported those same numbers by coincidence via the old
+under-counting logic (only fully-logged sims had any inferrable winner at
+all), but the new logic is more robust/correct in general and will also
+correctly count draws going forward.
+
+**Open question for a future round (not resolved, low priority):** why do
+~85% of sim_*.jsonl files only have a single pre-game line and no turns?
+Two theories, neither confirmed: (a) the scoring harness samples/logs only
+a subset of actual games played, and the `results.json` score IS the true
+total game count (39 and 20 games played total, not 250) -- in which case
+everything is fine and "250" is just an artifact of pre-allocated file
+slots; or (b) most sims silently fail to start for an unrelated harness
+reason and get miscounted. Given our score is a clean sweep either way,
+this hasn't mattered functionally, but worth a sanity check if a future
+round's score ever looks suspiciously low compared to sim file count.
+
+### Recommendation for round 3
+
+No urgent changes needed -- bot keeps winning cleanly and reproducibly
+against the identified real opponent both in real scored rounds and fresh
+local benchmarks. If `/logs/rounds/2/results.json` (this round, once it
+exists) is anything other than another clean sweep, or if a different
+opponent identity shows up, that's the trigger to revisit the "Ideas for
+future improvement" list earlier in this file (minimax lookahead, hazard
+support, weight tuning) -- use `git show
+origin/human/<Org>/<repo>:main.py` to pull whoever the new opponent is and
+re-run the local benchmark recipe before changing `main.py`.
