@@ -1325,3 +1325,76 @@ across all 4 games.
   rationale, and this section for the concrete traced bug it fixes).
 - `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats.
+
+## Round 2 (this session) — confirmed previous round's bug fix is solid, no code changes
+
+`/logs/rounds/{0,1}/results.json` confirm the opponent is still
+**`coreyja__devious-devin`** across both real rounds so far, and that last
+round's fix (documented in the section immediately above this one --
+"found + fixed a real, confirmed match-losing bug in the 'opponent
+territory' pessimistic area heuristic") is working as intended in the real
+scoring harness: round 0 (pre-fix) was **22-2** (2 real losses, both
+root-caused and fixed as documented above), round 1 (post-fix, same
+opponent) was a **clean 20-0 sweep** (`analyze_logs.py /logs/rounds/1`:
+20/20 sims won, avg 5.7 turns, min 2 max 10 -- opponent dies fast in the
+real harness in almost every game).
+
+### What I did this round
+
+Did **not** change `main.py`'s decision logic. Instead spent the step
+budget re-validating the fix more thoroughly via local benchmarking, since
+the fix was only lightly tested (partially inconclusive local benchmark)
+in the round it was made:
+
+1. Smoke-tested `main.move()` on a normal 2-snake state, `{}` (fully
+   malformed), and an empty-snakes state -- all return valid moves, no
+   exceptions.
+2. Extracted a fresh copy of the opponent
+   (`git show origin/human/coreyja/devious-devin:main.py > /tmp/opp/main.py`,
+   `cp server.py /tmp/opp/server.py`) and ran **14 real local games** via
+   the `battlesnake` CLI against the current, unmodified `main.py` (recipe
+   unchanged from many earlier rounds' notes -- `setsid nohup env PORT=...
+   python3 main.py > log 2>&1 </dev/null & disown` for both bots, then
+   loop `battlesnake play ... -o /tmp/game_N.json` backgrounded+disowned,
+   `sleep`, check `tail`). **Result: 14 wins / 0 losses**, games ranging
+   3-232 turns (a good mix of the fast early-death games that dominate the
+   real harness, plus several genuinely long grindy games up to 232 turns
+   -- specifically useful since the two real losses fixed last round both
+   happened deep into long games, turn 124 and 269). No errors/exceptions
+   in either bot's server log (`grep -i "error\|traceback\|exception"
+   /tmp/new.log /tmp/opp.log` clean).
+3. Inspected the longest game (232 turns, `/tmp/game_10.json` -- not
+   persisted, rerun the recipe above to reproduce) turn-by-turn for our
+   snake's final body shape: reached length 27, won cleanly (opponent
+   died first), body shows a long winding-but-not-self-sealed path with
+   no sign of the "self-coil" or "corridor-race" failure modes flagged in
+   many earlier rounds' notes. This is a good, concrete piece of evidence
+   that the current heuristic (raw-area-drives-hard-penalties +
+   capped opponent-pessimism secondary nudge, from last round's fix)
+   handles long games against this opponent robustly, not just short ones.
+
+### Recommendation for round 3+
+
+Given a clean local 14/0 sweep on top of two consecutive real-round
+results (22-2 pre-fix, 20-0 post-fix) against the same confirmed opponent,
+I judged further heuristic changes this round to carry more regression
+risk than expected benefit, and made **no changes to `main.py`**. If
+`/logs/rounds/2/results.json` (this round's real result, once it exists)
+is anything other than another clean/near-clean sweep, or a **different**
+opponent identity shows up, use `git log --oneline --all | grep -i
+human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+benchmark them (same recipe as used throughout this file) before changing
+`main.py`. The self-coil / corridor-race trace-replay technique
+documented in the section above (rebuild `blocked`/`risky_cells`/
+`opp_territory` from a literal logged board state, compare
+`main.move()`'s actual output against each candidate's raw flood-fill
+area) remains the most effective tool found so far for finding *real*
+bugs (as opposed to speculative heuristic tweaks) -- reach for it first if
+a new loss shows up against any opponent.
+
+Remaining not-yet-done ideas from many rounds of notes, still valid if a
+tougher opponent ever appears: true multi-ply minimax/lookahead (current
+bot is still fundamentally 1-ply flood-fill + heuristic trap-margin, with
+only a capped secondary nudge for opponent-territory awareness -- not a
+real simulation of future opponent moves), formal weight tuning via a
+self-play tournament sweep.
