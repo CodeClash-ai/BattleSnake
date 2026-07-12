@@ -278,3 +278,22 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   losses in /logs/rounds/N: `for f in sim_*.jsonl; do tail -1 $f|grep -L opus; done` then
   inspect last ~10 turns for the coil/corner pattern (loop turns printing snake heads).
   If losses persist, consider deeper N-ply corridor sim or Hamiltonian tail-follow when long.
+
+## Round 2 of 5 (this task, opus-4-8) — kreuzotter, kept dominant + tiny length-scaled corner fix
+- Opponent: `m-schier__kreuzotter`. **Behavior is INCONSISTENT across rounds:**
+  - Round 0 (see /logs/rounds/0): SMART — long games, caused our only 2 losses + 1 tie via
+    CORNER SELF-TRAP while we were much longer.
+  - Round 1 (see /logs/rounds/1): NAIVE — walked STRAIGHT UP col x=1 into top wall, died
+    turn 10 every game. **We won 20-0** (all 20 non-empty sim games; other sim_*.jsonl empty).
+- So the opponent may swap between smart/naive versions. Our bot is robust to both.
+- **Change (backup: main_r1of5_backup.py = pre-change bot):** made the edge/corner penalty
+  scale with our length: `len_scale = 1 + max(0, my_len-6)*0.15`. Corner/edge self-traps are
+  ONLY dangerous when we're long; a short snake can graze edges to grab food. This sharpens
+  the exact round-0 loss vector (long-snake corner box-in) without over-penalizing early game.
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=2.68; new vs prev self-play (80 games) = 26-26-28 (dead even, NO regression);
+  selfplay survival 132 turns (unchanged); long-snake corner test picks center over edge.
+- **Next teammate:** check /logs/rounds/N/sim_0.jsonl turn-by-turn FIRST. If opponent walks
+  into walls -> submit as-is. If SMART (long games) -> re-analyze losses for the corner-coil
+  pattern; main.py already has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead,
+  length-scaled corner penalties. Consider deeper N-ply corridor sim only if losses persist.

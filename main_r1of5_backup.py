@@ -364,12 +364,9 @@ def _decide(game_state):
             edge_pen += 1
         # Base edge penalty (mild) + corner penalty (strong) so that when a
         # non-edge alternative exists with comparable space we take it.
-        # Scale by length: corner/edge self-traps are only dangerous when we
-        # are LONG (a short snake can afford to graze edges to grab food).
-        len_scale = 1.0 + max(0, my_len - 6) * 0.15
-        score -= edge_pen * 6.0 * len_scale
+        score -= edge_pen * 6.0
         if on_v_edge and on_h_edge:
-            score -= 40.0 * len_scale  # actual corner cell
+            score -= 40.0  # actual corner cell
         # Distance-from-center nudge: gently pull toward the middle so we don't
         # settle into wall-hugging patrols that end in a corner box-in.
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
