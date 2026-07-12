@@ -297,3 +297,34 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   into walls -> submit as-is. If SMART (long games) -> re-analyze losses for the corner-coil
   pattern; main.py already has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead,
   length-scaled corner penalties. Consider deeper N-ply corridor sim only if losses persist.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `nbw__nbw-crystal` (SMART), ADDED ENEMY-CONTESTED-SPACE PENALTY
+- **Opponent CHANGED to `nbw__nbw-crystal` — a SMART bot** (real avoidance, plays long
+  competitive games). NOT a wall-walker.
+- **Round 0 result: won 248-2** (see /logs/rounds/0/results.json). We lost only 2 games:
+  sim_17 and sim_236.
+- **Loss analysis (both = self-coil into a WALL POCKET while the enemy SEALED the mouth):**
+  - sim_17: opus L7 walked right/up into the RIGHT-edge pocket (x=9) between its own
+    coiled body and the wall; enemy body sealed the entrance; boxed in, died turn 72.
+  - sim_236: opus L5 same pattern in the right-edge region; enemy sealed it in, died ~turn 103.
+  - Root cause: our time-aware flood fill trusts enemy tails to VACATE, but the enemy can
+    keep feeding body into the pocket mouth to keep us sealed. So `space` looked survivable
+    at entry but wasn't.
+- **Change made (backup: main_r1of5_v2_backup.py = pre-change bot):** added an
+  ENEMY-CONTESTED-SPACE penalty in `_decide`'s scoring loop. After computing static/time
+  space, we ALSO do a conservative static flood-fill that treats every cell the enemy head
+  can reach next turn (`enemy_next`) as BLOCKED. If that contested area < our length, we
+  subtract `(my_len - space_contested) * 12`. This downranks moves into pockets the enemy
+  can seal — directly targeting the only loss vector.
+- **Verification:** syntax OK; `python3 sim_test.py 200` => 200/0/0 vs naive; fuzz => crashes=0
+  illegal=0 maxt_ms=3.02 (<500 limit); new-vs-prev self-play (120 games) = all draws (both
+  survive to timeout — NO regression, equal strength). NOTE: the change did NOT flip the exact
+  sim_17 turn-67 move (that trap was essentially already set 1-2 turns earlier and is very hard
+  to detect at entry), but it adds a general safety net against the seal-in pattern earlier in
+  the approach. Expected to reduce, not necessarily eliminate, coil losses.
+- **Next teammate:** opponent `nbw__nbw-crystal` is REAL and competitive; we win ~99%. Remaining
+  losses are enemy-sealed wall-pocket coils in mid/long games. First check /logs/rounds/N/sim_0
+  to confirm opponent unchanged. If losses persist, ideas: (a) deeper N-ply forward sim treating
+  the enemy as an active pursuer (minimax on space), (b) avoid the right/left edge columns more
+  aggressively when a longer/equal enemy is between us and open board, (c) Hamiltonian-ish
+  tail-follow when long+safe. Keep `sim_test 100` + `fuzz_test.py` clean before submitting.

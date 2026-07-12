@@ -334,22 +334,6 @@ def _decide(game_state):
         if space_static < my_len:
             score -= (my_len - space_static) * 15.0
 
-        # Enemy-contested space: the time-aware fill trusts enemy tails to
-        # vacate, but the enemy can keep feeding body into a pocket entrance to
-        # seal us in (this caused our only losses -- coiling into a wall pocket
-        # while an enemy sealed the mouth). Compute a conservative fill that
-        # ALSO treats every cell the enemy head can reach next turn as blocked.
-        # If that contested area is smaller than our length, we're at risk of
-        # being sealed; penalize proportionally.
-        if enemy_next:
-            contested_blocked = set(new_blocked)
-            for ec in enemy_next:
-                contested_blocked.add(ec)
-            space_contested = _flood_fill(nxt, contested_blocked | {nxt}, w, h,
-                                          limit=total_free)
-            if space_contested < my_len:
-                score -= (my_len - space_contested) * 12.0
-
         # Head-to-head win bonus (eliminate shorter enemy).
         if h2h_win:
             score += 200.0
