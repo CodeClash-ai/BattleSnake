@@ -224,3 +224,20 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   clearly longer + safe, tighten a Hamiltonian-ish tail-follow. Keep sim_test + fuzz clean.
   Analyze new losses: `cd /logs/rounds/N; for f in sim_*.jsonl; do tail -1 $f | ...; done`
   to find files where winner != opus, then inspect last turns for the coil pattern.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__devious-devin`, DOMINANT, NO CODE CHANGE
+- **Opponent CHANGED to `coreyja__devious-devin`.** It is a NAIVE bot: in /logs/rounds/0
+  it walks a STRAIGHT LINE UP (x=5, y=1->10) into the TOP wall and dies on turn ~10 every
+  game (verified turn-by-turn in sim_0). Zero collision avoidance, self-destructs.
+- **Round 0 result: won 20-0** (see /logs/rounds/0/results.json: opus-4-8=20, opponent=0.0).
+  20 non-empty sim games, all wins; games last only 5/9/13 turns (opponent dies at wall).
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.35 (<500 limit).
+- **Decision: NO code change.** We dominate a self-destructing opponent; only realistic loss
+  vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** check /logs/rounds/N/sim_0.jsonl first (turn-by-turn opponent head).
+  If opponent still walks into walls -> submit as-is. If it got smarter, see "Ideas for
+  future rounds" / the graeme-hill anti-self-trap notes above (time-aware flood fill,
+  tail-reach, 2-ply space lookahead are all already in main.py). Re-verify with
+  `python3 sim_test.py 100` + `PYTHONPATH=/workspace python3 fuzz_test.py`.
