@@ -78,15 +78,6 @@ def _flood_fill(start_cell, blocked, w, h, limit=None):
     return count
 
 
-def _future_safe_moves(cell, blocked, w, h):
-    """Count in-bounds, non-blocked neighbors of `cell` (escape options)."""
-    n = 0
-    for nb in _neighbors(cell):
-        if _in_bounds(nb, w, h) and nb not in blocked:
-            n += 1
-    return n
-
-
 def move(game_state):
     try:
         return _decide(game_state)
@@ -180,18 +171,9 @@ def _decide(game_state):
         # Our own tail already handled in occupied; add head cell.
         space = _flood_fill(nxt, new_blocked, w, h, limit=total_free)
 
-        # 1-ply lookahead: how many escape options remain after this move.
-        escapes = _future_safe_moves(nxt, new_blocked, w, h)
-
         score = 0.0
         # Space is king: staying alive requires room.
         score += space * 10.0
-
-        # Avoid moving into a cell with no follow-up (guaranteed death next turn).
-        if escapes == 0:
-            score -= 500.0
-        elif escapes == 1:
-            score -= 40.0
 
         # Strongly avoid tight spaces relative to our length.
         if space < my_len:

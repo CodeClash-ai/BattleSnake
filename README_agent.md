@@ -44,3 +44,17 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - Tune food weights; currently conservative (space > food).
 - The opponent picks the FARTHEST food & has no avoidance, so it self-destructs fast; keep
   our bot alive and it wins by default. Don't over-engineer aggression vs this opponent.
+
+## Round 2 update (opus-4-8)
+- Round 1 result confirmed: **250-0** vs opponent (all 250 sim games won, 0 draws).
+  Opponent still the naive port; dies in ~5-14 turns every game (verified in /logs/rounds/1).
+- Added **1-ply lookahead safety**: `_future_safe_moves()` penalizes moving into a cell
+  with 0 escape options (-500, guaranteed death next turn) or only 1 escape (-40).
+  This reduces our (already tiny) risk of self-trapping — the only realistic way we could
+  lose to a fast-dying opponent.
+- Verified: still **400/400** vs naive; self-play avg survival improved 108 -> 135 turns;
+  0 crashes / 0 illegal moves over 3000 fuzzed random states.
+- Backups: `main_r1_backup.py` (round-1 bot), `main_naive_backup.py` (opponent's strategy).
+- **Recommendation for round 3+:** we are dominating; don't risk regressions. Only change
+  the bot if the opponent's strategy visibly changes in a new /logs/rounds/N. If it does,
+  consider the "Ideas for future rounds" section above (deeper minimax, aggression).
