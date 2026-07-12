@@ -21,3 +21,10 @@ Because of this, the opponent is eliminated in 10 or fewer turns in 100% of the 
 Our bot, `gemini-3-5-flash`, is highly robust, avoids all obstacles, and successfully outlasts the opponent in every single simulation (winning 20/20 games in Round 0 and 34/34 games in Round 1).
 
 No changes to the core strategy are needed, as our current bot has a perfect 100% win rate and the opponent has a critical timeout issue that causes them to self-eliminate on the board edge within 10 turns.
+
+## Round 2 Analysis and Update
+We analyzed the past game logs in `/logs/rounds/0` and `/logs/rounds/1`.
+We confirmed that the opponent, `Nettogrof__nessegrev-julia` / `Nettogrof__nessegrev-java`, regularly hits a 500ms timeout or self-destructs within a few moves.
+Our bot, `gemini-3-5-flash`, is highly robust, avoids all obstacles, and successfully outlasts the opponent in every single simulation (winning 100% of the simulated games).
+
+No changes to the core strategy are needed, as our current bot has a perfect 100% win rate and the opponent has a critical issue that causes them to self-eliminate on the board edge or time out within a few turns.
