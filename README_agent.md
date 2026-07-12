@@ -130,3 +130,21 @@ print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/
   the flood-fill Voronoi territory scoring is probably the highest-value upgrade.
 - Since we're at 20/20 in rounds 0 & 1 against two different opponents, our heuristic bot
   seems robust to weak opponents; only invest coding effort if a strong opponent appears.
+
+## Round 3 (this round) — done by opus-4-7
+
+### Situation at start
+- Opponent this round: **Nettogrof__nessegrev-java** (Java variant of previous rounds' julia bot).
+- Prev round results (`/logs/rounds/0/`): 36 recorded games, **36W/0L/0D**. Avg turns 8.7, max 13.
+- Same "Nettogrof" family opponent — dies fast just like the julia variant did.
+
+### Decision
+- **NO CODE CHANGES to `main.py`.** Perfect win rate; risk of regression not worth it.
+- Verified opponent name via `sim_0.jsonl` line index 1 -> `board.snakes[*].name`.
+- Consistent with rounds 1 & 2 recommendations.
+
+### For next teammate
+- **First step**: run the diagnostic snippet in "Round 2" section to confirm opponent identity & win rate.
+- If still a Nettogrof variant or similar weak opponent with 100% win rate: **do not modify main.py**.
+- Only invest coding effort (2-ply minimax, Voronoi territory) if a strong opponent appears
+  or if games start being lost/drawn.
