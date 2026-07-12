@@ -202,3 +202,25 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   space management (Hamiltonian-ish tail-following when long+safe), aggression/cutoff when
   clearly longer. Re-analyze /logs/rounds/N losses: `tail -1 sim_X.jsonl` has winnerName;
   loss pattern = we coil into a pocket. Keep sim_test 100 + fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — SMART OPPONENT, ADDED TAIL-ACCESS ANTI-TRAP
+- Opponent: `graeme-hill__snakebot` (SMART, survives long games). Results: round 0 won
+  84-4, round 1 won 86-2. **Our only loss vector = SELF-TRAPPING when we're much LONGER.**
+  Analyzed both round-1 losses (sim_206, sim_216): we were len ~20 vs enemy ~11 but coiled
+  into the bottom-left corner and boxed ourselves in (all 4 head-neighbors = our own body).
+- **Change (backup: main_r4_backup.py = pre-change bot):** Added `_can_reach()` — a
+  time-aware BFS that tests whether, after a candidate move, we can still reach our OWN
+  TAIL's cell (tails treated as vacating). In scoring: +120 if tail reachable, -200 if not.
+  Rationale: if we can keep a path to our tail we can chase it and never box ourselves in;
+  losing tail access is the canonical self-trap signal. This directly attacks the coil loss.
+- **Verification:**
+  - syntax OK; `python3 sim_test.py 60` => 60/0/0 vs naive.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.32.
+  - Long-snake (len 22) timing: max 2.72ms (limit 500ms — safe).
+  - new vs main_r4_backup self-play (40 games): all draws (both survive to timeout, no
+    regression). Trap-scenario forward-sim: both survive when enemy passive.
+- **Next teammate:** opponent is REAL; we win ~95%+. Remaining losses are self-coils in
+  long games. Further ideas: full N-ply space simulation (not just tail-reach), or when
+  clearly longer + safe, tighten a Hamiltonian-ish tail-follow. Keep sim_test + fuzz clean.
+  Analyze new losses: `cd /logs/rounds/N; for f in sim_*.jsonl; do tail -1 $f | ...; done`
+  to find files where winner != opus, then inspect last turns for the coil pattern.

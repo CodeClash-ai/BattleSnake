@@ -124,40 +124,6 @@ def _reachable_with_tails(start_cell, static_blocked, snakes_bodies, w, h, limit
     return count
 
 
-def _can_reach(start_cell, target, static_blocked, snakes_bodies, w, h):
-    """Time-aware BFS: can we reach `target` cell from start_cell, treating
-    body cells as vacating once their tail retreats past them? Returns bool.
-    This is the anti-self-trap signal: if we can still reach our own tail,
-    we can keep chasing it and won't box ourselves in."""
-    if start_cell == target:
-        return True
-    vacate = {}
-    for body, grew in snakes_bodies:
-        L = len(body)
-        for i, cell in enumerate(body):
-            t = (L - i) + (1 if grew else 0)
-            if cell not in vacate or vacate[cell] > t:
-                vacate[cell] = t
-    from collections import deque
-    dq = deque([(start_cell, 1)])
-    seen = {start_cell}
-    while dq:
-        cur, step = dq.popleft()
-        for nb in _neighbors(cur):
-            if nb == target:
-                return True
-            if nb in seen or not _in_bounds(nb, w, h):
-                continue
-            if nb in static_blocked:
-                continue
-            vt = vacate.get(nb)
-            if vt is not None and vt > step + 1:
-                continue
-            seen.add(nb)
-            dq.append((nb, step + 1))
-    return False
-
-
 def _future_safe_moves(cell, blocked, w, h):
     """Count in-bounds, non-blocked neighbors of `cell` (escape options)."""
     n = 0
@@ -266,7 +232,6 @@ def _decide(game_state):
     best_move = None
     best_score = None
     total_free = w * h
-    my_tail = my_body[-1]
 
     for mv, nxt, h2h_loss, h2h_win in pool:
         # Simulate our body after moving: add new head, drop tail (approx).
@@ -281,11 +246,6 @@ def _decide(game_state):
         space_t = _reachable_with_tails(nxt, static_bl, snakes_bodies, w, h,
                                         limit=total_free)
         space = max(space, space_t)
-
-        # Tail-access check: after this move, can we still reach our own tail's
-        # region? If yes we are almost never trapped (we can chase our tail).
-        # Use the time-aware fill's reachable set to test tail reachability.
-        tail_reach = _can_reach(nxt, my_tail, new_blocked, snakes_bodies, w, h)
 
         # 1-ply lookahead: how many escape options remain after this move.
         escapes = _future_safe_moves(nxt, new_blocked, w, h)
@@ -307,12 +267,6 @@ def _decide(game_state):
         score = 0.0
         # Space is king: staying alive requires room.
         score += space * 10.0
-        # Strong bonus for keeping access to our own tail (anti-coil / anti-trap).
-        # If we can chase our tail we can almost always survive indefinitely.
-        if tail_reach:
-            score += 120.0
-        else:
-            score -= 200.0
         # Reward keeping a large follow-up region (trap avoidance, 2-ply).
         score += best_next_space * 4.0
         if best_next_space < my_len:
