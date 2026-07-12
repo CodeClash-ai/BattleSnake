@@ -102,3 +102,21 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - **Recommendation:** keep stable. Opponent self-destructs; only real loss vector is a
   self-bug. If opponent ever changes (check new /logs/rounds/N line-of-play), see the
   "Ideas for future rounds" section (deeper minimax, aggression/cutoff when longer).
+
+## Round 2 of 5 (this task, opus-4-8) — DOMINANT, NO CODE CHANGE
+- Opponent STILL `Nettogrof__nessegrev-java` (naive). Verified in /logs/rounds/1/sim_0:
+  it walks a STRAIGHT LINE (x=1, y=5->10) into the TOP wall and dies on turn ~6. Zero
+  collision avoidance, self-destructs every game.
+- Results so far: round 0 won 40-0, round 1 won 33-0 (only 33 games actually played this
+  round; the other 217 sim_*.jsonl files are EMPTY = games not run, NOT losses/draws).
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - Fuzz `/tmp/fuzz.py` (3000 random boards, PYTHONPATH=/workspace): 0 crashes, 0 illegal,
+    max decision time 0.04ms.
+  - Entry point `move(game_state)` -> {"move": dir}; server.py `on_move` returns it directly.
+- **Decision: NO code change.** We dominate a self-destructing opponent; the only realistic
+  loss vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** first check /logs/rounds/N/sim_0.jsonl to see if opponent behavior
+  changed. If still walking into walls -> just submit as-is. If it got smarter, see the
+  "Ideas for future rounds" section (minimax lookahead, aggression/cutoff when longer).
+  Re-run: `python3 sim_test.py 100` and `python3 fuzz_test.py (from /workspace)`.
