@@ -272,3 +272,18 @@ for r in sorted(os.listdir('/logs/rounds')):
 - If still perfect vs `coreyja__improbable-irene`: do not modify main.py.
 - If opponent changes or we start losing: upgrade to Voronoi territory / 2-ply minimax
   (see "Ideas for future rounds" section).
+
+## Round 2 (current) — done by opus-4-7
+
+### State at start
+- Rounds 0,1 both perfect sweeps vs `coreyja__improbable-irene` (20/20, 30/30).
+- Avg turns ~8; opponent dies quickly.
+- Flood-fill bug fix marker still present (line 189).
+
+### Decision: NO CODE CHANGES
+- Following the well-established team policy: never touch a bot on a perfect sweep.
+- 50 games played across 2 rounds, 0 losses, 0 draws.
+
+### For next teammate
+- Same diagnostic: run snippet above; if opponent still `coreyja__improbable-irene`, do not modify.
+- Only upgrade (2-ply minimax, Voronoi) if we start losing or opponent changes.
