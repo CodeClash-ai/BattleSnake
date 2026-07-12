@@ -162,6 +162,8 @@ def move(game_state):
         # aggression bonus.
         risky_cells = set()
         winnable_cells = set()
+        opp_territory = set()
+        TERRITORY_HORIZON = 6  # multi-step BFS depth used for corridor-race detection
         for s in snakes:
             if s["id"] == my_id:
                 continue
@@ -171,6 +173,28 @@ def move(game_state):
                 np_ = (ohx + dx, ohy + dy)
                 if _in_bounds(np_, width, height):
                     target_set.add(np_)
+
+            # Multi-step pessimistic reachability: cells this opponent could
+            # reach within TERRITORY_HORIZON moves (BFS over the static
+            # blocked snapshot). Used only to detect "corridor races" -- long,
+            # narrow, single-exit routes where an opponent could reach/seal
+            # the exit before we finish traversing it, a failure mode a
+            # 1-ply-only flood fill cannot see (see README_agent.md for the
+            # concrete loss trace that motivated this).
+            oh = (ohx, ohy)
+            seen_o = {oh}
+            qo = deque([(oh, 0)])
+            while qo:
+                cur, d = qo.popleft()
+                if d >= TERRITORY_HORIZON:
+                    continue
+                for dx, dy in DIRS.values():
+                    np2 = (cur[0] + dx, cur[1] + dy)
+                    if np2 in seen_o or not _in_bounds(np2, width, height) or np2 in blocked:
+                        continue
+                    seen_o.add(np2)
+                    opp_territory.add(np2)
+                    qo.append((np2, d + 1))
 
         candidates = []
         for name, (dx, dy) in DIRS.items():
@@ -205,17 +229,33 @@ def move(game_state):
         # risky_cells / winnable_cells below).
         opp_next_cells = risky_cells | winnable_cells
 
+        # Also fold in longer-horizon opponent territory for the area/space
+        # evaluation specifically (corridor-race detection): a region only
+        # reachable through a chokepoint the opponent could plausibly reach
+        # around the same time we would should score lower than its raw
+        # flood-fill size suggests.
+        area_extra_blocked = opp_territory - opp_next_cells
+
         best_name = None
         best_score = float("-inf")
         for name, nxt in candidates:
             score = 0.0
 
             area_blocked = blocked | (opp_next_cells - {nxt})
+            area_soft_blocked = area_blocked | (area_extra_blocked - {nxt})
             area = _flood_fill_size(nxt, area_blocked, width, height, cap)
+            # Pessimistic area (also excludes longer-horizon opponent
+            # territory) -- use the smaller of the two so a corridor whose
+            # only exit region overlaps opponent territory scores lower,
+            # without ever letting the pessimistic version show *more*
+            # room than reality (it can't, since it blocks a superset of
+            # cells, but keep the min() for clarity/safety).
+            area_pess = _flood_fill_size(nxt, area_soft_blocked, width, height, cap)
+            area_for_score = min(area, area_pess)
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
-            if area < my_length:
-                score -= (my_length - area) * 100
+            if area_for_score < my_length:
+                score -= (my_length - area_for_score) * 100
             # Softer penalty gradient below a 2.2x buffer -- avoids shaving
             # margin so tight that a self-coil a few moves later (which
             # 1-ply flood fill can't see coming) becomes fatal. Widened
@@ -226,9 +266,9 @@ def move(game_state):
             # exit) -- see README_agent.md "self-coil" notes for the full
             # trace. A wider margin makes the bot react earlier/more
             # conservatively while area is still comfortably large.
-            elif area < my_length * 2.2:
-                score -= (my_length * 2.2 - area) * 12
-            score += area * 5
+            elif area_for_score < my_length * 2.2:
+                score -= (my_length * 2.2 - area_for_score) * 12
+            score += area_for_score * 5
 
             if nxt in risky_cells:
                 score -= 1000

@@ -994,3 +994,180 @@ for t in range(START, END):
    origin/human/<Org>/<repo>:main.py` to extract and benchmark them
    first, per the established pattern throughout this file, before
    assuming this round's fix matters against them too.
+
+## Round 2 (this session) — added multi-ply "corridor race" opponent-territory heuristic; found a SEPARATE pre-existing self-coil bug via local benchmarking
+
+`/logs/rounds/{0,1}/results.json`: opponent is `graeme-hill__snakebot` both
+rounds (real, 746-line ported bot, see earlier notes in this file for its
+algorithm summary). Round 0: 92-0 clean sweep. **Round 1: 86-1 — NOT a
+clean sweep this time** (`analyze_logs.py /logs/rounds/1` confirms via
+per-sim `winnerName`: 86 wins for sonnet-5, 1 for the opponent, out of 250
+sims, avg turn count 10.0 but max 165 -- most games still end fast, but
+the rare long game is where we lost).
+
+### Root cause of the one real loss (sim_249.jsonl), found via direct trace replay
+
+Extracted the exact losing sim (`/logs/rounds/1/sim_249.jsonl`) and walked
+the final ~20 turns turn-by-turn (see snippet: print each turn's
+`board.snakes[*].body` for both snakes). Concrete mechanism: our snake
+(reaching length 24-25) traveled the full length of the board's **right
+edge column (x=10)** from y=1 up to y=10 over ~9 turns while continuing to
+eat food along the way (so its own tail kept growing instead of
+following, filling in the whole column behind it with no way back). In
+parallel, the opponent (much shorter, length 9) independently walked a
+path that happened to converge on the corridor's *only exit* — the
+corner cell (9,10)/(10,10) area — and reached it **one turn before we
+did**, sealing us into the now fully-self-filled column with the head
+stuck at the (10,10) corner and literally zero legal moves the following
+turn. This is the concrete "opponent seals corridor" race scenario
+several earlier rounds' notes predicted/found evidence of but hadn't
+fully solved: our existing "1-ply pessimistic" opponent-blocking (blocking
+only cells an opponent could reach *next turn*, added a few rounds ago)
+is way too short-horizon to see a 6-8-turn-away race outcome coming.
+
+I verified this quantitatively by re-running `main.py`'s (pre-this-round)
+flood-fill on the actual turn-155 board state (the moment our snake
+committed to entering the column): the "go up the column" candidate's
+flood-fill area looked like a totally safe 59 cells at that moment (way
+more than our body length) — the danger was **completely invisible** to
+a same-turn-only or 1-ply-pessimistic flood fill; it only would have
+become visible turns later, too late to redirect.
+
+### Change made this round: multi-ply ("6-ply") pessimistic opponent-territory blocking for the area/space score
+
+In `main.py`'s `move()`, for each opponent I now also compute
+`opp_territory`: all cells that opponent could reach within
+`TERRITORY_HORIZON = 6` moves via a depth-limited BFS from their current
+head (over the same static blocked-cells snapshot used everywhere else —
+same conservative-but-cheap approximation as the rest of the bot, not a
+real multi-turn simulation of *their* future decisions). For the
+space/area evaluation only (not the legal-move filter, and always
+excluding the candidate cell itself so it can never forbid a move we're
+actually allowed to make), I now compute **two** flood-fill areas per
+candidate — the existing one (`area`, blocked by current bodies + 1-ply
+opponent-next-cells) and a more pessimistic one (`area_pess`, additionally
+blocked by the new 6-ply `opp_territory`) — and use `min(area, area_pess)`
+for all of the scoring math (hard-trap penalty, soft-margin penalty, and
+the linear `area * 5` bonus).
+
+**Verified this directly fixes the exact traced loss**: re-ran the new
+logic on the literal turn-155 board state from `sim_249.jsonl` — the "go
+up the column" candidate's pessimistic area collapsed to **1** (correctly
+flagging the corridor-race danger *before* committing), while "go down"
+(the safe alternative, back toward open board) stayed at a healthy 28.
+Given the same board state, the patched bot picks "down" instead of the
+fatal "up". See the inline replay script in shell history this round (or
+recreate: load `main.py`, build `risky_cells`/`winnable_cells`/
+`opp_territory` the same way `move()` does, print flood-fill areas for
+each direction from the turn-155 state) if you want to re-verify or tune
+`TERRITORY_HORIZON` further.
+
+### IMPORTANT — found a SEPARATE, pre-existing bug via fresh local benchmarking that is NOT fixed by the above and needs follow-up
+
+Ran a fresh 6-game local benchmark (recipe unchanged from many earlier
+rounds' notes: extract `origin/human/graeme-hill/snakebot:main.py` to
+`/tmp/opp/main.py`, run both as local Flask servers via `setsid nohup env
+PORT=... python3 main.py & disown`, then loop `battlesnake play ... -o
+/tmp/game_N.json` backgrounded+disowned) with the **patched** `main.py`.
+Result: **0 wins / 6 losses** (games ran 70-287 turns) — a real
+regression signal worth flagging loudly, though I want to be clear about
+what I found investigating it before running out of step budget:
+
+Inspected the shortest loss (`/tmp/game_5.json`, 69 turns) turn-by-turn
+and found **our snake self-coiled into a fully self-enclosed dead corner
+with the real opponent nowhere nearby** (opponent was length 4, far away
+on the other side of the board, playing no role at all in the trap). Our
+own body wound through a tight spiral near the bottom-right corner over
+~15 turns and sealed itself in — by the time the flood-fill's hard-trap
+penalty could see the shrinking space, every legal candidate was already
+part of a single forced corridor leading to a dead end. **This is a
+different, pre-existing failure mode from the one this round's patch
+targets** — this one has zero opponent involvement, it's purely our own
+1-ply flood-fill being blind to a slow self-created coil (the exact
+"self-coil" issue flagged and partially mitigated multiple rounds ago via
+the 2.2x soft-margin threshold — evidently that mitigation is still not
+enough against this specific opponent's food-placement/positioning
+pressure). **I did NOT have step budget left this round to determine
+whether this round's `opp_territory` patch made the self-coiling *worse*
+(e.g. by making the bot avoid more of the board and squeeze into tighter
+regions more often) or whether the pre-existing bot already had a similar
+0/6-ish local rate against this specific opponent build before my patch**
+— I was not able to re-run a clean before/after comparison (ran out of
+steps mid-comparison; the last thing I did was start re-testing the
+pre-patch `main.py` against the same opponent and the opponent's local
+server had already been killed by an earlier cleanup command in the same
+session, so that comparison is incomplete/inconclusive, not a completed
+result either way).
+
+**I chose to keep this round's `opp_territory` patch** (rather than
+revert) because: (a) it's independently verified via direct replay to fix
+a real, previously-undetectable loss mechanism (the sim_249 corridor
+race) with no possible false-legal-move issue (it only touches the
+scoring/area eval, never the legal-move filter) and no exceptions across
+several smoke tests (empty state, malformed state, empty snakes list,
+normal state); (b) the self-coiling loss pattern found in this round's
+local benchmark looks -- from the one game I inspected in detail -- to be
+a **pre-existing** bug independent of my change (zero opponent
+involvement in the specific trap), not obviously caused by it; and (c)
+the actual scored real-match results are still heavily lopsided in our
+favor (86-1, 92-0) despite this local benchmark looking rough, similar to
+the pattern noted in many earlier rounds where local 1v1 benchmarks are
+consistently harder than real scored results (possibly because the real
+harness's games end faster / opponent errors out more there, or because
+250 sims average away a small number of losses far better than a 6-game
+local sample does). But this is a judgment call under time pressure, not
+a fully confirmed "definitely still an improvement" -- see next steps.
+
+### Recommended next steps for round 3 (high priority, in order)
+
+1. **Redo the before/after local benchmark properly** (10+ games each,
+   both bots freshly started, `/tmp/main_before.py` in this session's
+   history has the exact pre-this-round `main.py` if you want to diff --
+   or just `git show HEAD:main.py` from before this round's commit once
+   this round's changes are committed) to get a real win-rate delta
+   number for the `opp_territory` change specifically, isolated from the
+   self-coiling issue. If the patch is neutral-or-positive, keep it larger
+   confidently; if it measurably hurts (e.g. by making the bot avoid
+   center-board options more often and squeeze into tighter spaces), it
+   may need `TERRITORY_HORIZON` tuned down (try 3-4 instead of 6) or
+   scoped only to when a candidate is entering a "single connected
+   corridor" region (e.g. only apply the pessimistic recompute when
+   `area` is already below some threshold like `my_length * 4`, to avoid
+   over-penalizing genuinely wide-open moves where opponent territory
+   overlap is coincidental/irrelevant) rather than applied unconditionally
+   to every candidate every turn.
+2. **The self-coiling bug is still the single biggest known unresolved
+   issue** across MANY rounds' notes now (see "self-coil" mentions
+   throughout this file going back several rounds) and this round found
+   a fresh, concrete, opponent-independent repro
+   (`/tmp/game_5.json` -- not persisted, rerun the recipe above to
+   reproduce fresh) where it single-handedly lost a game with a
+   4-length opponent nowhere nearby. The soft-margin mitigation (2.2x
+   threshold) is evidently insufficient against tighter/more contested
+   food layouts. The highest-value real fix remains genuine short
+   lookahead: simulate our own candidate move 2-4 plies deep (assuming
+   some simple opponent policy, e.g. "opponent also does 1-ply
+   flood-fill-safe-food-seeking") and use the resulting reachable-area
+   *after* that lookahead as the space score, rather than a single static
+   snapshot. This has been on the list for many rounds without being
+   attempted -- it's a bigger, riskier change than anything done so far,
+   but the accumulated evidence (this round's repro plus several past
+   rounds' "close local benchmark" notes) suggests 1-ply heuristics are
+   near their ceiling against `graeme-hill__snakebot` specifically.
+3. If real `/logs/rounds/2/results.json` (once it exists) shows a score
+   close to the round-1 86-1 (not a full regression to something much
+   worse), the patch is probably fine/net-positive in practice and safe
+   to build further on. If it's notably worse than 86-1, seriously
+   consider reverting this round's `opp_territory` change first (it's a
+   clean, isolated diff -- see `/tmp/main_before.py` recipe above,
+   or just remove the `opp_territory`/`area_pess`/`TERRITORY_HORIZON`
+   block and go back to using `area` alone in the scoring math) before
+   trying anything else, since the self-coiling bug it might be
+   interacting with is the more likely root cause either way.
+
+### Files (unchanged from previous rounds' notes)
+
+- `main.py` — the bot.
+- `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats (parses the final
+  `winnerName`/`isDraw` line per sim file).
