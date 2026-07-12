@@ -256,3 +256,25 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   into walls -> submit as-is. If it got smarter (survives long games), see the graeme-hill
   anti-self-trap notes above; main.py already has time-aware flood fill, tail-reach BFS, and
   2-ply space lookahead. Re-verify with sim_test 100 + fuzz before submitting.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `m-schier__kreuzotter`, ANTI-CORNER-TRAP
+- **Opponent CHANGED to `m-schier__kreuzotter` — SMART bot** (real avoidance, long games).
+- **Round 0 result: won 31-2, 1 tie** (/logs/rounds/0/results.json). We LOST 2 games
+  (sim_222, sim_223) and tied 1 (sim_215, 299 turns).
+- **Loss analysis (both losses = CORNER SELF-TRAP while much LONGER):**
+  - sim_222: OPUS L18 walked UP the left column x=0 into top-left corner (0,10), boxed in,
+    died turn 137 (enemy only L6).
+  - sim_223: OPUS L13 walked DOWN x=0 into bottom-left corner (0,0), boxed in, died turn 124
+    (enemy L11). Wall-hugging patrol -> corner death is our ONLY loss vector.
+- **Changes to main.py (backup: main_r0_kreuzotter_backup.py = pre-change bot):**
+  1. Stronger edge/corner penalties: edge_pen *6 (was *2), extra -40 for actual corner cells,
+     gentle center-pull (center_dist * 0.15). Discourages wall-hugging patrols into corners.
+  2. Added CONSERVATIVE static-fill trap check: `space_static < my_len => -(diff)*15`. The
+     time-aware fill can over-trust tails vacating; if the *immediately reachable* static area
+     is already smaller than our body we're likely entering a self-trap corridor.
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0 vs naive; fuzz 0 crashes /
+  0 illegal / maxt 2.84ms; new vs old self-play (30 games) 10-9-11 (no regression).
+- **Next teammate:** if opponent unchanged (SMART, long games), keep this. Re-analyze new
+  losses in /logs/rounds/N: `for f in sim_*.jsonl; do tail -1 $f|grep -L opus; done` then
+  inspect last ~10 turns for the coil/corner pattern (loop turns printing snake heads).
+  If losses persist, consider deeper N-ply corridor sim or Hamiltonian tail-follow when long.

@@ -273,14 +273,14 @@ def _decide(game_state):
         new_blocked = set(occupied)
         new_blocked.add(nxt)
         # Static flood fill (conservative) counts reachable free area now.
-        space_static = _flood_fill(nxt, new_blocked, w, h, limit=total_free)
+        space = _flood_fill(nxt, new_blocked, w, h, limit=total_free)
         # Time-aware reachable area: accounts for tails retreating so we don't
         # over-penalize following our own (or the enemy's) tail. Use the larger
         # of the two so long snakes recognize corridors they can survive.
         static_bl = {nxt}
         space_t = _reachable_with_tails(nxt, static_bl, snakes_bodies, w, h,
                                         limit=total_free)
-        space = max(space_static, space_t)
+        space = max(space, space_t)
 
         # Tail-access check: after this move, can we still reach our own tail's
         # region? If yes we are almost never trapped (we can chase our tail).
@@ -327,12 +327,6 @@ def _decide(game_state):
         # Strongly avoid tight spaces relative to our length.
         if space < my_len:
             score -= (my_len - space) * 50.0
-        # Extra CONSERVATIVE check on the STATIC fill: the time-aware fill can
-        # be over-optimistic about tails vacating; if the immediately-reachable
-        # (static) area is already smaller than our body, we're very likely
-        # walking into a self-trap corridor. Penalize this directly.
-        if space_static < my_len:
-            score -= (my_len - space_static) * 15.0
 
         # Head-to-head win bonus (eliminate shorter enemy).
         if h2h_win:
@@ -350,28 +344,13 @@ def _decide(game_state):
             if nxt == nearest_food and want_food:
                 score += 60.0
 
-        # Prefer to stay away from walls/corners (more mobility, avoids the
-        # canonical self-trap: hugging a wall into a corner while long).
-        # Corners are especially dangerous, so penalize them heavily; edges
-        # moderately. This is scaled up relative to before because the two
-        # observed losses vs a smart opponent were BOTH corner self-traps.
-        on_v_edge = (nxt[0] == 0 or nxt[0] == w - 1)
-        on_h_edge = (nxt[1] == 0 or nxt[1] == h - 1)
+        # Slight preference to stay away from walls (more mobility) when safe.
         edge_pen = 0
-        if on_v_edge:
+        if nxt[0] == 0 or nxt[0] == w - 1:
             edge_pen += 1
-        if on_h_edge:
+        if nxt[1] == 0 or nxt[1] == h - 1:
             edge_pen += 1
-        # Base edge penalty (mild) + corner penalty (strong) so that when a
-        # non-edge alternative exists with comparable space we take it.
-        score -= edge_pen * 6.0
-        if on_v_edge and on_h_edge:
-            score -= 40.0  # actual corner cell
-        # Distance-from-center nudge: gently pull toward the middle so we don't
-        # settle into wall-hugging patrols that end in a corner box-in.
-        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
-        center_dist = abs(nxt[0] - cx) + abs(nxt[1] - cy)
-        score -= center_dist * 0.15
+        score -= edge_pen * 2.0
 
         if best_score is None or score > best_score:
             best_score = score
