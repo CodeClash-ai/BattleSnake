@@ -382,3 +382,39 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   in edge regions (already have edge/corner penalties, enemy-contested-space penalty, tail-reach,
   2-ply space lookahead, H2H follow-up penalty). Consider: aggression/cutoff when WE are longer,
   or deeper N-ply space sim treating enemy as active pursuer. Keep sim_test + fuzz clean.
+
+## Round 2 of 5 (this task, opus-4-8) — Xe__since, STRENGTHENED EDGE/SHADOW ANTI-TRAP
+- Opponent `Xe__since` (SMART, aggressive, grows & shadows). Results so far: round 0 won
+  234-14, round 1 won 244-6. **Our remaining losses = EDGE/CORNER SELF-TRAP while EQUAL
+  length (L6 vs L6)** where the enemy SHADOWS us one lane inward and seals our exits.
+  - sim_113: opus L6 ran into the LEFT column (x=0), enemy body at (1,9)+top row sealed
+    the mouth, boxed in at (1,8), died turn 31.
+  - sim_116: opus L6 ran along the TOP row (y=10) from (6,10)->(10,10) into the top-right
+    CORNER, enemy shadowed at (10,9)/(10,8) and sealed it, died turn 36. Wrong move was
+    turn 31: went UP onto the top edge when U/D/R were all open — chose the edge over the
+    open board, then got committed to the wall run.
+  - Root cause: our edge/corner penalty only scaled up past len>6 (len_scale=1 at L6), so
+    at the exact loss length the edge penalty was tiny and the bot happily hugged walls.
+- **Changes (backup: main_r2of5_xe_backup.py = pre-change bot):**
+  1. Edge/corner penalty now kicks in earlier & stronger: `len_scale = 1 + max(0,len-4)*0.18`
+     (was len-6, *0.15); base edge_pen weight 9.0 (was 6.0). Discourages wall-hugging from
+     mid-game onward, not just when very long.
+  2. Added an **EDGE-SHADOW penalty**: when a candidate move goes onto an edge/corner AND
+     the nearest enemy head is within 3 cells, compute the free "run" length along that edge
+     (both directions) before hitting an obstacle/corner. If run < my_len, subtract
+     (my_len-run)*18. Directly targets the "enemy shadows us into the corner along an edge"
+     loss vector — a short edge corridor with an enemy right there is a trap.
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0 vs naive; fuzz => crashes=0
+  illegal=0 maxt_ms=2.3; long-snake(L22) decision time 0.01ms; new vs old self-play (80g)
+  = 28-24-28 (new slightly ahead, NO regression); hungry short snake still grabs EDGE food
+  (edge penalty balanced, doesn't cause starvation). NOTE: couldn't perfectly reconstruct the
+  exact sim_113/116 boards (enemy body positions unknown), so the fix is validated by design
+  + self-play + no-regression, not a replay of those exact frames.
+- **Next teammate:** opponent is REAL/aggressive & grows. First check /logs/rounds/N/sim_0 &
+  scan losses (`for f in sim_*.jsonl; do tail -1 $f|grep -qi opus||echo $f; done`), then run
+  /tmp/analyze2.py-style trace of last frames. Our remaining loss vector is likely still
+  edge/corner shadowing or falling behind in length. main.py now has: time-aware flood fill,
+  tail-reach BFS, 2-ply space lookahead, enemy-contested space, H2H follow-up penalty,
+  length-scaled edge/corner penalty, AND edge-shadow corridor penalty. Ideas if losses
+  persist: deeper N-ply minimax treating enemy as active pursuer; aggression/cutoff when we
+  are clearly longer. Keep sim_test + fuzz clean; verify decision time stays < 500ms.

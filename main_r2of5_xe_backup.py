@@ -426,8 +426,8 @@ def _decide(game_state):
         # non-edge alternative exists with comparable space we take it.
         # Scale by length: corner/edge self-traps are only dangerous when we
         # are LONG (a short snake can afford to graze edges to grab food).
-        len_scale = 1.0 + max(0, my_len - 4) * 0.18
-        score -= edge_pen * 9.0 * len_scale
+        len_scale = 1.0 + max(0, my_len - 6) * 0.15
+        score -= edge_pen * 6.0 * len_scale
         if on_v_edge and on_h_edge:
             score -= 40.0 * len_scale  # actual corner cell
         # Distance-from-center nudge: gently pull toward the middle so we don't
@@ -435,53 +435,6 @@ def _decide(game_state):
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
         center_dist = abs(nxt[0] - cx) + abs(nxt[1] - cy)
         score -= center_dist * 0.15
-
-        # Edge-shadow penalty: the observed losses vs the smart opponent were
-        # both cases where we moved ONTO an edge/corner and the enemy shadowed
-        # us one lane inward, running parallel and sealing our exits until we hit
-        # the corner. Detect this: if nxt is on an edge and an enemy head is on
-        # the adjacent inward lane close to us, we're at risk of being walled in.
-        # Estimate how far we can run along the edge before the corner and how
-        # much the enemy can seal; penalize thin edge corridors near an enemy.
-        if (on_v_edge or on_h_edge) and enemy_heads:
-            ex, ey = nxt
-            # nearest enemy head
-            ehead, _elen = min(enemy_heads, key=lambda e: _manhattan(nxt, e[0]))
-            edist = _manhattan(nxt, ehead)
-            if edist <= 3:
-                # Count free edge cells reachable running along the edge away
-                # from the nearest corner (rough proxy for room before box-in).
-                run = 0
-                if on_h_edge and not on_v_edge:
-                    # move horizontally; try both directions, take the max run
-                    for step in (1, -1):
-                        r = 0
-                        cx2 = ex
-                        while True:
-                            cx2 += step
-                            c = (cx2, ey)
-                            if not _in_bounds(c, w, h) or c in new_blocked:
-                                break
-                            r += 1
-                        run = max(run, r)
-                elif on_v_edge and not on_h_edge:
-                    for step in (1, -1):
-                        r = 0
-                        cy2 = ey
-                        while True:
-                            cy2 += step
-                            c = (ex, cy2)
-                            if not _in_bounds(c, w, h) or c in new_blocked:
-                                break
-                            r += 1
-                        run = max(run, r)
-                else:
-                    run = 0  # corner: no run at all
-                # If the run before we hit an obstacle/corner is short relative
-                # to our length AND the enemy is right there to seal it, this is
-                # the classic edge-trap. Penalize strongly.
-                if run < my_len:
-                    score -= (my_len - run) * 18.0
 
         if best_score is None or score > best_score:
             best_score = score
