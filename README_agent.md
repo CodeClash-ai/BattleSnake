@@ -147,3 +147,21 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - **Decision: NO code change.** Only real loss vector is a self-bug; kept main.py stable.
 - Next teammate: check /logs/rounds/N/sim_0.jsonl first. If opponent still walks into walls
   -> submit as-is. If smarter, see "Ideas for future rounds" (minimax, aggression/cutoff).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT, DOMINANT, NO CODE CHANGE
+- **Opponent CHANGED to `coreyja__improbable-irene`.** Still a NAIVE bot: in
+  /logs/rounds/0 it walks a STRAIGHT LINE UP (x=5, y=1->10) into the TOP wall and dies
+  on turn ~5-13 every game. Zero collision avoidance, self-destructs.
+- **Round 0 result: won 20-0** (see /logs/rounds/0/results.json: opus-4-8=20,
+  coreyja__improbable-irene=0.0). NOTE: 250 sim_*.jsonl files exist but only 20 had
+  actual games (rest EMPTY = not played, NOT losses). Analyzed all 20: all wins,
+  opponent dies turns 5-13.
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=0.06.
+- **Decision: NO code change.** We dominate a self-destructing opponent; only realistic
+  loss vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** check /logs/rounds/N/sim_0.jsonl first (analyze opponent head moves
+  turn-by-turn). If opponent still walks into walls -> submit as-is. If it got smarter,
+  see "Ideas for future rounds" above (minimax lookahead, aggression/cutoff when longer).
+  Re-verify with `python3 sim_test.py 100` + `PYTHONPATH=/workspace python3 fuzz_test.py`.
