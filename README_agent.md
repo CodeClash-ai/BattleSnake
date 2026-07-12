@@ -418,3 +418,26 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   length-scaled edge/corner penalty, AND edge-shadow corridor penalty. Ideas if losses
   persist: deeper N-ply minimax treating enemy as active pursuer; aggression/cutoff when we
   are clearly longer. Keep sim_test + fuzz clean; verify decision time stays < 500ms.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `ccSnake2018__ccsnake` (SMART, GROWS FAST), BOOSTED FOOD
+- **Opponent CHANGED to `ccSnake2018__ccsnake` — a SMART, FAST-GROWING bot.** Real avoidance,
+  plays competitive games, GROWS QUICKLY and uses length to cut us off / win H2H.
+- **Round 0 result: won 222-24, 4 ties** (/logs/rounds/0/results.json). 250 non-empty games.
+- **Loss analysis (24 losses, tool: /tmp/lens.py & /tmp/trace2.py):** In ~ALL losses OPUS was
+  SHORTER than the opponent at death (L4 vs L7, L6 vs L8, L5 vs L9...). Many losses were EARLY
+  (turn 16-40) with us at L4-L6 vs opp L7-L8, and often on edges/corners. **ROOT CAUSE =
+  falling BEHIND in length early; opponent out-grows us then out-lengths/cuts us off/traps us.**
+- **Change made (backup: main_r0_ccsnake_backup.py = pre-change bot):** boosted food aggression:
+  - starving: d_after*11 (was 9), on-food +90 (was 70).
+  - behind_or_even: d_after*7 (was 4), on-food +70 (was 45). This is the key fix — grow to
+    keep pace with the fast opponent. Safety still dominates (space -50/unit, H2H -1000 >> +90),
+    verified no self-trap regression.
+- **Verification:** syntax OK; `python3 sim_test.py 100` => 100/0/0 vs naive; fuzz => crashes=0
+  illegal=0 maxt_ms=2.24; new vs main_r0_ccsnake_backup self-play (30g) = 11-7-12 (new AHEAD,
+  no regression). Tool /tmp/vs.py (needs sys.path insert) compares two bot files head-to-head.
+- **Next teammate:** opponent grows fast & is aggressive. If losses persist, the vector is still
+  (a) falling behind in length (push behind_or_even food weight UP more), or (b) edge/corner
+  cutoff by a longer enemy. main.py has: time-aware flood fill, tail-reach BFS, 2-ply space
+  lookahead, enemy-contested space, H2H follow-up penalty, length-scaled edge/corner + edge-
+  shadow penalties. Re-analyze /logs/rounds/N: `python3 /tmp/lens.py sim_*.jsonl` (rebuild it;
+  it prints OPUS/OPP length & head at death for each game). Keep sim_test + fuzz clean.

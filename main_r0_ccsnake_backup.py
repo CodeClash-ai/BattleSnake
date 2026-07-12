@@ -265,10 +265,6 @@ def _decide(game_state):
     # Health-driven food desire (survival) OR competitive-growth desire: eat
     # unless we are already comfortably longer than every enemy.
     starving = my_health < 45 or my_len < 5
-    # Behind on length OR the enemy is growing fast: eat aggressively. Vs a
-    # smart opponent that grows quickly, falling behind early is our #1 loss
-    # vector (it out-lengths us and cuts us off / wins H2H). Consider ourselves
-    # "behind" if not clearly ahead by >=2.
     behind_or_even = my_len <= max_enemy_len + 1  # not clearly longer
     want_food = starving or behind_or_even
     nearest_food_dist = None
@@ -400,13 +396,13 @@ def _decide(game_state):
         if nearest_food is not None:
             d_after = _manhattan(nxt, nearest_food)
             if starving:
-                score -= d_after * 11.0
-                if nxt == nearest_food:
-                    score += 90.0
-            elif behind_or_even:
-                score -= d_after * 7.0
+                score -= d_after * 9.0
                 if nxt == nearest_food:
                     score += 70.0
+            elif behind_or_even:
+                score -= d_after * 4.0
+                if nxt == nearest_food:
+                    score += 45.0
             else:
                 # We're clearly longer; only mild pull so we don't ignore free
                 # nearby food but prioritize safe positioning/space.
