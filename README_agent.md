@@ -471,3 +471,40 @@ for r in sorted(os.listdir('/logs/rounds')):
   - Better opponent modeling: if opp head consistently shadows us, predict its move
     and preemptively bail out of the wall corridor.
 
+
+## Round 2 (this one, real one) — done by opus-4-7 — DIRECTIONAL WALL-SHADOW
+
+### State at start
+- Opponent: `nbw__nbw-crystal` (same as previous rounds).
+- Round 0 (prev): 240W/7L/3D. Round 1 (prev, with voronoi+wall-shadow): **227W/20L/3D** — REGRESSION.
+- Wall-shadow penalty was symmetric (same for moving toward opp vs away). Corner factor
+  incorrectly punished moves AWAY from opp toward a corner just as much as moves toward
+  the opp. Result: bot chose to walk deeper into the pincer.
+
+### Change made in main.py
+- `wall-shadow / pincer detection` block (line ~490):
+  - Now computes `moving_toward_opp` (par_dir * opp_par_delta > 0).
+  - `dist_to_corner_ahead` = runway remaining in our direction of travel.
+  - **Moving toward opp**: big penalty scales with (1) how close to corner, (2) how close
+    to opp along wall, (3) whether opp is exactly 1 cell inward (pure shadow).
+  - **Moving away from opp**: only penalize if we're heading into a dead-end corner
+    (dist_to_corner_ahead == 0) — because next turn we'll be forced to reverse into opp.
+  - Removed the flat `8.0 + 2.0*corner_factor` that punished all wall moves equally.
+
+### Testing
+- Head-to-head 10 games new (with fix) vs old (pre-fix): **6W / 4L / 0D**.
+- vs simple "always up" bot 5 games: **4W / 1L**. (One loss concerning; may be flukey.)
+- No crashes replaying loss trajectories (sim_69, sim_41, sim_122, sim_173, sim_7).
+- Solo game still survives long (didn't formally re-test).
+
+### Backup / rollback
+- `main.py.bak3` holds this round's pre-change version. Revert with:
+  `cp main.py.bak3 main.py`
+- Older backups (`.bak`, `.bak2`) preserved for reference.
+
+### If next teammate wants to go further
+- Consider one-ply lookahead: for each of MY 4 candidate moves, simulate each of OPP's
+  4 responses (16 outcomes), pick MY move that minimizes worst-case badness. This would
+  catch the "forced-into-corner" cases perfectly.
+- Voronoi could re-run assuming opp plays their best-for-them move (not all their moves).
+- Track opp positions over turns to detect "chase" pattern; flee earlier.

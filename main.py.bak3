@@ -496,60 +496,19 @@ def _decide(game_state):
                 if on_left or on_right:
                     perp_gap = abs(_oh[0] - px_)
                     par_gap = abs(_oh[1] - py_)
-                    # Are we moving TOWARD opp along wall?
-                    par_dir = my_dy  # +1 up, -1 down
-                    opp_par_delta = _oh[1] - py_  # sign: where opp is relative to us
                 elif on_bot or on_top:
                     perp_gap = abs(_oh[1] - py_)
                     par_gap = abs(_oh[0] - px_)
-                    par_dir = my_dx
-                    opp_par_delta = _oh[0] - px_
                 else:
                     continue
-                if not (1 <= perp_gap <= 3 and par_gap <= 4):
-                    continue
-                # Are we moving toward or away from opp?
-                # If par_dir has same sign as opp_par_delta, we're moving toward opp.
-                moving_toward_opp = (par_dir * opp_par_delta) > 0
-                # Compute how far to the corner in our direction of travel.
-                if on_left or on_right:
-                    if par_dir > 0:
-                        dist_to_corner_ahead = (h - 1) - py_
-                    else:
-                        dist_to_corner_ahead = py_
-                else:
-                    if par_dir > 0:
-                        dist_to_corner_ahead = (w - 1) - px_
-                    else:
-                        dist_to_corner_ahead = px_
-                # Penalty: bigger if moving toward opp; scale with how little
-                # room we have between us and the corner ahead.
-                # Being trapped: opp behind + short runway = death.
-                corner_factor = max(0, 6 - dist_to_corner_ahead)
-                base_pen = 4.0
-                if moving_toward_opp:
-                    # Bad: opp is ahead of us along the wall, we head into them
-                    # Especially bad if par_gap is small (about to meet).
-                    pen = 6.0 + 1.5 * corner_factor + max(0, 4 - par_gap) * 2.5
-                    # If perp_gap==1, opp is exactly one row inward: pure shadow.
-                    if perp_gap == 1:
-                        pen += 3.0
-                else:
-                    # We're moving away from opp along wall. Bad if we're
-                    # heading into a corner with no runway - we'll be forced
-                    # to reverse into the opp next turn.
-                    if dist_to_corner_ahead == 0:
-                        # dead-end: next turn we must move perpendicular; opp
-                        # can cover both options. Very bad if par_gap small.
-                        pen = 5.0 + max(0, 4 - par_gap) * 2.0
-                        if perp_gap == 1:
-                            pen += 3.0
-                    elif dist_to_corner_ahead <= 2 and par_gap <= 3:
-                        pen = base_pen + 1.5 * corner_factor
-                    else:
-                        pen = 0.3 * corner_factor  # mild
-                s -= pen
-                break
+                if 1 <= perp_gap <= 3 and par_gap <= 3:
+                    # Pincer situation - opp shadowing us along wall
+                    # penalty scales with how close we are to a corner
+                    dist_to_corner_along = min(py_, h-1-py_) if (on_left or on_right) else min(px_, w-1-px_)
+                    # closer to corner = more dangerous
+                    corner_factor = max(0, 6 - dist_to_corner_along)
+                    s -= 8.0 + 2.0 * corner_factor
+                    break
 
         # Reduce food attraction strongly if going onto a wall while long and healthy.
         if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
