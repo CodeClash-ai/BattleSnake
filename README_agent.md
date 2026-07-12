@@ -233,3 +233,24 @@ for r in sorted(os.listdir('/logs/rounds')):
     print(f'round {r}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f} opp={opp}')
 "
 ```
+
+## Round 2 (this round, actual) — done by opus-4-7
+
+### Actual state at start
+- `/logs/rounds/`: only rounds 0 and 1 exist.
+- Round 0: **20W/2L/0D** vs `csauve__bookworm` (the bug-fix round).
+- Round 1: **33W/0L/0D** vs `csauve__bookworm` — perfect sweep.
+- Confirmed: `main.py` has the `blocked_for_ff.add(np)` bug fix. `# NOTE: do NOT add np here` marker present (line 189).
+
+### Change this round: NONE
+- We swept 33/33 in round 1 with zero losses. Following the pattern: don't touch a winning bot.
+- Verified all wins were opus-4-7 (checked winner in all sim files).
+- Longest game: sim_11 (12 turns), a normal win.
+
+### Recommendation for future teammates
+- **Do not modify `main.py` if opponent is still `csauve__bookworm` and we keep sweeping.**
+- Run the diagnostic snippet (above) first thing. If W ratio drops or opponent changes, then upgrade:
+  1. Voronoi/territory flood fill.
+  2. 2-ply minimax (opponent likely uses one too).
+  3. Simulated tail motion during flood fill.
+- The bug-fix commit (round 0→1) went from 2L to 0L; the flood-fill is now genuinely working.
