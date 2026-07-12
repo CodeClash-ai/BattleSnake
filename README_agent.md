@@ -687,3 +687,77 @@ turns before the loss.
 Kill test servers by PID (`ps aux | grep main.py`), never `pkill -f`
 with a pattern that might match your own invoking shell's command line
 (see earlier rounds' notes -- this has bitten multiple past sessions).
+
+## Round 1 (this session) — opponent = coreyja__improbable-irene, confirmed still winning cleanly
+
+`/logs/rounds/0/results.json` shows this round's real opponent identity:
+`coreyja__improbable-irene` (elo #46, "Rung 5/50" per `git log --oneline
+--all | grep -i coreyja`). Real scored result: clean sweep, sonnet-5 20 vs
+opponent 0. `analyze_logs.py /logs/rounds/0` confirms via the per-sim
+`winnerName` summary lines: **20/20 sims won**, avg game length only 6.5
+turns (min 2, max 10) -- the opponent is dying almost immediately in the
+real scoring harness.
+
+The opponent's code (`git show
+origin/human/coreyja/improbable-irene:main.py`) is a real, non-trivial
+port: 2-ply MCTS (UCB1-Normal selection, random-rollout simulation to 25
+steps, flood-fill-based leaf eval) with a ~0.3s wall-clock budget per
+move -- not a trivial bot in principle, but apparently either times
+out/errors in the real harness or just loses badly to our safety-first
+heuristic once games run long enough to matter.
+
+### Local benchmark this round (fresh, confirms real-match result)
+
+Extracted the opponent fresh (`git show
+origin/human/coreyja/improbable-irene:main.py > /tmp/opp/main.py; cp
+server.py /tmp/opp/server.py`) and ran 6 real local games via the
+`battlesnake` CLI against the current, *unmodified* `main.py` (see recipe
+elsewhere in this file -- `setsid nohup ... & disown` to survive across
+tool calls in this harness). **Result: 6/6 clean wins for our bot**,
+games ranging 7-238 turns (one game ran the full 238 turns with both
+snakes alive most of the way -- no crashes, no exceptions in either
+server's log, our bot eventually won a real long-game scenario too, not
+just fast early kills). This matches/confirms the real round's 20-0
+sweep and rules out the "real score is lopsided but local 1v1 is close"
+pattern that showed up against some past opponents (e.g. the julia/
+bookworm ports in earlier rounds' notes) -- against *this* opponent, our
+current heuristic wins comprehensively both in short games (opponent
+dies almost immediately in ~90% of games) and in the rare long grindy
+game (won a 238-turn game cleanly too).
+
+### Decision this round: no code changes
+
+Given a clean, reproducible 6/6 local sweep on top of the real 20-0
+scored result against the confirmed current opponent, I judged further
+heuristic changes to `main.py` this round to carry more regression risk
+than expected benefit, and made **no changes to the bot's decision
+logic**. `main.py` is unchanged from the version described in the "Round
+4" and earlier sections above (flood-fill space eval with the 2.2x soft
+trap margin, BFS nearest-food seeking, risky/winnable head-to-head
+awareness, tail-just-ate detection).
+
+### Recommendation for round 2+
+
+- If `/logs/rounds/1/results.json` (once it exists) shows anything other
+  than another clean sweep, or a different opponent identity, use `git
+  log --oneline --all | grep -i human` + `git show
+  origin/human/<Org>/<repo>:main.py` to identify/extract them and re-run
+  the local benchmark recipe (condensed version a few sections up, or
+  just: start both bots with `setsid nohup env PORT=... python3 main.py
+  > /tmp/x.log 2>&1 </dev/null & disown`, then loop `./battlesnake play
+  ...` a handful of times with `disown`'d background jobs and `sleep`
+  before checking `tail` on the log files -- foreground calls with short
+  timeouts can get killed by the *bash tool's own* ~30s call timeout,
+  not just the `timeout` command's limit, so always background +
+  disown + sleep + check in a separate call, as done this round).
+- The still-not-done ideas list from earlier rounds remains valid if a
+  tougher opponent shows up: real 2-3 ply minimax/lookahead (current bot
+  is still 1-ply + heuristic trap-margin, not true lookahead), hazard
+  support (`board["hazards"]` still unused), formal weight tuning via a
+  self-play tournament sweep.
+- Reminder: this bash harness's tool-call wall-clock limit is ~30s
+  independent of any `timeout N` you pass to a background command --
+  don't rely on a single tool call to both launch and wait-out a batch of
+  60s-`timeout`'d background games; split launching and polling into
+  separate tool calls (as done this round: one call to launch+sleep 35s,
+  a follow-up call to sleep more + check the still-running long game).
