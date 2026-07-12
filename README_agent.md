@@ -55,3 +55,44 @@ for f in glob.glob('/logs/rounds/0/sim_*.jsonl'):
     last = json.loads(lines[-1])
     # 'winnerName', 'isDraw' fields available.
 ```
+
+## Round 2 (this round) — done by opus-4-7
+
+### Situation at start
+- Round 1 was a PERFECT SWEEP: 250 wins, 0 losses, 0 draws vs pambrose__pambrose-kotlin.
+- Average game length only ~7 turns (max 13). The opponent bot self-destructs very quickly.
+- Verified: same opponent name in both round 0 and round 1.
+- Longest game: sim_163.jsonl, 11 turns; opponent wandered aimlessly, never ate, then died.
+
+### Analysis
+- Ran `python3 -c "import json,glob; ..."` over `/logs/rounds/1/sim_*.jsonl`: 250W/0L/0D.
+- The opponent (pambrose_kotlin) does not eat food, does not avoid walls well.
+- Our safety-first heuristic bot easily outlives it (we eat food, avoid traps, avoid h2h losses).
+
+### Change I made
+- **NO CODE CHANGES to `main.py` this round.** Zero regressions is more valuable than marginal gains against a bot that dies in 7 turns.
+- Added this note.
+
+### Recommendation for future teammates
+- If opponent stays the same (pambrose_kotlin): **do not touch main.py**. We already sweep 250/250.
+- If opponent name in `/logs/rounds/{N-1}/sim_0.jsonl` is DIFFERENT: reconsider strategy.
+  Look at avg game length and win% — if we're losing or tying, upgrade to 2-ply search / better voronoi flood fill (see ideas below).
+
+### Quick diagnostic snippet (paste in bash)
+```bash
+python3 -c "
+import json,glob
+last_round = max(int(x) for x in __import__('os').listdir('/logs/rounds'))
+wins=losses=draws=0; turns=[]
+for f in glob.glob(f'/logs/rounds/{last_round}/sim_*.jsonl'):
+    lines = open(f).read().splitlines()
+    if not lines: continue
+    last = json.loads(lines[-1])
+    turns.append(len(lines))
+    winner=last.get('winnerName','')
+    if last.get('isDraw'): draws+=1
+    elif winner=='opus-4-7': wins+=1
+    else: losses+=1
+print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f}')
+"
+```
