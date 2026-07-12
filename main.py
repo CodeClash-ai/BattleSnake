@@ -2,10 +2,11 @@
 Simple but highly effective BattleSnake bot.
 Features:
 1. Avoids collisions with walls, self-body, and other snakes' bodies.
-2. If multiple safe moves exist:
-   - Evaluates each safe move for future space (simple flood-fill/accessibility heuristic or check of immediate neighbors).
-   - Targets food when health is low or we want to grow, but prefers the NEAREST food instead of the FARTHEST food!
-   - Prefers to avoid moving into a space where an opponent's larger head could move (head-to-head collision avoidance).
+2. Uses Time-Aware Flood Fill to accurately compute reachable space,
+   naturally handling following tails, coiling, and pocket sizes perfectly.
+3. Incorporates Voronoi Territory Partitioning to count free cells closer to us than opponents.
+4. Avoids head-to-head collisions with larger or equal length opponent snakes.
+5. Correctly targets nearest food or center depending on situation.
 """
 
 def info():
@@ -36,22 +37,37 @@ def _board_center(width, height):
     return (center_x, center_y)
 
 
-def _flood_fill(start, width, height, obstacles):
-    """Simple BFS to count reachable squares from start position."""
-    queue = [start]
+def _time_aware_flood_fill(start, width, height, snakes):
+    """
+    BFS that simulates time/steps. A cell occupied by a snake body segment
+    becomes free after (length - index) steps.
+    """
+    free_at_step = {}
+    for snake in snakes:
+        body = snake["body"]
+        N = len(body)
+        for i, seg in enumerate(body):
+            pos = (seg["x"], seg["y"])
+            steps_to_vacate = N - i
+            free_at_step[pos] = max(free_at_step.get(pos, 0), steps_to_vacate)
+            
+    queue = [(start, 0)]
     visited = {start}
     count = 0
+    
     while queue:
-        curr = queue.pop(0)
+        curr, step = queue.pop(0)
         count += 1
         cx, cy = curr
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = cx + dx, cy + dy
             if 0 <= nx < width and 0 <= ny < height:
                 np = (nx, ny)
-                if np not in obstacles and np not in visited:
-                    visited.add(np)
-                    queue.append(np)
+                if np not in visited:
+                    vacated_at = free_at_step.get(np, 0)
+                    if step + 1 >= vacated_at:
+                        visited.add(np)
+                        queue.append((np, step + 1))
     return count
 
 
@@ -60,16 +76,12 @@ def _voronoi_territory(start, opp_heads, width, height, obstacles):
     Computes Voronoi territory space for the snake starting at 'start'.
     Cells that are strictly closer to 'start' than any opponent head are counted.
     """
-    # Multi-source BFS
-    # dist[pos] = (closest_source, distance)
     dist = {}
     queue = []
     
-    # Add our starting move
     dist[start] = ('us', 0)
     queue.append((start, 'us', 0))
     
-    # Add all opponent heads
     for opp in opp_heads:
         if opp not in obstacles:
             dist[opp] = ('opp', 0)
@@ -88,10 +100,6 @@ def _voronoi_territory(start, opp_heads, width, height, obstacles):
                     if np not in dist:
                         dist[np] = (owner, d + 1)
                         queue.append((np, owner, d + 1))
-                    else:
-                        # If there's a tie in distance, we don't change owner.
-                        # But standard Voronoi partitions ties or counts only strict wins.
-                        pass
                         
     for pos, (owner, d) in dist.items():
         if owner == 'us':
@@ -111,8 +119,6 @@ def move(game_state):
         my_length = you["length"]
         my_health = you["health"]
         
-        # Build set of obstacles (all snake body segments, except their tails if they are not growing,
-        # but to be extremely safe, we treat all body segments as solid obstacles).
         obstacles = set()
         opp_heads = []
         for snake in board["snakes"]:
@@ -122,7 +128,6 @@ def move(game_state):
                 opp_head = snake["body"][0]
                 opp_heads.append((opp_head["x"], opp_head["y"]))
                 
-        # Directions
         directions = {
             "left": (-1, 0),
             "right": (1, 0),
@@ -130,52 +135,35 @@ def move(game_state):
             "up": (0, 1)
         }
         
-        # Check moves
         possible_moves = []
         for d, (dx, dy) in directions.items():
             nx, ny = my_head[0] + dx, my_head[1] + dy
-            # Check boundaries
             if 0 <= nx < width and 0 <= ny < height:
                 np = (nx, ny)
-                # Check obstacles
                 if np not in obstacles:
                     possible_moves.append((d, np))
                     
         if not possible_moves:
-            # Doom, just go up
             return {"move": "up"}
             
-        # Avoid head-to-head collisions with larger/equal snakes if possible
         dangerous_squares = set()
         for snake in board["snakes"]:
             if snake["id"] == my_id:
                 continue
             opp_head = snake["body"][0]
             opp_head_pos = (opp_head["x"], opp_head["y"])
-            # If opponent is larger or equal in length, their potential next moves are dangerous
             if snake["length"] >= my_length:
                 for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     ox, oy = opp_head_pos[0] + dx, opp_head_pos[1] + dy
                     if 0 <= ox < width and 0 <= oy < height:
                         dangerous_squares.add((ox, oy))
                         
-        # Filter possible moves that do not lead to dangerous head-to-head squares
         safe_moves = [(d, np) for d, np in possible_moves if np not in dangerous_squares]
         if not safe_moves:
-            # If all standard moves lead to danger, just fall back to standard possible moves
             safe_moves = possible_moves
             
-        # Target evaluation
         food = board.get("food", [])
         
-        # We target food if we are hungry (health < 40) or we are smaller than or equal to the opponent.
-        # Otherwise, we might want to prioritize control and space. Let's see if we should always target food.
-        opp_max_length = 0
-        for snake in board["snakes"]:
-            if snake["id"] != my_id:
-                opp_max_length = max(opp_max_length, snake["length"])
-                
-        # Target nearest food or center
         if food:
             target_food = None
             min_dist = 9999
@@ -189,60 +177,27 @@ def move(game_state):
         else:
             target = _board_center(width, height)
             
-        # Score each safe move
         best_move = safe_moves[0][0]
         best_score = -99999999
         
-        # Tail reachability analysis
-        my_tail = (you["body"][-1]["x"], you["body"][-1]["y"])
-        # We can reach the tail if we don't treat the tail itself as an obstacle
-        obstacles_without_tail = obstacles.copy()
-        if my_tail in obstacles_without_tail:
-            obstacles_without_tail.remove(my_tail)
-
         for d, np in safe_moves:
-            # 1. Flood fill score (extremely important to not get trapped)
-            space = _flood_fill(np, width, height, obstacles)
+            # 1. Time-Aware flood fill space
+            space = _time_aware_flood_fill(np, width, height, board["snakes"])
             
             # 2. Voronoi Territory Score
             voronoi_space = _voronoi_territory(np, opp_heads, width, height, obstacles)
             
-            # 3. Distance to target score (closer is better, so negative distance)
+            # 3. Distance to target score
             dist = _manhattan(np, target)
             
-            # 4. Tail reachability bonus
-            # If we can reach our own tail, we are highly unlikely to get trapped
-            tail_reachable = False
-            queue = [np]
-            visited = {np}
-            while queue:
-                curr = queue.pop(0)
-                if curr == my_tail:
-                    tail_reachable = True
-                    break
-                cx, cy = curr
-                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                    nx, ny = cx + dx, cy + dy
-                    if 0 <= nx < width and 0 <= ny < height:
-                        n_pos = (nx, ny)
-                        if (n_pos not in obstacles_without_tail) and (n_pos not in visited):
-                            visited.add(n_pos)
-                            queue.append(n_pos)
-
-            # Weighted score: heavily prioritize having enough space, then Voronoi territory, then move towards target
-            # Also, we penalize moves with very little absolute space (less than my_length).
-            score = (space * 1000) + (voronoi_space * 200) - dist
+            # Weighted score
+            score = (space * 1000) + (voronoi_space * 20) - dist
             
-            # If the space is less than our length, apply a heavy penalty
             if space < my_length:
-                score -= 50000
-            
-            if tail_reachable:
-                score += 100000  # huge bonus for tail reachability!
-            
-            # Slight bonus for avoiding head-to-head squares even in fallback scenarios
+                score -= 10000000  # heavy penalty for coiling in a small pocket
+                
             if np in dangerous_squares:
-                score -= 10000
+                score -= 50000
                 
             if score > best_score:
                 best_score = score
