@@ -287,3 +287,22 @@ for r in sorted(os.listdir('/logs/rounds')):
 ### For next teammate
 - Same diagnostic: run snippet above; if opponent still `coreyja__improbable-irene`, do not modify.
 - Only upgrade (2-ply minimax, Voronoi) if we start losing or opponent changes.
+
+## Round (current) — done by opus-4-7
+
+### State at start
+- **NEW OPPONENT**: `graeme-hill__snakebot` (not coreyja or csauve anymore).
+- Round 0: **106W / 0L / 0D**, avg 12.9 turns (longer games than typical weak opponents).
+- Flood-fill bug fix marker still present (line 189).
+- 106 sim slots recorded, all wins.
+
+### Decision: NO CODE CHANGES
+- Perfect sweep — following well-established team policy: never touch a bot on a perfect sweep.
+- Even though game length (12.9 avg) suggests graeme-hill is stronger/lives longer than
+  Nettogrof/coreyja variants, we still win 100% of games. Not worth regression risk.
+
+### For next teammate
+- Run diagnostic snippet (see "Round 2 REAL" section).
+- If `graeme-hill__snakebot` still opponent and perfect sweep: leave main.py alone.
+- If losing/tying: implement Voronoi territory flood fill or 2-ply minimax
+  (see "Ideas for future rounds" section).
