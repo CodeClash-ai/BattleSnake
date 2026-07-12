@@ -55,6 +55,50 @@ def _flood_fill(start, width, height, obstacles):
     return count
 
 
+def _voronoi_territory(start, opp_heads, width, height, obstacles):
+    """
+    Computes Voronoi territory space for the snake starting at 'start'.
+    Cells that are strictly closer to 'start' than any opponent head are counted.
+    """
+    # Multi-source BFS
+    # dist[pos] = (closest_source, distance)
+    dist = {}
+    queue = []
+    
+    # Add our starting move
+    dist[start] = ('us', 0)
+    queue.append((start, 'us', 0))
+    
+    # Add all opponent heads
+    for opp in opp_heads:
+        if opp not in obstacles:
+            dist[opp] = ('opp', 0)
+            queue.append((opp, 'opp', 0))
+            
+    us_count = 0
+    while queue:
+        curr, owner, d = queue.pop(0)
+        
+        cx, cy = curr
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < width and 0 <= ny < height:
+                np = (nx, ny)
+                if np not in obstacles:
+                    if np not in dist:
+                        dist[np] = (owner, d + 1)
+                        queue.append((np, owner, d + 1))
+                    else:
+                        # If there's a tie in distance, we don't change owner.
+                        # But standard Voronoi partitions ties or counts only strict wins.
+                        pass
+                        
+    for pos, (owner, d) in dist.items():
+        if owner == 'us':
+            us_count += 1
+    return us_count
+
+
 def move(game_state):
     try:
         board = game_state["board"]
@@ -70,10 +114,13 @@ def move(game_state):
         # Build set of obstacles (all snake body segments, except their tails if they are not growing,
         # but to be extremely safe, we treat all body segments as solid obstacles).
         obstacles = set()
+        opp_heads = []
         for snake in board["snakes"]:
-            # Standard rule: tail moves unless they ate. If we want to be safe, just avoid all parts.
             for seg in snake["body"]:
                 obstacles.add((seg["x"], seg["y"]))
+            if snake["id"] != my_id:
+                opp_head = snake["body"][0]
+                opp_heads.append((opp_head["x"], opp_head["y"]))
                 
         # Directions
         directions = {
@@ -120,8 +167,16 @@ def move(game_state):
             
         # Target evaluation
         food = board.get("food", [])
+        
+        # We target food if we are hungry (health < 40) or we are smaller than or equal to the opponent.
+        # Otherwise, we might want to prioritize control and space. Let's see if we should always target food.
+        opp_max_length = 0
+        for snake in board["snakes"]:
+            if snake["id"] != my_id:
+                opp_max_length = max(opp_max_length, snake["length"])
+                
+        # Target nearest food or center
         if food:
-            # Find NEAREST food (correcting the original's farthest food bug!)
             target_food = None
             min_dist = 9999
             for f in food:
@@ -136,11 +191,11 @@ def move(game_state):
             
         # Score each safe move
         best_move = safe_moves[0][0]
-        best_score = -999999
+        best_score = -99999999
         
         # Tail reachability analysis
         my_tail = (you["body"][-1]["x"], you["body"][-1]["y"])
-        # We can reach the tail if we don not treat the tail itself as an obstacle
+        # We can reach the tail if we don't treat the tail itself as an obstacle
         obstacles_without_tail = obstacles.copy()
         if my_tail in obstacles_without_tail:
             obstacles_without_tail.remove(my_tail)
@@ -149,13 +204,14 @@ def move(game_state):
             # 1. Flood fill score (extremely important to not get trapped)
             space = _flood_fill(np, width, height, obstacles)
             
-            # 2. Distance to target score (closer is better, so negative distance)
+            # 2. Voronoi Territory Score
+            voronoi_space = _voronoi_territory(np, opp_heads, width, height, obstacles)
+            
+            # 3. Distance to target score (closer is better, so negative distance)
             dist = _manhattan(np, target)
             
-            # 3. Tail reachability bonus
+            # 4. Tail reachability bonus
             # If we can reach our own tail, we are highly unlikely to get trapped
-            can_reach_tail = _flood_fill(np, width, height, obstacles_without_tail) if my_tail in obstacles else _flood_fill(np, width, height, obstacles)
-            # Actually, let us check if my_tail is in the visited set of BFS from np
             tail_reachable = False
             queue = [np]
             visited = {np}
@@ -173,15 +229,20 @@ def move(game_state):
                             visited.add(n_pos)
                             queue.append(n_pos)
 
-            # Weighted score: heavily prioritize having enough space, then move towards target
-            score = (space * 1000) - dist
+            # Weighted score: heavily prioritize having enough space, then Voronoi territory, then move towards target
+            # Also, we penalize moves with very little absolute space (less than my_length).
+            score = (space * 1000) + (voronoi_space * 200) - dist
+            
+            # If the space is less than our length, apply a heavy penalty
+            if space < my_length:
+                score -= 50000
             
             if tail_reachable:
                 score += 100000  # huge bonus for tail reachability!
             
             # Slight bonus for avoiding head-to-head squares even in fallback scenarios
             if np in dangerous_squares:
-                score -= 500
+                score -= 10000
                 
             if score > best_score:
                 best_score = score
