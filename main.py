@@ -196,9 +196,18 @@ def move(game_state):
             score = 0.0
 
             area = _flood_fill_size(nxt, blocked, width, height, cap)
-            # Heavily penalize getting trapped in a space smaller than our body.
+            # Heavily penalize getting trapped in a space smaller than our body
+            # (would starve/box us in for certain).
             if area < my_length:
-                score -= (my_length - area) * 50
+                score -= (my_length - area) * 100
+            # Softer penalty for staying below a 1.5x buffer -- avoids
+            # shaving margin so tight that a self-coil a move or two later
+            # (which 1-ply flood fill can't see) becomes fatal. This showed
+            # up in local testing as long, healthy (high length, high
+            # health) games where the bot still died by curling into its
+            # own body with no escape once area caught up to length.
+            elif area < my_length * 1.5:
+                score -= (my_length * 1.5 - area) * 15
             score += area * 5
 
             if nxt in risky_cells:

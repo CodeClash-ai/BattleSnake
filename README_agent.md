@@ -520,3 +520,79 @@ future improvement" list earlier in this file (minimax lookahead, hazard
 support, weight tuning) -- use `git show
 origin/human/<Org>/<repo>:main.py` to pull whoever the new opponent is and
 re-run the local benchmark recipe before changing `main.py`.
+
+## Round 1 (this session, real opponent = csauve__bookworm)
+
+`/logs/rounds/0/results.json` shows opponent `csauve__bookworm` (a Rust
+port doing best-first pruned tree search + minimax over opponent moves +
+flood-fill/food/head-to-head heuristic scoring, ~0.3s budget/move -- see
+`git show origin/human/csauve/bookworm:main.py` for the full ported code
+and its own docstring). Real scored result: clean sweep, sonnet-5 38 vs
+bookworm 0.
+
+### Local benchmark this round
+
+Extracted bookworm's code to `/tmp/opp/main.py` (recipe: `git show
+origin/human/csauve/bookworm:main.py > /tmp/opp/main.py && cp server.py
+/tmp/opp/server.py`) and ran several real local games via the
+`battlesnake` CLI (see recipe elsewhere in this file -- `setsid nohup env
+PORT=... python3 main.py &` to survive across tool calls). Games against
+this opponent commonly run 90-160+ turns (much longer than earlier
+opponents) since bookworm actually avoids obvious death. Out of games that
+completed within the local test window: 1 win, 1 loss, plus 2 that didn't
+finish before a 60s local timeout (inconclusive, not losses -- just slow).
+
+**Found and partially fixed a real bug via one of the losses:** dumped a
+full game to JSON (`-o /tmp/game5.json`) and inspected the final turns.
+Our snake reached **length 18 vs opponent's length 5, health 93+**, i.e.
+was winning by every simple metric, then died at turn ~92 anyway --
+diagnosis: it curled into its own body (a "self-coil" trap) that a 1-ply
+flood-fill from the immediate next cell can't see coming until it's
+already too late (area only drops below `my_length` once the coil is
+basically sealed, by which point every candidate move is already doomed).
+This is the "look-ahead / minimax" gap earlier rounds' notes predicted
+would eventually matter once we faced a long, grindy game against a
+non-trivial opponent instead of one that dies in <10 turns.
+
+**Change made:** added a softer secondary penalty gradient in `main.py`'s
+move-scoring loop -- previously we only penalized `area < my_length`
+(hard trap); now we *also* softly penalize `my_length <= area <
+my_length * 1.5` (tight-but-technically-safe margin), on top of raising
+the hard-trap penalty multiplier from 50 to 100. The intent is to bias the
+bot toward moves that keep a comfortable space buffer above its own body
+length rather than shaving it exactly to the limit, which should reduce
+(not eliminate -- this is still 1-ply, not real lookahead) how often we
+walk into a coil that only becomes visibly fatal 1-2 moves later than our
+horizon. This is a small, targeted, low-risk tweak (same overall
+structure, no new failure modes), verified via the synthetic
+`import main; main.move(state)` smoke test (see recipe further up this
+file) and a `main.move({})` malformed-input check -- both still return
+valid moves with no exceptions.
+
+**Not done this round (ran out of step budget):** a real 2-ply lookahead
+(simulate our candidate move, then re-run flood-fill/safety check assuming
+we then take our own best follow-up move, and use that as a tie-break or
+harder gate) would more directly fix the self-coil failure mode than the
+soft-margin heuristic above -- this is the top recommended next step if
+another long/close game against bookworm (or a similarly non-trivial
+opponent) shows up again. The `/tmp/game5.json` dump recipe (via
+`battlesnake play ... -o /tmp/gameN.json`) is a good way to find more
+concrete losing scenarios like this one to test against.
+
+### Recipe reminder (condensed, see earlier rounds' notes for full detail)
+
+```bash
+git show origin/human/csauve/bookworm:main.py > /tmp/opp/main.py
+cp server.py /tmp/opp/server.py
+(setsid nohup env PORT=8000 python3 /workspace/main.py > /tmp/new.log 2>&1 </dev/null &)
+(setsid nohup env PORT=8001 python3 /tmp/opp/main.py > /tmp/opp.log 2>&1 </dev/null &)
+cd /workspace/game
+setsid nohup timeout 90 ./battlesnake play -W 11 -H 11 \
+  --name new --url http://localhost:8000 --name opp --url http://localhost:8001 \
+  -g standard -m standard -o /tmp/gameN.json > /tmp/gameN.log 2>&1 </dev/null &
+disown
+# wait, then: tail -3 /tmp/gameN.log ; inspect /tmp/gameN.json turn-by-turn with a small python script
+```
+
+Kill test servers by PID (`ps aux | grep main.py`), not `pkill -f` (see
+earlier gotcha notes about it matching your own shell's command line).
