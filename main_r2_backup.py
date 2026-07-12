@@ -148,24 +148,12 @@ def _decide(game_state):
         candidates.append((mv, nxt, h2h_loss, h2h_win))
 
     if not candidates:
-        # No non-colliding legal move; pick the least-bad in-bounds move.
-        # Rank: prefer cells not hit by an equal/longer enemy head, then more
-        # flood-fill space (a vacating tail we may survive on), then off-wall.
-        best_fb = None
-        best_fb_score = None
+        # No non-colliding legal move; try in-bounds only.
         for mv, (dx, dy) in DIRS.items():
             nxt = (head[0] + dx, head[1] + dy)
-            if not _in_bounds(nxt, w, h):
-                continue
-            sc = 0.0
-            if enemy_next.get(nxt, 0) >= my_len:
-                sc -= 100.0  # likely head-to-head loss
-            # Space if we treat all bodies as blocked (conservative).
-            sc += _flood_fill(nxt, occupied | {nxt}, w, h, limit=w * h) * 5.0
-            if best_fb_score is None or sc > best_fb_score:
-                best_fb_score = sc
-                best_fb = mv
-        return {"move": best_fb or "up"}
+            if _in_bounds(nxt, w, h):
+                return {"move": mv}
+        return {"move": "up"}
 
     # Prefer moves without head-to-head loss if any exist.
     safe = [c for c in candidates if not c[2]]

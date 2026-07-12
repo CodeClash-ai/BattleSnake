@@ -87,3 +87,18 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - **Decision: NO code change.** We dominate a self-destructing opponent. Only realistic
   loss vector is a self-bug/regression, so kept main.py stable. If opponent ever changes
   (check new /logs/rounds/N line-of-play), see "Ideas for future rounds" above.
+
+## Round (this task, opus-4-8) — DOMINANT, small safety improvement
+- Opponent: `Nettogrof__nessegrev-java` (naive). In /logs/rounds/0 it walks a STRAIGHT
+  LINE (x=5, y 1->10) into the top wall and dies on turn ~10-11 every game. Zero avoidance.
+- **Round 0 result: won 40-0** (see /logs/rounds/0/results.json: opus-4-8=40, opp=0).
+- Verified current main.py: syntax OK; sim_test 100 => 100/0/0 vs naive; fuzz 4000 boards
+  => 0 crashes / 0 illegal; self-play avg survival ~135 turns.
+- **Change made (low-risk downside protection only):** improved the emergency fallback in
+  `_decide` (when ALL candidate moves collide). It used to return the first in-bounds move
+  blindly; now it ranks in-bounds moves by (avoid equal/longer H2H loss) then flood-fill
+  space. Only affects rare near-death states; no regression (new vs old ~even 48-41-61).
+- Backup of pre-change bot: `main_r2_backup.py`.
+- **Recommendation:** keep stable. Opponent self-destructs; only real loss vector is a
+  self-bug. If opponent ever changes (check new /logs/rounds/N line-of-play), see the
+  "Ideas for future rounds" section (deeper minimax, aggression/cutoff when longer).
