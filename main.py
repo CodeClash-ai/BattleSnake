@@ -65,13 +65,22 @@ def _in_bounds(p, width, height):
 
 
 def _build_blocked(snakes):
-    """All body segments except each snake's tail cell."""
+    """All body segments except each snake's tail cell (the tail vacates
+    next turn as long as that snake doesn't eat this turn).
+
+    Special case: if a snake just ate (detectable statelessly because its
+    last two body segments occupy the same cell -- the classic "duplicate
+    tail" produced by growth), then even after this move the vacated
+    tail's cell is still covered by the new tail (the former second-to-last
+    segment, which shares that same coordinate). So in that case we must
+    NOT exclude the tail cell -- it stays blocked."""
     blocked = set()
     for s in snakes:
         body = s["body"]
         n = len(body)
+        just_ate = n >= 2 and body[-1]["x"] == body[-2]["x"] and body[-1]["y"] == body[-2]["y"]
         for i, seg in enumerate(body):
-            if i == n - 1:
+            if i == n - 1 and not just_ate:
                 continue  # tail - assume it vacates next turn
             blocked.add((seg["x"], seg["y"]))
     return blocked
@@ -146,17 +155,20 @@ def move(game_state):
         blocked = _build_blocked(snakes)
 
         # Cells an equal-or-longer opponent could move into this turn.
+        # Cells only a strictly-shorter opponent could reach (a winnable
+        # head-to-head for us) are tracked separately for a small
+        # aggression bonus.
         risky_cells = set()
+        winnable_cells = set()
         for s in snakes:
             if s["id"] == my_id:
                 continue
-            if s["length"] < my_length:
-                continue  # we'd win a head-to-head there; not risky
             ohx, ohy = s["head"]["x"], s["head"]["y"]
+            target_set = risky_cells if s["length"] >= my_length else winnable_cells
             for dx, dy in DIRS.values():
                 np_ = (ohx + dx, ohy + dy)
                 if _in_bounds(np_, width, height):
-                    risky_cells.add(np_)
+                    target_set.add(np_)
 
         candidates = []
         for name, (dx, dy) in DIRS.items():
@@ -203,6 +215,13 @@ def move(game_state):
             x, y = nxt
             edge_dist = min(x, width - 1 - x, y, height - 1 - y)
             score += edge_dist * 0.5
+
+            # Small aggression bonus: stepping toward a cell only a
+            # strictly-shorter opponent could also reach this turn is a
+            # winnable head-to-head for us (kills them), so nudge toward
+            # it when it doesn't otherwise hurt our safety/space score.
+            if nxt in winnable_cells:
+                score += 15
 
             if score > best_score:
                 best_score = score

@@ -117,3 +117,95 @@ wall/self collisions vs. long grindy games).
    avoidance into the safety/scoring pass.
 5. Tune the scoring weights (flood-fill weight vs. food-distance weight vs.
    edge bonus) — currently hand-picked, not tuned via self-play tournament.
+
+## Round 2 update
+
+Round 1 result: **250-0 total win** (see `/logs/rounds/1/results.json`).
+The Kotlin opponent's naive strategy dies almost immediately (avg ~3.9
+turns/sim, see `python3 analyze_logs.py /logs/rounds/1`) by crashing into
+itself/walls, since it still has zero collision avoidance. Our heuristic
+survival bot from round 1 never lost a single simulation.
+
+### What I changed this round (round 2)
+
+Given the dominant win rate, I made small, low-risk correctness/quality
+improvements rather than a rewrite, to avoid regressing a 100%-win bot:
+
+1. **Fixed tail-vacate approximation for snakes that just ate.** Previously
+   `_build_blocked` always assumed every snake's tail cell frees up next
+   turn. This is wrong the turn after a snake eats: the body array has a
+   duplicated last segment (two trailing segments at the same coordinate,
+   the standard Battlesnake growth representation), and that cell will
+   *still* be occupied by the new tail after the coming move. This is now
+   detected statelessly (`body[-1] == body[-2]`) and such tails are kept
+   in `blocked`. This mostly matters in longer/self-play-style games; it
+   should never fire against the current 3-4-turn-lived opponent, but
+   makes the bot strictly more correct for any tougher opponent in future
+   rounds.
+2. **Added mild opportunistic aggression.** Previously we only avoided
+   `risky_cells` (equal-or-longer opponent could reach). Now we also
+   compute `winnable_cells` (cells only a strictly-shorter opponent's head
+   could reach this turn) and give a small score bonus (+15) for moving
+   into one -- since a head-to-head there kills the shorter snake and we
+   survive. This only nudges among already-safe/high-scoring candidates
+   (space/food scoring still dominates), so it shouldn't cause reckless
+   plays.
+
+### Testing done this round
+
+- Verified `main.py` parses and `move()` runs correctly on a synthetic
+  `game_state` (see quick inline test in shell history / just re-run
+  similar snippet if needed).
+- Ran the new bot against an unmodified copy of the pre-round-2 `main.py`
+  (`/tmp/oldbot`, not persisted -- recreate from git history/round-1 logic
+  if you want to re-run this) via the local `battlesnake` CLI engine.
+  ~50 games total, roughly even split (expected: both are very similar
+  heuristics playing each other, not a proxy for opponent strength). Games
+  ran 26-285 turns with no crashes, no exceptions in server logs
+  (`grep -i "error\|traceback\|exception"` clean). This mainly confirms
+  no regression/crash was introduced, not a strength delta -- the real
+  opponent is much weaker (no collision avoidance at all) so round-1's
+  100% win rate should be untouched or improved by these changes.
+
+### IMPORTANT environment gotcha for whoever tests locally next
+
+Each bash tool call in this harness runs in a **fresh subshell** -- plain
+`cmd &` background jobs die/become unreachable once the tool call
+returns. To start a long-lived local Flask test server that survives into
+your *next* tool call, use:
+
+```bash
+setsid nohup env PORT=8000 python3 main.py > /tmp/new.log 2>&1 < /dev/null &
+disown
+```
+
+Also: avoid `pkill -f main.py` (or any pattern) inside a command whose own
+command-line text contains that same string -- `pkill -f` matches against
+the full command line of *all* processes including bash invocations
+built from your own heredoc/inline script, so it can kill itself/sibling
+processes unexpectedly. Prefer killing by PID (`ps aux | grep main.py`)
+or a more specific pattern.
+
+### Ideas for future improvement (carried over / updated)
+
+1. **Look-ahead / simple minimax (2-3 ply)** -- still not done. Given the
+   current opponent is trivial, this is low priority *unless* future
+   rounds introduce a stronger opponent.
+2. ~~Tail-vacate-after-eating fix~~ -- **done this round**.
+3. **Tune aggression further**: right now it's a flat +15 bonus gated
+   only by reachability, not by whether the resulting head-to-head is
+   actually favorable board-position-wise (e.g. could still walk us into
+   a smaller pocket -- though the space/flood-fill penalty should catch
+   the worst cases already since it's just an additive bonus, not an
+   override).
+4. **Hazard support**: `board["hazards"]` still unused.
+5. **Formal weight tuning**: flood-fill weight / food-distance weight /
+   edge bonus / aggression bonus are all hand-picked, not swept via
+   self-play tournament. Would be a good next step if a stronger opponent
+   shows up and 1-ply heuristics stop being sufficient.
+
+### Files
+
+- `main.py` -- the bot.
+- `analyze_logs.py` -- point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats.
