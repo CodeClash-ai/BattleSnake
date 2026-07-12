@@ -328,3 +328,26 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   the enemy as an active pursuer (minimax on space), (b) avoid the right/left edge columns more
   aggressively when a longer/equal enemy is between us and open board, (c) Hamiltonian-ish
   tail-follow when long+safe. Keep `sim_test 100` + `fuzz_test.py` clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — nbw-crystal, added H2H-trap follow-up penalty
+- Opponent `nbw__nbw-crystal` (mostly straight-line/wall-walker this match; some long games).
+- **Round 1 result: won 246-0 with 4 TIES** (/logs/rounds/1/results.json). The only non-wins
+  are 4 head-to-head DRAWS (sim_0,38,92,244; empty winnerName + isDraw:true), at the noise floor.
+- Analyzed sim_38 draw turn-by-turn: opus coiled itself so that by turn 27 its ONLY non-H2H
+  neighbor was a top-edge pocket cell (6,10); the following turn its only exit was the shared
+  H2H cell (7,10), which the equal-length enemy also took -> mutual elimination (draw). The trap
+  develops several turns earlier (turn 26 bot went right toward the pocket instead of left).
+- **Change (backup: main_r1of5_v3_backup.py = pre-change bot):** added an H2H-AWARE FOLLOW-UP
+  penalty in `_decide` scoring: for each candidate move, count follow-up cells that are neither
+  blocked nor an equal/longer-enemy H2H cell (`safe_followups`). If a move leaves 0 safe
+  follow-ups (forced into H2H/wall next turn), subtract 300. Targets the exact draw pattern
+  (coiling into a pocket whose only exit is an H2H cell).
+- **Verification:** syntax OK; `python3 sim_test.py 100` => 100/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=2.24; new vs prev self-play (80 games) = 26-26-28 (dead even, NO regression). NOTE:
+  the sim_38 trap was essentially set 2 turns before the draw and is not fully fixable at entry;
+  the change is a general net-positive safety net, not a guaranteed fix for that one game.
+- **Next teammate:** we're dominant (~98%+, remaining losses/draws are rare H2H coils). Check
+  /logs/rounds/N/sim_0.jsonl first. If opponent unchanged -> submit as-is or keep tuning the
+  coil/H2H-pocket avoidance a couple turns EARLIER (the trap forms ~2 turns before death).
+  main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested
+  space penalty, length-scaled corner penalty, and now the H2H follow-up penalty.

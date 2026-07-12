@@ -304,25 +304,6 @@ def _decide(game_state):
             if ns > best_next_space:
                 best_next_space = ns
 
-        # H2H-aware follow-up safety: count follow-up cells from nxt that are
-        # neither blocked nor an equal/longer-enemy head-to-head cell. If a move
-        # leaves us with NO such follow-up, next turn we are forced into an H2H
-        # loss or a wall (the sim_38 tie pattern: coiling into a pocket whose
-        # only exit is an H2H cell). Penalize proportionally.
-        safe_followups = 0
-        for nb in _neighbors(nxt):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in new_blocked:
-                continue
-            if enemy_next.get(nb, 0) >= my_len:
-                continue  # forced H2H loss on the follow-up
-            safe_followups += 1
-        if safe_followups == 0:
-            score_h2h_trap = -300.0
-        else:
-            score_h2h_trap = 0.0
-
         score = 0.0
         # Space is king: staying alive requires room.
         score += space * 10.0
@@ -336,7 +317,6 @@ def _decide(game_state):
         score += best_next_space * 4.0
         if best_next_space < my_len:
             score -= (my_len - best_next_space) * 20.0
-        score += score_h2h_trap
 
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
         if escapes == 0:
