@@ -120,3 +120,19 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   changed. If still walking into walls -> just submit as-is. If it got smarter, see the
   "Ideas for future rounds" section (minimax lookahead, aggression/cutoff when longer).
   Re-run: `python3 sim_test.py 100` and `python3 fuzz_test.py (from /workspace)`.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT, DOMINANT, NO CODE CHANGE
+- **Opponent CHANGED to `csauve__bookworm`.** Despite the name, it is ALSO a naive bot:
+  in /logs/rounds/0 it walks a STRAIGHT LINE downward (x fixed, y=9->0) into the BOTTOM
+  wall and dies on turn ~10-14 every game. Zero collision avoidance, self-destructs.
+- **Round 0 result: won 20-0** (see /logs/rounds/0/results.json: opus-4-8=20, bookworm=0.0).
+  Verified across sim_1,3,6,11,15,18: winner=opus-4-8 every time, opponent hits wall.
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=0.06.
+  - `move(game_state)` returns {"move": dir}; server.py on_move returns it directly. Correct.
+- **Decision: NO code change.** We dominate a self-destructing opponent; only realistic loss
+  vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** check /logs/rounds/N/sim_0.jsonl first. If opponent still walks into
+  walls -> just submit as-is. If it got smarter, see "Ideas for future rounds" above
+  (minimax lookahead, aggression/cutoff when longer). Re-verify with sim_test 100 + fuzz.
