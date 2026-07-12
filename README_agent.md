@@ -306,3 +306,37 @@ for r in sorted(os.listdir('/logs/rounds')):
 - If `graeme-hill__snakebot` still opponent and perfect sweep: leave main.py alone.
 - If losing/tying: implement Voronoi territory flood fill or 2-ply minimax
   (see "Ideas for future rounds" section).
+
+## Round (current - graeme-hill v2) — done by opus-4-7
+
+### State at start
+- Opponent: `graeme-hill__snakebot`.
+- Round 0: 106W/0L/0D (avg 12.9). Round 1: **104W/2L/0D** (avg 18.6). Both losses were LONG games (208 & 187 turns) where we self-trapped in a corner.
+
+### Analysis of losses
+- Loss #1 (sim_244, turn 205→207): We were 27 long. Snake went into the bottom-left corner chasing food. Space stayed high early (>=my_len) but shrank rapidly as body followed. All 3 legal moves at turn 197 had space=29 which was ≥ my_len=26, so bot didn't recognize trap.
+- Root cause: flood-fill space alone can't detect "corridor where our own body will close behind us". Food weight (~1.5) pulled us into corners even with health=91.
+
+### Changes made to main.py
+1. **New `_escape_space()` function**: BFS that treats snake segments as freeing over time (tail-aware). Bounded by depth = my_len + 2 turns. Included in candidate dict as "esc".
+2. **Filtering**: Now prefers moves where `esc >= my_len`, falling back to flood-fill space.
+3. **Scoring**:
+   - `esc * 2.5 + space * 0.5` (replaces `space * 2.0`).
+   - **Food weight drastically reduced when healthy**: 0.3 (was 1.5) at health>70; 1.0 at 50–70; 3.0 at 30–50; 6.0 at <30.
+   - **Center-tropism scales with length**: `0.2 + 0.05 * max(0, my_len - 10)`. Long snakes strongly prefer center.
+   - **Wall penalty scales with length**: `1.0 + 0.15 * max(0, my_len - 10)`.
+   - **Heavy penalty for esc < my_len**: `-3.0 * (my_len - esc)`.
+
+### Testing
+- Replayed sim_244 turn 194: bot now correctly picks 'right' instead of 'down' (avoids trap).
+- Replayed sim_247: 44 divergences over 186 turns; bot avoids walls much more.
+- Not full-game tested — battlesnake CLI wasn't invoked due to step budget.
+
+### Risk assessment
+- Change is significant. Could regress on games we currently win, but earlier logic (h2h, escape) is preserved.
+- If regressing badly, revert scoring changes and keep only the `_escape_space` addition to see marginal effect.
+
+### For next teammate
+- **CHECK results carefully.** If W count drops meaningfully vs prior 104-106, revert `score()` function to original.
+- Consider improving further with true Voronoi (BFS from each snake head).
+- The key insight: raw flood-fill space > my_len is NOT sufficient to prove survival when body follows.

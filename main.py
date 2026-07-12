@@ -94,6 +94,62 @@ def _flood_fill(start, blocked, w, h, limit=None):
     return count
 
 
+def _escape_space(start, snakes, my_id, w, h, my_len, growing=False, limit=None):
+    """
+    BFS from `start` where snake segments become passable over time as tails
+    recede. Returns the number of distinct cells we can reach WITHIN my_len
+    turns from now. If this is >= my_len, we're likely safe from self-trap.
+    """
+    if not _in_bounds(start, w, h):
+        return 0
+    # Build cell -> earliest time it becomes free (0 = already free).
+    free_at = {}
+    for s in snakes:
+        body = s["body"]
+        tail_stays = len(body) >= 2 and body[-1] == body[-2]
+        L = len(body)
+        for i, seg in enumerate(body):
+            p = (seg["x"], seg["y"])
+            t_free = (L - i)
+            if tail_stays:
+                t_free += 1
+            if s["id"] == my_id and growing:
+                t_free += 1
+            if p in free_at:
+                free_at[p] = min(free_at[p], t_free)
+            else:
+                free_at[p] = t_free
+
+    # Bound the search depth so long-lived snakes' tails don't inflate the count.
+    max_time = my_len + 2
+    start_time = 1
+    if free_at.get(start, 0) > start_time:
+        return 0
+    seen = {start: start_time}
+    q = deque([(start, start_time)])
+    count = 0
+    while q:
+        (x, y), t = q.popleft()
+        count += 1
+        if limit is not None and count >= limit:
+            return count
+        if t >= max_time:
+            continue
+        nt = t + 1
+        for dx, dy in DIRS.values():
+            n = (x + dx, y + dy)
+            if n in seen:
+                continue
+            if not _in_bounds(n, w, h):
+                continue
+            if free_at.get(n, 0) > nt:
+                continue
+            seen[n] = nt
+            q.append((n, nt))
+    return count
+
+
+
 def _bfs_distance(start, targets, blocked, w, h, max_dist=None):
     """Shortest path length from start to any target avoiding blocked cells."""
     if not targets:
@@ -196,6 +252,11 @@ def _decide(game_state):
         # might step there). Not strictly blocked but reduce score.
 
         space = _flood_fill(np, blocked_for_ff, w, h, limit=my_len * 4 + 20)
+        # Better metric: escape space simulating tail retreat.
+        # Detect if we just ate (health==100 and body last two equal).
+        my_body = you["body"]
+        my_growing = len(my_body) >= 2 and my_body[-1] == my_body[-2]
+        esc = _escape_space(np, snakes, my_id, w, h, my_len, growing=my_growing, limit=my_len * 4 + 20)
 
         # Distance to nearest food from np
         food_dist = None
@@ -209,6 +270,7 @@ def _decide(game_state):
             "h2h_loss": h2h_loss,
             "h2h_kill": h2h_kill,
             "space": space,
+            "esc": esc,
             "food_dist": food_dist,
         })
 
@@ -222,57 +284,83 @@ def _decide(game_state):
 
     # Filter out obvious death (h2h loss) if we have alternatives
     safe = [c for c in candidates if not c["h2h_loss"]]
-    # Filter out moves with tiny space (self-trap) if alternatives with more
-    # space exist.
+    # Prefer moves where our escape-space (tail-aware) >= my_len (definitely survivable).
+    # Fall back to raw flood-fill space >= my_len, then max space.
     if safe:
-        max_space = max(c["space"] for c in safe)
-        # Prefer moves where space >= our length (won't trap)
-        big_enough = [c for c in safe if c["space"] >= my_len]
-        pool = big_enough if big_enough else [c for c in safe if c["space"] == max_space]
+        big_esc = [c for c in safe if c["esc"] >= my_len]
+        if big_esc:
+            pool = big_esc
+        else:
+            big_enough = [c for c in safe if c["space"] >= my_len]
+            if big_enough:
+                # pick the ones with largest esc among these
+                max_esc = max(c["esc"] for c in big_enough)
+                pool = [c for c in big_enough if c["esc"] >= max_esc * 0.9]
+            else:
+                # We're getting trapped no matter what; pick the one with max esc
+                max_esc = max(c["esc"] for c in safe)
+                pool = [c for c in safe if c["esc"] == max_esc]
+                if max_esc == 0:
+                    # esc gives 0; try flood-fill
+                    max_space = max(c["space"] for c in safe)
+                    pool = [c for c in safe if c["space"] == max_space]
     else:
-        # All moves are h2h losses; pick the one with most space
-        max_space = max(c["space"] for c in candidates)
-        pool = [c for c in candidates if c["space"] == max_space]
+        # All moves are h2h losses; pick the one with most escape space
+        max_esc = max(c["esc"] for c in candidates)
+        pool = [c for c in candidates if c["esc"] == max_esc]
+        if max_esc == 0:
+            max_space = max(c["space"] for c in candidates)
+            pool = [c for c in candidates if c["space"] == max_space]
 
     # Score remaining candidates
     def score(c):
         s = 0.0
-        # Space is most important
-        s += c["space"] * 2.0
+        # Escape space (tail-aware) is the most important survival metric
+        s += c["esc"] * 2.5
+        # Raw flood-fill space as secondary
+        s += c["space"] * 0.5
         # Prefer moves that don't die
         if c["h2h_loss"]:
             s -= 1000
         # Head-to-head kill opportunity
         if c["h2h_kill"]:
             s += 30
-        # Food consideration - stronger when health low
+        # Food consideration - stronger when health low.
+        # When health is high AND we're long, chasing food into corners is risky.
         if c["food_dist"] is not None:
-            # want food dist small
-            # weight scales with hunger
-            weight = 1.5
-            if my_health < 40:
+            weight = 0.3  # default: very mild pull toward food
+            if my_health < 30:
                 weight = 6.0
-            elif my_health < 60:
+            elif my_health < 50:
                 weight = 3.0
-            # If we're the shortest, prefer to eat (grow)
+            elif my_health < 70:
+                weight = 1.0
+            # If we're shorter than an opponent, we need to grow to survive h2h.
             if opponents:
                 max_opp_len = max(o["length"] for o in opponents)
-                if my_len <= max_opp_len:
+                if my_len < max_opp_len:
                     weight += 1.5
+                elif my_len <= max_opp_len + 1:
+                    weight += 0.5
             s -= weight * c["food_dist"]
         else:
-            # No reachable food
             if my_health < 30:
-                s -= 20  # discourage moves with no food access when starving
-        # Center-tropism (mild)
+                s -= 20
+        # Center-tropism (stronger when we are long, to avoid corners self-trap)
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
         px, py = c["pos"]
-        s -= 0.2 * (abs(px - cx) + abs(py - cy))
-        # Wall adjacency penalty
+        center_weight = 0.2 + 0.05 * max(0, my_len - 10)
+        s -= center_weight * (abs(px - cx) + abs(py - cy))
+        # Wall/corner adjacency penalty scales with our length
+        wall_pen = 1.0 + 0.15 * max(0, my_len - 10)
         if px == 0 or px == w - 1:
-            s -= 1.0
+            s -= wall_pen
         if py == 0 or py == h - 1:
-            s -= 1.0
+            s -= wall_pen
+        # If esc is small relative to length, heavy penalty
+        if c["esc"] < my_len:
+            s -= (my_len - c["esc"]) * 3.0
+        # Wall / edge distance shrinkage penalty when we're close to walls AND long
         return s
 
     pool.sort(key=score, reverse=True)
