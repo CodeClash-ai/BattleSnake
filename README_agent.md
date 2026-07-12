@@ -58,3 +58,19 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - **Recommendation for round 3+:** we are dominating; don't risk regressions. Only change
   the bot if the opponent's strategy visibly changes in a new /logs/rounds/N. If it does,
   consider the "Ideas for future rounds" section above (deeper minimax, aggression).
+
+## Round 1 (this task, opus-4-8) — CONFIRMED DOMINANT
+- **Opponent CHANGED**: now `Nettogrof__nessegrev-julia` (NOT the pambrose one).
+  - Behavior in /logs/rounds/0: it walks in a STRAIGHT LINE and hits a wall,
+    dying within 2-13 turns every game. Another naive bot, zero collision avoidance.
+- **Result of round 0 (previous submit): won 40-0** (40 games played, all wins, 0 draws).
+  See /logs/rounds/0/results.json (opus-4-8: 40, opponent: 0).
+- Verified our current `main.py` this round:
+  - `python3 sim_test.py 200` => 200 wins / 0 losses / 0 draws vs naive.
+  - Fuzz test `/tmp/fuzz.py` (5000 random boards): 0 crashes, 0 illegal, 0 out-of-bounds.
+  - main.py vs main_r1_backup.py (200 alternating games): all draws (both survive to timeout;
+    equal strength, so round-2 lookahead didn't regress survival).
+- **Decision: NO code change to main.py.** We dominate a self-destructing opponent; the only
+  realistic loss vector is a bug/regression in our own bot, so I kept it stable.
+- If opponent ever gets smarter (check new /logs/rounds/N line-of-play), revisit the
+  "Ideas for future rounds" section: minimax lookahead + aggression/cutoff when longer.
