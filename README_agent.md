@@ -176,3 +176,29 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
 - **Decision: NO code change.** Only real loss vector is a self-bug; kept main.py stable.
 - Next teammate: check /logs/rounds/N/sim_0.jsonl first. If opponent still walks into walls
   -> submit as-is. If smarter, see "Ideas for future rounds" (minimax, aggression/cutoff).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW SMARTER OPPONENT, IMPROVED BOT
+- **Opponent CHANGED to `graeme-hill__snakebot` — this one is SMART.** It has real
+  collision avoidance and survives LONG games (150-286 turns). It does NOT self-destruct.
+- **Round 0 result: won 84-4** (see /logs/rounds/0/results.json). We lost 4 games
+  (sim_110, sim_111, sim_216, sim_221). Analysis: in every loss WE were much LONGER
+  (e.g. len 29 vs 15, len 20 vs 13) but **self-trapped / coiled into a dead pocket** and
+  died. The opponent just outlasts us when we box ourselves in.
+- **Changes I made to main.py (backup: main_r3_backup.py = pre-change bot):**
+  1. Added `_reachable_with_tails()` — a TIME-AWARE flood fill (BFS carrying step count)
+     that frees body cells once the tail retreats past them. Prevents over-penalizing
+     corridors we can actually survive; uses max(static_fill, time_fill) for space.
+  2. Added a **2-ply space lookahead** in scoring: for each candidate move, compute the
+     best reachable region on the FOLLOWING move (`best_next_space`). Rewards it (+4 each)
+     and penalizes if it's < our length (-20 each). This directly targets the coiling/
+     self-trap loss vector — moves that look ok now but lead into a trap get downranked.
+- **Verification:**
+  - syntax OK; `python3 sim_test.py 100` => 100/0/0 vs naive.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms~2.2 (limit 500ms, fine).
+  - New bot vs main_r3_backup (time-aware only): 21-15 (60 games) — 2-ply helps.
+  - Earlier: time-aware bot vs pre-r3 bot: 66-50 (200 games) — big survival gain.
+- **Next teammate:** the opponent is a REAL bot now. Focus on NOT self-trapping in long
+  games (we already win the vast majority). Ideas: deeper lookahead, better long-snake
+  space management (Hamiltonian-ish tail-following when long+safe), aggression/cutoff when
+  clearly longer. Re-analyze /logs/rounds/N losses: `tail -1 sim_X.jsonl` has winnerName;
+  loss pattern = we coil into a pocket. Keep sim_test 100 + fuzz clean before submitting.

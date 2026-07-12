@@ -78,52 +78,6 @@ def _flood_fill(start_cell, blocked, w, h, limit=None):
     return count
 
 
-def _reachable_with_tails(start_cell, static_blocked, snakes_bodies, w, h, limit=None):
-    """BFS where a body cell frees up once the tail has retreated past it.
-
-    static_blocked: cells that never free (e.g. permanent). We instead compute
-    per-cell free-time from snake bodies: body cell at index i (0=head) of a
-    snake of length L vacates after (L - i) steps (tail=index L-1 vacates at
-    step 1, unless the snake just grew). We do a BFS carrying the step count;
-    a cell is enterable at step t if it's empty OR its vacate_time <= t.
-    """
-    # Build vacate-time map: cell -> earliest step it becomes free.
-    vacate = {}
-    for body, grew in snakes_bodies:
-        L = len(body)
-        for i, cell in enumerate(body):
-            # steps until this cell is vacated by tail retreat
-            # tail (i=L-1) vacates after 1 step normally; if grew, +1 delay
-            t = (L - i) + (1 if grew else 0)
-            # keep the max requirement if overlap
-            if cell not in vacate or vacate[cell] > t:
-                vacate[cell] = t
-    from collections import deque
-    dq = deque()
-    dq.append((start_cell, 1))
-    seen = {start_cell}
-    count = 0
-    while dq:
-        cur, step = dq.popleft()
-        count += 1
-        if limit is not None and count >= limit:
-            return count
-        for nb in _neighbors(cur):
-            if nb in seen:
-                continue
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in static_blocked:
-                continue
-            vt = vacate.get(nb)
-            if vt is not None and vt > step + 1:
-                # still occupied when we'd arrive
-                continue
-            seen.add(nb)
-            dq.append((nb, step + 1))
-    return count
-
-
 def _future_safe_moves(cell, blocked, w, h):
     """Count in-bounds, non-blocked neighbors of `cell` (escape options)."""
     n = 0
@@ -157,7 +111,6 @@ def _decide(game_state):
     occupied = set()  # cells blocked next turn (bodies minus vacating tails)
     all_bodies = {}   # snake id -> list of cells
     enemy_heads = []  # (head_cell, length) for enemies
-    snakes_bodies = []  # (body_cells_list, grew_bool) for time-aware fill
 
     for sn in snakes:
         body = [(s["x"], s["y"]) for s in sn["body"]]
@@ -169,7 +122,6 @@ def _decide(game_state):
             if i == len(body) - 1 and not grew:
                 continue  # tail will move away
             occupied.add(cell)
-        snakes_bodies.append((body, grew))
         if sn["id"] != you["id"]:
             enemy_heads.append((body[0], sn["length"]))
 
@@ -237,40 +189,15 @@ def _decide(game_state):
         # Simulate our body after moving: add new head, drop tail (approx).
         new_blocked = set(occupied)
         new_blocked.add(nxt)
-        # Static flood fill (conservative) counts reachable free area now.
+        # Our own tail already handled in occupied; add head cell.
         space = _flood_fill(nxt, new_blocked, w, h, limit=total_free)
-        # Time-aware reachable area: accounts for tails retreating so we don't
-        # over-penalize following our own (or the enemy's) tail. Use the larger
-        # of the two so long snakes recognize corridors they can survive.
-        static_bl = {nxt}
-        space_t = _reachable_with_tails(nxt, static_bl, snakes_bodies, w, h,
-                                        limit=total_free)
-        space = max(space, space_t)
 
         # 1-ply lookahead: how many escape options remain after this move.
         escapes = _future_safe_moves(nxt, new_blocked, w, h)
 
-        # 2-ply space lookahead: after moving to nxt, find the best space we
-        # could reach on the FOLLOWING move. If every follow-up is cramped,
-        # this move is leading us into a trap even if `space` looks okay now.
-        best_next_space = 0
-        for nb in _neighbors(nxt):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in new_blocked:
-                continue
-            ns = _reachable_with_tails(nb, {nxt, nb}, snakes_bodies, w, h,
-                                       limit=total_free)
-            if ns > best_next_space:
-                best_next_space = ns
-
         score = 0.0
         # Space is king: staying alive requires room.
         score += space * 10.0
-        # Reward keeping a large follow-up region (trap avoidance, 2-ply).
-        score += best_next_space * 4.0
-        if best_next_space < my_len:
-            score -= (my_len - best_next_space) * 20.0
 
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
         if escapes == 0:
