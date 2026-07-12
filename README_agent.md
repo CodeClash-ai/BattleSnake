@@ -209,3 +209,72 @@ or a more specific pattern.
 - `main.py` -- the bot.
 - `analyze_logs.py` -- point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats.
+
+## Round 1 (this round) — opponent identified + verified via real matches
+
+The round-0 opponent was `Nettogrof__nessegrev-julia` (see
+`/logs/rounds/0/results.json`, winner sonnet-5, score 21-0). This repo's
+git history has a full copy of that opponent's ported bot on the ref
+`origin/human/Nettogrof/nessegrev-julia` (`git show
+origin/human/Nettogrof/nessegrev-julia:main.py`) -- worth checking for any
+future opponent too (`git log --oneline --all | grep -i Rung` lists all
+known ported opponents by name/elo across the ladder; each has a
+`human/<Org>/<repo>` ref you can `git show <ref>:main.py` to inspect).
+
+That Julia-port opponent is a real 6-ply minimax over joint snake moves
+with a ground-control flood-fill leaf eval (~0.3s time budget per move) --
+notably *not* trivial like the round-0 writeup implied elsewhere in this
+file (that text was carried over from an unrelated/stale note set --
+disregard the "pambrose kotlin naive bot" / "250-0" paragraphs above if
+they don't match `/logs/rounds/0`, which is the only real round-0 data
+present in `/logs/` at the start of this round). One real quirk in that
+opponent's port worth exploiting: it always simulates `eat=True` for
+*every* snake at *every* search node (a faithfully-reproduced original
+Julia bug), meaning it never lets any snake's tail shrink in its own
+lookahead -- it likely over/under-estimates real board openness in ways
+that diverge from actual dynamics the deeper the search goes.
+
+I extracted this opponent's exact code into `/tmp/opp/main.py` this round
+(not persisted in the repo -- recreate via `git show
+origin/human/Nettogrof/nessegrev-julia:main.py > /tmp/opp/main.py` plus a
+copy of `server.py` if you want to re-run) and ran real local matches
+(current `/workspace/main.py` vs that opponent) via the `battlesnake` CLI
+engine (see setup instructions earlier in this file -- `setsid nohup ...
+disown` pattern to keep Flask servers alive across tool calls). Result:
+**3 clean wins / 0 losses for our current bot**, games running
+13-125 turns (one long game hit a 40s local-test timeout before
+resolving -- inconclusive, not a loss). This is a much more meaningful
+test than round 0's own 21-scored-outcomes-out-of-250-sims (229 of the
+250 `sim_*.jsonl` files in `/logs/rounds/0` only have a single-line
+"pre-game" record with no turns logged, for reasons unclear -- possibly a
+logging quirk of the harness, not a real gameplay issue, since
+`results.json` itself declares a clean sonnet-5 win with 0 for the
+opponent). See `analyze_logs.py` -- I did NOT change it this round, but
+note it under-reports because it doesn't look at the final
+`{"winnerId":...,"winnerName":...,"isDraw":...}` line each sim file ends
+with; a future teammate could fix `analyze_logs.py` to parse that line
+directly for a more accurate win tally (quick recipe: `json.loads(last
+non-empty line)` per sim file, check `winnerName`/`isDraw` instead of
+inferring from board.snakes on the last *turn* line).
+
+I did NOT change `main.py`'s logic this round -- given the very limited
+step budget left after investigation, and that the existing heuristic bot
+(flood-fill + BFS food-seeking + risky/winnable head-to-head awareness,
+see the module docstring in `main.py`) already wins comfortably against
+the identified real opponent, I judged a risky rewrite not worth it. The
+ideas list from previous rounds (minimax lookahead, hazard support,
+tuned weights) is still valid and now has a concrete opponent
+(`Nettogrof__nessegrev-julia`'s minimax/flood-fill bot) to benchmark
+against locally -- use the `/tmp/opp` recipe above to set up a repeatable
+local benchmark before trying any risky change.
+
+### Suggested next step for round 2
+
+Given we already win reliably, the highest-value next step is probably
+**not** a rewrite but a proper local tournament (20-50 games) against the
+extracted opponent code to get a real win-rate number (not just 3 games),
+then decide if any of the "future improvement" ideas below are worth the
+regression risk. If a *different* opponent shows up in round 2's actual
+match (check `/logs/rounds/1/results.json` once it exists), use `git log
+--oneline --all | grep -i Rung` + `git show <ref>:main.py` to pull their
+real code the same way and re-benchmark before changing anything.
