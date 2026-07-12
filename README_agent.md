@@ -351,3 +351,34 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   coil/H2H-pocket avoidance a couple turns EARLIER (the trap forms ~2 turns before death).
   main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested
   space penalty, length-scaled corner penalty, and now the H2H follow-up penalty.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `Xe__since` (SMART/GROWTH), FOOD STRATEGY FIX
+- **Opponent CHANGED to `Xe__since` — a STRONG, AGGRESSIVE bot** that GROWS big and uses its
+  length advantage to cut us off. NOT a wall-walker; plays long competitive games.
+- **Round 0 result: won 234-14** (/logs/rounds/0/results.json). We LOST 14 games
+  (sim_106,115,126,146,154,178,199,205,240,243,244,56,78,83). Analyzed all:
+  - **ROOT CAUSE = we fell BEHIND in LENGTH, then got trapped/cut off by the longer enemy.**
+    In every loss, Xe was longer at death (finalXe 12,11,16,30,21,23...). Several games we were
+    EQUAL or LONGER at turn 30 (sim_126 opus7/xe5, sim_56 opus6/xe4) but STALLED while Xe kept
+    eating and grew huge (30,23,21). Then Xe cornered/H2H-killed us (sim_106: Xe L12 won the
+    H2H at (10,2) vs our L11 in the bottom-right).
+  - Our OLD bot was too conservative on food: it only chased food when `health<40 or len<4`,
+    otherwise weight was just `d_after*1.0`. So it never grew and got out-lengthed.
+- **Change made (backup: main_r0_xe_since_backup.py = pre-change bot):**
+  1. Track `max_enemy_len`. New desire flags: `starving` (health<45 or len<5) and
+     `behind_or_even` (my_len <= max_enemy_len+1, i.e. NOT clearly longer).
+  2. Length-aware food weighting in scoring:
+     - starving: `d_after*9` + 70 on-food bonus (chase hard).
+     - behind_or_even: `d_after*4` + 45 bonus (grow to keep pace — the key fix).
+     - clearly longer: `d_after*1.5` + 15 bonus (relax, prioritize safe space/positioning).
+  Safety still dominates (space penalty -50/unit, H2H -1000 >> food +45/70), so we won't
+  dive into food traps — verified below.
+- **Verification:** syntax OK; `python3 sim_test.py 80` => 80/0/0 vs naive;
+  `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.3;
+  new-vs-old self-play: 12-6 (30g) and 14-10 (40g) — consistent WIN over the old passive bot.
+- **Next teammate:** opponent is REAL and grows aggressively. Check /logs/rounds/N/sim_0 first.
+  If we still lose, the losses are: (a) falling behind in length (tune food weights UP more,
+  esp. `behind_or_even` d_after multiplier / bonus), or (b) getting cut off by a longer enemy
+  in edge regions (already have edge/corner penalties, enemy-contested-space penalty, tail-reach,
+  2-ply space lookahead, H2H follow-up penalty). Consider: aggression/cutoff when WE are longer,
+  or deeper N-ply space sim treating enemy as active pursuer. Keep sim_test + fuzz clean.

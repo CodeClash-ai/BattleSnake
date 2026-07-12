@@ -253,20 +253,8 @@ def _decide(game_state):
     safe = [c for c in candidates if not c[2]]
     pool = safe if safe else candidates
 
-    # Track the longest enemy so we can stay competitive on length. A key loss
-    # vector vs a smart opponent is falling BEHIND in length: once the enemy is
-    # significantly longer it can cut us off / win head-to-heads. So we eat to
-    # keep pace, not just when starving.
-    max_enemy_len = 0
-    for _eh, _el in enemy_heads:
-        if _el > max_enemy_len:
-            max_enemy_len = _el
-
-    # Health-driven food desire (survival) OR competitive-growth desire: eat
-    # unless we are already comfortably longer than every enemy.
-    starving = my_health < 45 or my_len < 5
-    behind_or_even = my_len <= max_enemy_len + 1  # not clearly longer
-    want_food = starving or behind_or_even
+    # Health-driven food desire.
+    want_food = my_health < 40 or my_len < 4
     nearest_food_dist = None
     nearest_food = None
     for f in food:
@@ -388,27 +376,15 @@ def _decide(game_state):
         if h2h_loss:
             score -= 1000.0
 
-        # Food incentive. We weight food more heavily than before because the
-        # main loss vector vs a smart opponent is falling behind in LENGTH and
-        # then getting cut off. If we're starving, chase hard. If we're just
-        # not clearly longer than the enemy, still pull toward food to grow.
-        # Only when we're comfortably longer do we relax food pursuit.
+        # Food incentive.
         if nearest_food is not None:
             d_after = _manhattan(nxt, nearest_food)
-            if starving:
-                score -= d_after * 9.0
-                if nxt == nearest_food:
-                    score += 70.0
-            elif behind_or_even:
-                score -= d_after * 4.0
-                if nxt == nearest_food:
-                    score += 45.0
+            if want_food:
+                score -= d_after * 8.0
             else:
-                # We're clearly longer; only mild pull so we don't ignore free
-                # nearby food but prioritize safe positioning/space.
-                score -= d_after * 1.5
-                if nxt == nearest_food:
-                    score += 15.0
+                score -= d_after * 1.0
+            if nxt == nearest_food and want_food:
+                score += 60.0
 
         # Prefer to stay away from walls/corners (more mobility, avoids the
         # canonical self-trap: hugging a wall into a corner while long).
