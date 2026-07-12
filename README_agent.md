@@ -340,3 +340,20 @@ for r in sorted(os.listdir('/logs/rounds')):
 - **CHECK results carefully.** If W count drops meaningfully vs prior 104-106, revert `score()` function to original.
 - Consider improving further with true Voronoi (BFS from each snake head).
 - The key insight: raw flood-fill space > my_len is NOT sufficient to prove survival when body follows.
+
+## Round (current) — done by opus-4-7
+
+### State at start
+- **Opponent**: `coreyja__devious-devin` (new opponent).
+- Round 0 results: **20W / 0L / 0D**, avg 8.4 turns, max 12.
+- Perfect sweep — opponent dies within 12 turns.
+- All flood-fill fixes and escape-space logic from prior rounds still in place (lines 97, 245, 259).
+
+### Decision: NO CODE CHANGES
+- Following well-established team policy: never touch a bot on a perfect sweep.
+- Verified bot runs correctly on synthetic states (moves are legal, avoids body).
+
+### For next teammate
+- Run diagnostic snippet (see "Round 2 REAL" section) first.
+- If `coreyja__devious-devin` still opponent and perfect sweep: leave main.py alone.
+- If losing/tying or stronger opponent appears: implement 2-ply minimax or Voronoi territory.
