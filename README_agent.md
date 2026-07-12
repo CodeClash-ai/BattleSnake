@@ -596,3 +596,94 @@ disown
 
 Kill test servers by PID (`ps aux | grep main.py`), not `pkill -f` (see
 earlier gotcha notes about it matching your own shell's command line).
+
+## Round 4 (this session) update
+
+Confirmed opponent still `csauve__bookworm` for the two most recent real
+rounds (`/logs/rounds/0`: 38-0, `/logs/rounds/1`: 20-0, both clean sweeps
+for sonnet-5). Per `analyze_logs.py /logs/rounds/1`, real-match games are
+very short on average (6.4 turns), likely because the opponent times out
+/ errors out quickly in the actual scoring harness (saw `latency: "500"`
+i.e. hitting the 500ms move budget in round-1 sim logs) -- so our
+heuristic bot's simple safety-first approach is winning big in practice
+regardless of deep strategy.
+
+However, a fresh **local** 4-game benchmark this round against freshly
+extracted `csauve/bookworm` code (recipe below, same as prior rounds) came
+back **2 wins / 2 losses** in games that ran long (90-237 turns) -- i.e.
+when bookworm doesn't time out and the game goes long, it's a much closer
+fight than the real scores suggest. I dumped one loss to JSON
+(`/tmp/game_2.json` -- not persisted, rerun the recipe below to
+reproduce) and found a concrete failure mode predicted by earlier rounds'
+notes but not yet fixed: **our snake (length 16) spent ~15 turns hugging
+its own body along the board perimeter (bottom row -> right column ->
+along the top)**, and the opponent (length 5) camped near the bottom-left
+corner. By the time our flood-fill lookahead's "safe" margin
+(`area < my_length * 1.5` soft penalty) actually triggered, it was only
+1-2 turns before the only remaining route got pinched to a single cell by
+the opponent's body, and by the *next* turn after that there were **zero
+legal candidate moves** at all (both up and right were blocked by our own
+body + the opponent's body respectively) -- a pure 1-ply-invisible trap.
+
+### Change made this round
+
+Widened the soft trap-margin threshold in `main.py`'s scoring loop from
+`1.5x` my_length to **`2.2x`** (and increased the gradient penalty
+coefficient from 15 to 12 per missing cell -- net still meaningfully
+stronger at the wider margin since the gap `2.2x - area` is larger). This
+makes the bot react to a shrinking-space situation earlier/more
+conservatively while it still has more room to redirect, rather than only
+noticing once it's down to a ~1.5x cushion (which the corner-hugging
+scenario above blew through in just a couple of turns). This is still
+**not** true lookahead -- it's a heavier hand on the same 1-ply heuristic
+-- so it will not catch every possible coil, but should catch this class
+of "long slow perimeter squeeze" earlier.
+
+**Verification done:** `python3 -c "import main; main.move(state)"` smoke
+test (see recipe elsewhere in this file) still returns valid moves with
+no exceptions on both a normal 2-snake board and a fully empty/malformed
+`game_state`. Also restarted a local Flask server on the new code and
+ran one fresh local game against the extracted bookworm opponent
+(`/tmp/quick1.log`) -- it progressed cleanly past 130 turns with both
+snakes alive and no errors in either bot's log before this session ran
+out of step budget to observe the final outcome. **I did NOT get to run a
+full repeat of the 4-game local benchmark against the widened margin
+before running out of steps this round** -- that is the single highest-
+priority next step for whoever picks this up next (see recipe below,
+same as prior rounds -- extract `csauve/bookworm`, run ~6-10 games,
+specifically watch for the same "hugs own body along perimeter for a long
+stretch" pattern in any losses, and compare win rate to this round's 2/4
+baseline). If the widened margin doesn't help or seems to hurt (e.g. by
+making the bot too timid to grab food and lose on health/starvation
+instead), consider reverting to 1.5x and instead pursuing the "real 2-ply
+lookahead" idea that's been on the list for several rounds now, or a
+more targeted heuristic (e.g. explicitly penalizing moves that keep the
+head adjacent to 2+ of our own body segments for many consecutive turns,
+which is a proxy for "currently coiling").
+
+### Recipe reminder (condensed)
+
+```bash
+git show origin/human/csauve/bookworm:main.py > /tmp/opp/main.py
+cp server.py /tmp/opp/server.py
+(cd /workspace && setsid nohup env PORT=8000 python3 main.py > /tmp/new.log 2>&1 </dev/null &)
+(cd /tmp/opp    && setsid nohup env PORT=8001 python3 main.py > /tmp/opp.log 2>&1 </dev/null &)
+cd /workspace/game
+for i in 1 2 3 4 5 6; do
+  setsid nohup timeout 90 ./battlesnake play -W 11 -H 11 \
+    --name new --url http://localhost:8000 --name opp --url http://localhost:8001 \
+    -g standard -m standard -o /tmp/game_$i.json > /tmp/game_$i.log 2>&1 </dev/null &
+  disown
+done
+sleep 60   # long games (90-240 turns) take a while; check tail -3 /tmp/game_*.log for "was the winner"
+```
+
+To inspect a loss in detail: `python3 -c "import json; [print(l['turn'],
+[(s['name'], s['health'], s['length'], [(b['x'],b['y']) for b in
+s['body']]) for s in l['board']['snakes']]) for l in (json.loads(x) for x
+in open('/tmp/game_N.json')) if 'turn' in l]"` and look at the last ~15
+turns before the loss.
+
+Kill test servers by PID (`ps aux | grep main.py`), never `pkill -f`
+with a pattern that might match your own invoking shell's command line
+(see earlier rounds' notes -- this has bitten multiple past sessions).

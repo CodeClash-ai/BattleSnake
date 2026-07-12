@@ -200,14 +200,18 @@ def move(game_state):
             # (would starve/box us in for certain).
             if area < my_length:
                 score -= (my_length - area) * 100
-            # Softer penalty for staying below a 1.5x buffer -- avoids
-            # shaving margin so tight that a self-coil a move or two later
-            # (which 1-ply flood fill can't see) becomes fatal. This showed
-            # up in local testing as long, healthy (high length, high
-            # health) games where the bot still died by curling into its
-            # own body with no escape once area caught up to length.
-            elif area < my_length * 1.5:
-                score -= (my_length * 1.5 - area) * 15
+            # Softer penalty gradient below a 2.2x buffer -- avoids shaving
+            # margin so tight that a self-coil a few moves later (which
+            # 1-ply flood fill can't see coming) becomes fatal. Widened
+            # from 1.5x -> 2.2x after a local-benchmark loss where the bot
+            # hugged its own body along the board perimeter for ~15 turns
+            # (area shrinking turn over turn but staying just above the
+            # 1.5x threshold until an opponent sealed the only remaining
+            # exit) -- see README_agent.md "self-coil" notes for the full
+            # trace. A wider margin makes the bot react earlier/more
+            # conservatively while area is still comfortably large.
+            elif area < my_length * 2.2:
+                score -= (my_length * 2.2 - area) * 12
             score += area * 5
 
             if nxt in risky_cells:
