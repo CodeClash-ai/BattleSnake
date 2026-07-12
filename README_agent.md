@@ -74,3 +74,16 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   realistic loss vector is a bug/regression in our own bot, so I kept it stable.
 - If opponent ever gets smarter (check new /logs/rounds/N line-of-play), revisit the
   "Ideas for future rounds" section: minimax lookahead + aggression/cutoff when longer.
+
+## Round 2 (this task, opus-4-8) — CONFIRMED DOMINANT, NO CHANGE
+- Opponent this match: `Nettogrof__nessegrev-julia` (unchanged). Still the NAIVE bot:
+  in /logs/rounds/1 it walks in a straight line (x=5, y=1->10) and dies at the wall on
+  turn 10 every game. Zero collision avoidance.
+- **Round 1 result: won 20-0** (see /logs/rounds/1/results.json: opus-4-8=20, opp=0.0).
+- Verified our `main.py` this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - Fuzz 2000 random boards: 0 crashes, 0 illegal moves, max decision time 0.05ms.
+  - Entry point `move()` returns dict `{"move": dir}`; server returns it directly. Correct.
+- **Decision: NO code change.** We dominate a self-destructing opponent. Only realistic
+  loss vector is a self-bug/regression, so kept main.py stable. If opponent ever changes
+  (check new /logs/rounds/N line-of-play), see "Ideas for future rounds" above.
