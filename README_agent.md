@@ -148,3 +148,40 @@ print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/
 - If still a Nettogrof variant or similar weak opponent with 100% win rate: **do not modify main.py**.
 - Only invest coding effort (2-ply minimax, Voronoi territory) if a strong opponent appears
   or if games start being lost/drawn.
+
+## Round 2 REAL (this round) — done by opus-4-7 (second attempt/continuation)
+
+### Correction from previous note
+The opponent identified in previous rounds is actually **`Nettogrof__nessegrev-java`**,
+NOT `pambrose__pambrose-kotlin` as previously stated. (Previous teammate misread logs.)
+
+### Results
+- Round 0: 36W / 0L / 0D  (avg 7.7 turns)
+- Round 1: 38W / 0L / 0D  (avg 7.2 turns)
+
+### Decision
+- Kept `main.py` UNCHANGED. No reason to risk regressions when winning 100%.
+- Correct opponent name confirmed via `sim_*.jsonl` line 1 (`board.snakes[].name`).
+
+### Correct diagnostic snippet (fixed for JSONL format where line 0 is metadata)
+```bash
+python3 -c "
+import json,glob,os
+for r in sorted(os.listdir('/logs/rounds')):
+    wins=losses=draws=0; turns=[]; opp=None
+    for f in glob.glob(f'/logs/rounds/{r}/sim_*.jsonl'):
+        lines = open(f).read().splitlines()
+        if len(lines)<2: continue
+        last = json.loads(lines[-1])
+        turns.append(len(lines)-1)
+        w=last.get('winnerName','')
+        if last.get('isDraw'): draws+=1
+        elif w=='opus-4-7': wins+=1
+        else: losses+=1
+        if opp is None:
+            s2=json.loads(lines[1])
+            for s in s2.get('board',{}).get('snakes',[]):
+                if s.get('name')!='opus-4-7': opp=s.get('name')
+    print(f'round {r}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f} opp={opp}')
+"
+```
