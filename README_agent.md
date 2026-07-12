@@ -365,3 +365,94 @@ servers/CLI processes by literal PID (from `ps aux`) rather than `pkill
    `results.json`, re-identify via `git log --oneline --all | grep -i
    human` + `git show <ref>:main.py` before assuming this analysis still
    applies.
+
+## Round 1 (this session, fresh /logs/rounds with only round 0 present)
+
+Confirmed round-0 opponent from `/logs/rounds/0/results.json`:
+`Nettogrof__nessegrev-java` (elo #48, "Rung 3/50" on the ladder per git log
+`git log --oneline --all | grep -i Nettogrof`). Real scored result was a
+clean sweep: **sonnet-5 39 vs opponent 0** (see that file). Note this is a
+*different* opponent identity string from some of the julia-related notes
+earlier in this file (`Nettogrof__nessegrev-julia`, elo #49) -- both are
+real ported bots from the same author's repo (java vs julia dev version),
+just different snakes. Don't confuse them; re-check
+`/logs/rounds/<n>/results.json` each round to know which one you're
+actually facing, then `git show origin/human/Nettogrof/nessegrev-java:main.py`
+(or `-julia`) to pull the exact code.
+
+The `-java` port is a real paranoid minimax (depth up to 6, ~0.3s/move
+budget) with a voronoi/flood-fill leaf eval (`DuelNode`/`FourNode` scoring,
+see the port's own module docstring for exact original-fidelity notes --
+worth reading, it documents e.g. the payoff-matrix/paranoid assumption and
+exact leaf scoring formula). This is a genuinely strong-ish heuristic bot,
+not a trivial one.
+
+### Benchmark this round
+
+Did NOT change `main.py`'s logic. Instead validated current behavior with
+a real local tournament against the extracted `-java` opponent code (via
+the `battlesnake` CLI + two local Flask servers, per the existing recipe
+elsewhere in this file). **Result: 8 wins / 0 losses / 0 draws** across 8
+games (see `/tmp/game_*.log` recipe below -- not persisted, rerun if you
+want fresh logs), games ranging 11-105 turns, no server errors/exceptions
+in either bot's log (`grep -i error /tmp/new.log /tmp/opp.log` clean other
+than the CLI's own harmless request-timeout retry messages when a game
+naturally ends and the losing server's process/socket goes away).
+
+This confirms the round-0 39-0 scoreline is a real, reproducible result
+against this specific opponent (java port), not a fluke/artifact -- unlike
+the `-julia` port from earlier rounds' notes, where local testing found
+closer 5-2 / 3-0 splits. The `-java` port appears meaningfully weaker
+against our current heuristic than the `-julia` port was. Since we don't
+know for certain if this round's *actual* real match reuses the same
+`-java` opponent or switches, re-check `/logs/rounds/1/results.json` once
+it exists next round.
+
+### Recipe used (for next teammate, condensed)
+
+```bash
+# Extract opponent code fresh:
+git show origin/human/Nettogrof/nessegrev-java:main.py > /tmp/opp/main.py
+cp server.py /tmp/opp/server.py   # server.py is generic, just copy ours
+
+# Start both bots (must use setsid nohup ... & ; disown to survive across
+# tool calls in this harness -- see earlier notes in this file):
+cd /workspace && (setsid nohup env PORT=8000 python3 main.py > /tmp/new.log 2>&1 </dev/null &)
+cd /tmp/opp    && (setsid nohup env PORT=8001 python3 main.py > /tmp/opp.log 2>&1 </dev/null &)
+
+# Run games in background (each can take 5-30s wall-clock; batch 4 at a
+# time via nohup + disown, then sleep ~25-30s and check the logs, rather
+# than running `battlesnake play` in the foreground with a short timeout
+# -- games against the -java opponent's 0.3s/move budget commonly run
+# 50-100+ turns and will get killed by a short foreground timeout before
+# resolving, wasting the run):
+cd /workspace/game
+for i in 1 2 3 4; do
+  setsid nohup timeout 60 ./battlesnake play -W 11 -H 11 \
+    --name new --url http://localhost:8000 \
+    --name opp --url http://localhost:8001 \
+    -g standard -m standard > /tmp/game_$i.log 2>&1 </dev/null &
+  disown
+done
+sleep 28
+for f in /tmp/game_*.log; do echo "-- $f --"; tail -n 2 "$f"; done
+```
+
+Kill test servers by PID (`ps aux | grep main.py`) when done, not
+`pkill -f main.py` (see earlier gotcha notes in this file about pkill -f
+matching your own invoking shell).
+
+### Assessment / recommendation for next round
+
+Given an actual clean 39-0 real-match result *and* a reproducible 8-0
+local benchmark against the (likely same) opponent this round, I judged
+further heuristic changes to carry more regression risk than expected
+benefit this round, and made **no code changes** to `main.py`. The
+prioritized ideas list from earlier rounds (minimax lookahead, hazard
+support, formal weight tuning) is still valid groundwork for if/when a
+tougher opponent appears (e.g. the `-julia` port, which was closer in
+local testing, or any future different ladder opponent) -- worth
+revisiting then rather than risking the current bot's strong, verified
+performance against a weaker opponent now. If next round's
+`/logs/rounds/1/results.json` shows anything other than a clean sweep,
+that's the signal to actually invest in the minimax/lookahead upgrade.
