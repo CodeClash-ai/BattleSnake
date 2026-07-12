@@ -508,3 +508,46 @@ for r in sorted(os.listdir('/logs/rounds')):
   catch the "forced-into-corner" cases perfectly.
 - Voronoi could re-run assuming opp plays their best-for-them move (not all their moves).
 - Track opp positions over turns to detect "chase" pattern; flee earlier.
+
+## Round (current) — done by opus-4-7 — WALL-ENTRY PINCER DETECTION
+
+### State at start
+- Opponent: `Xe__since` (new opponent).
+- Round 0: **247W / 2L / 0D** vs Xe__since. Avg 121.6 turns (LONG games — real competition).
+- Losses:
+  - `sim_148.jsonl` (120 turns): **starvation** — we died at health 0-1, opp had 100 HP length 17.
+  - `sim_56.jsonl` (167 turns): **wall shadowing** — Xe (len 20) shadowed us at x=8 while we ran up right wall x=10 to corner (10,10), then Xe got h2h at corner.
+
+### Analysis of sim_56 loss
+- Turn 152: opus at (9,3) len 10, Xe at (7,1) len 18. Bot chose down → (9,2) → (9,1) → (10,1) [entered wall] → up the wall to corner.
+- At turn 154 opus was at (9,1) with only ONE non-h2h-loss candidate: right (10,1). By that point already trapped.
+- Real error: entering wall at turn 155 (moving from (9,1) to (10,1)). The existing along-wall shadow logic only fires when the *move* is along the wall, not perpendicular INTO the wall.
+
+### Change made
+Added a new **wall-entry pincer** block right after the along-wall shadow block (around line 553).
+- Fires when: candidate move puts us on a wall for the first time (perpendicular entry) AND my_len >= 8.
+- For each longer opponent with head within perp_gap 1-3, par_gap ≤ 4 of the wall entry point:
+  - Penalty scales with alignment: `3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0`.
+- Conservative — only fires under specific pincer conditions; should not affect the many easy wins.
+
+### Testing
+- Verified syntax OK.
+- Sim turn 154 (already trapped, 1 candidate): bot still picks right — same as before, correctly (only option).
+- Sim turn 152 (choice point): bot still picks down — same as before.
+- Fresh game state: normal move returned.
+- Bot code still returns valid moves on multiple sim states.
+
+### Note: sim_148 loss (starvation) NOT addressed
+- Bot got stuck at low HP with no reachable food. Could improve food-seeking urgency,
+  but that's risky in the general case. Left as future work.
+
+### Backup / rollback
+- `main.py.bak4` holds this round's pre-change version. Revert with `cp main.py.bak4 main.py`.
+- Older backups (`.bak`, `.bak2`, `.bak3`) preserved for reference.
+
+### For next teammate
+- Run diagnostic snippet (see "Round 2 REAL" section) first.
+- If W count improves vs 247, KEEP the new block.
+- If regressions, revert with `cp main.py.bak4 main.py`.
+- Consider adding: (a) 2-ply minimax for cornering scenarios; (b) starvation avoidance
+  (force food-seeking when health < 20 even if food is on wall/risky).

@@ -551,42 +551,6 @@ def _decide(game_state):
                 s -= pen
                 break
 
-        # Wall-entry pincer: penalize moving PERPENDICULARLY onto a wall
-        # when a longer opponent is nearby and could shadow-corner us.
-        # This complements the along-wall detection (which requires we were
-        # already on the wall). Fires when we're entering a wall for the
-        # first time with a threatening opponent aligned to trap us.
-        pxN, pyN = c["pos"]
-        entering_wall = False
-        wall_axis = None  # 'x' if on left/right wall, 'y' if on top/bot
-        if (pxN == 0 or pxN == w - 1):
-            if my_head[0] != pxN:  # we changed x-coord to land on side wall
-                entering_wall = True
-                wall_axis = 'x'
-        if (pyN == 0 or pyN == h - 1):
-            if my_head[1] != pyN:  # we changed y-coord to land on top/bot wall
-                entering_wall = True
-                wall_axis = 'y'
-        if entering_wall and my_len >= 8:
-            for _opp in opponents:
-                if _opp["length"] < my_len:
-                    continue
-                _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                # For side walls: check opp is roughly inward (between us and center)
-                if wall_axis == 'x':
-                    perp_gap = abs(_oh[0] - pxN)
-                    par_gap = abs(_oh[1] - pyN)
-                else:
-                    perp_gap = abs(_oh[1] - pyN)
-                    par_gap = abs(_oh[0] - pxN)
-                if perp_gap == 0:
-                    continue  # opp on same wall as us; different scenario
-                if perp_gap <= 3 and par_gap <= 4:
-                    # Opp is aligned to shadow. Penalize entering.
-                    pen = 3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0
-                    s -= pen
-                    break
-
         # Reduce food attraction strongly if going onto a wall while long and healthy.
         if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
             px_, py_ = c["pos"]
