@@ -241,17 +241,42 @@ def move(game_state):
         for name, nxt in candidates:
             score = 0.0
 
+            # Primary space metric: RAW flood-fill area, blocked only by
+            # actual current snake bodies (never by speculative opponent-
+            # territory guesses). This must drive the hard-trap / soft-
+            # margin thresholds below, because it reflects real, currently
+            # true reachability.
+            #
+            # IMPORTANT (bug found + fixed this round, see README_agent.md
+            # for the full traced example): an earlier version used
+            # min(area, area_pess) -- a heavily opponent-pessimistic
+            # estimate (blocking every cell an opponent could reach within
+            # several moves) -- as the value driving the *hard* trap
+            # penalty. Traced two real match losses directly to this: a
+            # wide-open, genuinely safe 90+-cell region got its pessimistic
+            # estimate collapsed to ~1 cell (because the opponent could
+            # *eventually* reach deep into that region within a many-move
+            # horizon, even though it posed no real, current threat), which
+            # made the hard-trap penalty score it *worse* than an actual
+            # small dead-end pocket the bot then walked into and died in.
+            # See sim_246.jsonl turn 124 and sim_248.jsonl turn 269 in
+            # /logs/rounds/0 for the exact reproduced traces.
             area_blocked = blocked | (opp_next_cells - {nxt})
             area_soft_blocked = area_blocked | (area_extra_blocked - {nxt})
-            area = _flood_fill_size(nxt, area_blocked, width, height, cap)
-            # Pessimistic area (also excludes longer-horizon opponent
-            # territory) -- use the smaller of the two so a corridor whose
-            # only exit region overlaps opponent territory scores lower,
-            # without ever letting the pessimistic version show *more*
-            # room than reality (it can't, since it blocks a superset of
-            # cells, but keep the min() for clarity/safety).
+            area = _flood_fill_size(nxt, blocked, width, height, cap)
             area_pess = _flood_fill_size(nxt, area_soft_blocked, width, height, cap)
-            area_for_score = min(area, area_pess)
+            area_for_score = area
+            # Mild, CAPPED secondary penalty for "opponent-contestable"
+            # space: if the pessimistic (opponent-blocked) estimate is much
+            # smaller than the true raw area, nudge the score down a little
+            # (corridor-race awareness) without ever letting it override a
+            # large genuine safety difference the way the old min()
+            # approach could. Capped at my_length so it can only ever be a
+            # tie-breaker among otherwise-comparable-safety options, never
+            # enough to make a truly wide-open move look worse than a truly
+            # tiny dead-end pocket.
+            contested_gap = max(0, area - area_pess)
+            score -= min(contested_gap, my_length) * 2
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area_for_score < my_length:

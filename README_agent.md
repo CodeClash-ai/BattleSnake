@@ -1171,3 +1171,157 @@ a fully confirmed "definitely still an improvement" -- see next steps.
 - `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats (parses the final
   `winnerName`/`isDraw` line per sim file).
+
+## Round (this session) — found + fixed a real, confirmed match-losing bug in the "opponent territory" pessimistic area heuristic
+
+Confirmed opponent this round via `/logs/rounds/0/results.json`:
+**`coreyja__devious-devin`** (a real paranoid minimax port, depth up to 6,
+~0.3s/move, see `git show origin/human/coreyja/devious-devin:main.py` for
+the full docstring). Real scored result: **sonnet-5 22, opponent 2** (not
+a clean sweep -- 2 real losses out of 24 total games, confirmed via
+`analyze_logs.py /logs/rounds/0` parsing the per-sim `winnerName` summary
+lines: 22 wins for us, 2 for the opponent, avg turn count 24.9, min 2 max
+274).
+
+### Root cause of BOTH real losses, found via direct trace replay (concrete, not speculative)
+
+Identified the exact two losing sims (`sim_246.jsonl` turn ~124→131,
+`sim_248.jsonl` turn ~269→274) and replayed `main.py`'s exact decision at
+the critical turn using the literal logged board state (recipe: load
+`main.py`, rebuild `blocked`/`risky_cells`/`winnable_cells`/
+`opp_territory` exactly like `move()` does, print each candidate's raw
+flood-fill area vs. the actual `main.move()` output for that state).
+
+**Found a serious, previously-unnoticed bug in the multi-round-old
+"opponent territory" pessimistic-area heuristic** (added ~2 rounds ago
+under the name `opp_territory`/`TERRITORY_HORIZON`/`area_pess`, originally
+intended to catch "opponent seals a corridor" corridor-race scenarios --
+see the many earlier rounds' notes above this section for its original
+motivation and a previous *inconclusive* worry that it might be
+interacting badly with self-coiling). This round found and **confirmed
+with hard evidence** exactly how it goes wrong:
+
+- At `sim_246.jsonl` turn 124 (our snake length 13), the two legal moves
+  were: `left` with a **true/raw** flood-fill area of 93 cells (wide open,
+  completely safe) vs. `right` with a true area of 6 cells (a genuine
+  dead-end pocket, smaller than our own body — a real trap). The old code
+  used `min(area, area_pess)` — where `area_pess` additionally blocks
+  every cell any opponent could reach within a 6-move BFS horizon — as
+  the value driving the *hard* trap penalty (`(my_length - area_for_score)
+  * 100`). Because the opponent could *eventually* (within 6 moves) reach
+  deep into the wide-open 93-cell region, `area_pess` for `left` collapsed
+  to **1**, making `left` score as if it were a near-total trap (worse
+  than the *actual* 6-cell dead-end pocket). The bot picked `right` — the
+  real trap — and died a few turns later exactly as predicted once it
+  finished walking into the sealed pocket. Full turn-by-turn trace + the
+  exact reproduction script is in shell history this round; the short
+  version: `main.move()` called on the literal turn-124 board state
+  returned `{"move": "right"}` before the fix, `{"move": "left"}` after.
+- `sim_248.jsonl` turn 269 (length 21) was the same mechanism: `left`
+  (true area 69, safe) vs `right` (true area 4, real dead-end). The
+  pessimistic estimate for `left` collapsed to 1 (partly from the 1-ply
+  `opp_next_cells` blocking alone dropping it 69→11, then the 6-ply
+  territory extension dropping it further to 1), while `right`'s estimate
+  matched its true tiny value unchanged (the opponent was nowhere near
+  that pocket). Same wrong pick, same eventual death. `main.move()` on
+  this literal state returned `{"move": "right"}` before the fix,
+  `{"move": "left"}` after.
+
+**The general failure mode**: treating "any cell an opponent could
+*possibly* reach within N moves" as fully blocked for our own space
+evaluation is far too aggressive once a region is large — it can make an
+enormous genuinely-open area look like a near-total trap just because an
+opponent could theoretically wander into part of it eventually, even from
+far away with no actual current threat. Meanwhile a real, small, already-
+sealed dead-end pocket (which the opponent *can't* reach either, so its
+estimate is unaffected) doesn't get similarly penalized — so the
+comparison between the two becomes inverted exactly when it matters most
+(deciding between "escape to the open board" and "wall myself into a
+pocket").
+
+### Fix made this round
+
+In `main.py`'s move-scoring loop:
+
+- The **raw** flood-fill area (blocked only by actual current snake
+  bodies — no opponent-territory speculation) is now the value that
+  drives the hard-trap penalty, the soft 2.2x-margin penalty, and the
+  `area * 5` linear bonus — i.e. all the heavyweight scoring that must
+  reflect *real, current* reachability.
+- The old opponent-pessimistic estimate (`area_pess`, still computed the
+  same way — 1-ply opponent-next-cells plus 6-ply `opp_territory`) is now
+  only used to compute a small, **capped** secondary penalty:
+  `score -= min(max(0, area - area_pess), my_length) * 2`. This keeps a
+  little bit of "corridor-race" awareness (mild preference away from
+  routes an opponent could contest) as a tie-breaker among otherwise
+  comparably-safe options, but it is mathematically incapable of making a
+  93-cell truly-open region score worse than a genuine 6-cell dead-end
+  trap, because it's capped at `my_length` (a few dozen points at most)
+  rather than being able to swing the *entire* trap-penalty formula the
+  way `min(area, area_pess)` could.
+- Verified directly: re-running `main.move()` on the exact two traced
+  losing board states now returns the correct/safe move in both cases
+  (see above). Also re-ran the existing smoke tests (`main.move()` on a
+  normal 2-snake state, `{}` empty state, and an empty-snakes state) —
+  all still return valid moves with no exceptions, matching prior
+  behavior.
+
+### Local benchmark this round (partially inconclusive due to step budget, but no regressions seen)
+
+Ran 4 fresh local games via the `battlesnake` CLI against freshly
+extracted `origin/human/coreyja/devious-devin:main.py` (same recipe as
+many earlier rounds — `setsid nohup env PORT=... python3 main.py &
+disown` for both bots, `battlesnake play ... &  disown`, sleep, check
+logs). **Result: 1 clean win, 1 clean loss, 2 games didn't finish before
+a 60s local timeout** (they were still running turns 175-190+ when
+killed — devious-devin's ~0.3s/move budget plus this harness's own
+overhead makes long games slow to finish locally; this is a known,
+previously-noted pattern in earlier rounds' benchmarks against other
+slow-thinking opponents, not specific to this session). This is a small
+and partially-inconclusive sample — **I did not have step budget left
+this round to re-run a larger/cleaner benchmark or to dig into the one
+observed local loss** (didn't get to dump/inspect it before running out
+of steps). No crashes or exceptions were seen in either bot's server log
+across all 4 games.
+
+### Recommendation for next round (HIGH PRIORITY)
+
+1. **Re-run a bigger local benchmark** (8-12 games, with longer sleep
+   windows between launching and checking so slow games vs.
+   devious-devin's 6-ply minimax actually finish — budget ~90-120s per
+   batch of games, split across multiple tool calls: one to launch+short
+   sleep, subsequent ones to sleep more + check `tail`) to get a more
+   confident win-rate number for the fix made this round. If you find a
+   *new* loss, use the exact same trace-replay technique documented above
+   (rebuild `blocked`/`risky_cells`/`opp_territory` from the literal
+   logged board state at the critical turn, compare `main.move()`'s
+   actual output against each candidate's raw flood-fill area) — it is a
+   fast, concrete way to find real bugs, much more effective this round
+   than speculative heuristic tweaking.
+2. Once `/logs/rounds/1/results.json` exists (this round's real scored
+   result), check whether the two-loss pattern from round 0 is gone or
+   reduced. If still `coreyja__devious-devin` and score is better than
+   22-2 (or a clean sweep), the fix is confirmed working in the real
+   harness too.
+3. If a **different** opponent appears, use `git log --oneline --all |
+   grep -i human` + `git show origin/human/<Org>/<repo>:main.py` to
+   extract and benchmark them per the established recipe throughout this
+   file, and consider re-running the trace-replay technique on any losses
+   found — it generalizes to any opponent, not just this one.
+4. The remaining `opp_territory`/6-ply-BFS computation in `main.py` is
+   now only used for the small capped secondary penalty. If future
+   profiling ever shows it's not pulling its weight (e.g. A/B testing
+   shows removing it entirely doesn't change win rate), it could be
+   deleted entirely to simplify the code and save a little compute — but
+   it's cheap enough (see many earlier rounds' timing notes) that this is
+   a low-priority cleanup, not a correctness concern anymore now that it
+   can't override the hard safety metric.
+
+### Files (unchanged)
+
+- `main.py` — the bot (this round's fix: raw-area-drives-hard-penalties,
+  opponent-pessimism now only a small capped secondary nudge — see the
+  inline comment block right above the scoring loop for the full
+  rationale, and this section for the concrete traced bug it fixes).
+- `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats.
