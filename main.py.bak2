@@ -177,71 +177,6 @@ def _bfs_distance(start, targets, blocked, w, h, max_dist=None):
     return None
 
 
-def _voronoi(my_start, opp_starts, blocked, w, h):
-    """Multi-source BFS. Returns count of cells my_start reaches strictly
-    before any opp_start. Blocked cells cannot be traversed. Ties are contested
-    (not counted for either side)."""
-    my_dist = {my_start: 0}
-    opp_dist = {}
-    q_my = deque([my_start])
-    q_opp = deque()
-    for op in opp_starts:
-        if op not in opp_dist:
-            opp_dist[op] = 0
-            q_opp.append(op)
-
-    # Alternate expansion: BFS my side one layer, then opp one layer.
-    my_frontier = deque([my_start])
-    opp_frontier = deque(opp_starts)
-    depth = 0
-    max_depth = w * h
-    while (my_frontier or opp_frontier) and depth < max_depth:
-        # Expand my one layer
-        nf = deque()
-        while my_frontier:
-            x, y = my_frontier.popleft()
-            for dx, dy in DIRS.values():
-                n = (x + dx, y + dy)
-                if not _in_bounds(n, w, h):
-                    continue
-                if n in blocked:
-                    continue
-                if n in my_dist:
-                    continue
-                # Only claim if opp hasn't claimed earlier
-                if n in opp_dist and opp_dist[n] < depth + 1:
-                    continue
-                my_dist[n] = depth + 1
-                nf.append(n)
-        my_frontier = nf
-        # Expand opp one layer
-        nf = deque()
-        while opp_frontier:
-            x, y = opp_frontier.popleft()
-            for dx, dy in DIRS.values():
-                n = (x + dx, y + dy)
-                if not _in_bounds(n, w, h):
-                    continue
-                if n in blocked:
-                    continue
-                if n in opp_dist:
-                    continue
-                if n in my_dist and my_dist[n] < depth + 1:
-                    continue
-                opp_dist[n] = depth + 1
-                nf.append(n)
-        opp_frontier = nf
-        depth += 1
-
-    my_cells = 0
-    for c, md in my_dist.items():
-        od = opp_dist.get(c)
-        if od is None or md < od:
-            my_cells += 1
-    return my_cells
-
-
-
 def move(game_state):
     try:
         return _decide(game_state)
@@ -329,20 +264,6 @@ def _decide(game_state):
             fd = _bfs_distance(np, food_set, blocked_for_ff, w, h, max_dist=w + h)
             food_dist = fd
 
-        # Voronoi: how many cells do we reach first vs opponent heads?
-        # Treat opponents' possible next-head positions as their starting cells.
-        opp_next_starts = []
-        for _o in opponents:
-            _oh = (_o["head"]["x"], _o["head"]["y"])
-            # Opp could be at any of its adjacent cells next turn
-            for _dx, _dy in DIRS.values():
-                _np = (_oh[0] + _dx, _oh[1] + _dy)
-                if _in_bounds(_np, w, h) and _np not in hard_blocked:
-                    opp_next_starts.append(_np)
-            # Also include current head (for cells farther out that don't depend on move)
-            opp_next_starts.append(_oh)
-        vor = _voronoi(np, opp_next_starts, hard_blocked, w, h) if opp_next_starts else space
-
         candidates.append({
             "move": name,
             "pos": np,
@@ -351,7 +272,6 @@ def _decide(game_state):
             "space": space,
             "esc": esc,
             "food_dist": food_dist,
-            "vor": vor,
         })
 
     if not candidates:
@@ -418,12 +338,6 @@ def _decide(game_state):
         if my_len >= 14 and min_opp_dist <= 6:
             _ff_w = 3.0
         s += c["space"] * _ff_w
-        # Voronoi territory: cells we reach first vs opponents. Strong survival signal.
-        # Weight scales with how contested the situation is.
-        _vor_w = 1.0
-        if my_len >= 6 and min_opp_dist <= 8:
-            _vor_w = 2.0
-        s += c["vor"] * _vor_w
         # Prefer moves that don't die
         if c["h2h_loss"]:
             s -= 1000
@@ -473,43 +387,6 @@ def _decide(game_state):
             on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
             if on_wall and c["space"] < my_len * 2:
                 s -= (my_len * 2 - c["space"]) * 2.0
-        # Wall-shadow / pincer detection: if new pos hugs a wall and an opponent
-        # is within 2-3 cells shadowing us with equal-or-greater length, penalize.
-        px_, py_ = c["pos"]
-        on_left = (px_ == 0)
-        on_right = (px_ == w - 1)
-        on_bot = (py_ == 0)
-        on_top = (py_ == h - 1)
-        moving_along_wall = False
-        my_dx = px_ - my_head[0]
-        my_dy = py_ - my_head[1]
-        if (on_left or on_right) and my_dy != 0:
-            moving_along_wall = True
-        if (on_bot or on_top) and my_dx != 0:
-            moving_along_wall = True
-        if moving_along_wall:
-            for _opp in opponents:
-                if _opp["length"] < my_len:
-                    continue  # only worry about equal-or-longer
-                _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                # Perpendicular shadow: opp is 1-3 cells inward and roughly aligned
-                if on_left or on_right:
-                    perp_gap = abs(_oh[0] - px_)
-                    par_gap = abs(_oh[1] - py_)
-                elif on_bot or on_top:
-                    perp_gap = abs(_oh[1] - py_)
-                    par_gap = abs(_oh[0] - px_)
-                else:
-                    continue
-                if 1 <= perp_gap <= 3 and par_gap <= 3:
-                    # Pincer situation - opp shadowing us along wall
-                    # penalty scales with how close we are to a corner
-                    dist_to_corner_along = min(py_, h-1-py_) if (on_left or on_right) else min(px_, w-1-px_)
-                    # closer to corner = more dangerous
-                    corner_factor = max(0, 6 - dist_to_corner_along)
-                    s -= 8.0 + 2.0 * corner_factor
-                    break
-
         # Reduce food attraction strongly if going onto a wall while long and healthy.
         if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
             px_, py_ = c["pos"]

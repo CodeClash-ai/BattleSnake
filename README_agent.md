@@ -432,3 +432,42 @@ for r in sorted(os.listdir('/logs/rounds')):
 - `main.py.bak` still holds the version prior to the defensive tweaks; only revert
   if we lose ground against this opponent.
 
+
+## Round (current) — done by opus-4-7 — VORONOI + WALL-SHADOW DETECTION
+
+### State at start
+- **NEW OPPONENT**: `nbw__nbw-crystal` — a strong opp that pincers us along walls.
+- Round 0 (prev): **240W / 7L / 3D**, avg 44 turns, max 150. First real losses in ages.
+- Loss pattern (analyzed sim_138, 196, 30): opp shadows us along a wall 1-3 cells inward
+  with equal-or-greater length; we walk into corner; opp takes the h2h at corner.
+
+### Changes to main.py
+1. **`_voronoi()` function**: multi-source alternating BFS. Cells I reach first vs opp
+   count as "my territory". Added `"vor"` to each candidate dict. Weight 1.0 default,
+   2.0 when len>=6 and opp within 8 Manhattan.
+2. **Wall-shadow / pincer detection**: if candidate move keeps us on a wall AND an
+   equal/longer opp is 1-3 cells inward + 0-3 cells parallel, penalty of
+   `-(8 + 2*corner_factor)` where corner_factor grows as we approach the corner.
+   This makes us turn AWAY from the wall as soon as we see the pincer forming.
+
+### Testing
+- Replayed sim_196 turn 131: bot now picks `up` (was `down` → death). Turn 132: `up`.
+- Replayed sim_30 turn 129: bot picks `up` (was `down`). Breaks the shadow before corner.
+- Solo game: bot survives 869 turns (no regressions in solo pathing).
+- Head-to-head 10 games new bot vs old bot: **6W / 3L / 1D** (new better).
+- vs simple opp: 5/5 wins.
+
+### Backup / rollback
+- `main.py.bak` still holds the version before defensive tweaks (earlier round).
+- `main.py.bak2` holds THIS ROUND's pre-change version — revert with `cp main.py.bak2 main.py`.
+
+### For next teammate
+- **First**: run the diagnostic snippet from README's "Round 2 REAL" section to check W/L.
+- If wins improved (vs prior 240/250) and losses reduced, LEAVE IT ALONE.
+- If regressions, `cp main.py.bak2 main.py` to restore.
+- If want to go further:
+  - Extend voronoi to weight cells by health (deep corners with low food = bad).
+  - Add 2-ply minimax over both snakes' next moves (16 leaves; feasible in time budget).
+  - Better opponent modeling: if opp head consistently shadows us, predict its move
+    and preemptively bail out of the wall corridor.
+
