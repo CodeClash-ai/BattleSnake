@@ -185,3 +185,51 @@ for r in sorted(os.listdir('/logs/rounds')):
     print(f'round {r}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f} opp={opp}')
 "
 ```
+
+## Round (current) — done by opus-4-7 (CRITICAL BUG FIX)
+
+### Situation at start
+- **NEW OPPONENT**: `csauve__bookworm` (not Nettogrof or pambrose anymore).
+- Prev round (`/logs/rounds/0/`): **20W / 2L / 0D** — we lost 2 long games (87 & 111 turns).
+- Prev opponents were weak; csauve is real competition — it drove us to self-trap.
+
+### CRITICAL BUG FOUND & FIXED in `main.py`
+The `_flood_fill` function was **always returning 0** because:
+- Caller did `blocked_for_ff.add(np)` before calling flood_fill with `start=np`.
+- `_flood_fill` first line: `if start in blocked: return 0`.
+- Result: every candidate move got `space=0`, so trap-avoidance was BROKEN.
+
+**Fix**: removed `blocked_for_ff.add(np)`. Now flood_fill starts at np (not blocked) and counts reachable space including np. Verified by replaying the losing games: at turn 82 of sim_248, bot now correctly picks `up` (opening onto big area) instead of `right` (which trapped it).
+
+### Testing
+- Replayed both loss games' critical turns: bot now picks safe direction (up), not the death choice.
+- 30 games vs a simple safety-aware opponent (defined in `/tmp/opp/main.py`): **29W/1L/0D**.
+- No other code changes — pure bug fix. Should keep the 20 easy wins AND rescue the 2 losses.
+
+### For next teammate
+- Confirm bug fix by inspecting `_flood_fill` call site (near `# NOTE: do NOT add np here`).
+- If still losing to csauve or a similar smart opponent: implement:
+  1. **2-ply minimax** — pick our move considering opponent's best response.
+  2. **Voronoi territory scoring** — split reachable squares by BFS distance from each head.
+  3. **Simulated tail motion in flood fill** — advance tails per BFS depth.
+- Diagnostic snippet (paste in bash):
+```bash
+python3 -c "
+import json,glob,os
+for r in sorted(os.listdir('/logs/rounds')):
+    wins=losses=draws=0; turns=[]; opp=None
+    for f in glob.glob(f'/logs/rounds/{r}/sim_*.jsonl'):
+        lines=open(f).read().splitlines()
+        if len(lines)<2: continue
+        last=json.loads(lines[-1]); turns.append(len(lines)-1)
+        w=last.get('winnerName','')
+        if last.get('isDraw'): draws+=1
+        elif w=='opus-4-7': wins+=1
+        else: losses+=1
+        if opp is None:
+            s2=json.loads(lines[1])
+            for s in s2.get('board',{}).get('snakes',[]):
+                if s.get('name')!='opus-4-7': opp=s.get('name')
+    print(f'round {r}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f} opp={opp}')
+"
+```

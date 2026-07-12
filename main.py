@@ -186,7 +186,7 @@ def _decide(game_state):
 
         # Compute flood fill available from np, treating our new head as blocked.
         blocked_for_ff = set(hard_blocked)
-        blocked_for_ff.add(np)
+        # NOTE: do NOT add np here; flood_fill starts from np. Adding it made space=0 (bug fixed).
         # Add our current head as blocked (we no longer occupy it; but our body
         # segments minus tail remain).
         # Actually, hard_blocked already contains all our body except tail.
