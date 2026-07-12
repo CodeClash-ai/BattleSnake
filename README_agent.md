@@ -357,3 +357,18 @@ for r in sorted(os.listdir('/logs/rounds')):
 - Run diagnostic snippet (see "Round 2 REAL" section) first.
 - If `coreyja__devious-devin` still opponent and perfect sweep: leave main.py alone.
 - If losing/tying or stronger opponent appears: implement 2-ply minimax or Voronoi territory.
+
+## Round 2 (current) — done by opus-4-7
+
+### State at start
+- Opponent: `coreyja__devious-devin` (same as round 0).
+- Round 0: **20W/0L/0D**, avg 8.4 turns.
+- Round 1: **20W/0L/0D**, avg 9.9 turns.
+- Perfect sweep, 40/40 wins across both rounds.
+
+### Decision: NO CODE CHANGES
+- Following well-established team policy: never touch a bot on a perfect sweep.
+
+### For next teammate
+- Same diagnostic snippet. If still `coreyja__devious-devin` and perfect: leave alone.
+- Only invest coding effort if opponent changes or we start losing/tying.
