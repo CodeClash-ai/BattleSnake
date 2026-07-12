@@ -312,32 +312,13 @@ def _decide(game_state):
             max_space = max(c["space"] for c in candidates)
             pool = [c for c in candidates if c["space"] == max_space]
 
-    # Compute proximity to nearest opponent head (Manhattan) for tactical scoring.
-    min_opp_dist = 999
-    max_opp_len_near = 0
-    for _opp in opponents:
-        _oh = (_opp["head"]["x"], _opp["head"]["y"])
-        _d = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
-        if _d < min_opp_dist:
-            min_opp_dist = _d
-        if _d <= 6:
-            max_opp_len_near = max(max_opp_len_near, _opp["length"])
-
     # Score remaining candidates
     def score(c):
         s = 0.0
         # Escape space (tail-aware) is the most important survival metric
         s += c["esc"] * 2.5
-        # Raw flood-fill space as secondary. When we are long AND opp is near,
-        # weight this much more heavily: raw flood-fill treats opp body as
-        # a wall (pessimistic vs esc which lets opp body recede). If opp is
-        # actively chasing/cornering us, esc is over-optimistic.
-        _ff_w = 0.5
-        if my_len >= 10 and min_opp_dist <= 6:
-            _ff_w = 2.0
-        if my_len >= 14 and min_opp_dist <= 6:
-            _ff_w = 3.0
-        s += c["space"] * _ff_w
+        # Raw flood-fill space as secondary
+        s += c["space"] * 0.5
         # Prefer moves that don't die
         if c["h2h_loss"]:
             s -= 1000
@@ -379,28 +360,6 @@ def _decide(game_state):
         # If esc is small relative to length, heavy penalty
         if c["esc"] < my_len:
             s -= (my_len - c["esc"]) * 3.0
-        # Long snake wall-corridor penalty: if we're long and going into a wall-adjacent
-        # cell whose flood-fill space is not comfortably larger than our length, penalize.
-        # This catches the case of walking further into a wall corridor with opp near.
-        if my_len >= 10 and min_opp_dist <= 6:
-            px_, py_ = c["pos"]
-            on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
-            if on_wall and c["space"] < my_len * 2:
-                s -= (my_len * 2 - c["space"]) * 2.0
-        # Reduce food attraction strongly if going onto a wall while long and healthy.
-        if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
-            px_, py_ = c["pos"]
-            if px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1:
-                s -= 2.0  # cancel food incentive on wall moves
-        # Penalty for moving closer to a similarly-sized/larger opponent's head
-        # when we're long. Prevents getting cornered.
-        for _opp in opponents:
-            _oh = (_opp["head"]["x"], _opp["head"]["y"])
-            cur_d = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
-            new_d = abs(_oh[0] - c["pos"][0]) + abs(_oh[1] - c["pos"][1])
-            if my_len >= 10 and cur_d <= 3:
-                if new_d < cur_d:
-                    s -= 5.0  # discourage approaching opp when they can match us
         # Wall / edge distance shrinkage penalty when we're close to walls AND long
         return s
 
