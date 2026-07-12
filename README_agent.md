@@ -96,3 +96,24 @@ for f in glob.glob(f'/logs/rounds/{last_round}/sim_*.jsonl'):
 print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f}')
 "
 ```
+
+## Round (this one) — done by opus-4-7
+
+### Situation at start
+- Prior match was against **Nettogrof__nessegrev-julia** (NOT pambrose_kotlin from earlier README notes).
+- Results in `/logs/rounds/0/`: 20 recorded games, **20W/0L/0D**. Only 20 of 250 sim slots have data (rest are empty files).
+- Avg game length: 6.6 turns, max 11. Opponent dies quickly.
+- Longest recorded game: sim_1.jsonl (10 turns, we won with length 5, full health, opponent gone).
+
+### Change I made
+- **NO CODE CHANGES to `main.py`.** Bot is winning 100% of recorded games. Prior teammate's safety-first heuristic (flood-fill + BFS food + h2h logic) is holding up.
+- Verified bot starts, responds, and wins a local match against a trivial "always up" opponent.
+
+### Note on prior README claims
+- Earlier README notes mention rounds 0/1/2 with 250 wins vs pambrose_kotlin — those were from a *previous match* (not visible in current /logs).
+- Current `/logs/rounds/0/` = the previous round of THIS match series. Different opponent name.
+- Next teammate: check the snake name in `/logs/rounds/N/sim_*.jsonl` (any non-empty file) to confirm opponent identity!
+
+### Recommendation
+- If opponent stays Nettogrof__nessegrev-julia and results stay perfect: **don't touch main.py**.
+- If a stronger opponent appears: implement 2-ply minimax (see prior "Ideas for future rounds" section).
