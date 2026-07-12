@@ -843,3 +843,154 @@ change, not a strength change against the current opponent.
   a self-play tournament sweep. Hazard support is now at least present
   (if currently inert) — remove this note once verified against a
   hazard-bearing map/ruleset if one ever appears.
+
+## Round 1 (this session) — opponent = graeme-hill__snakebot, found+partially-fixed a real "opponent seals corridor" trap
+
+`/logs/rounds/0/results.json`: clean sweep, sonnet-5 92 vs
+`graeme-hill__snakebot` 0 (confirmed via `analyze_logs.py /logs/rounds/0`:
+92/92 sims won, avg 8.0 turns, min 2 max 34 — opponent dies fast in the
+real harness, consistent with many past rounds' pattern of real-match
+scores being lopsided even when local 1v1 is closer).
+
+### Local benchmark (before any change)
+
+Extracted `origin/human/graeme-hill/snakebot:main.py` to `/tmp/opp/main.py`
+(746 lines — a real, non-trivial port, not a toy bot) and ran 6+1 local
+games via the `battlesnake` CLI against the *pre-this-round* `main.py`
+(recipe: see many earlier rounds' notes above — `setsid nohup env
+PORT=... python3 main.py > log 2>&1 </dev/null & disown` for both bots,
+then loop `./battlesnake play ...` backgrounded+disowned, `sleep`, then
+check `tail`). Result: **4 wins / 2 losses** out of 6, plus a 7th game
+dumped to JSON for analysis. This is a real, reproducible gap between
+local 1v1 and the crushing real-match score — worth digging into (as
+this round did), not just noting again.
+
+### Root cause found (concrete, not speculative)
+
+Dumped a loss to `/tmp/loss.json` (`-o` flag) and wrote an inline script
+(see recipe below) to print, for a stretch of ~15 turns before the death,
+every legal candidate move's flood-fill area from `main._flood_fill_size`
+using the *actual logged board state* at each turn. Found the literal
+mechanism: our snake (length 22) had a comfortable ~90-94-cell open area
+for **every** candidate at turn 130. One turn later (turn 131), one
+candidate's area had already collapsed to 14 (still correctly avoided by
+the existing hard-trap penalty, which chose the other candidate with area
+80). But by turn 132 — having taken the "safe" area-80 move — *both*
+remaining candidates had collapsed to area 1. The mechanism: the
+opponent's head advanced one cell (from (8,3) to (7,3) in this instance)
+between those two turns and sealed a chokepoint that connected our
+head's local neighborhood to the rest of the open board. Our existing
+1-ply flood-fill only ever sees the *current* board's connectivity (all
+snake bodies frozen at their present positions) — it has **no way to
+foresee** that an opponent's very next move can retroactively invalidate
+an 80-cell-looking escape route by closing a corridor, because the
+corridor cell itself isn't occupied *yet* at the moment we score it.
+
+I confirmed this quantitatively: re-running the *same* turn-131 flood
+fill but pre-blocking every cell the opponent's head could move into
+next turn (a cheap pessimistic 1-extra-ply widening, cost: just unioning
+in a set we already compute) dropped the "safe-looking" candidate's area
+from 80 down to **3** — i.e. the true danger *was* detectable one turn
+earlier than our then-current heuristic could see, just not with a
+same-turn-only flood fill.
+
+### Change made this round
+
+In `main.py`'s move-scoring loop: compute `opp_next_cells = risky_cells |
+winnable_cells` (a set we already build every call — the union of every
+opponent's own reachable-next-turn cells, regardless of relative
+length) and union it into the blocked-set used specifically for the
+flood-fill **area evaluation** (not the legal-move filter, and excluding
+the candidate cell itself, so it can't accidentally forbid a move we're
+actually allowed to make — that's still governed by the pre-existing
+risky_cells hard-avoid logic below it). This makes the space/openness
+score a cheap "1.5-ply" pessimistic estimate: "how much room would I
+have if every opponent also took their single worst-case-for-me next
+step", rather than a purely-static snapshot of the current board. Net
+effect: corridors that an opponent is one move away from sealing now
+show up as measurably smaller in the area score *before* we commit to
+walking down them, one turn earlier than before.
+
+This is still not true minimax/lookahead (opponents only get to block
+their own immediate neighbor cells, not simulated multiple turns deep,
+and we don't model *our own* future moves either) — but it's a very
+cheap, targeted fix for exactly the failure mode found in the loss dump,
+with no new data structures (reuses `risky_cells`/`winnable_cells`,
+already computed every call) and a one-line change to the flood-fill
+call site.
+
+### Verification done this round
+
+- `import main; main.move(state)` smoke tests: normal 2-snake state,
+  `{}` malformed state, and a state with an empty snakes list — all
+  return valid moves, no exceptions, matching pre-change behavior.
+- Re-ran a fresh 4-game local benchmark against the same extracted
+  opponent after the change: **3 wins / 1 loss**, no errors/exceptions
+  in either bot's server log (`grep -i error /tmp/new2.log` clean),
+  games ranging 131-238 turns. Comparable-or-better rate to the
+  pre-change 4/6 (~67%) — small sample, not conclusive proof of a
+  strength delta, but at minimum confirms **no regression/crash** was
+  introduced, and the specific mechanism it targets is real (verified
+  quantitatively above, not just "seems plausible").
+
+### Recipe used this round (for next teammate, condensed)
+
+```bash
+git show origin/human/graeme-hill/snakebot:main.py > /tmp/opp/main.py
+cp server.py /tmp/opp/server.py
+(cd /workspace && setsid nohup env PORT=8000 python3 main.py > /tmp/new.log 2>&1 </dev/null &)
+(cd /tmp/opp    && setsid nohup env PORT=8001 python3 main.py > /tmp/opp.log 2>&1 </dev/null &)
+cd /workspace/game
+setsid nohup timeout 90 ./battlesnake play -W 11 -H 11 \
+  --name new --url http://localhost:8000 --name opp --url http://localhost:8001 \
+  -g standard -m standard -o /tmp/loss.json > /tmp/loss.log 2>&1 </dev/null &
+disown
+# sleep ~28s in a separate tool call, then tail -3 /tmp/loss.log
+```
+
+To replay a dumped game's flood-fill areas turn-by-turn near a death (the
+exact technique used to find this round's bug):
+
+```python
+import json, main
+turns = [json.loads(l) for l in open('/tmp/loss.json') if 'turn' in json.loads(l)]
+byturn = {t['turn']: t for t in turns}
+for t in range(START, END):
+    l = byturn.get(t)
+    if not l: continue
+    snakes = l['board']['snakes']
+    me = [s for s in snakes if s['name'] == 'new'][0]
+    blocked = main._build_blocked(snakes)
+    w, h = l['board']['width'], l['board']['height']
+    head = (me['body'][0]['x'], me['body'][0]['y'])
+    for name, (dx, dy) in main.DIRS.items():
+        nxt = (head[0]+dx, head[1]+dy)
+        if nxt in blocked or not main._in_bounds(nxt, w, h):
+            continue
+        print(t, name, main._flood_fill_size(nxt, blocked, w, h, w*h))
+```
+
+### Suggested next steps for round 2+
+
+1. Run a bigger local benchmark (10-20 games) against the same
+   `graeme-hill__snakebot` extraction with the new pessimistic-area
+   change to get a more confident win-rate delta than this round's small
+   sample (3/4 vs previous 4/6) — I ran out of step budget to do this
+   myself this round.
+2. The same "opponent seals a corridor" mechanism could in principle be
+   extended: right now we only pessimistically block opponents' *own*
+   immediate neighbor cells for the area calc. A natural next increment
+   (still cheap) would be to also give this same treatment recursively
+   for 2 opponent-ply, or to combine it with our *own* best-response
+   (a real 1-ply minimax: "after I move here, what's the opponent's best
+   move against me, and how much room do I have after that") — this has
+   been on the "future improvement" list for many rounds now under
+   "minimax/lookahead" and this round's concrete bug is a good, specific
+   test case to validate any such change against (re-extract
+   `/tmp/loss.json` from this round if you don't want to re-find a fresh
+   repro).
+3. If `/logs/rounds/1/results.json` shows a different opponent identity,
+   use `git log --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark them
+   first, per the established pattern throughout this file, before
+   assuming this round's fix matters against them too.

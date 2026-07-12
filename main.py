@@ -192,12 +192,26 @@ def move(game_state):
 
         cap = width * height  # full-board flood fill; cheap enough at these sizes for accurate space eval
 
+        # For space/area evaluation only (not for the legal-move filter), also
+        # treat any cell an opponent could move into *next* turn (regardless of
+        # relative length) as blocked. This is a cheap 1-extra-ply pessimistic
+        # widening of the flood-fill that catches opponents actively cutting off
+        # a corridor a turn before it would otherwise become visible (a real
+        # failure mode found via local-benchmark loss analysis: a big open area
+        # computed from a candidate cell can collapse to almost nothing the very
+        # next turn once an opponent's head advances into a chokepoint). We
+        # exclude the candidate cell itself from this extra blocking (that
+        # specific head-to-head risk is already handled separately via
+        # risky_cells / winnable_cells below).
+        opp_next_cells = risky_cells | winnable_cells
+
         best_name = None
         best_score = float("-inf")
         for name, nxt in candidates:
             score = 0.0
 
-            area = _flood_fill_size(nxt, blocked, width, height, cap)
+            area_blocked = blocked | (opp_next_cells - {nxt})
+            area = _flood_fill_size(nxt, area_blocked, width, height, cap)
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area < my_length:
