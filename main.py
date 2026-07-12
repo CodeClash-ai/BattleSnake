@@ -138,6 +138,13 @@ def move(game_state):
         best_move = safe_moves[0][0]
         best_score = -999999
         
+        # Tail reachability analysis
+        my_tail = (you["body"][-1]["x"], you["body"][-1]["y"])
+        # We can reach the tail if we don not treat the tail itself as an obstacle
+        obstacles_without_tail = obstacles.copy()
+        if my_tail in obstacles_without_tail:
+            obstacles_without_tail.remove(my_tail)
+
         for d, np in safe_moves:
             # 1. Flood fill score (extremely important to not get trapped)
             space = _flood_fill(np, width, height, obstacles)
@@ -145,10 +152,32 @@ def move(game_state):
             # 2. Distance to target score (closer is better, so negative distance)
             dist = _manhattan(np, target)
             
+            # 3. Tail reachability bonus
+            # If we can reach our own tail, we are highly unlikely to get trapped
+            can_reach_tail = _flood_fill(np, width, height, obstacles_without_tail) if my_tail in obstacles else _flood_fill(np, width, height, obstacles)
+            # Actually, let us check if my_tail is in the visited set of BFS from np
+            tail_reachable = False
+            queue = [np]
+            visited = {np}
+            while queue:
+                curr = queue.pop(0)
+                if curr == my_tail:
+                    tail_reachable = True
+                    break
+                cx, cy = curr
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        n_pos = (nx, ny)
+                        if (n_pos not in obstacles_without_tail) and (n_pos not in visited):
+                            visited.add(n_pos)
+                            queue.append(n_pos)
+
             # Weighted score: heavily prioritize having enough space, then move towards target
-            # Each square of space is worth a lot (e.g., 100 points).
-            # Max possible space is ~121 on an 11x11 board.
             score = (space * 1000) - dist
+            
+            if tail_reachable:
+                score += 100000  # huge bonus for tail reachability!
             
             # Slight bonus for avoiding head-to-head squares even in fallback scenarios
             if np in dangerous_squares:
