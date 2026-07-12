@@ -551,3 +551,44 @@ Added a new **wall-entry pincer** block right after the along-wall shadow block 
 - If regressions, revert with `cp main.py.bak4 main.py`.
 - Consider adding: (a) 2-ply minimax for cornering scenarios; (b) starvation avoidance
   (force food-seeking when health < 20 even if food is on wall/risky).
+
+## Round 2 (real one) — done by opus-4-7
+
+### Situation
+- Opponent is actually **Xe__since** (NOT pambrose). Round 0: 247W/2L/0D. Round 1: 248W/1L/0D. Games avg ~124 turns.
+- Xe__since is a strong opponent that we beat but occasionally lose to via **corner/pincer traps** when it grows much longer than us.
+
+### Loss analysis
+- `/logs/rounds/1/sim_234.jsonl`: at turn 172, we were at (2,8), opp at (1,5) length 17 vs our 9. We chose LEFT (into pocket) instead of RIGHT/DOWN (safe). Voronoi from left was 12 vs down 45 / right 36. Food_dist for left was 1 (food at (1,9)) — this pulled us into the trap.
+- Similar corner-trap losses seen in round 0 (sim_56, sim_148).
+
+### What I tried (reverted)
+- Increased food weight when opp much longer → **made things worse** (drew us further into food-in-corner traps).
+- Added stronger pincer penalty scaling vor < my_len → didn't overcome food/space bonuses.
+- **Reverted; kept main.py identical to round-1 version.** Full backup in `main.py.bak_r2`.
+
+### Recommendations for next teammate
+1. **Fix the food-vs-safety tradeoff when opp longer**. When opp is longer AND our voronoi share of a food-adjacent cell is much smaller than alternatives, ignore the food. Concretely: if `c["vor"] < best_vor * 0.5`, cap food attraction to 0.
+2. **Better trap detection**: 2-ply search or model opp as also chasing (voronoi with opp moving toward us).
+3. **Grow opportunistically when equal/longer**, but avoid food when we're already ~equal length and food is on a wall/corner.
+4. **Do NOT increase food weight globally** — it makes corner traps worse.
+
+### Test scenario (paste to try fixes)
+```python
+gs = {
+    'board': {'width':11,'height':11,
+        'snakes': [
+            {'id':'me','name':'us','head':{'x':2,'y':8},
+             'body':[{'x':2,'y':8},{'x':2,'y':9},{'x':2,'y':10},{'x':3,'y':10},{'x':4,'y':10},{'x':4,'y':9},{'x':4,'y':8},{'x':4,'y':7},{'x':4,'y':6}],
+             'length':9,'health':98},
+            {'id':'op','name':'opp','head':{'x':1,'y':5},
+             'body':[{'x':1,'y':5},{'x':1,'y':4},{'x':1,'y':3},{'x':1,'y':2},{'x':1,'y':1},{'x':1,'y':0},{'x':2,'y':0},{'x':3,'y':0},{'x':4,'y':0},{'x':5,'y':0},{'x':6,'y':0},{'x':7,'y':0},{'x':7,'y':1},{'x':8,'y':1},{'x':9,'y':1},{'x':10,'y':1},{'x':10,'y':2}],
+             'length':17,'health':87},
+        ],
+        'food':[{'x':1,'y':9},{'x':8,'y':5}]},
+    'you': {'id':'me','name':'us','head':{'x':2,'y':8},
+             'body':[{'x':2,'y':8},{'x':2,'y':9},{'x':2,'y':10},{'x':3,'y':10},{'x':4,'y':10},{'x':4,'y':9},{'x':4,'y':8},{'x':4,'y':7},{'x':4,'y':6}],
+             'length':9,'health':98}
+}
+# Correct answer: 'down' or 'right'. Currently returns 'left' (trap).
+```
