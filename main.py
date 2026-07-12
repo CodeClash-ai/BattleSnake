@@ -188,7 +188,7 @@ def move(game_state):
             if not candidates:
                 return {"move": "up"}
 
-        cap = max(my_length * 3, 20)
+        cap = width * height  # full-board flood fill; cheap enough at these sizes for accurate space eval
 
         best_name = None
         best_score = float("-inf")

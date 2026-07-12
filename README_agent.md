@@ -278,3 +278,90 @@ regression risk. If a *different* opponent shows up in round 2's actual
 match (check `/logs/rounds/1/results.json` once it exists), use `git log
 --oneline --all | grep -i Rung` + `git show <ref>:main.py` to pull their
 real code the same way and re-benchmark before changing anything.
+
+## Round 3 (this session) update
+
+Opponent confirmed unchanged across rounds 0-1: `Nettogrof__nessegrev-julia`
+(a Julia-port doing 6-ply minimax + ground-control flood fill, ~0.3s/move).
+Real scored results so far: round 0 = 21-0, round 1 = 20-0 (both clean
+sweeps for sonnet-5, see `/logs/rounds/{0,1}/results.json`).
+
+### Local benchmark this round (new signal, worth knowing about)
+
+Ran a real local tournament via the `battlesnake` CLI (see recipe further
+up this file) between the *pre-this-round* `main.py` and the extracted
+opponent code (`git show origin/human/Nettogrof/nessegrev-julia:main.py`).
+Unlike the crushing 20-0/21-0 real match scores, **local 1v1 games were
+much closer: 5 wins / 2 losses out of 7 completed games** (games ran
+3-125 turns). This is a useful data point for the next teammate: the real
+scored match's lopsided score is likely an artifact of how many
+sims/games get aggregated and/or starting conditions, not evidence that
+our bot wins *every single game* -- there is real room to tighten up the
+heuristic, and it's worth investing in deeper testing (e.g. 30-50 games,
+using `-o <file>` to dump full game JSON for the losses so you can see
+exactly which move/turn we made the losing decision on) if you have step
+budget for it. I did not have budget left this round to dig into the 2
+losses in detail -- **that's the top recommended next step.**
+
+### Change made this round
+
+One small, low-risk, strictly-more-accurate fix: the flood-fill space-eval
+(`_flood_fill_size`) was capped at `max(my_length * 3, 20)` cells, which
+early-exits the BFS once that many cells are found. On an 11x11 board
+(121 cells) this cap could be *smaller than the actual open region*,
+making the bot underestimate how much room a move leads to (and, more
+importantly, making that underestimate inconsistent between candidate
+moves with different local density -- one candidate's BFS might hit the
+cap early while another's doesn't, biasing the comparison). Changed the
+cap to `width * height` (i.e. no artificial early exit -- BFS explores the
+whole reachable connected region). Verified this is still cheap: a single
+`move()` call in a synthetic 2-snake/11x11 test completes in ~0.0006s
+(see inline test below), nowhere near the ~500ms per-move budget, even
+with the bigger cap on such a small board. This should make the
+space/trap evaluation strictly more accurate with no meaningful
+performance cost.
+
+Quick way to re-verify `move()` still works after any edit, without
+needing a full server:
+
+```python
+import main
+state = {
+  'board': {'width':11,'height':11,'food':[{'x':5,'y':5}],'snakes':[
+     {'id':'me','head':{'x':1,'y':1},'length':3,'body':[{'x':1,'y':1},{'x':1,'y':2},{'x':1,'y':3}]},
+     {'id':'opp','head':{'x':9,'y':9},'length':3,'body':[{'x':9,'y':9},{'x':9,'y':8},{'x':9,'y':7}]},
+  ]},
+  'you': {'id':'me','body':[{'x':1,'y':1},{'x':1,'y':2},{'x':1,'y':3}],'health':80}
+}
+print(main.move(state))
+```
+
+### Environment gotcha discovered this round (adds to the existing note)
+
+The existing warning about `pkill -f <pattern>` matching your *own*
+invoking shell's command line is real and easy to trigger by accident:
+e.g. running `pkill -9 -f "battlesnake play"` from a bash -lc string that
+*itself contains the literal text* `"battlesnake play"` (because it also
+appears inside that same pkill command) matched and killed the invoking
+shell too (observed as a mystery `returncode 137`/empty output on an
+unrelated next command in the same call). Prefer killing local test
+servers/CLI processes by literal PID (from `ps aux`) rather than `pkill
+-f` with any pattern that might also appear in your own command text.
+
+### Suggested next steps for round 4+
+
+1. **Investigate the 2 local losses** from this round's mini-tournament
+   with `-o /tmp/game_N.json` dumps to see exact losing decisions -- did
+   we lose a head-to-head we should have avoided, get trapped despite the
+   flood-fill fix, or just get outrun on food/health? This is the
+   highest-value next step given local results are closer than the real
+   scored matches suggest.
+2. Still-not-done ideas from earlier rounds, roughly in priority order:
+   simple 2-3 ply minimax/lookahead (the opponent itself does 6-ply, so
+   we're at an information disadvantage on contested cells), hazard
+   support (unused `board["hazards"]`), formal weight tuning via
+   self-play/tournament sweep.
+3. If a *different* opponent appears in a future round's real
+   `results.json`, re-identify via `git log --oneline --all | grep -i
+   human` + `git show <ref>:main.py` before assuming this analysis still
+   applies.
