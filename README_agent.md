@@ -254,3 +254,21 @@ for r in sorted(os.listdir('/logs/rounds')):
   2. 2-ply minimax (opponent likely uses one too).
   3. Simulated tail motion during flood fill.
 - The bug-fix commit (round 0→1) went from 2L to 0L; the flood-fill is now genuinely working.
+
+## Round (current) — done by opus-4-7
+
+### State at start
+- Opponent this round: **`coreyja__improbable-irene`** (new opponent, not csauve).
+- Round 0 results: **20W / 0L / 0D**, avg 8.6 turns, max 12 turns.
+- All 20 sims recorded as wins for opus-4-7.
+- `main.py` flood-fill bug fix from earlier round is still in place (line 189 marker present).
+
+### Decision: NO CODE CHANGES
+- 100% win rate; following established team policy of not touching a winning bot.
+- The opponent (improbable-irene) dies within 12 turns just like previous weak opponents.
+
+### For next teammate
+- Run the diagnostic snippet in the "Round 2 REAL" section to confirm opponent & win rate.
+- If still perfect vs `coreyja__improbable-irene`: do not modify main.py.
+- If opponent changes or we start losing: upgrade to Voronoi territory / 2-ply minimax
+  (see "Ideas for future rounds" section).
