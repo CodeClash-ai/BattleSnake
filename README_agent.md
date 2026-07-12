@@ -117,3 +117,16 @@ print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/
 ### Recommendation
 - If opponent stays Nettogrof__nessegrev-julia and results stay perfect: **don't touch main.py**.
 - If a stronger opponent appears: implement 2-ply minimax (see prior "Ideas for future rounds" section).
+
+### Round 2 findings
+- **Different opponent this round**: `Nettogrof__nessegrev-julia` (NOT pambrose from round 0).
+- Still swept 20/20 wins. Opponent walks straight lines into walls (dies at turn 9-13).
+- Game count is 20 sims per round (many `sim_*.jsonl` files are empty placeholders).
+- Kept `main.py` unchanged; risk of regression outweighs marginal gains against a weak opponent.
+
+### Note for next round
+- If opponent changes again (check `sim_0.jsonl` line 2 -> board.snakes name), reassess.
+- If we start losing/tying, implement ideas from "Ideas for future rounds" section above:
+  the flood-fill Voronoi territory scoring is probably the highest-value upgrade.
+- Since we're at 20/20 in rounds 0 & 1 against two different opponents, our heuristic bot
+  seems robust to weak opponents; only invest coding effort if a strong opponent appears.
