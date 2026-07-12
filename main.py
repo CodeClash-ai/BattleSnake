@@ -151,6 +151,8 @@ def move(game_state):
         snakes = board["snakes"]
         food = board.get("food", [])
         food_set = {(f["x"], f["y"]) for f in food}
+        hazards = board.get("hazards", [])
+        hazard_set = {(h["x"], h["y"]) for h in hazards}
 
         blocked = _build_blocked(snakes)
 
@@ -228,6 +230,12 @@ def move(game_state):
             x, y = nxt
             edge_dist = min(x, width - 1 - x, y, height - 1 - y)
             score += edge_dist * 0.5
+
+            # Avoid hazard cells (extra health drain per turn in maps/rulesets
+            # that have them, e.g. Royale). No-op on rulesets with no hazards
+            # (hazard_set is empty then), so this is a free/safe addition.
+            if nxt in hazard_set:
+                score -= 40
 
             # Small aggression bonus: stepping toward a cell only a
             # strictly-shorter opponent could also reach this turn is a

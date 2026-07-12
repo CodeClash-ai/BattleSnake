@@ -761,3 +761,85 @@ awareness, tail-just-ate detection).
   60s-`timeout`'d background games; split launching and polling into
   separate tool calls (as done this round: one call to launch+sleep 35s,
   a follow-up call to sleep more + check the still-running long game).
+
+## Round 2 (this session) — confirmed opponent unchanged, added hazard support (low-risk, currently no-op)
+
+`/logs/rounds/{0,1}/results.json` both show clean 20-0 sweeps for
+sonnet-5 against `coreyja__improbable-irene` (same opponent both rounds,
+per the "Round 1 (this session)" section above already in this file).
+`analyze_logs.py /logs/rounds/1` confirms 20/20 sims won, avg 6.6 turns
+(opponent mostly dies almost immediately in the real scoring harness).
+
+### Verification this round
+
+- Smoke-tested `main.move()` on synthetic normal/empty/malformed states —
+  no exceptions, valid moves returned in all cases.
+- Fresh local benchmark (recipe in earlier rounds' notes: extract
+  `origin/human/coreyja/improbable-irene:main.py` to `/tmp/opp/main.py`,
+  run via the `battlesnake` CLI with both bots as local Flask servers,
+  `setsid nohup ... & disown` to survive across tool calls in this
+  harness): **6/6 clean local wins** before any code change, games
+  ranging 3-209 turns (including one 209-turn long game, both alive most
+  of the way — no crashes/errors in either server log). Confirms the
+  bot's real-round win rate is genuine, not a harness artifact.
+
+### Change made this round
+
+Added **hazard avoidance** (`board["hazards"]`), which every prior
+round's notes flagged as an unused TODO. Implementation: build a
+`hazard_set` from `board.get("hazards", [])` and apply a `-40` score
+penalty in the move-scoring loop for any candidate cell inside a hazard
+(on top of the existing safety/space/food scoring — it's additive, not a
+hard block, so the bot will still enter a hazard if every other option is
+worse, e.g. certain death).
+
+**Important scope note:** I confirmed via direct inspection of
+`/logs/rounds/1/sim_*.jsonl` that the real match ruleset is `"standard"`
+with **zero hazard cells ever present** in any observed board state (the
+`hazards` array is always empty — hazards are a Royale-map feature, not
+part of standard). So this change is **currently a complete no-op** in
+every match we've actually played or benchmarked — it cannot change any
+observed behavior right now, hence very low regression risk (verified
+with the smoke tests above, which behave identically with/without hazard
+cells in the input beyond the one synthetic test that explicitly included
+a hazard). It's future-proofing only, in case a later round's opponent
+match ever uses a hazard-bearing map/ruleset. If you want to double check
+this is truly inert in the current ruleset, grep any new round's
+`sim_*.jsonl` files for non-empty `"hazards"` the same way (see snippet
+below) before assuming it matters:
+
+```python
+import json
+for line in open('/logs/rounds/<n>/sim_0.jsonl'):
+    d = json.loads(line)
+    if 'board' in d and d['board'].get('hazards'):
+        print("hazards present!", d['board']['hazards'])
+```
+
+### Post-change re-verification
+
+Re-ran the local benchmark against the same extracted opponent after the
+change: 3 clean wins observed directly (36, 10, 120 turns) plus one very
+long game (200+ turns, both still alive) that ran past this session's
+step budget to observe the final outcome — not a loss, just
+inconclusive/slow, consistent with the pre-change 6/6 result. No behavior
+difference is expected/observed since hazards are never present in this
+ruleset (see above), so this is purely a code-quality/future-proofing
+change, not a strength change against the current opponent.
+
+### Recommendation for round 3+
+
+- Bot continues to win cleanly and reproducibly; no urgent changes
+  needed. Re-check `/logs/rounds/2/results.json` once it exists — if it's
+  still `coreyja__improbable-irene` and still a clean sweep, further
+  heuristic changes carry more regression risk than benefit. If a
+  *different* opponent appears, use `git log --oneline --all | grep -i
+  human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+  benchmark them before changing `main.py`, per the established recipe
+  throughout this file.
+- Still-not-done ideas from many earlier rounds, in case a tougher
+  opponent ever shows up: real 2-3 ply minimax/lookahead (current bot is
+  1-ply flood-fill + heuristic trap-margin only), formal weight tuning via
+  a self-play tournament sweep. Hazard support is now at least present
+  (if currently inert) — remove this note once verified against a
+  hazard-bearing map/ruleset if one ever appears.
