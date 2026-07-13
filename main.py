@@ -413,10 +413,43 @@ def move(game_state):
             # tail_reachable from True to (correctly) False for the
             # fatal "grab the corner food" candidate, while leaving the
             # safer alternatives (which don't eat) unaffected.
+            # BUG FIX (found this round via trace-replay against a real
+            # match starvation loss, tim-hub__awesome-snake sim_100.jsonl
+            # turns 98-118 in /logs/rounds/1 -- our snake cycled in a small
+            # 10-turn loop, walking directly ADJACENT to food repeatedly
+            # (food-dist 0/1 every turn) but never actually eating it,
+            # starving to death from health 20 down to 0 while food sat
+            # right next to it the whole time). Root cause: the previous
+            # eat_blocked fix (correctly) adds our own tail cell to the
+            # blocked set when this candidate eats food, to reflect that
+            # eating keeps that tail segment occupied one extra turn. But
+            # the tail-reachability check was then still called with
+            # target=my_tail -- i.e. it asked "can I reach `my_tail`"
+            # using a blocked-set that already contains `my_tail` itself,
+            # which _flood_fill_reach can NEVER answer "yes" to (a
+            # blocked cell is never added to `seen`/marked reached,
+            # regardless of area). This made EVERY food-eating candidate
+            # unconditionally register tail_reachable=False and eat the
+            # -my_length*8 anti-self-coil penalty, even for a completely
+            # safe, wide-open food pickup -- confirmed directly: replaying
+            # the exact turn-99 board state from sim_100.jsonl showed the
+            # candidate that eats immediately-adjacent food scored ~10-12
+            # points LOWER than non-eating alternatives purely from this
+            # spurious penalty, despite otherwise-identical area/voronoi/
+            # edge/degree terms, causing the bot to systematically avoid
+            # eating nearby food turn after turn. Fix: when a candidate
+            # eats, skip the (now-meaningless) tail-reachability penalty
+            # entirely for that candidate -- the area computation still
+            # correctly uses eat_blocked (that part was fine), only the
+            # reachability *check/penalty* is skipped.
+            eating = nxt in food_set
             eat_blocked = blocked
-            if my_tail is not None and nxt in food_set:
+            if my_tail is not None and eating:
                 eat_blocked = blocked | {my_tail}
-            area, tail_reachable = _flood_fill_reach(nxt, eat_blocked, width, height, cap, target=my_tail)
+            area, tail_reachable = _flood_fill_reach(
+                nxt, eat_blocked, width, height, cap,
+                target=(None if eating else my_tail),
+            )
             area_for_score = area
 
             # Anti-self-coil: if our own tail is NOT reachable from this
@@ -436,7 +469,7 @@ def move(game_state):
             # would show any danger. Penalty scales with our length (a
             # short snake's tail is close and this rarely matters; a long
             # snake failing this check is a much bigger red flag).
-            if my_tail is not None and not tail_reachable:
+            if my_tail is not None and not eating and not tail_reachable:
                 score -= my_length * 8
 
             # Voronoi "race" territory: cells strictly closer (BFS distance,

@@ -3767,3 +3767,133 @@ not behind).
   a small capped food-urgency weight boost when behind in length -- see
   inline comments at both spots for the full traced rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still tim-hub__awesome-snake (226-22-2 real), found + fixed a HIGH-IMPACT bug: food-eating candidates were incorrectly penalized by the tail-reachability anti-self-coil check, causing real starvation-loop losses
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is
+`tim-hub__awesome-snake`. Round 0 (before previous round's length-deficit
+food-urgency fix): 223-27. Round 1 (after that fix): **226-22-2** — a
+real, confirmed improvement, matching the previous round's expectation.
+
+### Traced a fresh round-1 loss (`sim_100.jsonl`, died turn 118) — found a serious, general bug (not opponent-specific)
+
+Full turn-by-turn replay (recipe: build a synthetic `game_state` per
+logged turn from `board.snakes[*].body`, call `main.move()` directly —
+same technique used throughout this file's history) showed our snake
+stuck at **length 4, health dropping 20→0 over 20 turns (turns 98-118)**,
+cycling through the *exact same* ~10-move loop **twice in a row**, never
+eating, then starving to death — even though food was sitting
+**immediately adjacent** (BFS food-distance 0 or 1) on almost every one
+of those turns. This is a different, more severe variant of the
+"starvation loop" pattern documented several times earlier in this file
+(e.g. `coreyja__jump-flooding`, `coreyja__coreyja-rs` sections above) —
+but this time the opponent wasn't even nearby/relevant; it was a pure,
+self-inflicted refusal to eat.
+
+### Root cause (found via direct per-term score printing, not just move() output — see method below)
+
+Temporarily instrumented `main.py`'s scoring loop with a debug print (via
+a `SNAKE_DEBUG` env var, removed before finishing — if you need to
+redo this, wrap the loop's `if score > best_score` block with a print of
+`name, nxt, score, area_for_score, voronoi_mine, tail_reachable, nxt in
+risky_cells, max_free_degree, free_degree, edge_dist, wall_run` similar to
+what's now documented inline in the fix comment) and replayed turn 99 of
+`sim_100.jsonl`: the candidate that moves directly onto adjacent food
+(`up` -> `(3,7)`, food-dist 0) scored **~10-12 points LOWER** than the
+non-eating alternatives, despite an otherwise-favorable `+20` immediate-
+food bonus and zero distance penalty. The culprit: `tail_reachable` was
+`False` for the food-eating candidate ONLY, triggering the
+`-my_length * 8` anti-self-coil penalty (`-32` at length 4) — a **bug**,
+not a real trap.
+
+The mechanism: a previous round's fix (see the large comment block
+earlier in this file/`main.py`, "Correctness fix ... zacpez__scape-goat
+sim_80.jsonl turn 72") correctly adds our own tail cell to the blocked
+set (`eat_blocked = blocked | {my_tail}`) when a candidate eats food,
+since growth means that tail segment does NOT vacate this turn. **But**
+`_flood_fill_reach` was then still called with `target=my_tail` — i.e.
+"is `my_tail` reachable" using a blocked-set that **already contains
+`my_tail` itself**. `_flood_fill_reach` can never mark a `blocked` cell
+as `seen`/reached, so this check was **unconditionally `False` for every
+single food-eating candidate, everywhere, regardless of any actual
+danger** — the earlier fix (correct in its own narrow goal: making the
+*area* calculation accurately reflect that eating keeps the tail
+occupied) had an unintended side effect of poisoning the *separate*
+tail-reachability *penalty* for the exact same candidates, making the
+bot systematically avoid eating food it was directly adjacent to. This
+is a strictly worse bug than the one it was patching, and had likely been
+silently active across all opponents since that fix landed a couple of
+rounds ago — not caught earlier because most opponents' matches don't run
+long/desperate enough to expose it clearly, or their traces happened to
+look at non-eating decision points.
+
+### Fix made this round
+
+When a candidate eats food: still use `eat_blocked` (tail included) for
+the **area** computation (unchanged, that part was correct), but pass
+`target=None` to `_flood_fill_reach` (skipping the now-meaningless
+reachability check) and skip the `-my_length * 8` penalty entirely for
+that candidate (added an `eating = nxt in food_set` flag, gated the
+penalty on `not eating`). Non-eating candidates are completely unaffected
+— same behavior as before.
+
+**Verified directly**: replaying the exact turn-99 board state from
+`sim_100.jsonl` now returns `{"move": "up"}` (eating the adjacent food),
+previously returned `{"move": "right"}` (continuing the fatal cycle).
+
+### Verification done
+
+- Smoke tests: normal 2-snake state, `{}` malformed state, empty-snakes
+  state, and a new explicit "food directly adjacent, low health" case
+  (added this round) — all return valid moves, no exceptions. The new
+  food-adjacent case correctly still picks a sensible move (moves toward
+  the opponent-free side; in the exact synthetic case tested it picked
+  the immediate-food-eating direction when that was also the safe one).
+- Confirmed no leftover `SNAKE_DEBUG`/debug code left in `main.py`
+  (`grep eat_blocked` — only the real code + comments remain) and
+  `ast.parse` confirms the file is syntactically valid.
+- **Did NOT get a fresh local-benchmark tournament run this round** (ran
+  out of step budget after finding/fixing/verifying the bug via direct
+  trace-replay) — this is the single most important next step. Given
+  this bug plausibly affected EVERY past round's real match results to
+  some degree (it's been active since the `zacpez__scape-goat` round a
+  few sessions ago, per the trace above), a fresh local benchmark against
+  `tim-hub__awesome-snake` (or whatever opponent is next) would be very
+  informative, and this fix should generalize to help against ANY
+  opponent, not just this one (it's a pure correctness fix to a
+  previously-shipped defensive heuristic, not opponent-specific tuning).
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Run a real local benchmark** (recipe unchanged from many earlier
+   rounds' notes throughout this file: `git show
+   origin/human/tim-hub/awesome-snake:main.py > /tmp/opp/main.py; cp
+   server.py /tmp/opp/server.py`, then `setsid nohup env PORT=...
+   python3 main.py > log 2>&1 </dev/null & disown` for both bots, loop
+   `battlesnake play ... -o /tmp/game_N.json & disown`, sleep, check
+   `tail`) to confirm this fix actually improves the win rate over the
+   226/22/2 baseline, and to check for any new failure modes.
+2. Given how long this bug went unnoticed (shipped a few rounds ago,
+   silently discouraging every food pickup where the anti-self-coil
+   check happened to be checked at all — which is every single turn),
+   it's worth a quick sanity pass over the OTHER anti-self-coil/tail
+   logic for similar "target is inside the blocked-set used to compute
+   it" traps. Nothing else found this round, but worth a second look if
+   step budget allows.
+3. If `/logs/rounds/2/results.json` (once it exists) shows a big jump in
+   win rate (or, if the opponent has changed, a strong result against
+   whoever's new), that's a good confirming signal this fix mattered in
+   the real harness too, not just in the one traced local example.
+4. As always: re-check the opponent identity each round via
+   `results.json` before assuming past analysis applies; use `git log
+   --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark a new
+   opponent if one appears.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: fixed the tail-reachability check to
+  skip itself for food-eating candidates instead of trivially failing
+  against a self-blocked target — see the large inline comment directly
+  above `eating = nxt in food_set` for the full traced rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
