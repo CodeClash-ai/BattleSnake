@@ -165,6 +165,36 @@ def _nearest_food_distance(pos, food):
     return min(_manhattan(pos, f) for f in food)
 
 
+
+def _nearest_uncontested_food_distance(pos, food, enemy_heads, my_len, enemy_max_len):
+    """Nearest food we can plausibly claim before an equal/longer enemy.
+
+    Against competent area bots, heavily chasing food that the opponent reaches
+    first causes us to walk into their body wall.  Manhattan timing is crude but
+    catches the common case where a longer enemy is adjacent to the same food.
+    """
+    if not food:
+        return 99
+    best = 99
+    for f in food:
+        md = _manhattan(pos, f)
+        if not enemy_heads:
+            best = min(best, md)
+            continue
+        ed = min(_manhattan(eh, f) for eh in enemy_heads)
+        # Equal-time food is unsafe when we cannot win the resulting head race.
+        if md < ed or (md == ed and my_len > enemy_max_len):
+            best = min(best, md)
+    return best
+
+
+def _food_contested_from(pos, food_cells, enemy_heads, my_len, enemy_max_len):
+    if pos not in food_cells or not enemy_heads:
+        return False
+    ed = min(_manhattan(eh, pos) for eh in enemy_heads)
+    return ed <= 1 and enemy_max_len >= my_len
+
+
 def _enemy_reachable_count(start, enemy_heads, w, h, blocked, limit=200):
     """Reachable cells for larger enemies, allowing them to start at their heads."""
     if not enemy_heads:
@@ -391,6 +421,7 @@ def move(game_state):
             safe_area = _flood_count(nxt, w, h, contested_blocked, limit=w * h)
             territory = _territory_count(nxt, enemy_heads, w, h, future_blocked, my_len, enemy_max_len)
             nearest_food = _nearest_food_distance(nxt, food)
+            safe_food = _nearest_uncontested_food_distance(nxt, food, enemy_heads, my_len, enemy_max_len)
             center_dist = _manhattan(nxt, ((w - 1) // 2, (h - 1) // 2))
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
             choke_risk = _articulation_risk(nxt, w, h, future_blocked)
@@ -440,11 +471,22 @@ def move(game_state):
             # length makes every future head-to-head and territory split worse.
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
+            food_dist = nearest_food
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
-            score -= nearest_food * food_weight
+                # Do not let catch-up pressure drag us toward food a longer
+                # opponent can reach first; use uncontested food unless starving.
+                if health >= 30:
+                    if safe_food < 99:
+                        food_dist = safe_food
+                    else:
+                        food_weight = min(food_weight, 25)
+            score -= food_dist * food_weight
             if nxt in food_cells:
-                score += (500 if health < 30 else (100 if health < 60 else 20)) + (800 if enemies and my_len <= enemy_max_len else 0)
+                if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
+                    score -= 1800
+                else:
+                    score += (500 if health < 30 else (100 if health < 60 else 20)) + (800 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 10000000
             for eh, e in zip(enemy_heads, enemies):
