@@ -576,6 +576,7 @@ def move(game_state):
             # Avoid squares an equal/longer enemy head could also choose.  This
             # is the main source of ties in the clone-vs-clone logs.
             h2h_risk = False
+            h2h_soft_penalty = 0
             for e in enemies:
                 eh = _pt(e["head"] if "head" in e else e["body"][0])
                 elen = e.get("length", len(e.get("body", [])))
@@ -585,9 +586,15 @@ def move(game_state):
                 # caused logged losses where we chose a one-cell self-trap
                 # instead of the large safe region next to ccSnake.  Keep the
                 # stricter generic rule for hunting/minimax-style opponents.
-                # jump-flooding also has an exact greedy Voronoi predictor; broad
-                # adjacent blocking trapped us in logged corner losses.
+                # jump-flooding has an exact greedy Voronoi predictor; broad
+                # adjacent blocking trapped us in logged corner losses.  BTAS also
+                # has a predictor, but the copied port can miss occasional moves;
+                # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
+                if "rdbrck" in ename or "btas" in ename:
+                    if _manhattan(nxt, eh) == 1 and elen >= my_len:
+                        h2h_soft_penalty = max(h2h_soft_penalty, 150)
+                    continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename:
                     continue
                 if _manhattan(nxt, eh) == 1 and elen >= my_len:
@@ -722,6 +729,8 @@ def move(game_state):
                     score += (2500 if health < 15 else (1200 if health < 30 else (100 if health < 60 else 20))) + (800 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
+            if h2h_soft_penalty:
+                score -= h2h_soft_penalty
             for ep, elen in random_direct_enemy_next:
                 if nxt == ep and my_len <= elen:
                     score -= 500000000
