@@ -95,6 +95,48 @@ def _flood_count(start, w, h, blocked, limit=200):
     return len(seen)
 
 
+
+def _distance_map(starts, w, h, blocked, limit=200):
+    """Breadth-first distances from one or more starts through unblocked cells."""
+    b = set(blocked)
+    dist = {}
+    q = []
+    for st in starts:
+        if st is not None and _in_bounds(st, w, h) and st not in dist:
+            b.discard(st)
+            dist[st] = 0
+            q.append(st)
+    qi = 0
+    while qi < len(q) and len(dist) < limit:
+        p = q[qi]
+        qi += 1
+        nd = dist[p] + 1
+        for n in _neighbors(p):
+            if _in_bounds(n, w, h) and n not in b and n not in dist:
+                dist[n] = nd
+                q.append(n)
+    return dist
+
+
+def _territory_count(my_start, enemy_heads, w, h, blocked, my_len, enemy_max_len):
+    """Approximate Voronoi cells we can reach before the enemy.
+
+    This helps in rare long games against real pathing bots: pure flood-fill can
+    overvalue large regions that a nearby equal/larger opponent actually controls.
+    Equal-time cells are only credited when we are longer and can win the
+    head-to-head.
+    """
+    myd = _distance_map([my_start], w, h, blocked, limit=w * h)
+    if not enemy_heads:
+        return len(myd)
+    ed = _distance_map(enemy_heads, w, h, blocked, limit=w * h)
+    terr = 0
+    for cell, d in myd.items():
+        e = ed.get(cell)
+        if e is None or d < e or (d == e and my_len > enemy_max_len):
+            terr += 1
+    return terr
+
 def _nearest_food_distance(pos, food):
     if not food:
         return 99
@@ -215,6 +257,7 @@ def move(game_state):
 
         enemies = [s for s in snakes if s.get("id") != my_id]
         enemy_heads = [_pt(s["head"] if "head" in s else s["body"][0]) for s in enemies]
+        enemy_max_len = max([s.get("length", len(s.get("body", []))) for s in enemies] or [0])
         enemy_next_pred = []
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
@@ -253,12 +296,14 @@ def move(game_state):
             future_blocked = set(occupied)
             future_blocked.add(nxt)
             area = _flood_count(nxt, w, h, future_blocked, limit=w * h)
+            territory = _territory_count(nxt, enemy_heads, w, h, future_blocked, my_len, enemy_max_len)
             nearest_food = _nearest_food_distance(nxt, food)
             center_dist = _manhattan(nxt, ((w - 1) // 2, (h - 1) // 2))
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
 
             score = 0
             score += area * 100                 # never trap ourselves
+            score += territory * (18 if enemies else 0)  # prefer space we reach first
             # If a much larger opponent survives into the endgame, avoid
             # voluntarily entering tiny one/two-cell pockets it controls.
             # This is deliberately a late/tactical penalty so early wall-
