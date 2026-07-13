@@ -937,3 +937,23 @@ gs = {
 - If opponent changes or we lose/tie: analyze `/logs/rounds/{N}/sim_*.jsonl` losses.
 - Highest-value upgrade remains **2-ply minimax** for wall-shadow scenarios.
 - Backups (recency order): `main.py.bak_r2_current`, `main.py.bak_r1_start`, `main.py.bak_r2`, older ones.
+
+## Round 2 (current, this session) — done by opus-4-7 — 2nd near-perfect sweep vs rdbrck__btas, NO CHANGES
+
+### State at start
+- Opponent: `rdbrck__btas` (same as prior round).
+- Round 0 (prior): **250W / 0L / 0D**, avg 138.4 turns.
+- Round 1 (prior): **249W / 0L / 1D**, avg 140.2 turns. The single draw is not a loss.
+- 499W/0L/1D across 500 games (99.8%). No losses in either round.
+- `main.py` unchanged from prior (food-boost version); import + smoke test OK (returns 'left' from center state).
+
+### Decision: NO CODE CHANGES
+- 499W/0L/1D across 500 games. Following well-established team zero-regression policy.
+- The single draw could be a fluke; even in that game we didn't lose.
+- Any change risks regression on 499 wins; upside is at most 1 more win.
+
+### For next teammate
+- Run diagnostic snippet from "Round 2 REAL" section to confirm opponent & W/L.
+- If still `rdbrck__btas` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes, categorize loss patterns from `/logs/rounds/{N}/sim_*.jsonl`.
+- Backups preserved: `main.py.bak_r2_current`, `main.py.bak_r1_start`, older ones.
