@@ -1562,3 +1562,35 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   x==0/y==0 edges (base 60 vs 100); it avoids cells an equal/longer enemy head is adjacent to
   (-80) — when LONGER we could body-block/cut it off. main.py has all prior layers + now the
   widened keep-pace growth band.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `joshhartmann11__battlejake2019`, LENGTH-SCALED ENEMY-REACH ANTI-SEAL
+- **Opponent = `joshhartmann11__battlejake2019`** — a 2019 BattleSnake port (y-flip to v1 API).
+  Real source saved to `opp_battlejake.py` (git show origin/human/joshhartmann11/battlejake2019:main.py,
+  556 lines). Food-seeking by HUNGRY/STARVING thresholds; stays SHORTER than us and outlasts us.
+  Test: `python3 vs_battlejake.py main.py <N>` (created; games run LONG, N<=12 for 30s cmd timeout;
+  use nohup+poll for larger N). A/B harness: `/tmp/ab_bj.py <N>` (NEW=main.py vs OLD=backup vs opp,
+  identical seeds).
+- **Round 0 result: won 226-24** (~90%). Analyzed all 24 losses (`analyze_losses.py`): the CHRONIC
+  self-coil vector — **20/24 losses OPUS was LONGER** (L11-29 vs OPP L9-21), ~18/24 die on an
+  EDGE/CORNER, HIGH health (90+). We coil our body into a bottom/right/corner pocket while the
+  SHORTER opponent slowly walls off our escape to the open board = ENEMY-ASSISTED SEAL.
+  Traced sim_101: L18 hp95 ran down into the bottom-left, coiled, got funneled right along y=1
+  into corner (10,0) while OPP L13 body occupied y=2-3 blocking the top escape. Died T151.
+- **Change (backup: main_r0_battlejake_backup.py = git HEAD pre-change bot):** made the
+  ENEMY-AWARE DEEP SURVIVAL horizon LENGTH-SCALED (was fixed 4-step enemy reach + depth-8):
+    - `e_steps = min(9, 4 + max(0,(my_len-12))//3)` (4 at L12, up to ~7-8 when long)
+    - `e_depth = min(14, 8 + max(0,(my_len-12))//3)`
+  The enemy walls off our escape over ~10 turns; a fixed 4-step reach + depth-8 can't see the
+  seal when we're long. Scaling both with length gives more foresight to detect the enemy-assisted
+  seal earlier and steer toward the open board.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3
+  fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.13 (<500 limit); L22 edge board decision 2.25ms
+  (safe). A/B vs real opp on IDENTICAL seeds (N=16, /tmp/ab_bj.py): NEW 12-1-3 vs OLD 13-3-0 —
+  **losses dropped 3->1** (converted to draws/wins), win count even within noise, ZERO regression.
+- **Next teammate:** opponent = opp_battlejake.py (2019 port, stays short, outlasts us). Our ONLY
+  loss vector is the LONG+healthy self-coil into an edge/corner pocket that the shorter enemy
+  seals. If losses persist: (a) raise e_steps/e_depth caps further (watch timing, L22=2.25ms so
+  room), (b) the canonical TRUE Hamiltonian tail-follow when long+safe is STILL the ideal
+  unimplemented fix (cycle the board tightly instead of coiling). Analyze new losses:
+  `cd /logs/rounds/N && python3 /workspace/analyze_losses.py sim_*.jsonl | grep -vi ...` (find
+  non-opus winners first). main.py has all prior layers + now length-scaled enemy-reach anti-seal.

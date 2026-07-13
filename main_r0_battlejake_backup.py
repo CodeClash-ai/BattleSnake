@@ -667,25 +667,15 @@ def _decide(game_state):
         # Only apply when we have a real body (avoids early-game over-caution).
         if my_len >= 8 and enemy_heads:
             blocked_now = enemy_body_cells | set(my_body)
-            # LENGTH-SCALED enemy-reach horizon: vs battlejake2019 (and other
-            # tail-chasers) we self-coil into an EDGE/CORNER pocket over ~10 turns
-            # while the enemy slowly walls off our escape to the open board (loss
-            # vector: sim_101/sim_115/sim_138 -- L14-22, high hp, funneled into a
-            # bottom/right pocket). A fixed 4-step enemy reach can't see the enemy
-            # sealing the top; scale it (and the self-sim depth) with our length so
-            # the longer we are, the further ahead we detect the seal.
-            e_steps = 4 + max(0, (my_len - 12)) // 3   # 4 at L12, up to ~7-8 when long
-            e_steps = min(e_steps, 9)
-            e_depth = min(14, 8 + max(0, (my_len - 12)) // 3)
             enemy_soon = set()
             for eh, _el in enemy_heads:
-                enemy_soon |= _enemy_reach_cells(eh, blocked_now, w, h, e_steps)
+                enemy_soon |= _enemy_reach_cells(eh, blocked_now, w, h, 4)
             sim_static_e = (enemy_body_cells | enemy_soon) - set(my_body)
             # don't block the cell we're actually moving into
             sim_static_e.discard(nxt)
-            e_surv, e_minsp = _deep_self_survival(nxt, sim_body, sim_static_e, w, h, depth=e_depth)
-            if e_surv < e_depth:
-                score -= (e_depth - e_surv) * 22.0
+            e_surv, e_minsp = _deep_self_survival(nxt, sim_body, sim_static_e, w, h, depth=8)
+            if e_surv < 8:
+                score -= (8 - e_surv) * 22.0
 
         # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a
         # Voronoi/territory strategy and can CONFINE us into a small corner strip
