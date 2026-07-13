@@ -1344,17 +1344,22 @@ def move(game_state):
                         if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
                             continue
                         clean_exits += 1
-                    score += edge_dist * 240
+                    # Round-1 losses were usually against a +2 or larger
+                    # Nagini that swept us along the outer row/column until a
+                    # forced losing head race.  Make the existing edge/escape
+                    # bias materially stronger only when Nagini is clearly
+                    # longer; equal-length play still needs normal food/space.
+                    score += edge_dist * (520 if enemy_max_len >= my_len + 2 else 300)
                     if edge_dist == 0:
-                        score -= 6200
+                        score -= 16000 if enemy_max_len >= my_len + 2 else 8500
                     elif edge_dist == 1:
-                        score -= 1500
+                        score -= 4200 if enemy_max_len >= my_len + 2 else 2200
                     if clean_exits == 0:
                         score -= 65000
                     elif clean_exits == 1 and (edge_dist <= 1 or near_nagini <= 3):
-                        score -= 17000
-                    if safe_area < 28:
-                        score -= (28 - safe_area) * 560
+                        score -= 30000 if enemy_max_len >= my_len + 2 else 19000
+                    if safe_area < 34:
+                        score -= (34 - safe_area) * (850 if enemy_max_len >= my_len + 2 else 620)
                     if choke_risk and safe_area < 40:
                         score -= choke_risk * 4200
             if has_hungry_enemy and enemy_max_len >= my_len:
