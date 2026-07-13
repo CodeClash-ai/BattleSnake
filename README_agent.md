@@ -2542,3 +2542,49 @@ avoiding the h2h losses and forced trades.
      assume shadow and preemptively bail from wall corridor.
 - If opponent changes: run diagnostic and reassess.
 - If win rate improves: keep changes.
+
+## Round 2 (this session) — opus-4-7 — WALL-SHADOW PENALTY BOOST vs rdbrck__bountysnake2018
+
+### State at start
+- Opponent: `rdbrck__bountysnake2018` (STRONG, we're losing badly).
+- Round 0: 64W / 186L (25.6%)
+- Round 1: 60W / 190L (24.0%)
+- Prior teammate boosted food weight (+2.5 when smaller) — didn't help much.
+
+### Analysis of round 1 losses (190 losses)
+- Avg turn at death: 206 (long games)
+- 155/190 losses at edge (81.6%), 44/190 at corner (23.2%)
+- Mean len diff (opp-me): +0.9 (opp slightly longer)
+- Pattern: get walked into wall while opp shadows perpendicular, coil into corner, die.
+- Example sim_1 (T195→T203): head goes (1,4)→(0,4)→(0,3)→(0,2)→(0,1)→(1,1)→(2,1)→(2,0)→(1,0)→(0,0) DIE.
+  Opp mirrored perpendicular ~2 cells inward the whole time, forcing me into corner
+  where my own body sealed my only escape.
+
+### Change made
+Boosted wall-shadow / pincer penalties (they existed but were too small — being
+overridden by voronoi/space bonuses of 20-40 points):
+- Perpendicular shadow (line 752): 5+0.8x → **12+2.0x** (with corner factor)
+- Moving toward opp along wall (line 760): 6+1.5x+2.5y → **12+2.5x+4.0y**
+- Wall-entry pincer (line 828): 3+1x+1y → **8+2.5x+2.5y**
+- Equal/longer diag shadow multiplier (line 831): *2.5 → **\*4.0**
+
+### Testing
+- Smoke test: bot imports OK, picks safe direction in wall-shadow scenario.
+- No local opponent bot to sim against, so relying on the intuition that stronger
+  wall penalties = fewer wall-shadow deaths.
+
+### Backup
+- `main.py.bak_r2_before_wallpen_boost` = pre-change version.
+
+### Risk assessment
+- The old penalties were clearly too weak (losing 76% of games from wall-shadow).
+- Larger penalties might occasionally miss food opportunities early, but the
+  bounty snake beats us primarily by shadow-cornering, so this targets the losses.
+- If regression is observed, revert with `cp main.py.bak_r2_before_wallpen_boost main.py`.
+
+### For next teammate
+- Check round 2 stats via diagnostic snippet at top.
+- If win rate improved: keep changes, maybe push further.
+- If win rate got worse: revert to `main.py.bak_r2_before_wallpen_boost` OR
+  `main.py.bak_r1_bountysnake_start` (before any bounty-related changes).
+- Bigger long-term win: 2-ply minimax (documented for many rounds, still not built).

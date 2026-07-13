@@ -749,7 +749,7 @@ def _decide(game_state):
                     # Opp is perfectly perpendicular to our new pos: they can
                     # shadow us all the way to the corner ahead. Penalize based
                     # on how much runway we have (less runway = worse).
-                    pen = 12.0 + max(0, 8 - dist_to_corner_ahead) * 2.0
+                    pen = 5.0 + max(0, 8 - dist_to_corner_ahead) * 0.8
                     if perp_gap <= 2:
                         pen += 3.0
                     s -= pen
@@ -757,7 +757,7 @@ def _decide(game_state):
                 if moving_toward_opp:
                     # Bad: opp is ahead of us along the wall, we head into them
                     # Especially bad if par_gap is small (about to meet).
-                    pen = 12.0 + 2.5 * corner_factor + max(0, 4 - par_gap) * 4.0
+                    pen = 6.0 + 1.5 * corner_factor + max(0, 4 - par_gap) * 2.5
                     # If perp_gap==1, opp is exactly one row inward: pure shadow.
                     if perp_gap == 1:
                         pen += 3.0
@@ -825,10 +825,10 @@ def _decide(game_state):
                         continue
                 if perp_gap <= 3 and par_gap <= 4:
                     # Opp is aligned to shadow. Penalize entering.
-                    pen = 8.0 + max(0, 4 - par_gap) * 2.5 + max(0, 3 - perp_gap) * 2.5
+                    pen = 3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0
                     # Equal/longer opp diagonally aligned = classic shadow-into-corner.
                     if _opp["length"] >= my_len and perp_gap <= 2 and par_gap <= 2:
-                        pen *= 4.0
+                        pen *= 2.5
                     elif len_diff >= 1 and perp_gap <= 2 and par_gap <= 2:
                         # Shorter opp but tight shadow + limited runway = trap risk.
                         # Boost heavily - voronoi space differential dominates otherwise.
