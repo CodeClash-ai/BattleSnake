@@ -2206,6 +2206,15 @@ def move(game_state):
                     # snowballs length and wins head-to-heads.
                     food_weight += min(360, 140 + (enemy_max_len - my_len) * 45)
                     food_dist = path_food
+                if has_sneaky_enemy:
+                    # Sneaky-Snake's weighted grid values all food highly and then
+                    # hunts smaller snakes.  Our remaining losses are usually high-
+                    # health length deficits (+4 to +15), not starvation.  Add a
+                    # controlled reachable-food catch-up term when behind; the
+                    # uncontested-food filter below still prevents chasing meals
+                    # that Sneaky can claim first.
+                    food_weight += min(420, 150 + (enemy_max_len - my_len) * 45)
+                    food_dist = path_food
                 if has_flipez_crystal_enemy:
                     # Flipez wins its rare games by outgrowing us with steady
                     # nearest-food chasing.  When behind, make reachable food a
@@ -2221,6 +2230,13 @@ def move(game_state):
                     elif has_flipez_crystal_enemy:
                         food_dist = path_food
                         food_weight = max(food_weight, 140)
+                    elif has_sneaky_enemy and path_food < 99:
+                        # If all food is technically contested by Manhattan time,
+                        # still move toward reachable food against Sneaky instead
+                        # of giving up growth entirely; its exact head predictor
+                        # and normal space terms handle immediate danger.
+                        food_dist = path_food
+                        food_weight = max(food_weight, 120)
                     else:
                         food_weight = min(food_weight, 25)
             if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
@@ -2280,7 +2296,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0) + (1200 if has_sneaky_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
