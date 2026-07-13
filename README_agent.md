@@ -4611,3 +4611,148 @@ away and had no representation in any current-turn heuristic.
 - `main.py` — the bot (no changes this round — investigation only, see
   above).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = coreyja__amphibious-arthur, traced losses (extreme-length self-coil + point-of-no-return edge-hugging, both well-known classes), NO code change (investigation-only, low risk given already-strong 232/18 result)
+
+`/logs/rounds/0/results.json`: opponent this round is **`coreyja__amphibious-arthur`**
+(a faithful Rust port — see `git show origin/human/coreyja/amphibious-arthur:main.py`
+for the full docstring. Notable quirk: its scoring function reads `health`
+from the board state but does NOT decrement it across its own internal
+recursion, so its heuristic is essentially "prefer neighborhoods with more
+open cells, biased toward keeping health near 80" — it has **no explicit
+food-seeking at all**, just collision avoidance + a mild open-space
+preference). Real result: **sonnet-5 232 / opponent 18** out of 250 (92.8%,
+NOT a clean sweep). `analyze_logs.py /logs/rounds/0`: avg 126.6 turns/sim
+(min 12, max 342) — games commonly run very long, which (per this file's
+extensive history) is exactly when our own long-horizon self-coil risk
+becomes the dominant loss mechanism rather than opponent pressure (this
+opponent has no active hunting/food-seeking behavior to create real
+corridor-race pressure).
+
+### Local benchmark (before any change)
+
+Extracted the opponent fresh (`git show
+origin/human/coreyja/amphibious-arthur:main.py > /tmp/opp/main.py; cp
+server.py /tmp/opp/server.py`) and ran 6 real local games via the
+`battlesnake` CLI against the current, unmodified `main.py` (standard
+recipe — see many earlier rounds' notes throughout this file: `setsid
+nohup env PORT=... python3 main.py > log 2>&1 </dev/null & disown` for
+both bots, loop `battlesnake play ... -o /tmp/game_N.json & disown`,
+sleep, check `tail`). **Result: 5 wins / 1 loss**, games 83-217 turns —
+roughly consistent with the real 92.8% win rate (not a case where local
+1v1 looks dramatically worse, unlike several past opponents in this
+file's history).
+
+### Traced the local loss + several real-match losses (recipe unchanged
+### from dozens of earlier rounds' notes — build a synthetic `game_state`
+### per logged turn from `board.snakes[*].body`, call `main.move()`
+### directly, and manually recompute `_flood_fill_reach`/`_greedy_self_room`
+### per candidate to see exactly which term decided a move)
+
+1. **Local loss (`/tmp/game_3.json`, died turn 217, our length 23 on the
+   11x11=121-cell board)** — the well-documented "extreme-length
+   self-coil, board nearly exhausted" class (search "extreme-length"
+   above, e.g. the `rdbrck__btas` sim_90 length-35 case). Traced back to
+   turn 204 (head `(8,6)`, legal `up`/`down`): manually computed
+   `_flood_fill_reach`/`_greedy_self_room` for both — `up` showed
+   `area=87, room_steps=23` (== my_length, i.e. the *existing*
+   anti-self-coil heuristic reported it as fully safe), `down` showed
+   `area=87, room_steps=15` (< my_length, correctly penalized as tighter).
+   The bot picked `up` (the heuristically "safer" option) — and it still
+   led to a fully forced dead end 1 turn later (turn 205 had only 1 legal
+   move) and death at turn 217. **This means `_greedy_self_room`'s
+   deterministic greedy walk produced a false negative here** — it
+   reported full room (23/23) for a path that, followed for real,
+   actually still dead-ended almost immediately. This is a concrete,
+   reproducible limitation of that heuristic (a single greedy walk isn't
+   guaranteed to find a real Hamiltonian-like path even when one might
+   exist, and can't detect when a region only *looks* like it has room
+   dimensionally but doesn't topologically) — worth flagging precisely
+   for whoever next works on this heuristic, since previous rounds'
+   notes only described `_greedy_self_room` in terms of what it *catches*
+   (e.g. the `rdbrck__btas` round), not this kind of false-negative gap.
+2. **Real-match loss `sim_224.jsonl` (died turn 21, SHORT game, our
+   length only 6)** — notably NOT an extreme-length case, showing this
+   failure class isn't just a very-long-game problem. Traced in full:
+   our snake walked up column `x=10` (the right edge) for 4 consecutive
+   turns while the opponent walked along row `y=0`/`y=1` in the same
+   direction, converging on the bottom-right corner. By turn 18, our
+   snake was already **completely forced (exactly 1 legal move)** for 2
+   consecutive turns, and by turn 20, **zero legal moves remained at
+   all** (both `up` and `left` blocked by our own body + the opponent's
+   body respectively). Walked back to the actual decision point (turn
+   16, head `(10,4)`, legal `up`/`down`) — confirmed via literal-state
+   `main.move()` replay that the current code picked `down` there
+   (matching the real game), continuing into the corner-bound corridor,
+   while `up` was the untaken alternative. Given the step budget
+   remaining, did not fully quantify *why* `down` scored higher (likely
+   another near-tie among area/voronoi/edge terms, per the many
+   previously-documented examples of this exact shape — see the
+   extensive `moxuz__pinky-snek`, `ccSnake2018__ccsnake`, and
+   `zacpez__scape-goat` sections above for near-identical traced
+   examples against other opponents) — this is the single best next
+   thing to check if picking this up again (see below for the exact
+   repro turn/state).
+
+### Why no code change was made this round
+
+Both traced mechanisms map directly onto the two most well-established,
+already-extensively-investigated failure classes in this file's long
+history (extreme-length self-coil at very high length; point-of-no-return
+edge-hugging where the fatal commitment happens several turns before any
+current metric shows danger) — neither is a locatable, fixable same-turn
+scoring bug in the traditional sense (no off-by-one, no wrong sign, no
+term canceling another unexpectedly, per the direct score inspection
+above). This file's history includes multiple concrete, documented
+attempts at heuristics targeting exactly these classes (`_greedy_self_room`
+itself, `wall_run`, the Voronoi race-territory term, the tail-reachability
+check) plus at least 2 documented reverts of speculative *further*
+attempts (opponent straight-line/heading projection vs `Xe__since`, the
+old `opp_territory`/`area_pess` mechanism) that turned out ineffective or
+harmful — the risk/reward of another speculative attempt with the very
+limited step budget remaining this round (4 steps left after this trace)
+was poor. Smoke tests (`main.move()` on a normal 2-snake state, `{}`
+malformed state, empty-snakes state) all still pass, confirming the
+codebase is healthy going into next round unmodified.
+
+### Recommended next steps
+
+1. **`sim_224.jsonl` turn 16** (head `(10,4)`, candidates `up`->`(10,5)`
+   vs `down`->`(10,3)`, real game took `down` and died 5 turns later) is
+   a clean, freshly-verified, SHORT-game repro point (unlike most past
+   examples in this file, which tend to be very long games) — worth a
+   full per-term score printout (`area`, `voronoi_mine`, `room_steps`,
+   `free_degree`, `edge_dist`/`wall_run`, food-dist) for both candidates
+   next round to see exactly which term(s) favored `down`, and whether
+   `up` was genuinely safer or just differently risky.
+2. **The `_greedy_self_room` false-negative found this round** (turn 204
+   of `/tmp/game_3.json`: `up` scored `room_steps=23` i.e. "fully safe"
+   but led to a forced dead end 1 turn later) is worth investigating
+   independently of any specific opponent — since the heuristic is a
+   single deterministic greedy walk, it may be worth trying 2-3
+   different tie-breaking rules (e.g. also try "prefer the neighbor
+   closest to the flood-filled region's centroid" or "prefer the
+   neighbor that keeps the most *distinct* branches open") and taking
+   the best (max) `room_steps` across a small number of cheap greedy
+   variants, rather than relying on one single walk's result — a bounded,
+   still-cheap generalization that might catch cases like this one
+   without the cost/risk of full multi-ply minimax.
+3. The still-not-attempted big idea, reconfirmed relevant yet again this
+   round: **true multi-ply lookahead / minimax with a simple
+   opponent-response model** — see the extensive design sketches in the
+   `ccSnake2018__ccsnake`, `Xe__since`, and `zacpez__scape-goat` sections
+   elsewhere in this file.
+4. As always: re-check `/logs/rounds/1/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's analysis applies.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only, see
+  above for two freshly-traced concrete repro points: `/tmp/game_3.json`
+  turn 204, and `/logs/rounds/0/sim_224.jsonl` turn 16 — recreate via the
+  local-benchmark recipe / `build_state()` helper pattern documented many
+  times throughout this file if `/tmp` has been cleared by the time you
+  read this).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
