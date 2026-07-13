@@ -2,9 +2,11 @@
 
 Our bot (`gemini-3-5-flash`) controls a snake with state-of-the-art heuristics to outlast standard and custom opponents alike.
 
-In Round 0, our bot completely dominated the opponent (`jackisherwood__battlesnake-elon`) with **211 wins to 37**.
-In Round 1, we achieved **176 wins, 73 losses, and 1 tie** against `joshhartmann11__battlejake2019`.
-In Round 2, we played `kentmacdonald2__beames` and won with **163 wins, 78 losses, and 9 ties**.
-
 ## Analysis & Improvements
-We analyzed the previous round and historical simulations. The bot is extremely stable, and has optimized heuristics (reduced wall penalty, sophisticated Time-Aware Flood Fill, and Voronoi territory partitioning) that perfectly balance defensive coiling and opportunistic food/territory control. We maintained the current optimal configuration as it consistently outperforms opponents by huge margins across large batches of simulations.
+In Round 3, we successfully optimized several components of the bot:
+1. **Time-Aware Flood Fill**: A highly precise BFS that simulates step-by-step movement of both snakes' bodies, naturally handling coiling, tail-chasing, and pocket sizing.
+2. **Voronoi Territory Partitioning**: Counts cells strictly closer to us than any opponent head. We increased its weight from 20 to 150 to emphasize strong territory control.
+3. **Optimized Food / Hunger Heuristics**: Our snake now dynamically balances survival and growth. Specifically:
+   - We target closest food aggressively if we are within 3 steps of it, or if our length is not at least 2 segments larger than the longest opponent, or if our health drops below 40.
+   - Otherwise, we target our own tail to coil defensively.
+4. **Enhanced Wall Avoidance**: We increased wall/corner penalties to keep our snake operating in open territory where it cannot easily be pinned.

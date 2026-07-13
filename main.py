@@ -123,9 +123,9 @@ def move(game_state):
         opp_lengths = [s["length"] for s in board["snakes"] if s["id"] != my_id]
         max_opp_length = max(opp_lengths) if opp_lengths else 0
         
-        # Hungry threshold: if our length is less than or equal to opponent's max length + 2,
-        # OR our health is critical (less than 35), we are hungry.
-        is_hungry = (my_length <= max_opp_length + 2) or (my_health < 35)
+        # Hunger logic: try to be comfortably longer than the opponent,
+        # or seek food if health is below 40.
+        is_hungry = (my_length <= max_opp_length + 2) or (my_health < 40)
         
         obstacles = set()
         opp_heads = []
@@ -196,18 +196,21 @@ def move(game_state):
             
         food = board.get("food", [])
         
-        if food and is_hungry:
-            target_food = None
-            min_dist = 9999
-            for f in food:
-                fp = (f["x"], f["y"])
-                dist = _manhattan(my_head, fp)
-                if dist < min_dist:
-                    min_dist = dist
-                    target_food = fp
+        # Determine closest food:
+        target_food = None
+        min_food_dist = 9999
+        for f in food:
+            fp = (f["x"], f["y"])
+            dist = _manhattan(my_head, fp)
+            if dist < min_food_dist:
+                min_food_dist = dist
+                target_food = fp
+                
+        # If there is very close food, or we are hungry, target the food.
+        # Otherwise, target our own tail to coil safely.
+        if target_food and (min_food_dist <= 3 or is_hungry):
             target = target_food
         else:
-            # If not hungry or no food, target our own tail to safely coil/follow ourselves!
             my_tail = (you["body"][-1]["x"], you["body"][-1]["y"])
             target = my_tail
             
@@ -233,13 +236,13 @@ def move(game_state):
                 wall_penalty += 1
                 
             # Weighted score
-            score = (space * 1000) + (voronoi_space * 20) - dist - (wall_penalty * 2)
+            score = (space * 1000) + (voronoi_space * 150) - dist - (wall_penalty * 10)
             
             if space < my_length:
                 score -= 10000000  # heavy penalty for coiling in a small pocket
                 
             if np in dangerous_squares:
-                score -= 50000
+                score -= 1000000  # heavy penalty for choosing a dangerous square when safe alternatives exist
                 
             if score > best_score:
                 best_score = score
