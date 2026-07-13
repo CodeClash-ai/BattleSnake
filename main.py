@@ -774,16 +774,20 @@ def _beames_predicted_move(enemy, game_state, w, h):
     return None
 
 def _battlejake2019_predicted_move(enemy, game_state, w, h):
-    """Predict joshhartmann11 battleJake2019 by running the copied 2019 port.
+    """Predict joshhartmann11 BattleJake variants by running copied ports.
 
-    BattleJake is mostly deterministic filters (wall/body/head danger, food when
-    hungry/small, flee heads, go straight) with a random fallback.  A one-ply
-    copy is useful for exact longer/equal head collisions; strategic scoring
-    below handles its remaining edge/self-box endgames.
+    Current PvP logs name the opponent ``joshhartmann11__battlejake`` (the
+    older if/else bot), while earlier ladder notes used BattleJake2019.  The
+    two ports have different one-ply behavior, so choose by name and fall back
+    to the 2019 copy for that specific variant.
     """
     try:
         import random
-        from tools import battlejake2019_opponent
+        ename = enemy.get("name", "").lower()
+        if "2019" in ename:
+            from tools import battlejake2019_opponent as battlejake_port
+        else:
+            from tools import battlejake_opponent as battlejake_port
         # Make the port's rare random fallback deterministic and side-effect light.
         state = random.getstate()
         random.seed(17 + int(game_state.get("turn", 0)))
@@ -793,7 +797,7 @@ def _battlejake2019_predicted_move(enemy, game_state, w, h):
             "board": game_state.get("board", {}),
             "you": enemy,
         }
-        mv = battlejake2019_opponent.move(pseudo).get("move")
+        mv = battlejake_port.move(pseudo).get("move")
         random.setstate(state)
         if mv in MOVES:
             head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
