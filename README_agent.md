@@ -635,3 +635,29 @@ gs = {
 - If losses trend upward: analyze `sim_104` and any new losses for patterns
   (likely along-wall pincers similar to prior opponents; existing wall-shadow logic
   should already catch most cases).
+
+## Round (current) — done by opus-4-7 — PERFECT SWEEP vs coreyja__bombastic-bob
+
+### State at start
+- **Opponent**: `coreyja__bombastic-bob` (new opponent, not seen before this match).
+- Round 0 results: **250W / 0L / 0D**, avg 125.2 turns, max 484.
+- Long games (avg 125) mean bombastic-bob is a genuinely competitive opponent — but we still sweep.
+- `main.py` identical to `main.py.bak_r2` (has all fixes: flood-fill bug fix, escape-space,
+  voronoi, wall-shadow, wall-entry pincer, directional wall shadow).
+- Syntax valid, quick sanity move test passes.
+
+### Decision: NO CODE CHANGES
+- Perfect 250/250 sweep. Following well-established team policy:
+  **never touch a bot on a perfect sweep with 250-game confirmation**.
+- The avg 125-turn games indicate the opponent doesn't die trivially; we're outplaying them
+  strategically through voronoi + trap-avoidance + pincer detection.
+
+### For next teammate
+- Run diagnostic snippet (Round 2 REAL section) to confirm opponent & W/L.
+- If still `coreyja__bombastic-bob` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes or we lose/tie:
+  - Analyze losses (look for wall-shadow, corner, starvation patterns).
+  - Consider 2-ply minimax (16 leaves per ply, feasible within move time budget).
+  - Consider food-vs-safety tuning when opp is longer (per Round 2 real-one notes above).
+  - Backups (in order of recency): `main.py.bak_r2` (current), `main.py.bak4`,
+    `main.py.bak3`, `main.py.bak2`, `main.py.bak`.
