@@ -896,6 +896,29 @@ def move(game_state):
                         score -= (30 - safe_area) * 520
                     if choke_risk:
                         score -= choke_risk * 4500
+                    if enemy_max_len >= my_len + 2:
+                        # Round-1 Flipez losses were usually not immediate head
+                        # collisions; we followed an edge/one-cell corridor while
+                        # a much longer nearest-food chaser closed all exits.  Raw
+                        # flood-fill overvalues these corridors because the enemy's
+                        # next step is not yet a permanent wall.  Count next-turn
+                        # exits that are not adjacent to any plausible enemy head
+                        # move, and heavily reject candidates with no clean escape.
+                        clean_exits = 0
+                        for nn in _neighbors(nxt):
+                            if not _in_bounds(nn, w, h) or nn in future_blocked:
+                                continue
+                            if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                                continue
+                            clean_exits += 1
+                        if clean_exits == 0:
+                            score -= 45000
+                        elif clean_exits == 1 and edge_dist <= 1:
+                            score -= 18000
+                        if safe_area < 12:
+                            score -= (12 - safe_area) * 7000
+                        if edge_dist == 0 and near_flipez <= 5 and safe_area < 35:
+                            score -= (35 - safe_area) * 900
             if has_nbw_ruby_enemy and enemy_max_len >= my_len:
                 # nbw-ruby's weighted-paint bot is especially good at turning the
                 # board edge plus its body into a zipper trap.  Round-1 losses were
@@ -1041,7 +1064,7 @@ def move(game_state):
                     # nearest-food chasing.  When behind, make reachable food a
                     # first-class objective instead of letting static space terms
                     # keep us orbiting safely but shorter.
-                    food_weight += min(260, 90 + (enemy_max_len - my_len) * 25)
+                    food_weight += min(520, 180 + (enemy_max_len - my_len) * 45)
                     food_dist = path_food
                 # Do not let catch-up pressure drag us toward food a longer
                 # opponent can reach first; use uncontested food unless starving.
@@ -1072,7 +1095,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (900 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
