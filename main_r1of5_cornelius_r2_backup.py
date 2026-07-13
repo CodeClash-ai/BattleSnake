@@ -410,7 +410,7 @@ def _decide(game_state):
     # opponent (elon L30-43) we widen this band so we keep pace and don't get
     # out-lasted once past the +2 lead (our #1 elon loss vector = being SHORTER
     # in long games). Vs short opponents the +1 band is unchanged.
-    _pace_margin = 8 if max_enemy_len >= 20 else (6 if max_enemy_len >= 12 else 1)
+    _pace_margin = 6 if max_enemy_len >= 20 else 1
     behind_or_even = my_len <= max_enemy_len + _pace_margin
     # TRULY behind: enemy is strictly longer than us. Vs a large food-greedy
     # opponent (cornelius reaches L28-41) our #1 loss vector is being SHORTER at

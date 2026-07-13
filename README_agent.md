@@ -1524,3 +1524,41 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   those low-edges or cut it off when we're longer (it avoids cells an equal/longer enemy head is
   adjacent to, -80). If we're LONGER when losing, it's the self-coil vector (tail-follow etc all
   present). Analyze: `python3 analyze_cornelius.py`. main.py has all prior layers + keep-pace growth.
+
+## Round 2 of 5 (this task, opus-4-8) — cornelius, WIDENED KEEP-PACE GROWTH BAND
+- Opponent STILL `ChaelCodes__cornelius` (FOOD-GREEDY 1-ply greedy, grows L28-41, no lookahead;
+  opp_cornelius.py). Results: round 0 won 177-73, round 1 won 193-55+2T (prev teammate's
+  keep-pace growth cut losses 73->55 — GROWTH IS THE LEVER vs this opponent).
+- **Loss analysis (round 1, 57 losses, analyze_cornelius.py + /tmp/deathcause.py):** UNCHANGED
+  dominant vector — **38/57 losses OPUS was SHORTER at death** (median opusL~22 vs oppL~24;
+  6 equal, 13 longer). Death cause: boxed 22, wall/corner 17, H2H 18. The 18 H2H losses are
+  DIRECTLY caused by being shorter (we lose every H2H when shorter). Cornelius (food-greedy)
+  OUT-GROWS us and out-lasts / H2H-kills us as the bigger snake. Losses are close in length
+  (only -2 median), so a modest growth boost should flip many.
+- **Change (backup: main_r1of5_cornelius_r2_backup.py = git HEAD pre-change bot):** widened the
+  keep-pace growth band so we don't fall behind cornelius:
+    - `_pace_margin = 8 if max_enemy_len>=20 else (6 if max_enemy_len>=12 else 1)`
+      (was `6 if >=20 else 1`). Now vs a large grower we keep eating to a +8 lead (was +6), and
+      vs a mid-length enemy (L12-19, the growth-race window) we keep pace to +6 (was +1 — we
+      used to stop eating too early mid-game and let cornelius pass us).
+  Logic table verified: whenever we're behind/near cornelius (L24-41) we eat HARD (truly_behind)
+  or keep pace (behind_or_even); clearly_ahead only fires at a genuinely big lead (behind_or_even
+  is checked BEFORE clearly_ahead in the elif chain, so it wins when both true). `_enemy_small`
+  left at 22 (unchanged) to NOT regress the tantilla anti-overgrowth guard.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=15.98. Logic table confirms keep-pace at
+  all cornelius-relevant lengths. A/B vs real opp in sim: NEW 10-0 = OLD 10-0 (NO regression;
+  the sim does NOT flood food like the real engine over 300+ turn games, so it CANNOT reproduce
+  the growth-race trap — both bots win in sim regardless, as every prior cornelius/tantilla/
+  eremetic/gigantic teammate found). Validated by DESIGN (directly targets the confirmed 38/57
+  shorter-at-death vector) + sim_test + fuzz + logic table + no-regression.
+- **Next teammate:** opponent = opp_cornelius.py (FOOD-GREEDY, grows L28-41, no lookahead). Our
+  loss vector = being SHORTER (out-grown) -> boxed/H2H-killed by the bigger snake. If losses
+  persist and we're STILL shorter, push _pace_margin higher (8->10) or truly_behind food weight
+  (9->11). NOTE: the sim CANNOT validate growth changes (doesn't food-flood) — validate by design
+  + analyze_cornelius.py on new /logs. If we start losing while LONGER, back off growth (self-coil
+  vector) — the canonical TRUE Hamiltonian tail-follow when long+safe is STILL the ideal
+  unimplemented fix. EXPLOIT idea (untried): cornelius has NO lookahead and is superstitious of
+  x==0/y==0 edges (base 60 vs 100); it avoids cells an equal/longer enemy head is adjacent to
+  (-80) — when LONGER we could body-block/cut it off. main.py has all prior layers + now the
+  widened keep-pace growth band.
