@@ -757,3 +757,27 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   2-ply space lookahead (10.0/-60), enemy-contested space, H2H follow-up, length-scaled
   edge/corner + edge-shadow, safety-aware food, CRITICAL starvation mode, Voronoi territory.
   Keep sim_test 60 + fuzz + vs_btas clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — rdbrck__btas, FIXED CRITICAL KeyError('length') BUG
+- Opponent STILL `rdbrck__btas` (STRONG 2017 winner, NON-deterministic; real source opp_btas.py).
+  Results: round 0 won 250-0, round 1 won 249-1.
+- **ROOT-CAUSED the round-1 loss (sim_174):** it was NOT a strategy failure. `_decide` did
+  `you["length"]` and `sn["length"]` — but the game_state does NOT always include a `"length"`
+  field. When absent, `_decide` threw KeyError, the bare `except` in `move()` returned the
+  BLIND fallback `{"move":"up"}`, which at the top edge is OUT OF BOUNDS = instant death.
+  Reconstructed sim_174 T18 board: bot crashed -> returned "up" (OOB) instead of a legal move.
+- **Fix (backup: main_r2of5_lengthfix_backup.py = git HEAD pre-change bot):**
+  - line 237: `my_len = you.get("length", len(my_body))`
+  - line 262: `enemy_heads.append((body[0], sn.get("length", len(body))))`
+  Now length is derived from the body when the field is missing; no more crash -> no more
+  blind-OOB fallback. Verified: reconstructed T18 board now returns a LEGAL move ("left")
+  instead of the OOB "up".
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.75; `python3 vs_btas.py main.py 100`
+  => 100-0-0 (real opponent).
+- **Next teammate:** this was a REAL latent bug that would fire whenever the engine omits the
+  "length" field (and likely caused the rare losses in earlier rounds too — the blind "up"
+  fallback is deadly). If any `KeyError`/crash-fallback losses persist, audit `_decide` for
+  other required-field accesses (health etc.) and make them `.get(...)` with body-derived
+  defaults. Also consider making the `except` fallback in `move()` pick a LEGAL in-bounds
+  non-body move rather than a blind "up". main.py has all prior strategy layers intact.
