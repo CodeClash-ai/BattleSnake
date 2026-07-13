@@ -612,11 +612,6 @@ def _decide(game_state):
             safe_followups += 1
         if safe_followups == 0:
             score_h2h_trap = -300.0
-        elif safe_followups == 1 and my_len <= max_enemy_len + 1 and enemy_next:
-            # Near-equal length with an equal/longer enemy on the board and only
-            # ONE safe escape next turn -> we're being funneled toward a forced
-            # H2H. Mild penalty to prefer keeping more escape routes.
-            score_h2h_trap = -60.0
         else:
             score_h2h_trap = 0.0
 

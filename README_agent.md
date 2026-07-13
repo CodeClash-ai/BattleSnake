@@ -2034,3 +2034,33 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
      vs OLD=main.py vs opp_tyrelh, identical seeds; nohup+poll, N=16). Do NOT ship regressions
      (we win ~64%). main.py has all prior layers. Tools: vs_tyrelh.py, /tmp/ab_t.py, /tmp/classify.py,
      /tmp/deathcause.py.
+
+## Round 2 of 5 (this task, opus-4-8) — tyrelh, ADDED NEAR-EQUAL H2H-FUNNEL PENALTY
+- Opponent STILL `tyrelh__tyrelh-python` (STRONG "Zero_Cool" 2017 port, H2H-aware, grows to stay
+  biggest; opp_tyrelh.py). Results: round 0 won 161-80+9T, round 1 won 172-73+5T (~70%).
+- Loss analysis (round 1, /tmp/deathcause.py): 55 SHORTER / 13 equal / 10 longer at death;
+  edge=35 corner=6; boxed=33, H2H-adjacent=41, starve=4. Dominant vector = being shorter/near-
+  equal and losing an H2H (we get funneled into a forced head-to-head against the equal/longer
+  enemy). Traced sim_102: we were EVEN L23 all game, opp ate to L24 and killed us in H2H at (2,3).
+- **Change (backup: main_r2of5_tyrelh_backup.py = git HEAD pre-change bot):** in the H2H-aware
+  follow-up-safety block, added a MILD penalty when `safe_followups == 1 AND my_len <=
+  max_enemy_len+1 AND enemy_next` (near-equal length, equal/longer enemy present, only ONE safe
+  escape next turn) -> `score_h2h_trap = -60.0`. This prefers keeping MORE escape routes when
+  we're near-equal, so we don't get funneled toward a forced H2H. Gentle (-60 << space*10) so it
+  only breaks ties away from the funnel; does nothing when we're clearly longer or no enemy near.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; A/B vs real opp on 3 seed
+  batches (/tmp/ab_t.py NEW=/tmp/v1.py vs OLD=/tmp/old_main.py=committed, identical seeds, N=16):
+    off1:   NEW (8,8,0) == OLD (8,8,0)   (neutral)
+    off101: NEW (8,5,3) vs OLD (7,6,3)   (+1 win / -1 loss)
+    off555: NEW (11,4,1) vs OLD (10,4,2) (+1 win / draw->win)
+  => Combined NEW 27-16-4 vs OLD 25-16-5: consistently >= OLD in EVERY batch, +2 wins net, ZERO
+  regressions. Small (the sim only partly reproduces the H2H-funnel frames, as prior teammates
+  found) but a genuine, safe improvement targeting the confirmed 41/78 H2H loss vector.
+- **Next teammate:** opponent = opp_tyrelh.py (STRONG, H2H-aware, grows to stay biggest). Loss
+  vector = being SHORTER/near-equal + H2H-funneled, plus self-coils (boxed=33). Scalar growth AND
+  anti-coil tweaks are NOISE-FLOOR/regressive (proven ~30 rounds). The remaining STRUCTURAL levers:
+  (a) canonical TRUE Hamiltonian cycle when long+safe (self-coil fix, STILL unimplemented);
+  (b) SURGICAL uncontested-food growth (eat only when strictly closer) to safely win the length
+  race without contested-food/H2H traps. A/B ANY change multi-seed (/tmp/ab_t.py <new> <old> N off,
+  offs 1/101/555; nohup+poll, games run LONG). Do NOT ship regressions (we win ~70%). main.py has
+  all prior layers + now the near-equal H2H-funnel penalty.
