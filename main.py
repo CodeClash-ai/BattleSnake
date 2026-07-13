@@ -137,6 +137,28 @@ def _territory_count(my_start, enemy_heads, w, h, blocked, my_len, enemy_max_len
             terr += 1
     return terr
 
+
+def _articulation_risk(pos, w, h, blocked):
+    """Penalty for stepping into a narrow connector with few exits.
+
+    Flood fill alone can prefer walking along walls through a one-cell-wide
+    corridor that a nearby opponent can later cut.  Penalize low-degree cells
+    when there is a roomier alternative.
+    """
+    exits = 0
+    second = 0
+    for n in _neighbors(pos):
+        if _in_bounds(n, w, h) and n not in blocked:
+            exits += 1
+            for nn in _neighbors(n):
+                if nn != pos and _in_bounds(nn, w, h) and nn not in blocked:
+                    second += 1
+    if exits <= 1:
+        return 3
+    if exits == 2 and second <= 2:
+        return 1
+    return 0
+
 def _nearest_food_distance(pos, food):
     if not food:
         return 99
@@ -259,6 +281,7 @@ def move(game_state):
         enemy_heads = [_pt(s["head"] if "head" in s else s["body"][0]) for s in enemies]
         enemy_max_len = max([s.get("length", len(s.get("body", []))) for s in enemies] or [0])
         enemy_next_pred = []
+        enemy_possible_next = set()
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -272,6 +295,13 @@ def move(game_state):
                     preds.add(pred)
             for pred in preds:
                 enemy_next_pred.append((pred, elen))
+            # Any legal enemy move may immediately partition space even if we
+            # win head-to-heads against shorter snakes.  Use these cells as a
+            # conservative one-ply space estimate below.
+            for d in MOVES.values():
+                ep = _add(eh, d)
+                if _in_bounds(ep, w, h) and ep not in occupied:
+                    enemy_possible_next.add(ep)
 
         candidates = []
         for name, delta in MOVES.items():
@@ -296,13 +326,25 @@ def move(game_state):
             future_blocked = set(occupied)
             future_blocked.add(nxt)
             area = _flood_count(nxt, w, h, future_blocked, limit=w * h)
+            contested_blocked = set(future_blocked)
+            contested_blocked.update(enemy_possible_next)
+            # If we are moving onto a predicted enemy square while longer, keep
+            # that square available for the attack; otherwise treat all enemy
+            # next-step options as temporary walls.
+            if my_len > enemy_max_len:
+                contested_blocked.discard(nxt)
+            safe_area = _flood_count(nxt, w, h, contested_blocked, limit=w * h)
             territory = _territory_count(nxt, enemy_heads, w, h, future_blocked, my_len, enemy_max_len)
             nearest_food = _nearest_food_distance(nxt, food)
             center_dist = _manhattan(nxt, ((w - 1) // 2, (h - 1) // 2))
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
+            choke_risk = _articulation_risk(nxt, w, h, future_blocked)
 
             score = 0
-            score += area * 100                 # never trap ourselves
+            score += area * 80                  # never trap ourselves
+            score += safe_area * (140 if enemies else 0)  # account for enemy cuts
+            if enemies and safe_area < min(18, my_len + 2):
+                score -= (min(18, my_len + 2) - safe_area) * 1800
             score += territory * (18 if enemies else 0)  # prefer space we reach first
             # If a much larger opponent survives into the endgame, avoid
             # voluntarily entering tiny one/two-cell pockets it controls.
@@ -315,7 +357,9 @@ def move(game_state):
             ]
             if bigger_heads and area <= max(6, my_len // 3):
                 score -= (max(6, my_len // 3) + 1 - area) * 2500
-            score += edge_dist * 8              # prefer room away from walls
+            score += edge_dist * 32              # prefer room away from walls
+            if enemies and area > 20:
+                score -= choke_risk * 2200
             score -= center_dist * 2            # stay roughly central
             score -= nearest_food * (20 if health < 50 else 16)
             if nxt in food_cells:

@@ -107,3 +107,10 @@ Round 1 notes (gpt-5-5 current run vs `m-schier__kreuzotter`):
 - Current `main.py` already predicts straight/default-up behavior and remains survival-first, so I left it unchanged to avoid regressing a perfect logged matchup.
 - Smoke test this round: `N=200 python quick_eval.py` vs `tools/simple_opponent.py` => 200 wins / 0 losses / 0 ties, avg turn ~5.6.
 - If future logs show Kreuzotter returning valid moves and causing long games, inspect those losses before changing strategy; the origin branch `origin/human/m-schier/kreuzotter` contains a large Python port with `TIME_BUDGET = 0.30` that may be useful for reference but may also be slow under local batch eval.
+
+Round 2 notes (gpt-5-5 current run vs `m-schier__kreuzotter`):
+- `/logs/rounds/1/results.json` dropped to 31-2 for us. The losses were long games `sim_232` (turn 162) and `sim_249` (turn 215), where production Kreuzotter started returning real moves, grew, and we died after walking along an edge into a one-cell corridor/box.
+- `main.py` changes this round: added conservative one-ply enemy-next-space scoring (`safe_area`) and `_articulation_risk` choke penalties. This tries to avoid moves whose raw flood-fill is large only because it ignores that an opponent can immediately cut a corridor, while keeping normal survival/food behavior.
+- Also increased edge preference a bit (edge_dist weight 8 -> 32) because in the logged losses the only difference between a safer central move and a corridor edge move was small territory/food scoring.
+- Tests after changes: `N=200 python quick_eval.py` and `N=100 python quick_eval.py` vs `tools/simple_opponent.py` remained perfect. Against `tools/lawnmower_opponent.py` (rough long-game proxy), a 50-game batch improved from 49-1 before final choke tuning to 50-0 after; a larger 100-game run timed out due to long games and was killed.
+- Added `tools/kreuzotter_opponent.py` copied from `origin/human/m-schier/kreuzotter` with env knobs `KREUZ_TIME_BUDGET` and `KREUZ_MAX_DEPTH`, but local runs were too slow/no-state under the batch harness. Use with caution/small N only.
