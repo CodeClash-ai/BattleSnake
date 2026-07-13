@@ -1548,6 +1548,39 @@ def move(game_state):
                     score -= 6000
                 if choke_risk and edge_dist <= 1 and safe_area < 30:
                     score -= choke_risk * 1800
+            if has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
+                # Woofers/WALTER can stay alive as a shorter tail/food/attack
+                # pathing bot.  Remaining production losses are often healthy
+                # self-boxes on the outer wall while we are already ahead.
+                # Use a narrow ahead-only restraint (unlike the reverted broad
+                # not-ahead Woofers edge penalty): prefer interior/tail-reachable
+                # candidates and reject one-exit perimeter pockets, but do not
+                # change normal equal/behind food racing.
+                score += edge_dist * 520
+                if edge_dist == 0:
+                    score -= 9000
+                elif edge_dist == 1:
+                    score -= 2200
+                if tail_dist >= 99:
+                    score -= 45000
+                else:
+                    score += max(0, 28 - tail_dist) * 750
+                clean_exits = 0
+                for nn in _neighbors(nxt):
+                    if not _in_bounds(nn, w, h) or nn in future_blocked:
+                        continue
+                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                        continue
+                    clean_exits += 1
+                if clean_exits == 0:
+                    score -= 65000
+                elif clean_exits == 1 and edge_dist <= 1:
+                    score -= 18000
+                need_area = max(18, my_len // 2)
+                if safe_area < need_area:
+                    score -= (need_area - safe_area) * 1100
+                if choke_risk and safe_area < 40:
+                    score -= choke_risk * 4200
             if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
                 # Cornelius often stays smaller while we overgrow; production
                 # losses were self-boxes along edges/top loops, not starvation.
@@ -2159,6 +2192,8 @@ def move(game_state):
                 food_weight = min(food_weight, 0)
             if has_bountysnake2018_enemy and health >= 55 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 3)
+            if has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
+                food_weight = min(food_weight, 2)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
@@ -2181,6 +2216,8 @@ def move(game_state):
                     score -= 80000 if (my_len >= 35 and my_len >= enemy_max_len + 20) else 12000
                 elif has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 12000
+                elif has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
+                    score -= 9000
                 elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                     score -= 7000
                 elif has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
@@ -2228,7 +2265,7 @@ def move(game_state):
                     if my_len >= elen + 3 and area >= my_len + 8:
                         score += 1200
                     elif my_len > elen:
-                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy or has_tr8r_enemy or has_woofers_enemy) else 50
+                        score += 7000 if has_woofers_enemy else (5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy or has_tr8r_enemy) else 50)
                     else:
                         score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
