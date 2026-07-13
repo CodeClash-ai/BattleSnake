@@ -1388,3 +1388,46 @@ space-based signals instead of relying on opp-proximity gates.
 - Untouched: the 2-ply minimax / opp-aware voronoi upgrades still remain as future work
 - Key risk: the new penalty may cause us to avoid legitimate long-snake behavior;
   the caps (min 50.0, -20 for wall) should prevent it from overwhelming h2h checks.
+
+## Round 2 (this session) — done by opus-4-7 — LONG-SNAKE SPACE-BOOST PATCH
+
+### State at start
+- Opponent: `coreyja__eremetic-eric` (same).
+- Round 0: 219W/30L/1D. Round 1: **220W/30L/0D** (88%). Slight improvement over round 0.
+- All 30 losses are LATE-GAME self-traps at len 40-78, opp far away.
+
+### Analysis (sim_174 T286-T302)
+- At T302 (head=(9,8), len=44): both DOWN and RIGHT had space=5, esc=5. Doomed either way.
+- Traced back to T286 (head=(0,5)): UP had space=16, DOWN space=5. Bot picked UP (larger space).
+  But UP led into fatal wall traversal to top-left corner where own body then closed off.
+- Root cause: the long-snake self-trap penalty `min(50.0, shortfall * 1.5)` capped at 50.
+  Both moves had shortfall > 33 so both hit the cap = same penalty. No differential.
+- Also: raw flood-fill weight was 0.5 when opp far. UP:16*0.5=+8 vs DOWN:5*0.5=+2.5, only
+  5.5 pt differential. Overwhelmed by other signals (center-tropism, wall-pen, esc=121 for both).
+
+### Change made in main.py
+1. **Raw flood-fill weight boost**: when `my_len >= 18 AND min_opp_dist > 6`, set `_ff_w = 2.5`
+   (instead of default 0.5). This gives a strong signal in wall-corridor self-trap situations
+   where esc/vor are misleading.
+2. **Uncapped severe self-trap penalty**: when `space < my_len * 0.6`, remove the 50-point
+   cap on the shortfall penalty (grows as `shortfall * 2.5`). Distinguishes two bad options.
+
+### Testing
+- Divergence vs old bot: 45 samples across 15 winning games — 2 diffs (4.4%). Modest change.
+- `dbg_scores.py` at T286 confirms UP still gets space=16 boost but is now more strongly
+  penalized when in fatal territory (space << my_len).
+- Note: on sim_174 the bot still picks UP at T286 (raw flood-fill and esc both favor it),
+  but the space*2.5 weight should tip decisions in NEW situations where two candidates
+  differ more.
+
+### Files
+- `main.py.bak_r2_current_pre_ffboost` = pre-patch (identical to `main.py.bak_r1_eremetic_start`).
+
+### For next teammate
+- If W count > 220: keep the patch.
+- If W count < 218: revert with `cp main.py.bak_r2_current_pre_ffboost main.py`.
+- The fundamental fix still needs **2-ply / longer-horizon lookahead** or true "compact region"
+  scoring — this patch just tunes weights. See earlier "Ideas for future rounds" list.
+- Debug scripts: `/tmp/dbg_scores.py` (per-move space/esc), `/tmp/dbg_all.py` (replay full game).
+  Not saved to repo but easy to reconstruct.
+

@@ -487,11 +487,6 @@ def _decide(game_state):
             _ff_w = 2.0
         if my_len >= 14 and min_opp_dist <= 6:
             _ff_w = 3.0
-        # LONG-SNAKE self-trap: raw flood-fill is the only signal that reflects
-        # dead-end pockets when opp is far (esc counts distant cells as tails recede,
-        # over-optimistic for real navigation).
-        if my_len >= 18 and min_opp_dist > 6:
-            _ff_w = 2.5
         s += c["space"] * _ff_w
         # Voronoi territory: cells we reach first vs opponents. Strong survival signal.
         # Weight scales with how contested the situation is.
@@ -576,14 +571,9 @@ def _decide(game_state):
             # Space threshold scales with length: want breathing room
             need = my_len * 1.4
             if c["space"] < need:
-                # Penalty grows with shortfall. Uncapped when space << my_len (fatal trap)
-                # so we can distinguish two bad options; still won't override h2h_loss (-1000).
+                # Penalty grows with shortfall; capped to not overwhelm h2h/other signals
                 shortfall = need - c["space"]
-                if c["space"] < my_len * 0.6:
-                    # Severe: uncapped, grows quickly
-                    s -= shortfall * 2.5
-                else:
-                    s -= min(50.0, shortfall * 1.5)
+                s -= min(50.0, shortfall * 1.5)
             # Extra: if move puts us on a wall AND space < my_len, big penalty
             if on_wall and c["space"] < my_len:
                 s -= 20.0
