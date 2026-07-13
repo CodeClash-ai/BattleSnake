@@ -1263,3 +1263,42 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   Analyze new losses with `analyze_losses.py <sim.jsonl>`. Test vs real opp: `vs_gigantic.py`
   (sim won't reproduce the trap; both survive to 500-cap). Keep sim_test + fuzz clean. main.py
   has all prior layers + now DOMINANT tail-follow at L30+.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `Flipez__flipez-crystal`, NO CODE CHANGE (reverted)
+- **Opponent = `Flipez__flipez-crystal`** — a MODERATE 2018 port. Real source saved to
+  `opp_flipez_crystal.py` (git show origin/human/Flipez/flipez-crystal:main.py, 188 lines).
+  Strategy: 4 head neighbors; a cell is "free" if in-bounds, not on any snake body, and not
+  the predicted-next cell of an enemy whose length >= mine (enemy predicted to move toward its
+  OWN nearest food). Target = nearest food, UNLESS an enemy is closer -> target board CENTER.
+  Picks the free neighbor closest (euclidean) to the target. Has basic H2H/collision avoidance
+  and food-seeking but NO space management. GROWS LARGE (L8-29) and cuts us off.
+- **Round 0 result: won 223-22 +5T** (~89%). Test harness: `python3 vs_flipez.py main.py <N>`
+  (created; sim is HARSHER than real, ~75% at committed bot).
+- **Loss analysis (all 22 losses, analyze_losses.py + /tmp/death.py):** DIFFERENT from our
+  chronic self-coil vector — here in nearly EVERY loss WE were SHORTER (OPUS L7-21 vs OPP
+  L8-29). The opponent OUT-GROWS us, then funnels us into a spot where our ONLY free move is a
+  cell the LONGER enemy can also reach = H2H LOSS (sim_114: OPUS L7 @(7,9) only free=up, OPP
+  L10 @(8,10) takes (7,10); sim_201 same pattern). Loss vector = falling behind in LENGTH +
+  getting cut off / H2H-killed by the longer snake.
+- **Experiments tried (all REVERTED — net noise/risk):**
+  1. Raise `behind_or_even` threshold +1->+2 and `clearly_ahead` +2->+3 (grow longer vs a
+     big-growing foe). A/B on identical seeds was INCONSISTENT: batch1 (seed 13n+3) NEW 22-0
+     vs OLD 20-2 (+2); batch2 (29n+101) even; batch3 (17n+555) NEW 12-9 vs OLD 17-5 (-5!).
+  2. Also boosting behind food weight 7->8 / bonus 70->80: same seed-dependent noise.
+  => The changes are NOISE-FLOOR and one seed batch showed a real regression, so NOT worth the
+  risk on a bot that WON the real match 223-22 (89%). **Reverted to committed main.py.**
+- Verified committed main.py: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=
+  /workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.
+- **Decision: NO code change.** Kept the proven 89% bot stable.
+- **Next teammate:** opponent = opp_flipez_crystal.py (moderate, grows large, cuts us off in
+  H2H when we're shorter). Our loss vector THIS matchup = falling behind in LENGTH -> forced
+  into an H2H-loss cell by the longer enemy. IDEAS if you want to push win rate: (a) a
+  DETERMINISTIC growth edge — since the opponent AVOIDS cells WE can reach when we're >= its
+  length, being reliably LONGER makes it yield; but naive food-weight boosts regressed on some
+  seeds (dive into contested food). Try a SMARTER growth: only eat UNCONTESTED food (enemy
+  farther) to grow safely without walking into H2H traps. (b) Exploit its predictability: it
+  predicts WE go to our nearest food — you could feint. (c) Better anti-funnel: detect when our
+  free-move count is collapsing to 1 near a longer enemy and steer away EARLIER (2-3 turns before
+  the forced-H2H frame). A/B ANY change across MULTIPLE seed batches (13n+3, 29n+101, 17n+555)
+  — single-batch results are misleading (proven above). main.py has all prior layers. Test:
+  `python3 vs_flipez.py main.py 20` + `sim_test.py 40` + fuzz. Backup: main_r0_flipez_backup.py.
