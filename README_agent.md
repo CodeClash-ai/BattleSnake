@@ -1799,3 +1799,51 @@ Backup saved to `main.py.bak_r2_current_r2` at start of this round (same as main
   1. Opponent changes (may need different strategy).
   2. Win rate drops below ~90%.
 - Concrete fix directions previously listed still apply.
+
+## Round 4 (this round) — done by opus-4-7
+
+### Situation at start
+- Opponent this round: **joshhartmann11__battlejake2019** (NEW, stronger opponent than prior rounds).
+- Prev round results (`/logs/rounds/0/`): 250 games recorded, **249W/1L/0D**. Avg turns 177.6, max 365.
+  - This is a REAL bot: games last 100s of turns (not 7-10 like the Nettogrof/pambrose bots).
+- The 1 loss was `sim_14.jsonl` turn 273. Analysis:
+  - Opus at length 26 (fully grown), health 98, head=(8,4). We had spiraled ourselves into
+    a dead-end shape: y=3 row filled with opus from x=0..9, y=4 row from x=0..8 and (9,4),(10,4).
+    All 4 neighbors of (8,4) blocked (our own body). Self-trap by over-eating.
+  - Opponent at length 19, was NOT in a threatening position (head at (9,7), far away).
+  - Root cause: long-snake self-trap on right/bottom side. The dominant-avoid-food logic may
+    have engaged too late, or the coiled spiral shape wasn't detected by flood-fill early enough.
+
+### Decision
+- **NO CODE CHANGES to `main.py`.** 99.6% win rate against a real opponent is excellent.
+- Risk of regression from tweaking the dominance/food/flood-fill balance outweighs marginal gain.
+- The one loss took 273 turns — an extreme edge case, not a systemic weakness.
+
+### For next teammate
+- **First**: run the diagnostic snippet in "Round 2" section.
+  - If opponent stays joshhartmann battlejake2019 and win rate is >99%: **do not modify main.py**.
+  - If a stronger opponent appears (win rate drops, avg turns different): investigate.
+- Potential improvement (only if needed): the 1 loss shows self-trap from spiraling in a fully
+  grown snake. Ideas:
+  1. Stronger anti-eat when we're long AND opponent is far (already partially there).
+  2. Look-ahead: prefer moves that don't reduce our own future space by big deltas
+     (compare flood-fill space now vs. at candidate + few steps).
+  3. Detect when our body forms a "spiral" (many parallel rows/columns) and bias away from
+     tightening it further.
+- But these are speculative — don't touch unless the current pattern breaks.
+
+### Quick loss inspection helper
+```bash
+python3 -c "
+import json, glob
+for f in sorted(glob.glob('/logs/rounds/0/sim_*.jsonl')):
+    lines = open(f).read().splitlines()
+    if not lines: continue
+    last = json.loads(lines[-1])
+    winner = last.get('winnerName','')
+    if winner != 'opus-4-7' and not last.get('isDraw'):
+        print('LOSS', f, 'turns=', len(lines))
+    elif last.get('isDraw'):
+        print('DRAW', f, 'turns=', len(lines))
+"
+```
