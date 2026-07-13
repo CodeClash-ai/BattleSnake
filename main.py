@@ -383,6 +383,7 @@ def move(game_state):
         enemy_max_len = max([s.get("length", len(s.get("body", []))) for s in enemies] or [0])
         enemy_next_pred = []
         enemy_possible_next = set()
+        random_longer_enemy_next = set()
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -416,6 +417,12 @@ def move(game_state):
                 ep = _add(eh, d)
                 if _in_bounds(ep, w, h) and ep not in occupied:
                     enemy_possible_next.add(ep)
+                    # Bombastic Bob is genuinely random among legal non-body moves.
+                    # If Bob is equal/longer, avoid stepping into a position where
+                    # one random Bob move leaves us with no non-head-to-head escape
+                    # next turn (the sole round-0 loss had exactly this shape).
+                    if "bombastic-bob" in ename.lower() and elen >= my_len:
+                        random_longer_enemy_next.add(ep)
 
         candidates = []
         for name, delta in MOVES.items():
@@ -492,6 +499,20 @@ def move(game_state):
                     score -= 300
             if enemies and area > 20:
                 score -= choke_risk * 2200
+            if random_longer_enemy_next:
+                future_safe_exits = 0
+                for nn in _neighbors(nxt):
+                    if not _in_bounds(nn, w, h) or nn in future_blocked:
+                        continue
+                    # Next-turn destinations adjacent to longer/equal random heads
+                    # can become forced losing head-to-heads; count only clean exits.
+                    if any(_manhattan(nn, ep) <= 1 for ep in random_longer_enemy_next):
+                        continue
+                    future_safe_exits += 1
+                if future_safe_exits == 0:
+                    score -= 25000
+                elif future_safe_exits == 1:
+                    score -= 3500
             score -= center_dist * 2            # stay roughly central
             # Food urgency.  In long games against area/Voronoi bots, the main
             # remaining failure mode is starving while our large space terms keep
