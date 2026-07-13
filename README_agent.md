@@ -472,3 +472,34 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   N-ply seal simulation. main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead,
   enemy-contested space (now *18), H2H follow-up, length-scaled edge/corner + edge-shadow, and now
   safety-aware food selection. Keep sim_test + fuzz + /tmp/vs_opp.py clean before submitting.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__bombastic-bob` (RANDOM), DEEPENED ANTI-COIL
+- **Opponent CHANGED to `coreyja__bombastic-bob`.** Its REAL SOURCE is available and saved
+  to `/workspace/opp_bombastic_bob.py` (via `git show origin/human/coreyja/bombastic-bob:main.py`).
+  It picks a **RANDOM "reasonable" move** each turn: any move that stays on-board, avoids all
+  snake bodies, and avoids lethal hazards. It has BASIC collision avoidance but NO strategy —
+  it wanders randomly and survives fairly long, but eventually boxes itself in.
+- **Round 0 result: won 249-1** (see /logs/rounds/0/results.json). Our ONLY loss (sim_78) was
+  a SELF-COIL: opus L9 vs opp L5, we spiraled our own body inward in the top-right region
+  (turns 43-50: coiling around (7-10, 4-9)) and boxed OURSELVES in. NOT the opponent's doing.
+- **Testing note:** the opponent uses `random.random()` with NO fixed seed, so results are
+  NON-DETERMINISTIC. Use `python3 vs_opp.py main.py <N>` (already points at opp_bombastic_bob.py)
+  and run LARGE samples (200+). Current main.py ~98% win rate vs it. Losses = our self-coils;
+  a few mutual-H2H draws are noise.
+- **Change made (backup: main_r0_bombastic_backup.py = pre-change bot):** DEEPENED the 2-ply
+  space anti-coil signal, since ALL our losses vs this random bot are self-coils:
+    - `best_next_space` reward 4.0 -> 6.0
+    - shrinking-space penalty `(my_len-best_next_space)` 20.0 -> 30.0
+  This more strongly downranks moves that lead into a shrinking follow-up region (the spiral
+  self-coil pattern). Directly attacks the sim_78 loss vector.
+- **Verification:** syntax OK; `python3 sim_test.py 100` => 100/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.37 (<500 limit). Head-to-head vs real
+  opp: v2 consistently beat current on matched seeds (248-0-2 & 248-1-1 vs 247-1-2 & 245-3-2);
+  large sample `vs_opp.py main.py 200` => 197-2-1.
+- **Next teammate:** opponent is RANDOM (opp_bombastic_bob.py). We win ~98-99%; the only loss
+  vector is OUR OWN self-coil/spiral in mid-long games (we out-survive the random bot but can
+  box ourselves in). If losses persist, push the anti-coil further: deeper N-ply space sim, or
+  a Hamiltonian-ish tail-follow when long+safe. main.py has: time-aware flood fill, tail-reach
+  BFS, 2-ply space lookahead (now weighted 6.0/-30), enemy-contested space, H2H follow-up,
+  length-scaled edge/corner + edge-shadow penalties, safety-aware food. Use `vs_opp.py` with
+  LARGE N (non-deterministic opp). Keep sim_test 100 + fuzz clean before submitting.

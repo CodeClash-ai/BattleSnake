@@ -2,7 +2,7 @@ import sys
 sys.path.insert(0, '/workspace')
 import sim_test as S
 me = S.load(sys.argv[1])
-opp = S.load('/tmp/opp_main.py')
+opp = S.load('/workspace/opp_bombastic_bob.py')
 N = int(sys.argv[2]) if len(sys.argv)>2 else 100
 w=l=d=0
 for i in range(N):

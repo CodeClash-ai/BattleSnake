@@ -386,9 +386,9 @@ def _decide(game_state):
         else:
             score -= 200.0
         # Reward keeping a large follow-up region (trap avoidance, 2-ply).
-        score += best_next_space * 6.0
+        score += best_next_space * 4.0
         if best_next_space < my_len:
-            score -= (my_len - best_next_space) * 30.0
+            score -= (my_len - best_next_space) * 20.0
         score += score_h2h_trap
 
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
