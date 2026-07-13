@@ -1018,6 +1018,32 @@ def move(game_state):
                     score += max(0, 28 - tail_dist) * 900
                 if choke_risk:
                     score -= choke_risk * 4200
+            if has_cornelius_enemy and health >= 45 and enemy_max_len >= my_len + 2:
+                # When Cornelius is clearly longer, avoid letting its sweep/body wall
+                # herd us into an edge pocket.  Keep this narrower than the safely-
+                # ahead mode above; broad equal-length edge penalties hurt local play.
+                near_corn = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_corn <= 6 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    if clean_exits == 0:
+                        score -= 65000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_corn <= 3):
+                        score -= 16000
+                    score += edge_dist * 160
+                    if edge_dist == 0:
+                        score -= 5000
+                    elif edge_dist == 1:
+                        score -= 1200
+                    if safe_area < 26:
+                        score -= (26 - safe_area) * 450
+                    if choke_risk and safe_area < 34:
+                        score -= choke_risk * 3500
             if has_flipez_crystal_enemy and enemy_max_len >= my_len:
                 # Flipez-crystal is a competent nearest-food/center chaser.
                 # Logged losses usually had us shorter and crowded near a wall,
