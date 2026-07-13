@@ -522,26 +522,49 @@ def move(game_state):
             # stays cheap, but continuing to hug it for many turns becomes
             # increasingly expensive, biasing the bot to break back toward
             # open interior space earlier, while there is still room to.
-            edge_run = 1 if (on_v_edge or on_h_edge) else 0
-            if on_v_edge and not on_h_edge:
+            # NOTE (this round's fix): the old version only counted a "run"
+            # when consecutive segments shared the EXACT same x (vertical
+            # edge) or EXACT same y (horizontal edge), and only considered
+            # a cell "on an edge" at all when x/y == 0 or width/height-1
+            # exactly. This missed two real, confirmed cases traced in a
+            # local-benchmark loss vs coreyja__coreyja-rs this round
+            # (/tmp/game_1.json, died turn 113): (a) our snake hugged the
+            # column ONE cell in from the true edge (x=1 on an 11-wide
+            # board) for ~10 consecutive turns -- `on_v_edge` was False
+            # the entire time (x=1 != 0), so NO penalty accrued at all;
+            # (b) when the path then turned a corner (from the x=1 column
+            # onto the true top edge y=10), the run counter reset to 1
+            # because the segments no longer shared the same exact x OR y
+            # -- so a single continuous ~15-turn wall-hugging trap was
+            # scored as if it were two separate 1-cell touches. Both
+            # combined meant the self-corridor penalty essentially never
+            # fired during the entire fatal approach. Fixed by tracking a
+            # general "near-wall run": how many consecutive own body
+            # segments (from the head) have edge_dist <= 1 (true edge OR
+            # one cell in), regardless of whether they're on the same
+            # exact edge -- this correctly keeps accumulating across a
+            # corner turn and starts counting one cell earlier (at
+            # distance 1, not just distance 0).
+            near_wall = edge_dist <= 1
+            wall_run = 0
+            if near_wall:
+                wall_run = 1
                 for seg in my_body:
-                    if seg["x"] == x:
-                        edge_run += 1
+                    seg_edge_dist = min(
+                        seg["x"], width - 1 - seg["x"],
+                        seg["y"], height - 1 - seg["y"],
+                    )
+                    if seg_edge_dist <= 1:
+                        wall_run += 1
                     else:
                         break
-            elif on_h_edge and not on_v_edge:
-                for seg in my_body:
-                    if seg["y"] == y:
-                        edge_run += 1
-                    else:
-                        break
-            if edge_run > 0:
+            if wall_run > 0:
                 nearest_opp_dist = min(
                     (abs(x - ox) + abs(y - oy) for ox, oy in opp_heads),
                     default=99,
                 )
                 proximity_mult = 2.0 if nearest_opp_dist <= 8 else 1.0
-                score -= edge_run * edge_run * 1.0 * len_scale * proximity_mult
+                score -= wall_run * wall_run * 1.0 * len_scale * proximity_mult
 
             # Avoid hazard cells (extra health drain per turn in maps/rulesets
             # that have them, e.g. Royale). No-op on rulesets with no hazards

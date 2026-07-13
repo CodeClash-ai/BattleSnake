@@ -2989,3 +2989,114 @@ kill+restart both together to avoid an inconsistent state.
   the inline comments directly above both changes for the full traced
   rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 2 (this session) — opponent still coreyja__coreyja-rs, fixed a real "near-edge / corner-turn" gap in the wall-hugging penalty (confirmed via traced local-benchmark loss)
+
+`/logs/rounds/1/results.json` confirmed: opponent `coreyja__coreyja-rs`,
+real result **clean sweep 40-0** (`analyze_logs.py /logs/rounds/1`: 40/40
+sims won, avg 5.4 turns — opponent dies/errors fast in the real harness,
+consistent with the long-established pattern in this file).
+
+### Local benchmark (before any change) — found a fresh, concrete loss
+
+Both bots (`/workspace` port 8000, `/tmp/opp` port 8001 with a fresh
+`git show origin/human/coreyja/coreyja-rs:main.py` extraction) were
+already running from a previous session. Ran 6 local games via the
+`battlesnake` CLI (standard recipe from earlier rounds' notes throughout
+this file). **Result: 5 wins / 1 loss.** Traced the loss
+(`/tmp/game_1.json`, died turn 113) turn-by-turn.
+
+### Root cause (concrete, verified via direct code inspection + trace replay)
+
+Our snake (length 12) traveled up column **x=1** (one cell in from the
+true left edge x=0) for ~10 turns, then turned the corner onto the true
+**top edge y=10**, and got pinched into the top-right corner (10,10) by a
+comparable-length opponent approaching from below — the same general
+"corridor race via edge-hugging" family documented many times throughout
+this file. But this time the exact bug in the *existing* mitigation
+(`edge_run` self-corridor penalty) was locatable and clear:
+
+1. `on_v_edge`/`on_h_edge` only fire when `x == 0` or `x == width-1`
+   **exactly**. Our snake spent ~10 turns at `x == 1` (one cell in), so
+   `on_v_edge` was **False the entire time** — zero penalty accrued
+   during the whole approach.
+2. Even after reaching the true edge (y=10), the old `edge_run` counter
+   only counted consecutive body segments sharing the *exact same x* (for
+   a vertical edge) or *exact same y* (for a horizontal edge) — so the
+   moment the path turned the corner from the x=1 column onto the y=10
+   row, the run **reset to 1**, treating a single continuous ~15-turn
+   wall-hugging trap as two separate 1-cell touches.
+
+Net effect: the self-corridor penalty essentially never fired at any
+point during the actual fatal approach.
+
+### Fix made this round
+
+Replaced the exact-same-x/exact-same-y `edge_run` tracking with a general
+**`wall_run`**: count of consecutive own body segments (from the head)
+whose `edge_dist` (distance to the *nearest* of all 4 walls) is `<= 1`
+(true edge OR one cell in), regardless of whether they're on the same
+exact edge. This correctly (a) starts counting one cell earlier (near-edge,
+not just true-edge), and (b) keeps accumulating across a corner turn
+instead of resetting. Penalty formula unchanged otherwise
+(`wall_run**2 * 1.0 * len_scale * proximity_mult`).
+
+**Verified this changes behavior at the actual decision points**: replaying
+`main.move()` on the literal logged board states from turns 96-104 of the
+traced loss now diverges from the real game's actual moves starting at
+turn 98 (returns `right`/`up` instead of continuing up the x=1 column) —
+i.e. the patched bot breaks out of the near-edge corridor several turns
+before the real game committed to the fatal path.
+
+### Post-fix local benchmark
+
+Restarted both local test servers (killed old PIDs directly — confirmed
+correct PIDs via `ps aux`/checked cwd first, not `pkill -f`, per the many
+earlier gotcha-notes in this file) and ran a fresh 6-game batch. **3
+confirmed clean wins observed** (3, 50, and 186 turns) with **zero losses**
+before this session's step budget ran out; the remaining 3 games were
+still healthily in progress (both snakes alive) at 250+ turns when last
+checked — not losses, just slow/long games (typical against this
+opponent's real minimax search). No errors/exceptions in either server's
+log.
+
+### Verification done
+
+- Smoke tests (`main.move()` on normal 2-snake state, `{}` malformed
+  state, empty-snakes state) — all still return valid moves, no
+  exceptions, before and after the fix.
+- Direct trace-replay on the exact traced loss (see above) — confirmed
+  the fix changes the specific fatal decision sequence.
+- Local benchmark: 0 losses observed post-fix (3 clean wins + 3 long
+  games still healthy) vs. 1/6 pre-fix.
+
+### Recommended next steps
+
+1. **Finish/extend the local benchmark** (the 3 long games from this
+   round, plus a fresh larger batch) to get a more confident win-rate
+   number — this session ran out of step budget before they resolved.
+2. If a new loss shows up, re-use the same trace-replay technique (build
+   a synthetic `game_state` per logged turn, call `main.move()` directly,
+   inspect `edge_dist`/`wall_run`/`area`/`voronoi_mine` per candidate) —
+   it found and pinpointed a very concrete, fixable bug this round (a gap
+   in existing logic, not a fundamentally new failure mode), same as
+   several previous rounds' "free_degree edge bias" and "capped opponent-
+   pessimism" fixes elsewhere in this file.
+3. As always: re-check `/logs/rounds/2/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh. This round's fix is a general correctness
+   improvement (not opponent-specific), so it should help regardless.
+4. The recurring multi-ply-lookahead idea (see many earlier rounds'
+   notes throughout this file, e.g. the detailed `ccSnake2018__ccsnake`
+   and `Xe__since` sections) remains the highest-ceiling not-yet-attempted
+   improvement if local-heuristic patches like this one start showing
+   diminishing returns.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: replaced exact-same-x/y `edge_run`
+  tracking with a general near-wall `wall_run` that survives corner
+  turns and starts one cell earlier — see the large inline comment right
+  above that code block for the full traced rationale).
+- `analyze_logs.py` — unchanged.
