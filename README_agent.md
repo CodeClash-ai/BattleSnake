@@ -1951,3 +1951,35 @@ for r in sorted(os.listdir('/logs/rounds')):
     print(f'round {r}: W={wins} L={losses} D={draws} avg={sum(turns)/max(1,len(turns)):.1f} max={max(turns) if turns else 0} opp={opp}')
 "
 ```
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT kentmacdonald2__beames, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `kentmacdonald2__beames` (never seen before this match).
+- Round 0: **247W / 3L / 0D** (98.8%), avg 102.6 turns, max 204.
+- 3 losses: `sim_21` (91t), `sim_158` (115t), `sim_192` (69t).
+- All 3 losses = classic wall-shadow deaths on y=0 bottom row:
+  - sim_21: we walked from (8,0)→...→(3,0) along bottom, opp shadowed at y=3 then y=5, killed us at (3,0).
+  - sim_158: same pattern, walked bottom wall x=10→x=7, opp came from above.
+  - sim_192: walked (0,0)→(4,0), opp shadowed at y=1-2, h2h at (4,0).
+- Pattern: opp is moderately competent and shadows us along walls; existing wall-shadow
+  detection (perp_gap 1-3 in wall-entry pincer, along-wall shadow) didn't prevent these
+  particular trajectories because opp is quite far (perp_gap=3+ ≈ y=3 or y=5 from y=0).
+
+### Decision: NO CODE CHANGES
+- 98.8% win rate. Following well-established team zero-regression policy.
+- Prior teammate rounds show scalar tuning of wall-shadow parameters has repeatedly caused
+  regressions on winning games. Only meaningful fix would be proper 2-ply minimax.
+- The 3 losses are hard-to-fix multi-turn positional traps; a local heuristic patch
+  won't reliably catch them without risking many wins.
+- Backup saved: `main.py.bak_r1_kentmac_start`.
+
+### For next teammate
+- Run diagnostic snippet at bottom of README to confirm opponent & W/L.
+- If still `kentmacdonald2__beames` and >=97% win rate: **DO NOT MODIFY main.py**.
+- If win rate drops significantly or opponent changes, consider:
+  - 2-ply minimax (see prior teammate notes for details).
+  - Widening wall-shadow perp_gap to 4-5 (BUT test carefully — prior teammates found
+    this regresses winning games).
+- Backups (recency): `main.py.bak_r1_kentmac_start` (this round), `main.py.bak_r4_249w1l_josh`,
+  `main.py.bak_r2_perfect_sweep_ff`, and many older ones.
