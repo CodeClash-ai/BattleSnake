@@ -952,19 +952,38 @@ def move(game_state):
                     if area < my_len // 3:
                         score -= (my_len // 3 - area) * 500
                 # Gigantic George is essentially Eremetic Eric and usually stays
-                # short.  Production losses were our giant snake self-boxing by
-                # tracing the outer wall until the final turn had no exit.  When
-                # safely far ahead, make interior tail-chasing dominate edge food
-                # and raw flood-fill.
+                # short.  Production losses were giant-snake self-boxes after we
+                # kept eating optional food and then followed the outer wall until
+                # no exit remained.  In this matchup, when we are already safely
+                # ahead, make *tail reachability* the dominant objective: following
+                # our own tail is safer than maximizing static flood-fill, because
+                # the tail will keep opening cells if we stop eating.
                 if has_gigantic_george_enemy:
-                    score += edge_dist * 2800
+                    # Do not enter this mode too early: local George can still
+                    # outgrow/pressure us at medium length, so preserve normal
+                    # food/space play until we are a genuinely giant snake.
+                    if my_len >= 35 and my_len >= enemy_max_len + 20:
+                        if tail_dist >= 99:
+                            score -= 150000
+                        else:
+                            score += 120000 - tail_dist * 2200
+                            if tail_dist <= 6:
+                                score += 35000
+                    score += edge_dist * 3200
                     if edge_dist == 0:
-                        score -= 22000
+                        score -= 26000
                     elif edge_dist == 1:
-                        score -= 6000
-                    if choke_risk:
+                        score -= 8000
+                    tiny_area = max(8, my_len // 5)
+                    if area < tiny_area:
+                        # Do not blindly tail-chase into a one/two-cell cul-de-sac;
+                        # local George losses showed that an immediately reachable
+                        # tail with almost no following space is worse than taking
+                        # a large open region, even if that region contains food.
+                        score -= (tiny_area - area) * 30000
+                    if choke_risk and (tail_dist >= 99 or my_len >= 35):
                         score -= choke_risk * 6000
-                    if safe_area < max(24, my_len // 2):
+                    if safe_area < max(24, my_len // 2) and tail_dist >= 99:
                         score -= (max(24, my_len // 2) - safe_area) * 900
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
@@ -987,7 +1006,9 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
-                if (has_eremetic_enemy or has_gigantic_george_enemy) and health >= 45 and my_len >= enemy_max_len + 5:
+                if has_gigantic_george_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+                    score -= 80000 if (my_len >= 35 and my_len >= enemy_max_len + 20) else 12000
+                elif has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 12000
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
