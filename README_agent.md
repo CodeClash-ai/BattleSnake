@@ -1983,3 +1983,52 @@ for r in sorted(os.listdir('/logs/rounds')):
     this regresses winning games).
 - Backups (recency): `main.py.bak_r1_kentmac_start` (this round), `main.py.bak_r4_249w1l_josh`,
   `main.py.bak_r2_perfect_sweep_ff`, and many older ones.
+
+## Round 2 (this session) — done by opus-4-7 — NO CHANGES
+
+### State at start
+- Opponent: `kentmacdonald2__beames` (same as prior round).
+- Round 0: 247W/3L/0D (98.8%).
+- Round 1: 246W/4L/0D (98.4%). Avg turns 100.9, max 284.
+
+### Round 1 loss analysis (4 losses)
+All 4 losses in round 1 are **SELF-SPIRAL** deaths on a wall, NOT h2h with opp.
+Representative: `sim_130` (99 turns):
+- T85 head=(0,6) len 10. Bot moved right into (1,6).
+- T87→T92: bot climbed via (1,7)→(1,8)→(1,9)→(2,9)→(2,10)→(1,10). Spiraled around.
+- T93: bot at (0,10). At this point body wraps back and self-blocks left-side.
+- T94→T96: bot walked down along x=0 wall from (0,10) to (0,7).
+- T97: at (0,7), ALL three neighbors were own body — self-trap death.
+  - down (0,6) = body (pos 11 of 13; tail at pos 12 = (0,5), doesn't vacate in time).
+  - right (1,7) = own body.
+  - up (0,8) = own body.
+- Opponent (len 12) was FAR from the death cell at T97 (at (6,8)). No opp pressure.
+- This is a pure self-trap where the bot's flood-fill/voronoi/escape metrics all said
+  "plenty of space", but the coiled shape doomed it 5 turns later.
+
+### Similar losses
+- sim_222, sim_225, sim_76: all self-spiral wall coils, opponent nearby but not directly
+  causing h2h. Bot at len 11-13 spirals on wall x=0 or y=0/y=10.
+
+### Decision: NO CODE CHANGES
+- 98.4% win rate is excellent. All 4 losses are the same coiled-spiral pattern that
+  PRIOR TEAMMATES tried to fix repeatedly with scalar tuning — all resulted in
+  regressions on winning games (see "Round 2 vs eremetic-eric", "Round 2 vs gigantic-george",
+  "Round 4 vs battlejake2019", etc.).
+- The ONLY fix that would robustly catch this is proper N-step lookahead of our own body
+  shape (simulate 5-10 turns forward, detect enclosed region shrinking below my_len). This
+  is a substantial refactor.
+- Backup: `main.py.bak_r2_kentmac_r2_start` = current unchanged main.py.
+
+### For next teammate
+- Run diagnostic (top of README). If still `kentmacdonald2__beames` and >=97%: leave alone.
+- If you want to try to fix the self-spiral losses (RISKY):
+  1. **Path-forward simulation**: for each candidate move, simulate 5-10 turns of our body
+     assuming we continue in the same direction / smart-repeat; check that flood-fill after
+     N steps still returns >= my_len. Add a large penalty otherwise.
+  2. **Coil detection**: count how many of our own body segments are within Manhattan-2 of
+     the candidate cell. High count = tight coil = risky. Penalize accordingly.
+  3. **Compactness metric**: compare number of open cells adjacent to any body segment
+     (perimeter) vs body length. High ratio = spread out; low ratio = coiled = risky.
+- Backups (recency): `main.py.bak_r2_kentmac_r2_start`, `main.py.bak_r1_kentmac_start`,
+  `main.py.bak_r4_249w1l_josh`, `main.py.bak_r2_perfect_sweep_ff`, older.
