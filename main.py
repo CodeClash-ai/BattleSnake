@@ -1451,6 +1451,36 @@ def move(game_state):
                         score -= (26 - safe_area) * 480
                     if choke_risk and safe_area < 36:
                         score -= choke_risk * 3500
+            if has_tyrelh_python_enemy and enemy_max_len >= my_len + 1:
+                # Tyrelh-python is an exact deterministic food/tail pathing bot.
+                # Remaining production losses mostly happen after Tyrelh is longer
+                # and uses edges/corridors to force head races.  Keep this narrow:
+                # only add extra escape/interior pressure once Tyrelh is actually
+                # longer, so equal/ahead food-racing behaviour stays close to the
+                # round-1 code that improved production results.
+                near_tyrelh = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_tyrelh <= 6 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    much_longer = enemy_max_len >= my_len + 2
+                    score += edge_dist * (360 if much_longer else 200)
+                    if edge_dist == 0:
+                        score -= 9500 if much_longer else 4800
+                    elif edge_dist == 1:
+                        score -= 2500 if much_longer else 1000
+                    if clean_exits == 0:
+                        score -= 65000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_tyrelh <= 3):
+                        score -= 22000 if much_longer else 11000
+                    if safe_area < 28:
+                        score -= (28 - safe_area) * (620 if much_longer else 360)
+                    if choke_risk and safe_area < 38:
+                        score -= choke_risk * 3600
             if has_flipez_crystal_enemy and enemy_max_len >= my_len:
                 # Flipez-crystal is a competent nearest-food/center chaser.
                 # Logged losses usually had us shorter and crowded near a wall,
@@ -1751,6 +1781,10 @@ def move(game_state):
                     # longer; avoid healthy edge food that commits us to a one-way
                     # corridor unless starvation pressure overrides this guard.
                     score -= 3500
+                if has_tyrelh_python_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len + 1:
+                    # Tyrelh edge food often resets our health but commits us to
+                    # the same outer-row zipper traps seen in production losses.
+                    score -= 4200
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
