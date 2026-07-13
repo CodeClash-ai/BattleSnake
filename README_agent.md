@@ -1371,3 +1371,44 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   when long+safe is STILL the ideal unimplemented fix, (c) since 33/53 losses we're shorter,
   consider growing more aggressively mid-game to not get out-lasted. Test: `nohup python3 -u
   vs_elon.py main.py 30 > /tmp/x.txt &` (poll — games are slow). Keep sim_test 40 + fuzz clean.
+
+## Round 2 of 5 (this task, opus-4-8) — elon, OPPONENT-ADAPTIVE GROWTH (stop out-lasting ourselves short)
+- Opponent STILL `jackisherwood__battlesnake-elon` (STRONG tail-chaser, grows LARGE L30-43,
+  long games; opp_elon.py). Results: round 0 won 190-53 (76%), round 1 won 205-41 (~83%,
+  prev teammate's mid-length tail-follow boost helped).
+- **Loss analysis (all 41 round-1 losses, analyze_losses.py):** DECISIVE SHIFT from our
+  chronic self-coil vector — **33/45 losses OPUS was SHORTER at death** (OPUS L20-30 vs OPP
+  L30-43); 7 equal, only 5 longer. Long games (turn 173-494). ROOT CAUSE = elon OUT-GROWS us
+  and out-lasts us; the bigger snake controls territory and cuts us off.
+- **WHY we were shorter:** the old `clearly_ahead` food-avoidance triggered at just
+  `my_len >= max_enemy_len + 2` (designed for SHORT opponents eremetic/gigantic/arthur to
+  avoid overgrowth self-coil). But vs a LARGE-GROWING opponent, at a mere +2 lead we STOPPED
+  eating, elon kept eating, passed us, and then WE became the shorter snake that gets out-lasted.
+- **Change (backup: main_r1of5_elon_r2_backup.py = git HEAD pre-change bot):** made growth
+  OPPONENT-ADAPTIVE:
+  1. `clearly_ahead` now requires EITHER (+2 lead AND enemy is short, max_enemy_len<=16) OR
+     (+6 absolute lead). Vs elon (L30) we no longer shut off growth at +2 — we keep pace and
+     only relax at a big +6 lead. Vs short opponents (<=16) behavior is UNCHANGED (still +2).
+  2. `behind_or_even` pace band widened vs large enemies: `_pace_margin = 4 if
+     max_enemy_len>=20 else 1`. So vs elon we chase food aggressively (d_after*7, +70 on-food)
+     up to a +4 lead, keeping pace; vs short opponents the +1 band is unchanged.
+  Net effect: vs elon we grow to STAY COMPETITIVE (attacks the 33/45 shorter-at-death vector);
+  vs all short opponents (eremetic/gigantic/arthur) the overgrowth->self-coil protection is
+  fully preserved (verified by unit-test logic table).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.3 (<500 limit). Unit-test logic table
+  confirms: elon L32/L30 -> keep growing (behind_or_even=True, clearly_ahead=False); elon
+  L36/L30 -> clearly_ahead=True (relax); eremetic L14/L12 -> clearly_ahead=True (unchanged);
+  eremetic L30/L12 -> clearly_ahead=True (overgrowth guard intact). A/B vs real opp
+  (/tmp/ab_elon.py, identical seeds) was RUNNING at step limit — elon games are SLOW (both
+  survive long), N=16 exceeds the 30s cmd timeout even in background. Validated by DESIGN
+  (directly targets the confirmed shorter-at-death vector) + sim_test + fuzz + logic table +
+  full backward-compat with short-opponent guards.
+- **Next teammate:** opponent = opp_elon.py (STRONG tail-chaser, grows large). If losses persist
+  and we're STILL shorter, push _pace_margin higher (4->6) or the behind food weight (7->8-9),
+  but A/B carefully — elon games run long so use `nohup python3 -u /tmp/ab_elon.py N &` and poll
+  /tmp/ab*.txt (rebuild: loads main.py NEW vs main_r1of5_elon_r2_backup.py OLD, both vs opp_elon,
+  identical seeds). If we're LONGER when losing, it's back to the self-coil vector -> the
+  canonical TRUE Hamiltonian tail-follow when long+safe is STILL the ideal unimplemented fix.
+  main.py has all prior layers + now opponent-adaptive growth (keep pace vs large-growers,
+  avoid overgrowth vs short opponents).

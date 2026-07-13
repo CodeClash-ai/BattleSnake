@@ -406,29 +406,13 @@ def _decide(game_state):
     # smart opponent that grows quickly, falling behind early is our #1 loss
     # vector (it out-lengths us and cuts us off / wins H2H). Consider ourselves
     # "behind" if not clearly ahead by >=2.
-    # "behind or even": keep eating to stay competitive. Vs a LARGE-growing
-    # opponent (elon L30-43) we widen this band so we keep pace and don't get
-    # out-lasted once past the +2 lead (our #1 elon loss vector = being SHORTER
-    # in long games). Vs short opponents the +1 band is unchanged.
-    _pace_margin = 4 if max_enemy_len >= 20 else 1
-    behind_or_even = my_len <= max_enemy_len + _pace_margin
+    behind_or_even = my_len <= max_enemy_len + 1  # not clearly longer
     # When we are COMFORTABLY longer than the opponent, we do NOT need to grow.
     # Chronic loss vector vs amphibious-arthur: we grow to L30-44 while the
     # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
     # solid length lead, extra length only makes self-coiling MORE likely, so we
     # actively AVOID food to keep the body short and manageable.
-    # clearly_ahead: we hold a comfortable lead AND the opponent is NOT itself
-    # growing large. Vs SHORT opponents (eremetic/gigantic/arthur, L6-16) a +2
-    # lead means extra length only raises self-coil risk -> avoid food. But vs a
-    # LARGE-GROWING opponent (elon reaches L30-43), if we stop eating at a mere
-    # +2 lead the opponent quickly out-grows us and out-lasts us in long games
-    # (33/45 elon losses = we were SHORTER at death). So only shut off growth
-    # when the enemy is genuinely short (<=16) OR we hold a big absolute lead.
-    _enemy_small = max_enemy_len <= 16
-    clearly_ahead = (not starving) and (my_len >= 6) and (
-        (my_len >= max_enemy_len + 2 and _enemy_small) or
-        (my_len >= max_enemy_len + 6)
-    )
+    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 2) and (my_len >= 6)
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
     # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
