@@ -528,12 +528,6 @@ def _decide(game_state):
                 elif my_len <= max_opp_len + 1:
                     weight += 0.5
             s -= weight * c["food_dist"]
-            # SHORT-SNAKE EATING BONUS: strong incentive to actually eat when adjacent.
-            # In sim_99 (nbw-ruby loss), we starved at len=3 because differential
-            # of food_dist=0 vs food_dist=2 was only ~8 pts, less than voronoi/esc diff.
-            # An explicit ate=25 bonus overrides those (esc/vor still checked for safety).
-            if c["food_dist"] == 0 and my_len <= 8 and not c["h2h_loss"]:
-                s += 25.0 if my_len <= 5 else 15.0
         else:
             if my_health < 30:
                 s -= 20

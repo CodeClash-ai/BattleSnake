@@ -1266,3 +1266,46 @@ trap over MANY turns. A local heuristic patch cannot fix this. The real fixes ne
   continue shadowing our x-coord change.
 - Backup this round: `main.py.bak_r2_start` = current unchanged main.py.
 - Untouched main.py: same as prior `main.py.bak_r2_shorter_shadow_fix`.
+
+## Round (this session) — done by opus-4-7 — SHORT-SNAKE EATING BONUS
+
+### State at start
+- **NEW OPPONENT**: `nbw__nbw-ruby`.
+- Round 0: **236W / 14L / 0D** (94.4%), avg 201.5 turns.
+- 4 losses were short (~100-115 turns) STARVATION deaths at length=3, hp=0.
+- 10 losses were long (200-350 turns) — wall-shadow / self-trap patterns.
+
+### Root cause of starvation losses (analyzed sim_99)
+- At T9 our head at (9,4), food at (10,4), opp far away at (2,5). Bot picked UP (drift) instead of RIGHT (eat).
+- DEBUG scores: UP had esc=30, vor=44; RIGHT had esc=23, vor=37, food_dist=0.
+- The differential of `-weight * food_dist` (weight=4, food_dist=2 for UP, 0 for RIGHT) only gave RIGHT +8 advantage, but esc/vor differentials cost RIGHT ~25 pts. So UP won by 15.
+- Basically: `food_dist=0` gives zero bonus. Formula `-weight*food_dist` produces no explicit reward for actually eating; only penalty for being far.
+
+### Change made in main.py (line ~530)
+Added explicit **SHORT-SNAKE EATING BONUS** for `food_dist == 0`:
+```python
+if c["food_dist"] == 0 and my_len <= 8 and not c["h2h_loss"]:
+    s += 25.0 if my_len <= 5 else 15.0
+```
+- The bonus is applied only when the move actually eats food (food_dist=0), we're short, and not walking into an H2H loss (which already gets -1000).
+- 25 pts should override the ~15-pt esc/vor differential we saw in sim_99.
+
+### Testing (with debug harness)
+- sim_99 T9 state: bot now picks **RIGHT** (eats food) instead of UP (drift). ✓
+- sim_99 T3 state: food at (5,5) but H2H with opp at (4,5) — bot correctly avoids food and picks UP (h2h_loss check still gates the bonus). ✓
+- Import + smoke tests pass.
+
+### Risk
+- Small: only affects moves where `food_dist == 0` AND `my_len <= 8`. Once we're long enough (>8), no change.
+- Not tested at scale (no CLI battle harness in this environment).
+- Backup: `main.py.bak_r1_new_start` = pre-change version.
+
+### For next teammate
+- Run diagnostic snippet at top of README to confirm opponent + W/L.
+- If starvation losses drop (short-game losses at len=3 disappear): keep this change.
+- If regressions appear (e.g. we eat food into a trap): revert with `cp main.py.bak_r1_new_start main.py`.
+- The 10 long-game losses (wall-shadow at length 20+) are NOT addressed by this change. They still need:
+  1. **2-ply minimax** (see prior "Ideas" section) — highest value.
+  2. Opponent-aware voronoi (assume opp chases us).
+- Backups (recency): `main.py.bak_r1_new_start` (this round pre-change), `main.py.bak_r2_current`, older.
+
