@@ -686,13 +686,13 @@ def _decide(game_state):
         # Depth scales with our length: the longer we are, the further ahead a
         # coil develops, so a fixed depth-8 horizon can't see it (loss vector vs
         # amphibious-arthur: we die at L30-44 by coiling). Cap for speed.
-        deep_depth = min(45, max(10, my_len + 18))
+        deep_depth = min(24, max(8, my_len // 2))
         surv_turns, min_sp = _deep_self_survival(nxt, sim_body, sim_static, w, h, depth=deep_depth)
         if surv_turns < deep_depth:
             # we hit a dead-end within the horizon -> strong coil penalty
             score -= (deep_depth - surv_turns) * 45.0
         if min_sp < my_len:
-            score -= (my_len - min_sp) * 15.0
+            score -= (my_len - min_sp) * 6.0
 
         # ENEMY-AWARE DEEP SURVIVAL (anti enemy-assisted seal): the pure self-sim
         # above ignores the enemy, so it misses funnels where the enemy actively
