@@ -807,6 +807,27 @@ def _beames_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _tr8r_predicted_move(enemy, game_state, w, h):
+    """Predict noahspriggs TR-8R by running the faithful copied port one ply."""
+    try:
+        from tools import tr8r_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = tr8r_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _battlejake2019_predicted_move(enemy, game_state, w, h):
     """Predict joshhartmann11 BattleJake variants by running copied ports.
 
@@ -1078,6 +1099,7 @@ def move(game_state):
         has_tyrelh_2018_enemy = False
         has_zakwht_2018_enemy = False
         has_bountysnake2018_enemy = False
+        has_tr8r_enemy = False
         has_jerrykott_enemy = False
         has_untimely_enemy = False
         for e in enemies:
@@ -1099,6 +1121,7 @@ def move(game_state):
             is_tyrelh = ("tyrelh" in ename.lower()) and not is_tyrelh_2018
             is_zakwht = "zakwht" in ename.lower() or "zakwht-2018" in ename.lower()
             is_bounty = "bountysnake2018" in ename.lower() or "bounty" in ename.lower()
+            is_tr8r = "tr-8r" in ename.lower() or "noahspriggs" in ename.lower()
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             if is_jerrykott:
@@ -1131,6 +1154,11 @@ def move(game_state):
                 elif is_bounty:
                     has_bountysnake2018_enemy = True
                     pred = _bountysnake2018_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_tr8r:
+                    has_tr8r_enemy = True
+                    pred = _tr8r_predicted_move(e, game_state, w, h)
                     if pred is not None:
                         preds.add(pred)
                 elif is_zakwht:
@@ -1323,13 +1351,24 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
+                if "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
-                        h2h_soft_penalty = max(h2h_soft_penalty, 500 if "tyrelh-2018" in ename else (450 if "zakwht" in ename else (220 if ("bounty" in ename or "bountysnake2018" in ename) else (250 if ("elon" in ename or "jackisherwood" in ename) else 150))))
+                        soft = 150
+                        if "tyrelh-2018" in ename:
+                            soft = 500
+                        elif "zakwht" in ename:
+                            soft = 450
+                        elif "tr-8r" in ename or "noahspriggs" in ename:
+                            soft = 260
+                        elif "bounty" in ename or "bountysnake2018" in ename:
+                            soft = 220
+                        elif "elon" in ename or "jackisherwood" in ename:
+                            soft = 250
+                        h2h_soft_penalty = max(h2h_soft_penalty, soft)
                     continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
@@ -1721,6 +1760,36 @@ def move(game_state):
                         score -= (26 - safe_area) * 480
                     if choke_risk and safe_area < 36:
                         score -= choke_risk * 3500
+            if has_tr8r_enemy and enemy_max_len >= my_len + 1:
+                # TR-8R is an exact deterministic A*/food/tail bot.  Round-0
+                # losses are mostly long games after TR-8R becomes a little
+                # longer and its safety zones/body path squeeze us near edges.
+                # Keep this narrow: avoid obvious edge/one-exit pockets only
+                # while TR-8R is actually longer; use the exact predictor for
+                # direct head collisions.
+                near_tr8r = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_tr8r <= 6 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    much_longer = enemy_max_len >= my_len + 3
+                    score += edge_dist * (340 if much_longer else 190)
+                    if edge_dist == 0:
+                        score -= 9000 if much_longer else 4500
+                    elif edge_dist == 1:
+                        score -= 2300 if much_longer else 900
+                    if clean_exits == 0:
+                        score -= 65000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_tr8r <= 3):
+                        score -= 20000 if much_longer else 10000
+                    if safe_area < 28:
+                        score -= (28 - safe_area) * (600 if much_longer else 340)
+                    if choke_risk and safe_area < 38:
+                        score -= choke_risk * 3400
             if has_tyrelh_python_enemy and enemy_max_len >= my_len + 1:
                 # Tyrelh-python is an exact deterministic food/tail pathing bot.
                 # Remaining production losses mostly happen after Tyrelh is longer
@@ -2016,6 +2085,11 @@ def move(game_state):
                     # reachable/uncontested food so we do not chase through its wall.
                     food_weight += min(260, 100 + (enemy_max_len - my_len) * 35)
                     food_dist = path_food if path_food < 99 else food_dist
+                if has_tr8r_enemy:
+                    # TR-8R reliably selects centre-near safe food; do not let it
+                    # snowball length, but still use uncontested filtering below.
+                    food_weight += min(360, 130 + (enemy_max_len - my_len) * 45)
+                    food_dist = path_food
                 if has_hungry_enemy:
                     # Hungry is entirely food-distance driven; race it to reachable
                     # food whenever we are not longer, otherwise it snowballs length.
