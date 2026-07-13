@@ -1486,3 +1486,41 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   is STILL the ideal unimplemented fix (cycle the board tightly instead of coiling). Scalar
   food/tail-follow tweaks are noise-floor and don't reproduce in the sim. main.py has all prior
   layers + now clearly-ahead anti-corner-approach + stronger clearly-ahead peel-off.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `ChaelCodes__cornelius` (FOOD-GREEDY, GROWS LARGE), KEEP-PACE GROWTH
+- **Opponent = `ChaelCodes__cornelius`** — a 1-PLY GREEDY bot (Rust port). Source saved to
+  `opp_cornelius.py` (git show origin/human/ChaelCodes/cornelius:main.py, 172 lines). Scoring per
+  head-neighbor: base 100 interior / 60 on x==0 or y==0 edges (NOT the max edges!); +75 food;
+  -80 if equal/longer enemy head adjacent; +50 if flood-fill space>=len else -(80-space); +75
+  incidental if food. Picks argmax of the 4 moves. **NO lookahead.** It is STRONGLY food-attracted
+  and GROWS LARGE (L28-41). Test: `python3 vs_cornelius.py main.py <N>` (games long; N<=14 for 30s
+  cmd timeout, or nohup+poll). NOTE: sim_test/vs_cornelius do NOT flood food like the real engine,
+  so they can't reproduce the growth-race loss vector (we win ~15-0 in sim).
+- **Round 0 result: won 177-73** (~71%, one of our CLOSER matchups). Analyzed all 73 losses
+  (`python3 analyze_cornelius.py`): DECISIVE — **55/73 losses OPUS was SHORTER at death** (OPUS
+  L20-33 vs OPP L24-41); 5 equal, only 13 longer. LONG games (median turn 323). ROOT CAUSE =
+  Cornelius OUT-GROWS us (it's food-greedy, +75) and out-lasts/out-positions us as the bigger
+  snake. This is the OPPOSITE of our chronic self-coil vector — vs Cornelius we stop growing too
+  early and get out-lengthed.
+- **Changes (backup: main_r0_cornelius_backup.py = git HEAD pre-change bot):**
+  1. `_pace_margin` for large-growing enemies (max_enemy_len>=20): 4 -> **6** (keep chasing food
+     to a bigger lead before relaxing, so a food-greedy L41 opponent doesn't pass us).
+  2. Added `truly_behind = my_len < max_enemy_len and max_enemy_len >= 12` flag. New food-scoring
+     branch (between starving and behind_or_even): chase HARD (d_after*9, +85 on-food).
+  3. When truly_behind (and not critical), target the ABSOLUTE nearest food (bypass safety-ranked
+     food selection) to win the growth race. Safety/space/H2H penalties still dominate scoring
+     (space*10/unit, H2H -1000) so no suicidal dives.
+  All changes fire ONLY when we're strictly shorter than a >=L12 enemy, so they DON'T affect
+  short-opponent overgrowth guards (eremetic/gigantic/arthur/tantilla: those enemies stay short,
+  truly_behind stays false once we lead, clearly_ahead unchanged).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3
+  fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.1 (<500 limit); `vs_cornelius.py main.py 14`
+  => 13-0-1 (no regression; sim can't reproduce the food-flood growth race so validated by DESIGN
+  — directly targets the confirmed 55/73 shorter-at-death vector — + sim_test + fuzz + no crash).
+- **Next teammate:** opponent = opp_cornelius.py (FOOD-GREEDY, grows L28-41, no lookahead). Our
+  loss vector = being SHORTER (out-grown). If losses persist and we're still shorter, push
+  _pace_margin higher (6->8) or truly_behind food weight (9->11). EXPLOIT: Cornelius has NO
+  lookahead and is superstitious of x==0/y==0 edges (base 60 there) — we could bait it toward
+  those low-edges or cut it off when we're longer (it avoids cells an equal/longer enemy head is
+  adjacent to, -80). If we're LONGER when losing, it's the self-coil vector (tail-follow etc all
+  present). Analyze: `python3 analyze_cornelius.py`. main.py has all prior layers + keep-pace growth.

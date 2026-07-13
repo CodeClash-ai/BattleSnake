@@ -410,12 +410,8 @@ def _decide(game_state):
     # opponent (elon L30-43) we widen this band so we keep pace and don't get
     # out-lasted once past the +2 lead (our #1 elon loss vector = being SHORTER
     # in long games). Vs short opponents the +1 band is unchanged.
-    _pace_margin = 6 if max_enemy_len >= 20 else 1
+    _pace_margin = 4 if max_enemy_len >= 20 else 1
     behind_or_even = my_len <= max_enemy_len + _pace_margin
-    # TRULY behind: enemy is strictly longer than us. Vs a large food-greedy
-    # opponent (cornelius reaches L28-41) our #1 loss vector is being SHORTER at
-    # death (55/73 losses). When actually behind a big enemy, chase food HARD.
-    truly_behind = my_len < max_enemy_len and max_enemy_len >= 12
     # When we are COMFORTABLY longer than the opponent, we do NOT need to grow.
     # Chronic loss vector vs amphibious-arthur: we grow to L30-44 while the
     # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
@@ -499,14 +495,6 @@ def _decide(game_state):
             critical = True
             nearest_food = abs_nearest_food
             nearest_food_dist = abs_nearest_dist
-
-    # TRULY behind a large opponent (cornelius grows to L28-41, our #1 loss vector
-    # is being SHORTER at death): win the growth race by targeting the ABSOLUTE
-    # nearest food rather than the safety-ranked one, so we don't cede uncontested
-    # growth. Safety/space/H2H penalties still dominate in scoring (no suicidal dive).
-    if (not critical) and truly_behind and abs_nearest_food is not None:
-        nearest_food = abs_nearest_food
-        nearest_food_dist = abs_nearest_dist
 
     best_move = None
     best_score = None
@@ -751,11 +739,6 @@ def _decide(game_state):
                 score -= d_after * 11.0
                 if nxt == nearest_food:
                     score += 90.0
-            elif truly_behind:
-                # Strictly shorter than a large enemy: grow HARD to catch up.
-                score -= d_after * 9.0
-                if nxt == nearest_food:
-                    score += 85.0
             elif behind_or_even:
                 score -= d_after * 7.0
                 if nxt == nearest_food:
