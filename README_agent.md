@@ -1547,3 +1547,64 @@ if opponents and my_len >= 20 and my_health > 40:
 ### Key insight: same-wall vs perpendicular-wall shadowing
 - Old wall-shadow code handles OPP-ON-INTERIOR-SHADOWING-US-ALONG-WALL (perp_gap 1-3).
 - New block handles OPP-ON-SAME-WALL-AS-US (perp_gap=0). Both cases matter.
+
+## Round 2 (this round, prev round vs Flipez) — done by opus-4-7
+
+### Situation at start
+- Opponent (round 1): **Flipez__flipez-crystal**.
+- Prev round results: **W=246 L=4 D=0** (98.4%), avg_turns=127.3, max=297.
+- Only 4 losses out of 250 → very high win rate.
+
+### Analysis of the 4 losses
+All 4 are LATE-GAME self-trap / cornering:
+- `sim_71` (T134, len 12): classic **spiral self-trap** — we wound our body into a tight spiral
+  along the left wall, entered a pocket that closed off. Bot went UP into pocket at (0,4) at
+  turn 131; should have gone DOWN. Interestingly, current-bot-in-isolation at that state
+  now picks DOWN (correct)! So the bot has already been improved but the log is old.
+- `sim_144` (T74, len 9): cornered into (10,10) by mid-body of long opp coming up from below.
+  By turn 72 already forced (only one legal move); trap was set earlier around turn 68-70.
+- `sim_148` (T175, len 15): trapped on left wall as opp shadow-came around.
+- `sim_241` (T116, len 8): trapped by opp closing in with hp=27 (starving).
+
+### Change I made
+- **NO CODE CHANGES to main.py.** 246/250 is a great baseline; the remaining losses are
+  hard-to-fix multi-turn positional traps that would need real lookahead search to solve.
+  A tuning change risks regressing more than 4 games.
+- Verified current bot correctly handles sim_71 turn 131 case in isolation (picks DOWN).
+
+### Files
+- `main.py.bak_r2_final_246w4l` — snapshot of bot going into round 2.
+
+### For next teammate
+Diagnostic (run first):
+```bash
+python3 -c "
+import json,glob,os
+last_round = max(int(x) for x in os.listdir('/logs/rounds'))
+wins=losses=draws=0; turns=[]
+opp_names = set()
+for f in glob.glob(f'/logs/rounds/{last_round}/sim_*.jsonl'):
+    lines = open(f).read().splitlines()
+    if not lines: continue
+    last = json.loads(lines[-1])
+    turns.append(len(lines))
+    winner=last.get('winnerName','')
+    if last.get('isDraw'): draws+=1
+    elif winner=='opus-4-7': wins+=1
+    else: losses+=1
+    if len(lines) >= 2:
+        d = json.loads(lines[1])
+        for s in d.get('board',{}).get('snakes',[]):
+            if s['name'] != 'opus-4-7': opp_names.add(s['name'])
+print(f'round {last_round}: W={wins} L={losses} D={draws} avg_turns={sum(turns)/max(1,len(turns)):.1f} opps={opp_names}')
+"
+```
+
+Decision tree:
+- **If W >= 246 vs Flipez**: don't touch main.py. Add analysis, revert any recent changes.
+- **If W < 240 vs Flipez** (regression): `cp main.py.bak_r2_final_246w4l main.py`.
+- **If different opponent**: analyze losses first before changing anything.
+
+### Highest-value next upgrades (still not done, ~diminishing returns)
+1. Real 2-ply minimax (would fix spiral self-trap by seeing 2 moves ahead)
+2. Simulate our own body shape N turns forward on candidate paths to detect enclosed regions
