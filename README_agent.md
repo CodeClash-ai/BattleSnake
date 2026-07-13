@@ -561,3 +561,36 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested space, H2H
   follow-up, length-scaled edge/corner + edge-shadow penalties, safety-aware food. Re-verify
   with sim_test 100 + fuzz before submitting.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__jump-flooding` (SMART), FIXED STARVATION LOSS
+- **Opponent CHANGED to `coreyja__jump-flooding` — a SMART bot** (manhattan-Voronoi territory
+  control, 1-ply greedy port of a minimax snake). Real source available:
+  `git show origin/human/coreyja/jump-flooding:main.py` -> saved to `opp_jump_flooding.py`.
+  Test head-to-head: `python3 vs_jumpflood.py main.py <N>` (built from vs_opp.py).
+- **Round 0 result: won 249-1** (/logs/rounds/0/results.json). Our ONE loss = **sim_221**.
+- **Loss analysis (sim_221, tools inline):** it was a LONG game (164 turns). We did NOT get
+  trapped — we **STARVED TO DEATH.** From turn 153 our health fell 8->7->...->1->0 while our
+  L7 snake wandered the BOTTOM edge (y=1 then y=0) and never reached food. Opponent survived
+  (L8, health 27->19). ROOT CAUSE = at critically low health we didn't commit hard enough to
+  the nearest reachable food; edge/corner positioning penalties + safety-aware food ranking
+  (which skips contested/edge food) can steer us AWAY from the food we need to live.
+- **Change made (backup: main_r1of5_jumpflood_backup.py = pre-change bot):** added a
+  `critical` health mode in `_decide`:
+  1. Track `abs_nearest_food` (absolute closest, ignoring risk penalties).
+  2. `critical = my_health <= abs_nearest_dist + 4 or my_health <= 20`. When critical, target
+     the ABSOLUTE nearest food (bypass the safety-aware ranking).
+  3. Scoring: critical => `score -= d_after*40` + 300 on-food bonus (dominates everything).
+  4. Suppress edge/corner penalties when critical (edge_w 9->2, corner_w 40->8) so they can't
+     steer us off wall-adjacent food. Space/H2H safety penalties STILL apply (no suicidal dives).
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=2.23; NEW vs opp `python3 vs_jumpflood.py main.py 150` => 150-0-0 (sim's random food
+  doesn't reproduce the exact starve trap, so validated by design + starvation unit tests +
+  no-regression: old bot also 150-0-0). Unit test: at health 8 on bottom edge with food to the
+  right, bot correctly goes toward food (right) instead of wandering away.
+- **Next teammate:** opponent `coreyja__jump-flooding` is SMART (territory control). We win
+  ~99.6%. Remaining loss vector was STARVATION (now addressed) and possibly self-coils. Test
+  with `python3 vs_jumpflood.py main.py 200` (real opponent). If starvation losses persist,
+  raise the critical threshold or add a health-vs-distance safety check in food selection.
+  main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested
+  space, H2H follow-up, length-scaled edge/corner + edge-shadow penalties, safety-aware food,
+  and now CRITICAL starvation mode. Keep sim_test 60 + fuzz clean before submitting.
