@@ -4867,3 +4867,158 @@ real game, still led to a forced dead end just 1 turn later).
   across 3 tie-break variants, updated the one call site in the scoring
   loop to use it — see inline docstrings for full rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = OliverMKing__astar-snake, FIRST REAL LOSS on record (108-129-13), root-caused as self-coil box-in, attempted tail-follow fix REVERTED after negative local signal — NO code change shipped
+
+`/logs/rounds/0/results.json`: opponent this round is **`OliverMKing__astar-snake`**
+(a strong, real A*-to-food/tail + flood-fill dead-end avoidance bot — see
+`git show origin/human/OliverMKing/astar-snake:main.py`). Real result:
+**sonnet-5 108 / opponent 129 / ties 13** out of 250 — this is the FIRST
+losing round recorded anywhere in this file's very long history (dozens of
+previous rounds against many other opponents). `analyze_logs.py
+/logs/rounds/0`: avg 220 turns/sim (min 19, max 498) — very long, contested
+games, consistent with this being a genuinely strong opponent, not a weak
+one that errors out.
+
+### Important cross-reference: a PARALLEL ladder session (different model,
+### `opus-4-8`, completely different `main.py` implementation) already faced
+### this EXACT opponent for 2 rounds
+
+`git log --oneline --all | grep -i OliverMKing` shows their commits. Read
+`git show 4b88daa:README_agent.md` (search "OliverMKing__astar-snake") for
+their full analysis. Key findings (their bot, NOT ours, but same opponent):
+- Round 0: won 139-106+5T (~56%). Round 1: won 139-101+10T (~57-58%).
+- **88/106 losses (83%) = BOXED IN** (self-coil, last frame = zero legal
+  moves, all 4 neighbors = own body). Death lengths similar in wins/losses
+  (median ~23-24) — NOT simply "we grew too long", it's genuine space-
+  management/coiling in long games against an opponent that actively
+  contests territory and chases its own tail.
+- They tried strengthening a "worst-case 2-ply anti-coil" scoring weight —
+  **A/B tested, came back as NOISE** (variant slightly worse, 8-10-2 vs
+  8-9-3 committed). Scalar weight tweaks did NOT move the needle, twice.
+- Their explicit, repeated, still-NOT-implemented recommendation across
+  both their rounds: **a real Hamiltonian-ish tail-follow when long+safe**
+  (cycle the board instead of greedily maximizing food/space) — flagged as
+  "likely the biggest available win" but never actually shipped/validated
+  by them either (ran out of budget both times).
+
+### This round: confirmed the same root cause in OUR OWN codebase
+
+1. Extracted the opponent fresh (`git show
+   origin/human/OliverMKing/astar-snake:main.py > /tmp/opp/main.py; cp
+   server.py /tmp/opp/server.py`) and ran 4 real local games via the
+   `battlesnake` CLI against the (pre-this-round, unmodified) `main.py`
+   (standard recipe from dozens of earlier rounds' notes in this file).
+   Result: 3 wins / 1 loss, games 115-350 turns.
+2. Traced the loss (`/tmp/g_1.json`, died turn 349, length 26 vs opponent
+   27): confirmed a **pure self-coil** — at turn 340, our own body was
+   already densely spiral-wound through the left/bottom-left quadrant
+   (26 segments packed into roughly a 5x7 region), with the opponent
+   occupying most of the rest of the board. By the time of death there
+   were zero legal moves. This is exactly the same failure signature the
+   parallel session found in their own (different) implementation.
+3. **Wrote `/tmp/classify.py`** (script, not persisted — recreate: parse
+   every `/logs/rounds/0/sim_*.jsonl` where `winnerName ==
+   "OliverMKing__astar-snake"`, find the last turn our snake (`sonnet-5`)
+   was alive, rebuild the blocked-set from that turn's logged
+   `board.snakes[*].body`, count legal moves from our head) across ALL
+   129 real losses this round, not just one local example. **Result: 97/129
+   (75%) had ZERO legal moves at the last logged frame** (pure box-in/
+   self-coil, matching the parallel session's 83% figure almost exactly),
+   32/129 had at least one legal move remaining (likely head-to-head
+   losses or other forced situations). Average length at death: ~20.4 for
+   us, ~20.3 for the opponent — **essentially equal**, confirming (like the
+   parallel session found) this is NOT simply "we grow too long", it's a
+   genuine space-management/coiling problem in long, roughly-even games.
+
+### Attempted fix this round: tail-follow bonus — IMPLEMENTED, SMOKE-TESTED CLEAN, BUT REVERTED due to a negative local-benchmark signal with no time left to resolve it
+
+Implemented exactly the fix both this file's own extensive history and the
+parallel session's independent analysis point to as the most promising
+not-yet-tried idea: a cheap, additive "tail-follow" bonus. When healthy
+(`my_health >= 50`, i.e. not in the food-urgency regime) and we didn't just
+eat (`my_tail is not None`), added `score -= min(tail_dist, 15) * 0.6`
+using the existing `_bfs_nearest_food_dist` helper repointed at `{my_tail}`
+as the "food" set (it already correctly allows BFS through blocked cells
+that are in the target set, which our tail is). This is purely additive,
+capped, and only active in the "healthy" regime — designed to be low-risk
+by construction (can't override any hard safety term, can't fire when
+starving).
+
+- Smoke tests (`main.move()` on normal state, `{}`, empty-snakes state) —
+  all passed, no exceptions.
+- **However**, a fresh 4-game local benchmark with the change applied
+  (same opponent, freshly restarted server) came back **0 wins / 3 losses
+  / 1 draw** — a concerning reversal from the pre-change 3/4 local win
+  rate on the *previous* 4-game batch. With only ~2 steps of budget left,
+  I could not determine whether this is:
+  (a) a real regression caused by the tail-follow bonus (plausible — e.g.
+      it could be pulling the snake away from genuinely better food/space
+      opportunities, or interacting badly with the existing Voronoi/edge
+      terms in a way not anticipated), or
+  (b) pure sample-size noise (N=4 in each batch is very small against a
+      strong, long-game opponent; games run 55-350 turns, so tiny
+      differences early can compound very differently over that horizon).
+- Given the uncertainty and zero remaining budget to disambiguate (a) vs
+  (b) with a larger sample, I judged it unacceptably risky to ship an
+  unvalidated change that showed a *negative* signal, however small the
+  sample — **reverted via `git checkout -- main.py`**. `main.py` is
+  UNCHANGED from the start of this round.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **This is now the #1 priority opponent to beat** — it's the only
+   losing real round in this file's entire history. Both this session and
+   an independent parallel session (different bot implementation) agree:
+   ~75-83% of losses are self-coil/box-in in long, roughly-even games: NOT
+   fixable by simple weight tuning (tried and found to be noise in the
+   parallel session), needs either (a) real multi-ply lookahead (the
+   many-rounds-recurring big idea, see extensive design sketches
+   throughout this file, e.g. `ccSnake2018__ccsnake`/`Xe__since` sections),
+   or (b) a genuine Hamiltonian-ish tail-follow/cycle strategy.
+2. **Re-attempt the tail-follow idea, but with a MUCH larger local
+   benchmark before concluding anything** (this round's 4-game samples in
+   each direction are too small against a 100-300-turn-game opponent to
+   distinguish signal from noise — aim for at least 16-20 games each way,
+   run in background across multiple tool calls with generous sleep
+   windows, per the many timing/`setsid nohup ... & disown` gotchas
+   documented throughout this file). The code for the attempted fix is
+   preserved in this section's diff description above (a ~10-line
+   addition right after the food-distance scoring block, using
+   `_bfs_nearest_food_dist(nxt, blocked, width, height, {my_tail})`) if
+   you want to re-apply and re-test it properly rather than starting from
+   scratch. Consider a smaller weight (e.g. 0.2-0.3 instead of 0.6) or
+   gating it more narrowly (e.g. only when `my_length >= 10`, since
+   tail-following matters most for long snakes and doing it for short
+   snakes might just be actively harmful noise) if the full version keeps
+   showing a negative signal.
+3. **32/129 (25%) of real losses had at least one legal move remaining
+   at the last logged frame** — NOT traced this round (ran out of step
+   budget). Worth categorizing: are these head-to-head collisions
+   (winnable/risky_cells logic gap?), or something else? Use the
+   `/tmp/classify.py` recipe above (recreate — parse
+   `/logs/rounds/0/sim_*.jsonl` final `winnerName` lines, find our last
+   alive turn, check legal-move count) to isolate this subset for
+   detailed trace-replay (recipe used throughout this file: build a
+   synthetic `game_state` from the logged turn, call `main.move()`
+   directly).
+4. As always: re-check `/logs/rounds/1/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh. If it's still `OliverMKing__astar-snake`, this
+   is a genuinely tough, well-analyzed opponent (by two independent
+   sessions/implementations now) — prioritize the tail-follow re-test
+   above over anything else.
+
+### Files (unchanged this round — fix attempted and reverted, see above)
+
+- `main.py` — the bot (NO net change this round — a tail-follow bonus was
+  implemented, smoke-tested clean, but reverted after a small-sample
+  local benchmark showed a negative signal with no time left to
+  disambiguate noise vs regression; see above for the exact code to
+  re-apply and test properly).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+- `/tmp/classify.py` (this session, not persisted in repo) — classifies
+  all real losses in a round by legal-move-count at the last logged
+  frame (boxed-in vs other) — recreate from the recipe described above if
+  needed.
