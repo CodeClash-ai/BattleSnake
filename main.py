@@ -603,6 +603,33 @@ def _flipez_crystal_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _battlesnake_elon_predicted_move(enemy, game_state, w, h):
+    """Predict jackisherwood battlesnake-elon by running the copied faithful port.
+
+    Elon alternates between tail-chasing, food-seeking, and collision-avoidance
+    with deterministic lodash-style tie breaks.  Round-0 failures were mostly
+    exact head-to-heads near edges where our broad adjacent-head rule could not
+    distinguish the square Elon would actually choose.
+    """
+    try:
+        from tools import battlesnake_elon_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = battlesnake_elon_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -736,6 +763,10 @@ def move(game_state):
                 pred = _eremetic_eric_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
+            elif "battlesnake-elon" in ename.lower() or "jackisherwood" in ename.lower() or "elon" in ename.lower():
+                pred = _battlesnake_elon_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
             else:
                 preds.add(_simple_opponent_target_move(eh, food, w, h))
                 straight = _continuation_or_default_move(e, w, h)
@@ -823,9 +854,13 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "rdbrck" in ename or "btas" in ename:
+                if "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
-                        h2h_soft_penalty = max(h2h_soft_penalty, 150)
+                        # For deterministic predicted bots, an exact predicted
+                        # collision is penalized below; adjacent non-predicted
+                        # squares are risky but often the only escape from edge
+                        # pockets, so do not blanket-ban them.
+                        h2h_soft_penalty = max(h2h_soft_penalty, 250 if ("elon" in ename or "jackisherwood" in ename) else 150)
                     continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
