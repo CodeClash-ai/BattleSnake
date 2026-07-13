@@ -172,6 +172,61 @@ def _flood_fill_reach(start, blocked, width, height, cap, target=None):
     return count, reached
 
 
+def _greedy_self_room(start, blocked, width, height, steps_needed):
+    """Bounded, opponent-independent 'can my own body actually fit here'
+    check. Starting at `start`, greedily walk up to `steps_needed` more
+    cells, at each step picking the unvisited/unblocked neighbor with the
+    most free neighbors of its OWN (a cheap 'head toward the most-open
+    local space' rule -- not a claim of optimal pathing, just a plausible
+    proxy for how our own body would naturally continue). Cells visited by
+    this virtual walk are treated as newly blocked (simulating our body
+    extending along it), same as the real snake's future body would.
+
+    Returns the number of steps successfully taken before getting stuck
+    (no legal neighbor left at all), capped at `steps_needed`.
+
+    Motivation (see README_agent.md, many rounds' "self-coil" write-ups):
+    a candidate can have a large raw flood-fill area *and* pass the
+    tail-reachability check while still leading into a region that is
+    only wide enough for a fraction of our own body to actually fit
+    without folding back on itself -- raw area only counts total open
+    cells, not whether there's a real, walkable multi-step path through
+    them for a body of our exact length. This is a cheap (<= my_length
+    extra BFS-neighbor-degree checks, negligible cost on an 11x11 board)
+    approximation of that, meant to complement (not replace) the
+    existing hard-trap/tail-reachability checks -- used only as a soft,
+    additive penalty below, never as a hard gate, to avoid repeating the
+    already-documented mistake of an overly aggressive pessimistic-area
+    heuristic overriding the real safety metrics (see the extensive
+    "opp_territory"/"area_pess" history earlier in README_agent.md)."""
+    if start in blocked:
+        return 0
+    visited = {start}
+    cur = start
+    steps = 0
+    while steps < steps_needed:
+        best_nb = None
+        best_deg = -1
+        for dx, dy in DIRS.values():
+            nb = (cur[0] + dx, cur[1] + dy)
+            if nb in visited or nb in blocked or not _in_bounds(nb, width, height):
+                continue
+            deg = 0
+            for ddx, ddy in DIRS.values():
+                nb2 = (nb[0] + ddx, nb[1] + ddy)
+                if _in_bounds(nb2, width, height) and nb2 not in blocked and nb2 not in visited:
+                    deg += 1
+            if deg > best_deg:
+                best_deg = deg
+                best_nb = nb
+        if best_nb is None:
+            break
+        visited.add(best_nb)
+        cur = best_nb
+        steps += 1
+    return steps
+
+
 def _voronoi_area(my_start, opp_starts, blocked, width, height):
     """Multi-source BFS 'race' partition: returns the number of cells
     strictly closer (by shortest-path BFS distance, avoiding `blocked`)
@@ -509,6 +564,19 @@ def move(game_state):
             elif area_for_score < my_length * 2.2:
                 score -= (my_length * 2.2 - area_for_score) * 12
             score += area_for_score * 5
+
+            # Bounded, opponent-independent "does my body actually fit"
+            # check (see _greedy_self_room docstring above for full
+            # rationale). Only bother running it when the region already
+            # looks nominally safe (area_for_score >= my_length) -- if it's
+            # already smaller than our body, the hard-trap penalty above
+            # already fires much harder, so this would be redundant. Soft,
+            # additive-only penalty (never a hard gate) so it can't repeat
+            # the previously-documented "pessimistic area override" bug.
+            if area_for_score >= my_length:
+                room_steps = _greedy_self_room(nxt, blocked, width, height, my_length)
+                if room_steps < my_length:
+                    score -= (my_length - room_steps) * 7
 
             if nxt in risky_cells:
                 # Relax the flat -1000 "never risk a possible head-to-head"

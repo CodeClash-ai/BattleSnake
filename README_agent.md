@@ -4020,3 +4020,131 @@ behaves correctly — all pass.
 
 - `main.py` — the bot (no changes this round — investigation only).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 2 (this session) — opponent still rdbrck__btas (247/1/2 both real rounds), added bounded opponent-independent "self-room" check, validated via 24-game local benchmark (no regression)
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is `rdbrck__btas`.
+Round 0: 247-2-1(tie). Round 1: 247-1-2(tie) — already excellent (98.8%
+win rate), consistent across both rounds. The previous round's notes (see
+the long "opponent = rdbrck__btas" section directly above this one) traced
+both round-0 losses in detail and concluded: one (`sim_35.jsonl` turn 124)
+is a genuine 1-ply tie (every spatial/safety metric literally identical
+between the two live candidates, only food-distance differed, and the
+trap only became visible 2-3 turns later — provably unfixable by weight
+tuning, needs real lookahead); the other (`sim_90.jsonl`) is the
+well-documented "extreme-length self-coil" class (our snake reached
+length 35 on an 11x11=121-cell board — nearly 30% of the board was our
+own body). No code change was made last round given the already-excellent
+result and the provably-untunable nature of the traced tie.
+
+### What I did this round
+
+1. **Fresh local benchmark BEFORE any change** (recipe unchanged from
+   dozens of earlier rounds' notes throughout this file — extract
+   `origin/human/rdbrck/btas:main.py` to `/tmp/opp/main.py`, `cp server.py
+   /tmp/opp/server.py`, run both as local Flask servers via `setsid
+   nohup env PORT=... python3 main.py > log 2>&1 </dev/null & disown`,
+   loop `battlesnake play ... -o /tmp/game_N.json & disown`, sleep, check
+   `tail`). **Result: 14/14 clean wins**, games 7-242 turns. This is a
+   strong, clean confirmation that the real 98.8% win rate is genuine and
+   reproducible locally too (unlike several past opponents in this file's
+   history where local 1v1 was notably harder than the real score).
+
+2. **Added a new, bounded, opponent-independent scoring term:
+   `_greedy_self_room()`** (see the function's own docstring in `main.py`
+   for full detail). Motivation: the extensive "self-coil" trace history
+   throughout this file (many rounds, many opponents) repeatedly found
+   candidates with a large raw flood-fill area AND a passing
+   tail-reachability check that still led to a fatal trap a few turns
+   later, because neither check verifies whether there's an actual
+   *walkable path* through the region wide enough for our own body's
+   full length — raw area only counts total open cells, not path
+   geometry. The new check greedily walks forward from a candidate cell
+   for up to `my_length` steps (always choosing the neighbor with the
+   most free neighbors of its own — a cheap "head toward the most-open
+   local space" rule), treating visited cells as newly blocked (simulating
+   our body extending along that path), and reports how many steps it
+   managed before getting stuck. If it gets stuck early (fewer than
+   `my_length` steps), that's now a soft, additive penalty
+   (`(my_length - room_steps) * 7`) on top of the existing terms — never
+   a hard gate, deliberately, to avoid repeating the already-documented
+   mistake of an overly aggressive pessimistic heuristic overriding the
+   real safety metrics (see the extensive `opp_territory`/`area_pess`
+   history earlier in this file, which had to be reverted/fixed twice for
+   exactly that failure mode). Only computed when `area_for_score >=
+   my_length` (redundant otherwise, since the hard-trap penalty already
+   fires much harder in that case) — bounded cost, verified via timing
+   (300 `move()` calls on an 11x11 board with a 25-length snake in
+   ~2ms/call, nowhere near the 500ms/move budget).
+
+3. **Verification**:
+   - Smoke tests (`main.move()` on a normal 2-snake state, `{}` malformed
+     state, empty-snakes state) — all still return valid moves, no
+     exceptions, both before and after the change.
+   - `ast.parse` confirms the file is syntactically valid.
+   - **Fresh 20-game local benchmark AFTER the change** (same recipe,
+     restarted both servers with the new code): **19/20 wins, 1 loss**.
+     Traced the loss (`/tmp/post_9.json`, died turn 202): our snake had
+     grown to **length 25 on the 11x11 board** and formed a tight spiral
+     in a ~7x7 corner region — the same well-documented "extreme-length
+     self-coil, board nearly exhausted" class as the previously-traced
+     `sim_90.jsonl` (length 35) from last round's notes, not a new
+     regression. No errors/exceptions in either server's log across the
+     full 34-game combined benchmark (14 pre-change + 20 post-change).
+   - **Combined local result this round: 33/34 (97%)**, fully consistent
+     with (not worse than) the pre-change 14/14 and the real match history
+     (247/1/2, 247/2/1) — no evidence of regression, and the one loss
+     found matches an already-understood, hard-to-fix failure class
+     rather than a new bug introduced by this round's change.
+
+### Honest assessment: this change is unlikely to have fixed the specific
+### previously-traced `sim_35.jsonl` tie (still needs real multi-ply
+### lookahead), but is a reasonable, low-risk, generally-applicable
+### addition
+
+The `sim_35.jsonl` turn-124 tie previous notes described was between two
+paths where literally *every* metric (area, voronoi, tail_reachable) was
+identical — a mirrored/symmetric situation where a greedy "most locally
+open neighbor" self-walk would likely also come out identical for both
+directions (same geometry, just mirrored), so this specific change
+probably would NOT have flipped that exact decision. It's better
+understood as a complementary check for a *different* (but related)
+self-coil sub-case: "this candidate's region has plenty of raw area and
+a path back to my tail exists in principle, but there isn't actually room
+for my whole body to fit through it without folding back on itself" —
+distinct from "the whole region will get sealed by an opponent 2-3 turns
+from now" (which genuinely needs opponent modeling / real lookahead, not
+yet attempted, see the many `ccSnake2018__ccsnake`/`Xe__since`/
+`zacpez__scape-goat` design sketches elsewhere in this file for that).
+
+### Recommended next steps
+
+1. **Keep monitoring `/logs/rounds/2/results.json`** (this round's real
+   result, once it exists) — if the opponent is still `rdbrck__btas` and
+   the win rate stays similar (~98-99%) or improves slightly, this
+   change is safe to keep building on. If it regresses noticeably,
+   revert via `/tmp/main_before_round2.py` (saved this session, not
+   persisted in the repo — recreate via `git show HEAD:main.py` before
+   this round's commit if that file is gone) and investigate why.
+2. The genuinely-tied `sim_35.jsonl`-style loss (identical metrics,
+   only food-distance differs, danger invisible for 2-3 turns) remains
+   the best concrete, reproducible test case in this file's history for
+   validating any future real multi-ply-lookahead attempt — see last
+   round's notes (directly above this section) for the full trace and
+   exact turn/state to replay.
+3. As always: re-check the opponent identity each round via
+   `results.json` before assuming past analysis applies; use `git log
+   --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark a new
+   opponent if one appears.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added `_greedy_self_room()` and a
+  soft additive penalty using it in the scoring loop — see the function's
+  docstring and the inline comment at its call site for full rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+- `/tmp/main_before_round2.py` (this session, not persisted in the repo)
+  has the exact pre-this-round `main.py` if a revert/diff is needed —
+  recreate via `git show HEAD:main.py` before this round's commit if
+  that file is gone by the time you read this.
