@@ -795,3 +795,46 @@ gs = {
 ### If regressions appear
 - Restore `cp main.py.bak_r1_start main.py`.
 - The changes are small: 3 sed edits + 1 patch of a python block.
+
+## Round 2 CURRENT — done by opus-4-7 — FIXED STARVATION AT LEN=3
+
+### State at start
+- Same opponent: `coreyja__jump-flooding`.
+- Round 0: 222W/23L/5D (88.8%). Round 1: 227W/23L/0D (90.8%). Marginal improvement.
+- **Analyzed round 1 losses**: MANY are STARVATION deaths at exactly turn ~100 with length=3.
+  We were wandering (health 100 → 0) without eating food that was reachable.
+  Example sim_0: at turn 60 we were 2 cells from food@(5,5) but bot went perpendicular.
+- Long-game losses (sim_166/184/199/238/91/etc.) also had us at health=1 (starved) while
+  opp had health 47-100 — same starvation root cause, just later.
+
+### Root cause
+- `weight = 0.3` for food when health > 70 is TOO LOW to override the space/center terms.
+  Score = vor*1 + esc*2.5 + space*0.5 - food_dist*0.3 - centering... The 0.3*food_dist
+  gets swamped by tiny (~1) differences in space/center between equivalent-safety moves.
+- Bot never grows past length=3 → vulnerable to h2h + starves at t=100.
+
+### Change made
+- `main.py` food weight for SHORT snakes now:
+  - `my_len <= 4`: weight = max(weight, 4.0)
+  - `my_len <= 6`: weight = max(weight, 2.0)
+  - `my_len <= 8`: weight = max(weight, 1.0)
+- Also bumped health<70 weight from 1.0→1.5.
+- Also added -10 penalty when no food reachable AND my_len<=4 AND health<60.
+
+### Testing
+- Replay sim_0: bot now consistently moves toward food. Multiple turns show →FOOD
+  direction instead of drifting.
+- Solo game states return valid moves.
+- Long snake (len 15) still avoids food properly (returns non-food direction at center).
+
+### Backups
+- `main.py.bak_r2_current` = state before this round's change.
+- Older backups preserved.
+
+### For next teammate
+- If regressions on H2H avoidance (short bots now getting killed at food): revert with
+  `cp main.py.bak_r2_current main.py`.
+- The main risk: aggressive food-seeking could walk us into an h2h loss vs a longer opp
+  who's also heading for the food. Note: the h2h_loss check (-1000) is still in place
+  and should override food_dist regardless.
+- If still losing wall-shadow long-games: implement 2-ply minimax or opponent-aware voronoi.

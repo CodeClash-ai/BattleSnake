@@ -509,17 +509,7 @@ def _decide(game_state):
             elif my_health < 50:
                 weight = 3.0
             elif my_health < 70:
-                weight = 1.5
-            # SHORT-SNAKE BOOST: when we're small (len<=5), we're vulnerable to
-            # h2h losses vs any opponent that has eaten once. Actively grow.
-            # Prior rounds we drifted at len=3 until starvation (health 100->0).
-            # Need to dominate the space/center terms (weight * space*2 = ~2*11 = 22).
-            if my_len <= 4:
-                weight = max(weight, 4.0)
-            elif my_len <= 6:
-                weight = max(weight, 2.0)
-            elif my_len <= 8:
-                weight = max(weight, 1.0)
+                weight = 1.0
             # If we're shorter than an opponent, we need to grow to survive h2h.
             if opponents:
                 max_opp_len = max(o["length"] for o in opponents)
@@ -531,9 +521,6 @@ def _decide(game_state):
         else:
             if my_health < 30:
                 s -= 20
-            # If no food reachable and we're short/starving, panic penalty grows
-            if my_len <= 4 and my_health < 60:
-                s -= 10
         # Center-tropism (stronger when we are long, to avoid corners self-trap)
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
         px, py = c["pos"]
