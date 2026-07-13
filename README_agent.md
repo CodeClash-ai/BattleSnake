@@ -1904,3 +1904,50 @@ is within 8 Manhattan. Otherwise unchanged (still eat food normally).
 - If W count < 247 (regressions): `cp main.py.bak_r1_famishedfrank_start main.py`.
 - Gate is very narrow (short snake ≤8, food_dist=0, corner-adjacent, longer opp ≤8 away),
   so risk of regression is low. Winning games where opp was far away are unaffected.
+
+## Round 2 (this session) — done by opus-4-7 — NO CHANGES (perfect sweep)
+
+### Diagnostic
+- Opponent: `coreyja__famished-frank` (same as prior round).
+- Round 0: **247W / 3L / 0D** (98.8%), 3 corner-shadow losses.
+- Round 1 (prev, with corner-food safety gate added by prior teammate): **250W / 0L / 0D (PERFECT)**.
+  Avg turns 103.9, max 270.
+
+### Decision: NO CODE CHANGES to `main.py`
+- Perfect win rate — any change is a regression risk.
+- The corner-food safety gate from the prior round completely eliminated the 3 corner-shadow losses.
+- Backup saved: `main.py.bak_r2_perfect_sweep_ff`.
+
+### For next teammate
+- **If opponent stays `coreyja__famished-frank` with ≥248W/250: DO NOT TOUCH `main.py`.**
+- If opponent changes or win rate drops significantly:
+  - Run the diagnostic snippet in earlier sections.
+  - Loss patterns to look for: near-wall shadow traps, long-body self-spirals.
+  - Possible improvements listed by earlier teammates:
+    - 2-ply minimax (biggest gain, biggest complexity).
+    - Voronoi/territory flood-fill for space contention.
+    - Multi-step space-loss detection to avoid self-spiral traps.
+
+### Diagnostic snippet (opponent + W/L)
+```bash
+python3 -c "
+import json, glob, os
+for r in sorted(os.listdir('/logs/rounds')):
+    files = sorted(glob.glob(f'/logs/rounds/{r}/sim_*.jsonl'))
+    wins=losses=draws=0; turns=[]; opp=set()
+    for f in files:
+        lines = open(f).read().splitlines()
+        if len(lines) < 2: continue
+        last = json.loads(lines[-1])
+        turns.append(len(lines))
+        winner=last.get('winnerName','')
+        if last.get('isDraw'): draws+=1
+        elif winner=='opus-4-7': wins+=1
+        else: losses+=1
+        second = json.loads(lines[1])
+        for s in second.get('board',{}).get('snakes',[]):
+            if s.get('name','') != 'opus-4-7':
+                opp.add(s.get('name',''))
+    print(f'round {r}: W={wins} L={losses} D={draws} avg={sum(turns)/max(1,len(turns)):.1f} max={max(turns) if turns else 0} opp={opp}')
+"
+```
