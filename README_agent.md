@@ -1150,3 +1150,38 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   Hamiltonian tail-follow when long+safe (still not implemented). Test: `python3 vs_eremetic.py
   main.py 8` (or nohup for larger N — games run 400-800 turns). Keep sim_test 40 + fuzz clean.
   main.py has all prior layers + now HARD any-food avoidance when clearly ahead.
+
+## Round 2 of 5 (this task, opus-4-8) — eremetic-eric, LENGTH-SCALED TAIL-FOLLOW + FIXED ANTI-WALL-HUG GATE
+- Opponent STILL `coreyja__eremetic-eric` (coiling tail-chaser, stays SHORT L9-16, survives
+  400-670 turn games; opp_eremetic_eric.py). Results: round 0 won 241-9, round 1 won 247-3.
+- **Loss analysis (round 1: sim_18, sim_231, sim_233; tool analyze_losses.py):** ALL three are
+  the SAME chronic vector — OPUS grew to **L19/L53/L72** with HP pinned at 100 the whole game,
+  then ran along an EDGE into a CORNER ((7,0)/(10,0)) and self-coiled (only 1 free neighbor each
+  step until 0). KEY: the /logs sim floods the board with FOOD (~53 food on 121 cells by turn
+  420!), so our -400 "avoid food when clearly_ahead" penalty CANNOT stop growth (food is
+  unavoidable — every neighbor is food). The opponent stays short by tightly following its OWN
+  tail (coiling) and only eating when its loop calc says it must.
+- **Two changes (backup: main_r1of5_eremetic_r2_backup.py = git HEAD pre-change bot):**
+  1. **LENGTH-SCALED TAIL-FOLLOW** (line ~585): tail-follow bias weight was fixed 2.0; now
+     `tf_w = 2.0 + (my_len-15)*0.6` for my_len>=15 (strong at L50+). Makes a long snake coil
+     in a COMPACT loop chasing its tail (like the opponent) instead of running edges into corners.
+  2. **FIXED ANTI-WALL-HUG GATE** (line ~783): the escape-off-edge bonus was gated on
+     `max_enemy_len >= my_len-2`, so when we're MUCH longer (L53 vs L10) it NEVER fired — exactly
+     our loss case! Removed the enemy gate: now fires whenever `my_len>=8 and currently_on_edge
+     and not critical` (self-coil is length-driven, not enemy-driven). Rewards peeling off the
+     wall into open board (+22*len_scale), penalizes heading into a corner (-30*len_scale).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.08. Frame tests on sim_231: at T420
+  (L21 on top edge) NEW picks DOWN (into interior) vs OLD RIGHT (along edge) — peels off. A/B vs
+  real opp on same seeds: NEW 21-0-3 & 27-0-3, OLD 22-0-2 & 28-0-2 (IDENTICAL within noise, NO
+  regression). The sim's random food doesn't reproduce the exact corner-coil frames (as prior
+  teammates repeatedly found), so validated by design (targets confirmed vector) + frame tests +
+  no-regression. NOTE: by the death FRAME (T548) we were already forced (only 1 free neighbor);
+  the trap forms 5-10 turns earlier — the two changes attack that EARLIER commit + keep us shorter.
+- **Next teammate:** opponent = opp_eremetic_eric.py (coiling tail-chaser, stays short). Our ONLY
+  loss vector is overgrowth (L50-72 on a food-flooded board) -> self-coil into a corner. If losses
+  persist: (a) raise tail-follow scale further, (b) a TRUE Hamiltonian cycle when very long+safe
+  (still the canonical unimplemented fix), (c) even harder edge/corner avoidance for L20+. Test:
+  `python3 vs_eremetic.py main.py 24` IN BACKGROUND (`nohup ... &`, poll file — games run 400-800
+  turns, N>~24 exceeds the 30s cmd timeout). Keep sim_test 40 + fuzz clean. main.py has all prior
+  layers + now length-scaled tail-follow and enemy-independent anti-wall-hug escape.

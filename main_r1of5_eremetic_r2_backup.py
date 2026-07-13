@@ -587,15 +587,7 @@ def _decide(game_state):
             if td is not None:
                 # Closer to tail is better; scale gently so space (x10) still
                 # dominates but ties/near-ties break toward the un-coiled path.
-                # LENGTH-SCALED: vs coiling opponents (eremetic-eric) we grow to
-                # L50-72 in 500+ turn games and self-coil into corners. The
-                # opponent stays short by tightly following its OWN tail. Make
-                # our tail-follow bias much stronger when very long so we coil
-                # in a compact loop and STOP running along edges into corners.
-                tf_w = 2.0
-                if my_len >= 15:
-                    tf_w = 2.0 + (my_len - 15) * 0.6   # up to strong at L50+
-                score -= td * tf_w
+                score -= td * 2.0
 
         # DEEP SELF-SURVIVAL SIM (anti-coil): 2-ply lookahead can't see traps
         # that develop 5+ turns out when an enemy is actively sealing us into a
@@ -780,12 +772,8 @@ def _decide(game_state):
             currently_on_edge = cur_on_v or cur_on_h
         except Exception:
             currently_on_edge = False
-        # The escape bonus originally gated on an enemy being near/longer, but our
-        # WORST loss vector (vs coiling opponents like eremetic-eric) is a pure
-        # SELF-coil where we are MUCH longer (L50+) and run along an edge into a
-        # corner with no enemy involved. So fire whenever we are long + on an edge.
-        long_on_edge = my_len >= 8 and currently_on_edge and not critical
-        if long_on_edge:
+        if my_len >= 8 and currently_on_edge and max_enemy_len >= my_len - 2 \
+                and not critical:
             nxt_on_edge = on_v_edge or on_h_edge
             if not nxt_on_edge:
                 score += 22.0 * len_scale   # peel off the wall into open board
