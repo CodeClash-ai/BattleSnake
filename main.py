@@ -848,6 +848,16 @@ def _battlejake2019_predicted_move(enemy, game_state, w, h):
 
 
 
+
+def _untimely_neglected_predicted_moves(enemy, game_state, w, h):
+    """No exact one-ply prediction for altersaddle UNW.
+
+    The copied port chooses randomly among smart moves and local sampling showed
+    that treating a sampled/all smart move as exact over-avoids.  Keep the port
+    for offline analysis but do not feed predictions into fatal head scoring.
+    """
+    return set()
+
 def _zakwht_2018_predicted_move(enemy, game_state, w, h):
     """Predict zakwht/battlesnake-2018 by running the faithful local port.
 
@@ -1019,6 +1029,7 @@ def move(game_state):
         has_zakwht_2018_enemy = False
         has_bountysnake2018_enemy = False
         has_jerrykott_enemy = False
+        has_untimely_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1038,6 +1049,7 @@ def move(game_state):
             is_zakwht = "zakwht" in ename.lower() or "zakwht-2018" in ename.lower()
             is_bounty = "bountysnake2018" in ename.lower() or "bounty" in ename.lower()
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
+            is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1051,7 +1063,11 @@ def move(game_state):
                 except Exception:
                     pass
             else:
-                if is_bounty:
+                if is_untimely:
+                    has_untimely_enemy = True
+                    for pred in _untimely_neglected_predicted_moves(e, game_state, w, h):
+                        preds.add(pred)
+                elif is_bounty:
                     has_bountysnake2018_enemy = True
                     pred = _bountysnake2018_predicted_move(e, game_state, w, h)
                     if pred is not None:
@@ -1569,6 +1585,39 @@ def move(game_state):
                         score -= (34 - safe_area) * (850 if enemy_max_len >= my_len + 2 else 620)
                     if choke_risk and safe_area < 40:
                         score -= choke_risk * 4200
+            if has_untimely_enemy and enemy_max_len >= my_len + 999:
+                # Untimely Neglected Wearable is a strong space/squeeze bot that
+                # randomly chooses among smart safe moves.  Round-0 losses were
+                # mostly us, slightly shorter, taking/continuing edge corridors
+                # until the only move was a losing longer-head collision.  Bias
+                # away from healthy perimeter/one-exit pockets while still racing
+                # for food when behind.
+                near_unw = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_unw <= 8 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    much_longer = enemy_max_len >= my_len + 2
+                    score += edge_dist * (420 if much_longer else 260)
+                    if edge_dist == 0:
+                        score -= 11000 if much_longer else 6500
+                    elif edge_dist == 1:
+                        score -= 3000 if much_longer else 1500
+                    if clean_exits == 0:
+                        score -= 80000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_unw <= 3):
+                        score -= 24000 if much_longer else 14000
+                    if safe_area < 32:
+                        score -= (32 - safe_area) * (700 if much_longer else 480)
+                    if choke_risk and safe_area < 42:
+                        score -= choke_risk * 4500
+                    if tail_dist >= 99 and edge_dist <= 1 and health >= 45:
+                        score -= 12000
+
             if has_hungry_enemy and enemy_max_len >= my_len:
                 # TheApX Hungry is a deterministic nearest-food BFS bot.  If we let
                 # it take uncontested meals it becomes much longer and eventually
@@ -1906,6 +1955,9 @@ def move(game_state):
                     # food whenever we are not longer, otherwise it snowballs length.
                     food_weight += min(460, 170 + (enemy_max_len - my_len) * 55)
                     food_dist = path_food
+                if has_untimely_enemy:
+                    food_weight += min(380, 130 + (enemy_max_len - my_len) * 45)
+                    food_dist = path_food
                 if has_nagini_enemy:
                     # Race Nagini for reachable food when behind; it otherwise
                     # snowballs length and wins head-to-heads.
@@ -1968,6 +2020,8 @@ def move(game_state):
                     # longer; avoid healthy edge food that commits us to a one-way
                     # corridor unless starvation pressure overrides this guard.
                     score -= 3500
+                if has_untimely_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len + 999:
+                    score -= 4200
                 if has_tyrelh_python_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len + 1:
                     # Tyrelh edge food often resets our health but commits us to
                     # the same outer-row zipper traps seen in production losses.
