@@ -2066,3 +2066,141 @@ opponent).
   pre-this-round `main.py` if you want to diff/revert (not persisted in
   the repo — recreate via `git show HEAD:main.py` before this round's
   commit if needed).
+
+## Round (this session) — opponent still Xe__since, confirmed real improvement holds, deep-dived remaining losses (root cause = legitimate opponent pressure, not an obvious bug), NO code change
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is `Xe__since`.
+Round 0 (before previous round's edge/corner-penalty strengthening):
+234-15-1. Round 1 (after that fix, current unchanged `main.py`): **241-6-3**
+— a real, confirmed improvement (fewer losses, more ties), consistent
+with the previous round's local-benchmark signal (7/8) that the
+length-scaled edge/corner penalty helped. `analyze_logs.py
+/logs/rounds/1`: avg 86.9 turns/sim, max 303 — long, grindy games are
+common against this opponent.
+
+### What I did this round
+
+1. Identified all 6 real losses in round 1 via the `winnerName` field in
+   each `sim_*.jsonl`'s final summary line (same technique
+   `analyze_logs.py` uses). All 6 were long games (76-169 turns).
+2. Picked the longest loss (`sim_56.jsonl`, died turn 166) and did a full
+   turn-by-turn trace, **replaying `main.py`'s actual `move()` on
+   synthetic `game_state` dicts built directly from each turn's literal
+   logged board state** (recipe: for each snake in `board.snakes`, build
+   `{'id': name, 'head':..., 'length':..., 'body':...}`, wrap in the
+   `board`/`you` shape `move()` expects — see shell history this round
+   for the exact script, or reconstruct from the many earlier rounds'
+   trace-replay recipes in this file). **Confirmed the replay exactly
+   reproduces the real game's recorded moves turn-by-turn** (a good sanity
+   check that `move()` is deterministic/stateless and the harness's
+   actual decisions match what static analysis would predict).
+3. Found the concrete shape of the trap (again): our snake's body forms a
+   small rectangle near a board corner (an artifact of its own recent
+   path, not inherently dangerous by itself — the open region beyond it
+   was still ~98 of 121 cells, both raw flood-fill area AND Voronoi
+   territory identical across all live candidates at that point, so
+   those terms provided **zero** signal either way), then the head
+   continues along the board edge for ~10 more turns while a **longer**
+   opponent (13-26 vs our 12-20 in the two traces I looked at) approaches
+   from the opposite direction along a parallel lane and eventually pinches
+   the exit, trapping us with zero legal moves.
+4. **Crucially, verified this is NOT simply "the bot doesn't know edges
+   are risky" or an area/voronoi blind spot** — at the actual decision
+   points I traced (e.g. `sim_56.jsonl` turn 145), the move *away* from
+   the edge (`up`, toward more central space) was scored far *lower* than
+   the edge-hugging alternatives, and printing the exact score breakdown
+   showed why: `up` led to a cell inside `risky_cells` (an equal-or-
+   longer opponent's head was one move away from being able to contest
+   it — a **real, correct** head-to-head danger, -1000 penalty), while
+   the edge-hugging moves were not in `risky_cells` at that moment. In
+   other words: **the opponent was actively threatening a head-to-head
+   in the center, correctly forcing our snake toward the edge as the only
+   locally-safe options** — this is the opponent playing well and
+   applying real positional pressure, not a bug in our scoring. The
+   *eventual* trap only becomes visible many turns later, once the
+   opponent (which kept growing longer in the meantime — 13→26 in one
+   trace) closes the pincer — a genuine multi-turn-ahead tactical squeeze
+   that no 1-ply (or even few-ply local) heuristic can fully see coming
+   without actually modeling the opponent's future path.
+5. Ran a fresh 10-game local benchmark against a freshly-extracted
+   `origin/human/Xe/since:main.py` (standard recipe from many earlier
+   rounds' notes in this file). **Result: 8 wins / 2 losses.** Traced the
+   longest loss (`/tmp/game_9.json`, 231 turns): **exact same mechanism**
+   — our snake (length 20) hugging the left edge (x=0) downward while the
+   opponent (length 22→26, i.e. had grown substantially bigger than us by
+   that point) came up the same column from below and pinched us at the
+   corner. Consistent with the round-1 real-loss trace above; not a new
+   or different bug.
+
+### Why I made no code change this round
+
+The mechanism found is a **real, hard tactical problem** (getting boxed
+into an edge lane by a bigger, well-positioned opponent over many turns)
+rather than a **locatable bug** in the existing scoring (area/voronoi/
+risky-cells all fired correctly and consistently at every decision point
+I traced — the bot picked the best *locally* available option every
+single turn, it just didn't have enough foresight to avoid entering the
+squeeze several turns earlier while it still had other choices). Given:
+
+- Only ~7 steps of budget remained after this investigation,
+- the fix for this class of problem (real multi-ply lookahead / opponent
+  path prediction) is exactly the "not yet attempted, higher-risk" item
+  that's been at the top of this file's recommendations for **many**
+  consecutive rounds now, not something to rush in the last few steps,
+- the bot's real-match trend is clearly positive already (234-15-1 →
+  241-6-3) and local benchmarking (8/10) is consistent with that,
+
+I judged it safer to document this precisely (with concrete traces and
+the exact reason previous "add another local penalty term" fixes won't
+touch this specific mechanism — the area/voronoi/risky-cells terms are
+all already firing *correctly*, so tweaking their weights won't change
+the outcome) rather than risk a rushed, undertested change.
+
+### Concrete recommendation for the next teammate (why local patches won't fix this specific pattern, and what would)
+
+This is now the **second round in a row** where the traced remaining
+losses show correctly-functioning local heuristics losing to legitimate
+multi-turn opponent pressure, not a bug. Tweaking edge weights, degree
+checks, or Voronoi formulas further is unlikely to help much more (this
+round's trace shows the bot doesn't even reach the edge by choice when it
+has a real center-space option — it's forced there by `risky_cells`
+avoidance, which is *correct* behavior at that instant). The actual fix
+needs to look further ahead than "what does the board look like right
+now" — concretely, one of:
+
+1. **Real N-ply lookahead / minimax**: simulate our candidate move, then
+   the opponent's most-likely response (e.g. their own greedy-toward-
+   longest-Voronoi-area move, or literally run their extracted source —
+   we have `/tmp/opp/main.py` recipe: `git show
+   origin/human/Xe/since:main.py`), 2-4 plies deep, and use the resulting
+   position's flood-fill/Voronoi score as the leaf eval instead of a
+   single static snapshot. This is the single most-repeated "not yet
+   done" item across dozens of rounds' notes in this file now — probably
+   worth just doing it next time there's a full budget, rather than
+   another targeted local patch.
+2. A cheaper partial step in that direction: when we're forced into
+   `risky_cells`-avoidance mode near an edge (i.e., an equal-or-longer
+   opponent is contesting the center), explicitly check whether the
+   *escape route* along the edge we're about to commit to has a
+   Voronoi-favorable exit within our own body length's worth of moves —
+   i.e., look not just at "how much area is reachable right now" but
+   "if I follow this edge for `my_length` more turns, mirroring how far
+   the opponent could travel toward my likely endpoint in that time, do I
+   still win the race to the exit?" This is a bounded, deterministic
+   lookahead (not a full opponent-policy simulation) that directly
+   targets the traced mechanism (a race to a corridor exit) without the
+   complexity/risk of full minimax.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+- Recipe used this round for trace-replay (condensed, reusable): build a
+  synthetic `game_state` per logged turn from `sim_*.jsonl`'s
+  `board.snakes[*].body` fields (see many earlier rounds' notes elsewhere
+  in this file for the exact dict shape `move()` expects), call
+  `main.move(gs)` directly, and separately recompute each candidate's
+  `area`/`voronoi_mine`/`risky_cells` membership by hand to see exactly
+  which scoring term is deciding the move — this remains the fastest way
+  to distinguish "real bug in scoring" from "correct local decision that
+  loses to longer-range opponent strategy" (this round found the latter).
