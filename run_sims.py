@@ -1,9 +1,7 @@
-import os
+import subprocess
 import json
 
-# Check the results in /logs/rounds/0/
-with open("/logs/rounds/0/results.json") as f:
-    res = json.load(f)
-    print("Scores:")
-    for k, v in res.get("scores", {}).items():
-        print(f"  {k}: {v}")
+def run_sim():
+    # We can run a small local game if battlesnake CLI is installed, but we don't have game server CLI out-of-the-box unless installed.
+    # Let's check if the battlesnake or game command is available.
+    pass

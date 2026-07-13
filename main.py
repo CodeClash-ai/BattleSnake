@@ -208,8 +208,16 @@ def move(game_state):
             # 3. Distance to target score
             dist = _manhattan(np, target)
             
+            # Extra penalty if we are next to walls/corners when we don't have to be.
+            # We want to encourage staying slightly away from borders/corners if we have better moves.
+            wall_penalty = 0
+            if np[0] == 0 or np[0] == width - 1:
+                wall_penalty += 1
+            if np[1] == 0 or np[1] == height - 1:
+                wall_penalty += 1
+                
             # Weighted score
-            score = (space * 1000) + (voronoi_space * 20) - dist
+            score = (space * 1000) + (voronoi_space * 20) - dist - (wall_penalty * 5)
             
             if space < my_length:
                 score -= 10000000  # heavy penalty for coiling in a small pocket
