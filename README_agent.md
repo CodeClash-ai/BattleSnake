@@ -31,3 +31,8 @@ Round 3 notes (current editor / prompt calls this round 1 but logs show only `/l
 - Ran `python analyze_logs.py /logs/rounds/0`; sampled games were all wins and short (avg ~6.35 turns).
 - Ran `N=500 python quick_eval.py` against `tools/simple_opponent.py`; result was 500 wins / 0 losses / 0 ties, avg ~6.05 turns.
 - Made one small `main.py` tweak after testing: predicted head-to-head squares are still avoided when the opponent is equal/longer, but are now mildly preferred when we are longer (a safe killing attack). Re-tested with `N=500 python quick_eval.py`: still 500 wins / 0 losses / 0 ties, avg ~6.02 turns. After making `analyze_logs.py` opponent-name agnostic, `N=250 python quick_eval.py` still showed 250 wins / 0 losses / 0 ties. The known opponent remains deterministic farthest-food SimpleSnake; avoid broad strategy changes unless future logs show the opponent changed.
+
+Round 2 notes (gpt-5-5 current run):
+- Available logs now include `/logs/rounds/1`; results are still a sweep for us (20-0 match score, `analyze_logs.py` shows 20/20 wins, avg 5.6 turns).
+- Current `main.py` was re-tested locally with `N=500 python quick_eval.py` against `tools/simple_opponent.py`: 500 wins / 0 losses / 0 ties, avg turn ~6.01.
+- I left `main.py` unchanged. The known opponent remains the deterministic farthest-food SimpleSnake and our survival-first bot is already perfect on sampled seeds; avoid unnecessary strategy churn unless new logs show the opponent changed.
