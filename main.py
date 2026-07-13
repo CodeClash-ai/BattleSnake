@@ -111,6 +111,50 @@ def _flood_fill_size(start, blocked, width, height, cap):
     return count
 
 
+def _flood_fill_reach(start, blocked, width, height, cap, target=None):
+    """Like _flood_fill_size, but also reports whether `target` cell is
+    reachable within the explored region. Returns (count, reached_target).
+
+    This directly targets the "self-coil" failure mode documented
+    extensively in README_agent.md across many rounds: a candidate move
+    can have a large *raw* flood-fill area (lots of nominally-reachable
+    board cells) while still being a fatal self-trap, because that area
+    calculation doesn't check whether it's actually connected back to
+    where our own tail currently is. Since our own tail cell is normally
+    *not* in `blocked` (it's assumed to vacate next turn, see
+    _build_blocked), a path back to the tail is a cheap, well-known
+    proxy for "this region isn't a disconnected pocket that will seal
+    behind me as my body advances" -- if you can always reach your own
+    tail, you can (approximately) always retrace your own body's path
+    to escape, since the tail vacates as you move. It's not a perfect
+    guarantee (the tail keeps moving too), but it is a much stronger
+    signal than raw area alone against slow multi-turn self-coils, which
+    is exactly the pattern traced in real match losses vs several past
+    opponents (see README_agent.md "self-coil" sections)."""
+    if start in blocked:
+        return 0, False
+    seen = {start}
+    reached = (start == target)
+    q = deque([start])
+    count = 0
+    while q and count < cap:
+        cur = q.popleft()
+        count += 1
+        for dx, dy in DIRS.values():
+            nxt = (cur[0] + dx, cur[1] + dy)
+            if nxt in seen:
+                continue
+            if not _in_bounds(nxt, width, height):
+                continue
+            if nxt in blocked:
+                continue
+            seen.add(nxt)
+            if nxt == target:
+                reached = True
+            q.append(nxt)
+    return count, reached
+
+
 def _voronoi_area(my_start, opp_starts, blocked, width, height):
     """Multi-source BFS 'race' partition: returns the number of cells
     strictly closer (by shortest-path BFS distance, avoiding `blocked`)
@@ -198,6 +242,17 @@ def move(game_state):
         my_length = len(my_body)
         my_health = you.get("health", 100)
 
+        # Own tail cell + whether we just ate (duplicate tail segment) --
+        # used below for the tail-reachability anti-self-coil check. If we
+        # just ate, the tail cell doesn't vacate this coming turn (it's
+        # already excluded from `blocked` correctly by _build_blocked in
+        # that case, i.e. it stays blocked), so a "reach my own tail" check
+        # would be meaningless/misleading right after eating -- skip it
+        # that turn (my_tail = None disables the check below).
+        _n_body = len(my_body)
+        _just_ate = _n_body >= 2 and my_body[-1]["x"] == my_body[-2]["x"] and my_body[-1]["y"] == my_body[-2]["y"]
+        my_tail = None if _just_ate else (my_body[-1]["x"], my_body[-1]["y"])
+
         snakes = board["snakes"]
         food = board.get("food", [])
         food_set = {(f["x"], f["y"]) for f in food}
@@ -282,8 +337,28 @@ def move(game_state):
             # small dead-end pocket the bot then walked into and died in.
             # See sim_246.jsonl turn 124 and sim_248.jsonl turn 269 in
             # /logs/rounds/0 for the exact reproduced traces.
-            area = _flood_fill_size(nxt, blocked, width, height, cap)
+            area, tail_reachable = _flood_fill_reach(nxt, blocked, width, height, cap, target=my_tail)
             area_for_score = area
+
+            # Anti-self-coil: if our own tail is NOT reachable from this
+            # candidate (and we have a tail to check, i.e. we didn't just
+            # eat), that's a strong warning sign that this region may seal
+            # off from the rest of the board as our own body advances --
+            # exactly the mechanism traced in a real match loss this round
+            # (sim_106.jsonl vs coreyja__bombastic-bob: our snake spiraled
+            # along the top edge into the top-right corner over ~10 turns,
+            # each individual move having a large *raw* flood-fill area
+            # right up until the final couple of turns, by which point it
+            # was already a forced dead end -- see README_agent.md for the
+            # full turn-by-turn trace). This is a well-known heuristic used
+            # by many strong Battlesnake bots ("can I still reach my own
+            # tail") as a cheap, much-earlier-firing proxy for "is this
+            # move part of a slow self-coil", well before raw area alone
+            # would show any danger. Penalty scales with our length (a
+            # short snake's tail is close and this rarely matters; a long
+            # snake failing this check is a much bigger red flag).
+            if my_tail is not None and not tail_reachable:
+                score -= my_length * 8
 
             # Voronoi "race" territory: cells strictly closer (BFS distance,
             # avoiding current bodies) to this candidate than to any

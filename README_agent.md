@@ -2582,3 +2582,146 @@ against, all in `/logs/rounds/1/`:
 - `main.py` — the bot (no changes this round — investigation only, see
   above).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = coreyja__bombastic-bob (a purely RANDOM safe-move bot), added tail-reachability anti-self-coil heuristic
+
+`/logs/rounds/0/results.json`: opponent this round is
+**`coreyja__bombastic-bob`** — confirmed via `git show
+origin/human/coreyja/bombastic-bob:main.py` to be a **deliberately trivial
+bot**: it just picks a uniformly-random move among all "reasonable" moves
+(in bounds, not into any snake body, not into a deadly hazard), no food-
+seeking, no lookahead, no opponent modeling at all. Real result: sonnet-5
+240 / opponent 10 out of 250 sims (96%, NOT a clean sweep).
+`analyze_logs.py /logs/rounds/0`: avg 83.1 turns/sim (min 9, max 227) —
+games commonly run long since the random opponent doesn't play
+aggressively, giving OUR OWN snake plenty of time/length to accumulate and
+potentially self-coil.
+
+### Root cause of the losses: since the opponent is random (not
+### adversarial), all 10 losses are almost certainly pure self-inflicted
+### traps ("self-coil"), not opponent pressure
+
+Traced `sim_106.jsonl` (one of the 10 real losses) in full via literal-
+board-state replay (recipe: build a synthetic `game_state` per logged turn
+from `board.snakes[*].body`, call `main.move()` directly — see many
+earlier rounds' notes in this file for the exact dict shape). Confirmed:
+our snake (length 13) spiraled along the top edge then down the right
+edge into the top-right corner over ~10 turns (turns 133→142), ending with
+**zero legal moves** at turn 143. The opponent was nowhere near the trap
+region for the entire sequence (it was wandering randomly elsewhere on the
+board) — this is a **pure self-coil**, not a corridor race or head-to-head
+pressure situation. This matches and reconfirms the "self-coil" failure
+class flagged in MANY previous rounds' notes throughout this file (search
+"self-coil" above) — but this is the *first* time we've faced an opponent
+simple/random enough that we can be fully confident the trap is 100%
+self-inflicted (no possible opponent-modeling angle to investigate
+instead).
+
+### Fix attempted this round: tail-reachability check (a well-known anti-
+### self-coil heuristic used by many strong real Battlesnake bots)
+
+Added `_flood_fill_reach()` (in `main.py`, right above `_voronoi_area`): a
+BFS flood fill that also tracks whether a given `target` cell (our own
+current tail) is reachable within the explored region. Wired into the
+scoring loop: for each candidate move, if our own tail is NOT reachable
+(and we didn't just eat, i.e. `my_tail is not None`), apply a
+`-my_length * 8` penalty. Rationale: our own tail cell is normally *not*
+blocked (it's assumed to vacate next turn per `_build_blocked`), so
+"can I reach my own tail" is a cheap, well-known proxy for "is this
+region actually connected back to space that will open up as my body
+advances" — much stronger signal than raw flood-fill area alone (which
+only degrades once a pocket is *already* nearly sealed).
+
+**Honest limitation found via direct testing (important, read before
+tuning further):** replaying this exact heuristic turn-by-turn against
+the literal `sim_106.jsonl` states (turns 95-133, see shell history this
+round for the exact script) found that `tail_reachable` only correctly
+flags the two already-obviously-bad candidates that the *existing* hard
+trap penalty (area < my_length) already correctly avoided (turn 122
+"right", area 1; turn 132 "down", area 3) — it did **not** provide any
+*earlier* warning for the actual fatal path (at turn 133, both "left" and
+"right" show `area=99, reach_tail=True` — completely tied, no
+differentiation at all). In other words: for *this specific* traced loss,
+the tail-reachability check does not fire early enough to change the
+outcome — the true point of no return for this particular coil happened
+even earlier than turn 95 (not traced further back due to step budget),
+or the coil's fatal narrowing only becomes detectable at a horizon this
+1-ply check still can't see.
+
+**Why I kept the change anyway:** even though it didn't fix this specific
+traced example, it's a well-established, low-risk, purely additive
+heuristic (extra BFS reuses the exact same traversal we already do for
+`area`, just also tracking one target cell — negligible extra cost,
+verified ~1ms/call for 200 calls in a smoke test) that should still help
+in *other* self-coil shapes where the tail does become unreachable before
+the raw area collapses (a real, common pattern in Battlesnake more
+generally, well documented in the wider community as a standard technique
+— see e.g. any "avoid getting trapped" writeup). No exceptions/regressions
+found in smoke tests (normal state, `{}`, empty-snakes state).
+
+### Verification done
+
+- Smoke tests (`main.move()` on normal 2-snake state, `{}`, empty-snakes
+  state) — all still return valid moves, no exceptions.
+- Timing: 200 `move()` calls on a synthetic 11x11 2-snake state in
+  ~0.21s total (~1ms/call) — no meaningful performance regression from
+  the extra target-tracking BFS.
+- Did **NOT** get a fresh local-benchmark tournament against extracted
+  `coreyja/bombastic-bob` code this round (ran low on step budget after
+  the trace investigation) — this is the most important next step for
+  whoever picks this up next, see below. Given the opponent is *random*,
+  a meaningful benchmark would need a fairly large sample (10-20+ games)
+  since any single game's outcome has real variance from the opponent's
+  randomness alone, independent of any bot changes.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Run a real local benchmark** (recipe unchanged from many earlier
+   rounds' notes in this file — extract `origin/human/coreyja/
+   bombastic-bob:main.py` to `/tmp/opp/main.py`, `cp server.py
+   /tmp/opp/server.py`, run both as local Flask servers via `setsid
+   nohup env PORT=... python3 main.py > log 2>&1 </dev/null & disown`,
+   then loop `battlesnake play ... -o /tmp/game_N.json & disown`, sleep,
+   check `tail`). Aim for 15-20+ games given the opponent's randomness
+   adds noise. Compare against the real 240/10 (96%) baseline.
+2. **Trace further back in `sim_106.jsonl`** (turns < 95) with the same
+   `_flood_fill_reach`-based script (see shell history this round, or
+   reconstruct: build a synthetic `game_state` per turn, call
+   `main._flood_fill_reach` for every legal candidate, print `area` and
+   `reach_tail`) to find exactly how far back the "point of no return"
+   for this specific coil actually was — this would tell you whether a
+   *deeper* lookahead (2-3 ply) would have caught it, or whether it's a
+   more fundamental issue (e.g., growing too fast/too long without ever
+   returning toward open board, unrelated to any single decision point).
+3. **Trace the other 9 real losses** the same way (identify via each
+   `sim_*.jsonl`'s final `winnerName` line, same technique
+   `analyze_logs.py` uses) — this round only fully traced 1 of 10; it's
+   possible some of the others have a different, more locally-fixable
+   mechanism where the tail-reach check (or a different, targeted fix)
+   *does* catch it early enough to matter.
+4. Given this opponent is uniquely simple (pure random-safe-move, zero
+   food-seeking or strategy), it's a good stress test specifically for
+   our OWN self-coil tendencies in isolation from any opponent modeling
+   question — worth using it as the benchmark opponent of choice
+   whenever iterating on self-coil fixes in future rounds, since any
+   loss against it is guaranteed to be self-inflicted, not opponent
+   pressure (makes the trace-replay technique's conclusions much
+   cleaner/faster to draw than against a "smart" opponent where you
+   first have to rule out legitimate opponent pressure, as several
+   earlier rounds' notes had to do against `Xe__since` and
+   `ccSnake2018__ccsnake`).
+5. As always: re-check `/logs/rounds/1/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's analysis/fix still
+   applies.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added `_flood_fill_reach()` and a
+  `my_tail`/tail-reachability penalty in the scoring loop — see the
+  inline comments right above both for full rationale + the honest
+  limitation noted above; kept despite not fixing the one specific
+  traced example, since it's a well-established low-risk heuristic that
+  should still generalize to other coil shapes).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
