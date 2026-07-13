@@ -292,6 +292,74 @@ def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
 
 
 
+
+def _jump_flooding_predicted_move(enemy, snakes, w, h):
+    """Predict coreyja jump-flooding's greedy Manhattan-Voronoi move.
+
+    The reference bot scores legal moves by seeding its moved head first, then
+    other heads, and counting the whole board by Manhattan distance (bodies are
+    used only as a legal-move filter).  Matching this one-ply choice lets us
+    distinguish the exact head-to-head square from merely-adjacent squares in
+    cramped edge endgames.
+    """
+    body = [_pt(p) for p in enemy.get("body", [])]
+    if not body:
+        return None
+    my_id = enemy.get("id")
+    head = body[0]
+
+    blocked = set()
+    for s in snakes:
+        b = [_pt(p) for p in s.get("body", [])]
+        n = len(b)
+        for idx, cell in enumerate(b):
+            if idx == n - 1 and n >= 2:
+                # Tail is enterable unless it is duplicated (just grew).
+                if b[n - 2] == cell:
+                    blocked.add(cell)
+            else:
+                blocked.add(cell)
+    if len(body) >= 2:
+        blocked.add(body[1])
+
+    others = []
+    for s in snakes:
+        if s.get("id") == my_id:
+            continue
+        b = s.get("body", [])
+        if b:
+            others.append((s.get("id"), _pt(b[0])))
+
+    def terr_score(candidate):
+        heads = [(my_id, candidate)] + others
+        mine = 0
+        total = 0
+        for x in range(w):
+            for y in range(h):
+                best_id = None
+                best_d = None
+                for sid, hp in heads:
+                    d = abs(x - hp[0]) + abs(y - hp[1])
+                    if best_d is None or d < best_d:
+                        best_d = d
+                        best_id = sid
+                total += 1
+                if best_id == my_id:
+                    mine += 1
+        return mine / total if total else 0
+
+    best = None
+    best_score = None
+    for name, d in MOVES.items():  # original order: up, down, left, right
+        p = _add(head, d)
+        if not _in_bounds(p, w, h) or p in blocked:
+            continue
+        sc = terr_score(p)
+        if best_score is None or sc > best_score:
+            best_score = sc
+            best = p
+    return best
+
 def _ccsnake2018_predicted_move(enemy, game_state, w, h):
     """Predict ccSnake2018 by running the local faithful port with `you` swapped.
 
@@ -395,6 +463,10 @@ def move(game_state):
                 pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
                 if pred is not None:
                     preds.add(pred)
+            elif "jump-flooding" in ename.lower():
+                pred = _jump_flooding_predicted_move(e, snakes, w, h)
+                if pred is not None:
+                    preds.add(pred)
             elif is_ccsnake:
                 pred = _ccsnake2018_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -444,6 +516,8 @@ def move(game_state):
                 # caused logged losses where we chose a one-cell self-trap
                 # instead of the large safe region next to ccSnake.  Keep the
                 # stricter generic rule for hunting/minimax-style opponents.
+                # jump-flooding also has an exact greedy Voronoi predictor; broad
+                # adjacent blocking trapped us in logged corner losses.
                 ename = e.get("name", "").lower()
                 if "ccsnake" in ename or "ccsnake2018" in ename:
                     continue
@@ -547,7 +621,7 @@ def move(game_state):
                 else:
                     score += (500 if health < 30 else (100 if health < 60 else 20)) + (800 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
-                score -= 10000000
+                score -= 500000000
             for eh, e in zip(enemy_heads, enemies):
                 elen = e.get("length", len(e.get("body", [])))
                 if my_len >= elen + 3 and _manhattan(nxt, eh) == 1 and area >= my_len + 8:
@@ -562,7 +636,7 @@ def move(game_state):
                     elif my_len > elen:
                         score += 50
                     else:
-                        score -= 1000000
+                        score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
 
         if candidates:
