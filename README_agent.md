@@ -1675,3 +1675,137 @@ are *already* deemed safe by the raw-area hard-trap gate.
   and this section for the full traced rationale/example).
 - `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats.
+
+## Round (this session) — opponent = nbw__nbw-crystal, replaced uninformative opp_territory heuristic with Voronoi "race" territory (PARTIALLY VALIDATED — needs follow-up)
+
+`/logs/rounds/0/results.json`: opponent `nbw__nbw-crystal` (Crystal-lang
+port: Voronoi-flood-based path search + survival-mode fallback). Real
+result: sonnet-5 239 / nbw 8 / ties 3 out of 250 sims (NOT a clean sweep —
+8 real losses). `analyze_logs.py /logs/rounds/0`: avg 24.8 turns, max 161.
+
+### Root cause traced (sim_110.jsonl, died turn 74)
+
+Our snake (length 4-5, health 36-39, i.e. `health<50` food-seeking-weight
+active) walked along row y=9 toward a food pellet sitting right in the
+top-left corner (0,9), then continued curling along the top edge (row
+y=10) afterward. Raw flood-fill area stayed ~112-114 cells (huge, "safe")
+at every one of these turns -- the existing hard-trap/soft-margin gates
+never fired. Meanwhile the opponent was independently closing in from
+below/right. Confirmed via direct trace replay
+(`main.move()` on literal logged board states, turns 60-73) that the bot
+kept picking "go toward food in the corner" every turn, ultimately getting
+sealed in with **zero legal moves** at turn 74.
+
+Also confirmed the existing `opp_territory`/`area_pess`/`TERRITORY_HORIZON=6`
+mechanism (added several rounds ago specifically to catch this class of
+bug) was **completely uninformative** in this exact scenario: at every one
+of the relevant decision turns, ALL live candidates got `area_pess == 1`
+(verified directly) -- i.e. the fixed 6-move BFS horizon from the
+opponent's head covers/pessimizes basically the *entire* open region on an
+11x11 board equally, giving zero discriminating power exactly when it was
+needed. This matches a general problem with that approach: "any cell an
+opponent could reach within N moves" is a binary, board-size-sensitive
+threshold, not a real race-timing comparison.
+
+### Fix made this round: Voronoi race-territory heuristic
+
+Added `_voronoi_area(my_start, opp_starts, blocked, width, height)` — a
+proper multi-source BFS partition: for a given candidate cell, count how
+many board cells are **strictly closer** (BFS distance, avoiding current
+bodies) to that candidate than to any opponent's current head (ties go to
+neither side). This directly measures "how much space can I actually claim
+before an opponent could contest it", which is the real question in a
+corridor-race scenario, unlike a fixed-horizon "could they possibly get
+there eventually" check.
+
+Removed the old `opp_territory`/`TERRITORY_HORIZON`/`area_pess`/
+`contested_gap` machinery entirely (confirmed uninformative in the traced
+loss, and flagged by multiple previous rounds' notes as a repeated source
+of bugs/tuning pain -- see the long history of "min(area,area_pess)" and
+"capped vs uncapped gap" fixes earlier in this file). Replaced with:
+`score += voronoi_mine * 6`, purely additive on top of the existing
+raw-area-driven hard-trap/soft-margin gates (which are untouched and still
+correctly the primary safety signal).
+
+**Standalone verification (separate from main.py, simpler setup)**:
+manually computed `_voronoi_area` turn-by-turn for turns 60-66 of the
+traced loss (see shell history this round) and got a *clear* signal: the
+"down" direction (staying near open board) consistently kept 2-4x more
+Voronoi territory than "left" (toward the food/corner) at every turn
+(e.g. turn 66: down=28 vs left=24; turn 60: down=93 vs left=80) — exactly
+the differentiation the old mechanism failed to produce.
+
+**however**: when I re-ran the *exact same* scenario through the full
+`main.move()` (not the standalone script) at turn 66, `voronoi_mine` came
+back **equal (113) for all three candidates** — i.e. the integrated
+version did NOT reproduce the standalone script's differentiation, and
+`main.move()` still picks "left" (unchanged from before the fix) on that
+exact state. **I ran out of step budget this round before finding why
+these two computations disagree** — prime suspects to check first: (a)
+`_build_blocked`'s "just ate" tail-handling differs from the plain
+`body[:-1]` used in my standalone script, changing which cells are
+`blocked`; (b) `opp_heads` in `move()` is built from `s["head"]` fields
+(which the synthetic test harness must set consistently with `s["body"][0]`
+-- if a caller ever passes a `head` dict inconsistent with `body[0]`,
+`opp_heads` would silently use stale/wrong coordinates); (c) possibly the
+opponent in this specific replay was simply far enough that turn 66's
+board state genuinely has no contested cells (the standalone script may
+have used a different/earlier opponent position than what I fed into the
+`main.move()` re-check by mistake). **This needs to be resolved before
+trusting the fix** -- see next steps.
+
+### Verification done (what I DID confirm)
+
+- `main.py` imports cleanly, `move()` runs with no exceptions on: a normal
+  2-snake state, `{}` (fully malformed), and an empty-snakes state — all
+  return valid moves.
+- The change is a clean removal-and-replacement (no leftover references to
+  `opp_territory`/`TERRITORY_HORIZON`/`area_pess`/`contested_gap` in the
+  file — grep to confirm if picking this up).
+- Did **NOT** get to run a fresh local-benchmark tournament against
+  extracted `nbw__nbw-crystal` code this round (ran out of step budget) --
+  this is unverified against the real opponent beyond the single traced
+  scenario, and that scenario itself showed a discrepancy (see above) that
+  needs resolving first.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Resolve the standalone-vs-integrated discrepancy** described above
+   first, before anything else -- it's possible the Voronoi fix is not
+   actually firing as intended inside real `move()` calls yet. Re-run the
+   turn-66 trace (recipe: load `sim_110.jsonl` from `/logs/rounds/0`,
+   turn 66, both snakes' literal `body` arrays, build a `game_state` dict
+   exactly like `move()` expects, print `main._voronoi_area(nxt, opp_heads,
+   blocked, width, height)` for each candidate *and* separately print
+   `opp_heads` / `blocked` themselves to eyeball whether they match what
+   the standalone script computed) to find the exact divergence.
+2. Extract opponent fresh: `git show origin/human/nbw/nbw-crystal:main.py
+   > /tmp/opp/main.py; cp server.py /tmp/opp/server.py`, then run a real
+   local benchmark (recipe throughout this file: `setsid nohup env
+   PORT=... python3 main.py > log 2>&1 </dev/null & disown` for both bots,
+   loop `./battlesnake play ... -o /tmp/game_N.json & disown`, sleep,
+   check `tail`) — aim for 8-10+ games, get a real win-rate delta vs the
+   239/8/3 baseline, and re-run the trace-replay technique on any new
+   losses (this has been the most effective bug-finding tool across many
+   rounds of notes in this file).
+3. If the Voronoi fix turns out not to help (or hurts), the previous
+   `opp_territory` code is fully removed from git history at this
+   commit's parent — easy to diff/revert if needed (`git show
+   HEAD~1:main.py` before this round's commit, or check the section just
+   above this one in this file for the exact removed code blocks).
+4. Once resolved, consider tuning the `* 6` weight on `voronoi_mine` via
+   the same local-benchmark process, and/or applying it more aggressively
+   during low-health food-seeking specifically (the traced loss was
+   triggered by the `health<50` food-distance weight of 4 overpowering a
+   weak safety signal — a Voronoi-aware food bonus, e.g. discount food
+   whose path goes through heavily-contested territory, could be a more
+   targeted fix than a flat additive bonus).
+
+### Files
+
+- `main.py` — the bot (this round: removed `opp_territory`/
+  `TERRITORY_HORIZON`/`area_pess`/`contested_gap`, added
+  `_voronoi_area()` and `score += voronoi_mine * 6` — see inline comment
+  above that line for rationale; **needs the discrepancy above resolved
+  before considering this a confirmed improvement**).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.

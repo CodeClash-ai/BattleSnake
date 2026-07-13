@@ -111,6 +111,56 @@ def _flood_fill_size(start, blocked, width, height, cap):
     return count
 
 
+def _voronoi_area(my_start, opp_starts, blocked, width, height):
+    """Multi-source BFS 'race' partition: returns the number of cells
+    strictly closer (by shortest-path BFS distance, avoiding `blocked`)
+    to `my_start` than to any of `opp_starts` (each opponent's current
+    head). Cells reached at the exact same distance by both sides are
+    treated as contested (owned by neither) -- a conservative choice.
+
+    This directly answers "how much board space can I actually claim
+    before an opponent could contest it?", which a plain single-source
+    flood fill cannot: a huge nominally-reachable region can still be a
+    losing bet if an opponent is closer to the corridor/chokepoint that
+    leads into most of it (found via a real traced match loss -- see
+    README_agent.md for the concrete example this was built to fix).
+    """
+    if my_start in blocked:
+        return 0
+    dist = {my_start: 0}
+    owner = {my_start: "me"}
+    frontier = [my_start]
+    for opp in opp_starts:
+        if opp in blocked:
+            continue
+        if opp not in dist:
+            dist[opp] = 0
+            owner[opp] = "opp"
+            frontier.append(opp)
+        else:
+            owner[opp] = None  # started on the same cell somehow -- contested
+    d = 0
+    while frontier:
+        next_candidates = {}
+        for cell in frontier:
+            o = owner[cell]
+            if o is None:
+                continue
+            for dx, dy in DIRS.values():
+                nb = (cell[0] + dx, cell[1] + dy)
+                if nb in dist or nb in blocked or not _in_bounds(nb, width, height):
+                    continue
+                next_candidates.setdefault(nb, set()).add(o)
+        next_frontier = []
+        for cell, owners in next_candidates.items():
+            dist[cell] = d + 1
+            owner[cell] = next(iter(owners)) if len(owners) == 1 else None
+            next_frontier.append(cell)
+        frontier = next_frontier
+        d += 1
+    return sum(1 for o in owner.values() if o == "me")
+
+
 def _bfs_nearest_food_dist(start, blocked, width, height, food_set):
     """Shortest-path distance (BFS) from start to nearest food, avoiding
     blocked cells. Returns None if unreachable."""
@@ -162,39 +212,17 @@ def move(game_state):
         # aggression bonus.
         risky_cells = set()
         winnable_cells = set()
-        opp_territory = set()
-        TERRITORY_HORIZON = 6  # multi-step BFS depth used for corridor-race detection
+        opp_heads = []
         for s in snakes:
             if s["id"] == my_id:
                 continue
             ohx, ohy = s["head"]["x"], s["head"]["y"]
+            opp_heads.append((ohx, ohy))
             target_set = risky_cells if s["length"] >= my_length else winnable_cells
             for dx, dy in DIRS.values():
                 np_ = (ohx + dx, ohy + dy)
                 if _in_bounds(np_, width, height):
                     target_set.add(np_)
-
-            # Multi-step pessimistic reachability: cells this opponent could
-            # reach within TERRITORY_HORIZON moves (BFS over the static
-            # blocked snapshot). Used only to detect "corridor races" -- long,
-            # narrow, single-exit routes where an opponent could reach/seal
-            # the exit before we finish traversing it, a failure mode a
-            # 1-ply-only flood fill cannot see (see README_agent.md for the
-            # concrete loss trace that motivated this).
-            oh = (ohx, ohy)
-            seen_o = {oh}
-            qo = deque([(oh, 0)])
-            while qo:
-                cur, d = qo.popleft()
-                if d >= TERRITORY_HORIZON:
-                    continue
-                for dx, dy in DIRS.values():
-                    np2 = (cur[0] + dx, cur[1] + dy)
-                    if np2 in seen_o or not _in_bounds(np2, width, height) or np2 in blocked:
-                        continue
-                    seen_o.add(np2)
-                    opp_territory.add(np2)
-                    qo.append((np2, d + 1))
 
         candidates = []
         for name, (dx, dy) in DIRS.items():
@@ -229,13 +257,6 @@ def move(game_state):
         # risky_cells / winnable_cells below).
         opp_next_cells = risky_cells | winnable_cells
 
-        # Also fold in longer-horizon opponent territory for the area/space
-        # evaluation specifically (corridor-race detection): a region only
-        # reachable through a chokepoint the opponent could plausibly reach
-        # around the same time we would should score lower than its raw
-        # flood-fill size suggests.
-        area_extra_blocked = opp_territory - opp_next_cells
-
         best_name = None
         best_score = float("-inf")
         for name, nxt in candidates:
@@ -261,43 +282,29 @@ def move(game_state):
             # small dead-end pocket the bot then walked into and died in.
             # See sim_246.jsonl turn 124 and sim_248.jsonl turn 269 in
             # /logs/rounds/0 for the exact reproduced traces.
-            area_blocked = blocked | (opp_next_cells - {nxt})
-            area_soft_blocked = area_blocked | (area_extra_blocked - {nxt})
             area = _flood_fill_size(nxt, blocked, width, height, cap)
-            area_pess = _flood_fill_size(nxt, area_soft_blocked, width, height, cap)
             area_for_score = area
-            # Mild, CAPPED secondary penalty for "opponent-contestable"
-            # space: if the pessimistic (opponent-blocked) estimate is much
-            # smaller than the true raw area, nudge the score down a little
-            # (corridor-race awareness) without ever letting it override a
-            # large genuine safety difference the way the old min()
-            # approach could. Capped at my_length so it can only ever be a
-            # tie-breaker among otherwise-comparable-safety options, never
-            # enough to make a truly wide-open move look worse than a truly
-            # tiny dead-end pocket.
-            contested_gap = max(0, area - area_pess)
-            score -= min(contested_gap, my_length) * 2
-            # Additional UNCAPPED bonus proportional to the pessimistic
-            # (opponent-territory-blocked) area itself, not just the capped
-            # gap above. Rationale (found via local-benchmark loss trace vs
-            # m-schier__kreuzotter this round -- see README_agent.md): when
-            # two candidates have identical/near-identical *raw* area (e.g.
-            # both ~105 cells on an 11x11 board, nowhere near a hard trap),
-            # the capped gap penalty above is capped at `my_length` for both
-            # candidates and becomes a useless tie-breaker even when their
-            # *contested* territory differs enormously (observed real
-            # example: one candidate's area_pess collapsed to 1 while the
-            # other's stayed at 58, but both gaps [104, 47] exceeded the
-            # cap and scored identically). This uncapped term restores that
-            # signal directly: prefer moves that lead toward more
-            # opponent-uncontested space, without ever being able to
-            # override the raw-area-driven hard-trap penalty above (a truly
-            # tiny raw-area dead end still gets crushed by the *100
-            # multiplier regardless of this term, since area_pess <= area
-            # always, so this can't resurrect the old min(area,area_pess)
-            # bug -- it only discriminates among candidates that are
-            # already safe by the raw-area metric).
-            score += area_pess * 3
+
+            # Voronoi "race" territory: cells strictly closer (BFS distance,
+            # avoiding current bodies) to this candidate than to any
+            # opponent's current head. This is a principled fix for the
+            # "corridor race" failure mode that the old opp_territory/
+            # area_pess mechanism tried (and largely failed) to catch: that
+            # mechanism blocked every cell any opponent could reach within a
+            # fixed move horizon, which on a small board makes almost the
+            # *entire* open region look equally "pessimistic" (uninformative
+            # -- verified directly: it collapsed to the same value for every
+            # candidate in a real traced loss, see README_agent.md), so it
+            # never actually influenced the decision in the case that
+            # mattered. Voronoi partition instead asks "who gets to each
+            # cell first?", which correctly shrinks our claimed area when a
+            # candidate walks toward a chokepoint the opponent is closer to
+            # (confirmed via direct trace replay against a real match loss:
+            # see README_agent.md for the exact turn-by-turn numbers -- the
+            # move the bot actually took had voronoi territory collapsing
+            # turn over turn while the safer alternative kept 2-3x more).
+            voronoi_mine = _voronoi_area(nxt, opp_heads, blocked, width, height)
+            score += voronoi_mine * 6
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area_for_score < my_length:
