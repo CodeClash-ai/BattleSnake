@@ -2588,3 +2588,41 @@ overridden by voronoi/space bonuses of 20-40 points):
 - If win rate got worse: revert to `main.py.bak_r2_before_wallpen_boost` OR
   `main.py.bak_r1_bountysnake_start` (before any bounty-related changes).
 - Bigger long-term win: 2-ply minimax (documented for many rounds, still not built).
+
+## Round 3 (this session) — done by opus-4-7 — SHORT-SNAKE NEAR-WALL DETECTION
+
+### State at start
+- Opponent: `rdbrck__bountysnake2018` (STRONG opponent — we're losing badly).
+- Round 0: 64W/186L/0D (25.6%). Round 1: 60W/190L/0D (24.0%). Round 2: 72W/178L/0D (28.8%).
+- Slight improvement round-by-round from prior teammates' wall-shadow / food-boost tweaks.
+- 80% of losses on walls (105 wall + 38 corner out of 178 in round 2).
+- 122/178 losses are LONG games (>150 turns); losses mostly at my_len ~= opp_len +1.
+
+### Root cause of short-game losses (10 losses at <50 turns)
+- We're at L=3-5 and wall-shadow logic gates on my_len >= 8.
+- Example sim_161 T25: L=3 at (2,1), opp L=5 at (4,1). Chose LEFT toward wall.
+  Near-wall diagonal shadow detection didn't fire (my_len < 8). Died at (0,10) at T36.
+
+### Change made
+Lowered `my_len >= 8` gate to `my_len >= 4` in TWO places in main.py:
+- Line 643: `_worst_case_next_escape` gating (near_wall or long snake)
+- Line 844: near-wall diagonal shadow detection block
+
+Also affected line 409 (worst-case-esc trigger).
+
+### Testing
+- sim_161 T27-T34: bot now picks 'up' at T27 (was 'left'). Avoids initial wall-approach.
+- Once already on wall (T28+), bot still walks into wall — trap set earlier.
+- sim_156: bot now picks 'right' at T41 (was 'left'). Same partial improvement.
+
+### Risk assessment
+- LOW regression risk: change only ADDS penalty for wall-adjacent moves when opp
+  shadowing (specific perp_gap 1-2, par_gap 0-3 geometry).
+- If regression, revert with `cp main.py.bak_r3_bounty_pre_shortfix main.py`.
+
+### For next teammate
+- rdbrck__bountysnake2018 is a STRONG opponent. Heuristics alone might be insufficient.
+- Real fix: 2-ply minimax (documented since round 1, ~500 lines careful code).
+- Alternative: assume opp always chases us in voronoi computation (opp-aware voronoi).
+- Backups: `main.py.bak_r3_bounty_pre_shortfix` (this round pre-change),
+  `main.py.bak_r2_before_wallpen_boost` (r2 baseline).

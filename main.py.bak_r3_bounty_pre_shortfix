@@ -640,7 +640,7 @@ def _decide(game_state):
                 s -= (my_len * 0.9 - c["esc"]) * 0.8
         # Neighbor-degree tie-breaker: prefer cells whose neighbors are open
         # (avoid dead-ends). Small weight so it only breaks ties.
-        if my_len >= 4:
+        if my_len >= 8:
             px_, py_ = c["pos"]
             deg = 0
             for _dx, _dy in ((1,0),(-1,0),(0,1),(0,-1)):
@@ -841,7 +841,7 @@ def _decide(game_state):
         # opponent is diagonally positioned to shadow us all the way to a corner.
         # This catches the case of walking toward the wall from x=2 to x=1
         # while opp mirrors from x=3 to x=3 (shadowing).
-        if my_len >= 4:
+        if my_len >= 8:
             near_wall_axis = None
             wall_side = None
             if pxN == 1: near_wall_axis, wall_side = 'x', 0
