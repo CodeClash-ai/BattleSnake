@@ -5418,3 +5418,153 @@ can force me below body length next turn" case.
   response would leave us below our body length in reachable area — see
   the inline comment right above it for full rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 5 (this session, FINAL round of this task) — opponent still OliverMKing__astar-snake (5 straight losing real rounds: 108-129-13, 109-128-13, 113-131-6, 104-130-16, 106-131-13), extended the 1-ply adversarial lookahead to a genuine 2-ply minimax — confirmed a real, meaningful local-benchmark improvement (72.2% vs prior ~60-67%)
+
+`/logs/rounds/{0,1,2,3,4}/results.json`: opponent all five prior real rounds
+is `OliverMKing__astar-snake` — still the only opponent in this file's
+entire long history we have ever lost to, and we've now lost 5 real rounds
+in a row to it by a very consistent margin (~104-113 for us vs ~128-131 for
+it, out of 250, every single time regardless of what local heuristic
+tweaks were tried in between — see the many long sections above this one
+for the full history: self-coil tracing, two independently-reverted
+tail-chase attempts, `_greedy_self_room_multi`, Voronoi race-territory, and
+a 1-ply adversarial opponent-response lookahead added a couple of rounds
+ago). Given this is the final round of this particular task, I focused the
+whole session on the single most promising, already-partially-validated,
+lowest-regression-risk lever left on the table: **extending the existing
+1-ply adversarial lookahead to a real 2-ply minimax**, which multiple
+previous rounds' notes explicitly flagged as "the natural next increment"
+after the 1-ply version was added, and which is mechanistically different
+(and much less likely to interact badly with the other ~10 scoring terms)
+than the twice-already-reverted tail-chase idea.
+
+### Change made this round
+
+In `_opponent_worst_case_area()` (see its docstring in `main.py` for the
+original 1-ply rationale): previously, for each of the opponent's possible
+next moves (the adversarial "worst case for us" ply), the leaf value was
+just `_flood_fill_size(nxt, leaf_blocked, ...)` — our STATIC area at our
+own candidate cell, without letting ourselves respond further. This round
+adds a genuine extra ply: **after** simulating the opponent's move, we now
+also simulate OUR own best possible follow-up move from `nxt` (try all 4
+directions, take the one with the largest resulting flood-fill area as
+computed with both bodies now advanced), and use *that* value as the leaf
+instead of the static one-shot area. This is a real depth-2 minimax step
+(our move → opponent's worst move for us → our best response → assess),
+not a repeat of the old, already-discredited `opp_territory`/`area_pess`
+multi-move-horizon *territory-blocking* mechanism (which pessimistically
+blocked cells reachable within many moves and was found to be
+uninformative/harmful on a small board — see the extensive history
+elsewhere in this file) — it only ever looks at each snake's *single* next
+real move at each of the two plies, so it can't inflate a large open
+region into looking dangerous just because it's theoretically reachable
+eventually.
+
+Cost: at most 4 (candidates) × 4 (opponent moves) × 4 (our follow-up moves)
+= 64 extra flood-fills per `move()` call in the worst case, still cheap on
+an 11x11 board — verified via timing (200 calls on a normal 2-snake state:
+~4.2ms/call; 50 calls on a synthetic 25-length-snake worst case:
+~3.1ms/call), nowhere near the 500ms/move budget.
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state, `{}` (fully
+  malformed), and an empty-snakes state — all return valid moves, no
+  exceptions.
+- `ast.parse` confirms the file is syntactically valid.
+- **Local benchmark (the real test): 18 games total, run in 3 separately-
+  launched batches of 6, against a freshly extracted
+  `origin/human/OliverMKing/astar-snake:main.py`** (recipe unchanged from
+  many earlier rounds' notes throughout this file — `git show
+  origin/human/OliverMKing/astar-snake:main.py > /tmp/opp/main.py; cp
+  server.py /tmp/opp/server.py`, then `setsid nohup env PORT=...
+  python3 main.py > log 2>&1 </dev/null & disown` for both bots to survive
+  across tool calls, loop `battlesnake play ... -o /tmp/g5_N.json &
+  disown`, sleep ~27-28s per batch, check `tail`).
+  **Result: 13 wins / 3 losses / 2 draws = 72.2% win rate**, games ranging
+  69-389 turns (batch breakdown: batch1 5W/0L/1D, batch2 3W/3L/0D, batch3
+  5W/0L/1D — some batch-to-batch variance as expected against a
+  long/contested-game opponent, but the aggregate is clearly better than
+  this session's own historical local benchmarks against this exact
+  opponent: the previous round's 1-ply-only version scored 6/10 (60%) and
+  8/12 (66.7%) in its two local batches; the round before that (before any
+  lookahead) scored 4/8 (50%) and 2/10 (20%, the reverted tail-chase
+  variant) and 3/4 (75%, one very small early sample) in various
+  sessions' batches — see the long history above). Zero
+  errors/exceptions in either bot's server log across all 18 games
+  (`grep -i "error\|traceback\|exception" /tmp/new.log /tmp/opp.log` —
+  clean).
+
+### Honest caveats
+
+1. **Sample size is still modest (18 games)** against a long/variable-
+   game opponent (69-389 turns per game) — real-match variance for this
+   exact matchup has historically been high even for byte-identical code
+   across consecutive real rounds (round2 vs round3 in the history above:
+   113 vs 104 wins for literally the same `main.py`, out of 250 sims each
+   time). A 72.2% local win rate is an encouraging, meaningfully better
+   number than prior sessions' local benchmarks against the same
+   opponent, but should not be over-interpreted as a guaranteed real-match
+   win-rate jump of the same magnitude.
+2. **Did not get to trace the 3 new local losses** (`/tmp/g5_7.json`,
+   `/tmp/g5_8.json`, `/tmp/g5_9.json` — should still be on disk if `/tmp`
+   hasn't been cleared) — worth a look if this round is followed by
+   another one, using the trace-replay recipe documented dozens of times
+   throughout this file (build a synthetic `game_state` per logged turn
+   from `board.snakes[*].body`, call `main.move()` directly) to see
+   whether the 2-ply extension still misses the same class of danger (a
+   3+-ply-deep tie) or whether these are a different/new mechanism.
+3. **Did not attempt a controlled same-session A/B against the pre-round
+   1-ply-only version** (relied on comparing against this session's
+   documented historical local-benchmark numbers from previous rounds'
+   sections instead — see caveat 1 about real-match variance history,
+   which applies to local benchmarks too, just less dramatically since
+   local batches aren't subject to whatever real-harness-specific factors
+   might also be at play). `/tmp/main_before_round5.py` (this session,
+   not persisted in the repo) has the exact pre-this-round `main.py` if a
+   teammate wants to run that controlled comparison with a bigger sample
+   (20+ games each side) before trusting this round's number fully.
+
+### If this is genuinely the final round of the task (per the task framing)
+
+Given the instructions describe this as the final round, there won't be a
+next-round teammate to hand this off to *for this specific ladder run* —
+but leaving these notes anyway in case: (a) the task framing is wrong and
+more rounds follow, (b) a parallel/future session on a different ladder
+run faces the same opponent again (very likely given 5 consecutive real
+rounds so far), or (c) this file itself is read by a future audit/review.
+
+### Recommended next steps (for whoever/whatever picks this up, if anyone)
+
+1. Check `/logs/rounds/5/results.json` (this round's real result, once it
+   exists) to see if the 2-ply extension moved the real-match needle at
+   all from the persistent ~104-113/250 baseline. Given the high
+   round-to-round variance documented in this file even for identical
+   code, don't over-index on a single round's number either way.
+2. If continuing to invest in this opponent specifically: the natural
+   next increment is extending further (3-ply), or — more likely higher
+   value at this point — actually tracing the 3 new local losses (see
+   caveat 2) to see if there's a *qualitatively different*, more
+   targeted fix available now that the "genuine 1-2-ply tie" class is
+   more thoroughly covered by the existing 1-ply-adversarial +
+   2-ply-response mechanism.
+3. As always throughout this file: re-check the opponent identity each
+   round via `results.json` before assuming any of this analysis applies
+   — if the ladder ever assigns a different opponent, use `git log
+   --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark them fresh
+   per the established recipe used dozens of times throughout this file.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: extended `_opponent_worst_case_area`'s
+  leaf evaluation from a static 1-ply area snapshot to a genuine 2-ply
+  minimax step — our move → opponent's worst move → our best response →
+  assess resulting area — see the inline comment directly above the new
+  `best_our_followup` loop for full rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+- `/tmp/main_before_round5.py` (this session, not persisted in the repo)
+  has the exact pre-this-round `main.py` if a revert/diff/controlled A/B
+  is needed — recreate via `git show HEAD:main.py` before this round's
+  commit if that file is gone by the time you read this.

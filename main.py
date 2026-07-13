@@ -408,7 +408,33 @@ def _opponent_worst_case_area(nxt, my_new_body, opp, blocked_now, other_bodies,
         opp_new_body = _advance_body(opp_body, opp_nxt, food_set)
         leaf_bodies = [my_new_body, opp_new_body] + other_bodies
         leaf_blocked = _blocked_from_bodies(leaf_bodies, exclude_body=my_new_body)
-        area = _flood_fill_size(nxt, leaf_blocked, width, height, cap)
+
+        # Genuine 2-ply extension (this round): rather than leaf-evaluating
+        # immediately after the opponent's (worst-case-for-us) move, let
+        # OURSELVES respond with our own best next move from `nxt` first,
+        # and use THAT resulting area as the leaf value. This is a real,
+        # bounded minimax step deeper than the previous 1-ply version (our
+        # move -> opponent's worst move -> OUR best response -> assess),
+        # directly targeting the many-rounds-documented "genuine tie that
+        # only resolves 2+ plies out" failure class (see README_agent.md,
+        # many traced examples e.g. against rdbrck__btas/ccSnake2018/
+        # OliverMKing__astar-snake, where even a 1-ply-adversarial check
+        # sometimes isn't deep enough because the two candidates were tied
+        # for multiple consecutive turns, not just one). Cost is bounded:
+        # at most 4 extra flood-fills per opponent-move branch (16 total
+        # per candidate, 64 per move() call) -- still cheap on an 11x11
+        # board per this file's many earlier timing notes elsewhere.
+        best_our_followup = 0
+        for fdx, fdy in DIRS.values():
+            my_nxt2 = (nxt[0] + fdx, nxt[1] + fdy)
+            if not _in_bounds(my_nxt2, width, height):
+                continue
+            if my_nxt2 in leaf_blocked:
+                continue
+            area2 = _flood_fill_size(my_nxt2, leaf_blocked, width, height, cap)
+            if area2 > best_our_followup:
+                best_our_followup = area2
+        area = best_our_followup
         if worst is None or area < worst:
             worst = area
     return worst
