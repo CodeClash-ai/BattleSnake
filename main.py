@@ -705,6 +705,26 @@ def _famished_frank_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+def _beames_predicted_move(enemy, game_state, w, h):
+    """Predict kentmacdonald2 Beames by running the copied A*/food port."""
+    try:
+        from tools import beames_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = beames_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _battlejake2019_predicted_move(enemy, game_state, w, h):
     """Predict joshhartmann11 battleJake2019 by running the copied 2019 port.
 
@@ -825,6 +845,7 @@ def move(game_state):
         has_cornelius_enemy = False
         has_battlejake_enemy = False
         has_famished_frank_enemy = False
+        has_beames_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -837,7 +858,13 @@ def move(game_state):
             is_cornelius = "cornelius" in ename.lower() or "chaelcodes" in ename.lower()
             is_battlejake = "battlejake" in ename.lower() or "joshhartmann11" in ename.lower()
             is_famished = "famished-frank" in ename.lower() or "famished" in ename.lower()
-            if is_famished:
+            is_beames = "beames" in ename.lower() or "kentmacdonald2" in ename.lower()
+            if is_beames:
+                has_beames_enemy = True
+                pred = _beames_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_famished:
                 has_famished_frank_enemy = True
                 pred = _famished_frank_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -902,6 +929,9 @@ def move(game_state):
                 pred = _eremetic_eric_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
+            elif "beames" in ename.lower() or "kentmacdonald2" in ename.lower():
+                # Exact predictor already added above; keep generic adjacent-head rule.
+                pass
             elif "battlesnake-elon" in ename.lower() or "jackisherwood" in ename.lower() or "elon" in ename.lower():
                 has_battlesnake_elon_enemy = True
                 pred = _battlesnake_elon_predicted_move(e, game_state, w, h)
