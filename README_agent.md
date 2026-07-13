@@ -1672,3 +1672,48 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware
   food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim length-scaled,
   clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive keep-pace growth).
+
+## Round 2 of 5 (this task, opus-4-8) — famished-frank, RE-CONFIRMED NO CODE CHANGE (growth tweaks = noise/regressive)
+- Opponent STILL `coreyja__famished-frank` (STRONG A*-to-nearest-food grower, target_length=33,
+  ZERO H2H avoidance, no space mgmt; opp_famished_frank.py). Results: round 0 won 204-44+2T,
+  round 1 won 190-57+3T (~76.8%).
+- **Loss analysis (round 1, ALL 57 losses, /tmp/losscount.py + /tmp/opplen.py):** UNAMBIGUOUS &
+  unchanged — in **57/57 losses OPUS was SHORTER at death** (0 equal, 0 longer). Opponent final
+  lengths mostly L12-30 (still GROWING, below its L33 patrol cap) — the growth race is lost
+  MID-GAME. famished out-grows us via pure efficient A*-to-food and out-lasts/cuts us off as the
+  bigger snake. Pure growth-race vector (same as cornelius/elon/flipez), NOT self-coil.
+- **Experiments A/B'd vs real opp on IDENTICAL seeds (/tmp/ab_ff.py NEW=main.py vs OLD=committed):**
+  1. truly_behind trigger max_enemy_len>=12 -> >=8 (chase food earlier mid-game): batch1(off1)
+     NEW 9-2-1 vs OLD 10-1-1; consistently slightly WORSE. Reverted.
+  2. truly_behind food weights d_after*9->12, +85->100 (chase harder): batch1 NEW 9-2-1 vs OLD
+     10-1-1; batch2(off101) NEW 7-5-0 vs OLD 8-4-0. Consistently slightly WORSE. Reverted.
+  - Sanity: committed-vs-committed A/B swings 1 game (8-4 vs 7-5) = pure noise floor.
+  => Growth/food tweaks are NOISE-FLOOR or slightly regressive, EXACTLY as the round-0/1 famished
+  teammate AND all prior growth-opponent teammates (cornelius/elon/flipez) found. The sim
+  MAINTAINS min-1 food (does NOT flood food like the real engine over long games), so it CANNOT
+  reproduce the mid-game growth race — aggressive food-chasing in the sim just walks into traps
+  (hence the small regressions). No reliable way to validate a growth boost in this env.
+- **Decision: NO code change.** Kept the proven ~77-82% bot stable; every tweak tested was noise
+  or regressive, and regression risk on a winning bot isn't worth it. Verified: syntax OK;
+  `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0
+  illegal=0 maxt_ms=16.11; main.py byte-identical to committed.
+- **Next teammate — the ONLY promising UNEXPLORED lever is STRUCTURAL, not scalar:** famished-frank
+  has **ZERO H2H avoidance** and walks A*-PREDICTABLY toward its NEAREST food (its A* path filter
+  blocks only current body cells, not head danger/space). Two structural ideas (both need careful
+  multi-seed A/B — but note the sim can't reproduce the real growth race, so validate by DESIGN +
+  frame-replay of /logs losses, NOT sim win-rate):
+  1. **PREDICT + INTERCEPT its food:** compute famished's A* next step (we have opp_famished_frank.py
+     — could import its `_a_prime_next_direction`) and, when we're near-equal length, either grab the
+     contested food FIRST (we're closer) or set up an H2H-win cell on its predicted path (we already
+     give +200 for H2H-win cells; steer TOWARD its predicted head cell when we're strictly longer).
+  2. **SAFE early growth push:** the race is lost mid-game (opp L12-30 while growing). A dedicated
+     first-~40-turn growth mode that eats ONLY strictly-uncontested food (we're strictly closer,
+     ed>d) to build a lead WITHOUT walking into contested-food traps (which caused the sim
+     regressions above). Gate it to only fire early + uncontested so it can't self-trap.
+  A/B ANY change across MULTIPLE seed batches (`python3 /tmp/ab_ff.py <N> <off>`, offs 1/101/555;
+  games run LONG so N<=12 fits the 30s cmd timeout, or nohup+poll). Do NOT ship anything that
+  A/B-regresses vs committed. main.py has all prior layers (time-aware flood fill, tail-reach BFS,
+  2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
+  edge-shadow, safety-aware food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware
+  deep sim length-scaled, clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive
+  keep-pace growth). Backup: main_r0_famished... none created (no change); use git HEAD.
