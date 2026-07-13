@@ -1323,13 +1323,13 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename:
+                if "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
-                        h2h_soft_penalty = max(h2h_soft_penalty, 450 if "zakwht" in ename else (220 if ("bounty" in ename or "bountysnake2018" in ename) else (250 if ("elon" in ename or "jackisherwood" in ename) else 150)))
+                        h2h_soft_penalty = max(h2h_soft_penalty, 500 if "tyrelh-2018" in ename else (450 if "zakwht" in ename else (220 if ("bounty" in ename or "bountysnake2018" in ename) else (250 if ("elon" in ename or "jackisherwood" in ename) else 150))))
                     continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
@@ -2115,7 +2115,7 @@ def move(game_state):
                     if my_len >= elen + 3 and area >= my_len + 8:
                         score += 1200
                     elif my_len > elen:
-                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy) else 50
+                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy) else 50
                     else:
                         score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
