@@ -913,12 +913,7 @@ def _zakwht_2018_predicted_move(enemy, game_state, w, h):
     return None
 
 def _tyrelh_python_predicted_move(enemy, game_state, w, h):
-    """Predict tyrelh-python (Zero_Cool) by running the copied faithful port.
-
-    Tyrelh is a strong deterministic food-then-tail A* bot.  Production log
-    checks against round 0 matched its next head essentially exactly, so using
-    its one-ply move is much safer than broad adjacent-head guessing.
-    """
+    """Predict tyrelh-python (Zero_Cool) by running the copied faithful port."""
     try:
         from tools import tyrelh_python_opponent
         pseudo = {
@@ -928,6 +923,34 @@ def _tyrelh_python_predicted_move(enemy, game_state, w, h):
             "you": enemy,
         }
         mv = tyrelh_python_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
+
+def _tyrelh_2018_predicted_move(enemy, game_state, w, h):
+    """Predict tyrelh/tyrelh-2018 by running the faithful copied port.
+
+    This is *not* tyrelh-python.  The 2018 bot flips to the old API internally,
+    seeks food until it is biggest/hungry, then hunts enemy-adjacent kill zones
+    with flood-fill tie-breaking.  A one-ply check on /logs/rounds/0 matched the
+    current production opponent exactly on sampled games, so route tyrelh-2018
+    here instead of the tyrelh-python predictor.
+    """
+    try:
+        from tools import tyrelh_2018_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = tyrelh_2018_opponent.move(pseudo).get("move")
         if mv in MOVES:
             head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
             nxt = _add(head, MOVES[mv])
@@ -1052,6 +1075,7 @@ def move(game_state):
         has_hungry_enemy = False
         has_nagini_enemy = False
         has_tyrelh_python_enemy = False
+        has_tyrelh_2018_enemy = False
         has_zakwht_2018_enemy = False
         has_bountysnake2018_enemy = False
         has_jerrykott_enemy = False
@@ -1071,7 +1095,8 @@ def move(game_state):
             is_beames = "beames" in ename.lower() or "kentmacdonald2" in ename.lower()
             is_hungry = "theapx" in ename.lower() or ename.lower().endswith("__hungry") or "hungry" == ename.lower()
             is_nagini = "nagini" in ename.lower() or "xtagon" in ename.lower()
-            is_tyrelh = "tyrelh" in ename.lower()
+            is_tyrelh_2018 = "tyrelh-2018" in ename.lower() or "battlesnake2018" in ename.lower()
+            is_tyrelh = ("tyrelh" in ename.lower()) and not is_tyrelh_2018
             is_zakwht = "zakwht" in ename.lower() or "zakwht-2018" in ename.lower()
             is_bounty = "bountysnake2018" in ename.lower() or "bounty" in ename.lower()
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
@@ -1111,6 +1136,11 @@ def move(game_state):
                 elif is_zakwht:
                     has_zakwht_2018_enemy = True
                     pred = _zakwht_2018_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_tyrelh_2018:
+                    has_tyrelh_2018_enemy = True
+                    pred = _tyrelh_2018_predicted_move(e, game_state, w, h)
                     if pred is not None:
                         preds.add(pred)
                 elif is_tyrelh:
