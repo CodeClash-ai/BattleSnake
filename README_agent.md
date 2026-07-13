@@ -1717,3 +1717,59 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   edge-shadow, safety-aware food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware
   deep sim length-scaled, clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive
   keep-pace growth). Backup: main_r0_famished... none created (no change); use git HEAD.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `kentmacdonald2__beames` (A* GROWER, NO H2H/SPACE), NO CODE CHANGE
+- **Opponent = `kentmacdonald2__beames`** — a 2017 Advanced-division A* port. Real source saved
+  to `opp_beames.py` (git show origin/human/kentmacdonald2/beames:main.py, 209 lines). Strategy:
+  rank food by squared-Euclidean dist to head, A* (squared-euclid heuristic, count>499 bailout)
+  to NEAREST food, quirky second-food fallback, then desperation = first safe neighbor in fixed
+  order up/down/left/right. `_if_safe` = on-board AND not in ANY snake body cell. **CRITICAL
+  WEAKNESSES: ZERO head-to-head avoidance, ZERO space/flood management, blocks ALL body cells
+  (incl. tails).** It's an AGGRESSIVE nearest-food grower (reaches L20-34) that OUT-GROWS us.
+  Test harness: `python3 vs_beames.py main.py <N> [seedoff]` (created; N<=14 for 30s cmd timeout).
+- **Round 0 result: won 188-59 +3T** (~75%). Analyzed all 59 losses (/tmp/beames_analysis.py —
+  rebuild: counts shorter/equal/longer at death across /logs/rounds/0/sim_*.jsonl):
+  **58/59 losses OPUS was SHORTER at death** (0 equal, 1 longer). Beames out-grows us via
+  aggressive nearest-food A* and out-lasts/H2H-kills us as the bigger snake. ~1/3 of losses are
+  NEAR-EQUAL length (L4v5, L5v6, L7v8, L11v12, L18v19) = growth-race + forced-H2H at edges;
+  the rest are pure growth-race blowouts (L14v24, L19v34). This is the SAME growth-race vector
+  as cornelius/elon/famished, NOT our chronic self-coil vector.
+- **Experiments A/B'd vs real opp on IDENTICAL seeds (/tmp/ab_beames.py NEW=main.py mod vs
+  OLD=committed, alternates start):** boosted truly_behind food weight d_after*9->12 / +85->105
+  AND behind_or_even *7->9 / +70->90. Batch1(off1): NEW (8,3,1) vs OLD (8,3,1). Batch2(off101):
+  NEW (9,3,0) vs OLD (9,3,0). => BYTE-IDENTICAL results = pure NOISE-FLOOR, exactly as every
+  prior growth-opponent teammate (cornelius/elon/flipez/famished) found. The sim spawns food at
+  15%/turn (does NOT flood like the real engine over long games), so it CANNOT reproduce the
+  mid-game growth race — growth tweaks don't move the sim needle. Reverted.
+- **Verified the H2H-race loss is ALREADY handled:** reconstructed sim_2 T17 (OPUS L4 @(7,10)
+  top edge, OPP L5 @(8,9), both racing food @(9,10)) in /tmp/test_t17.py — the CURRENT bot picks
+  DOWN (peels off the edge, away from the H2H-loss cell (8,10)), NOT right into the trap. So the
+  near-equal H2H-race losses are largely already avoided by the safety-aware food ranking +
+  edge/corner penalties; the historical losses were slightly different frames / earlier commits.
+- **Decision: NO code change.** Kept the proven ~75% bot stable. Growth tweaks are noise/
+  regression-risk (proven), the sim can't validate them, and the addressable H2H-race pattern is
+  already handled. Verified: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.13; main.py byte-identical to committed.
+- **Next teammate — the ONLY promising UNEXPLORED lever is STRUCTURAL (beames is fully
+  DETERMINISTIC + has ZERO H2H/space awareness):**
+  1. **PREDICT + EXPLOIT:** import opp_beames.py's `_decide`/`_search` to predict beames' EXACT
+     next move (it always A*'s to nearest food). When we're EQUAL or LONGER, steer TOWARD its
+     predicted head cell to force an H2H-win (we already give +200 for h2h_win cells; make the
+     enemy_next model use beames' PREDICTED single cell, not all 4 neighbors, so we can
+     aggressively contest it). When SHORTER, use the prediction to grab the contested food FIRST
+     if we're strictly closer, or dodge its predicted cell.
+  2. **CUT IT OFF when longer:** beames has no space management and blocks all body cells (incl.
+     tails) — so when we're longer we can body-block it into a dead-end / shrink its Voronoi
+     (we already have `_voronoi_owned`). It cannot escape a seal it can't foresee.
+  3. **SAFE early growth:** the race is lost because we start/stay behind. A dedicated first-~40-
+     turn growth mode eating ONLY strictly-uncontested food (ed>d) could build a lead without the
+     contested-food traps that make naive food boosts regress. Gate to early+uncontested.
+  A/B ANY change across MULTIPLE seed batches (`python3 /tmp/ab_beames.py <N> <off>`, offs 1/101/
+  555; N<=14 for the 30s cmd timeout). Do NOT ship anything that A/B-regresses vs committed — we
+  win ~75% and the sim can't validate growth-race changes (validate structural exploits by DESIGN
+  + frame-replay of /logs losses + no-regression). main.py has all prior layers (time-aware flood
+  fill, tail-reach BFS, 2-ply best/worst space, enemy-contested space, H2H follow-up, length-
+  scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi, deep
+  self-survival sim, enemy-aware deep sim length-scaled, clearly_ahead food-avoid, tail-follow
+  anti-coil, opponent-adaptive keep-pace growth). Tools: vs_beames.py, /tmp/ab_beames.py,
+  /tmp/beames_analysis.py, /tmp/test_t17.py (rebuild from this note if /tmp cleared).
