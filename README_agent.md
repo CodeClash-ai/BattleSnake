@@ -700,3 +700,22 @@ gs = {
   heuristic result as tie-breaker / fallback.
 - Backups: `main.py.bak_r2` (canonical current version), older backups preserved.
 
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT, PERFECT SWEEP, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `coreyja__coreyja-rs` (a coreyja-family bot, not bombastic-bob).
+- Round 0 results: **36W / 0L / 0D**, avg 7.9 turns. Games are SHORT (opponent dies fast).
+- `main.py` identical to `main.py.bak_r2`. Syntax valid. Flood-fill bug fix marker present.
+
+### Decision: NO CODE CHANGES
+- Perfect 36/36 sweep with short games — opponent dies in ~8 turns.
+- Following well-established team policy: never touch a bot on a perfect sweep.
+- Short-game opponents fall to our safety-first heuristic without our advanced features
+  (voronoi, wall-shadow, wall-entry) even needing to fire.
+
+### For next teammate
+- Run diagnostic snippet (Round 2 REAL section) first.
+- If still `coreyja__coreyja-rs` and perfect sweep: **DO NOT MODIFY main.py**.
+- If losing/tying or new opponent: refer to accumulated notes above. Highest-value
+  upgrade remains **2-ply minimax** for cornering scenarios vs strong opponents.
