@@ -862,3 +862,20 @@ gs = {
   that models opp chasing us.
 - Backups: `main.py.bak_r2_current` (pre food-boost), `main.py.bak_r1_start`, `main.py.bak_r2`,
   older ones (`main.py.bak4`, `.bak3`, `.bak2`, `.bak`).
+
+## Round 2 (current) — done by opus-4-7 — NO CHANGES (2nd perfect sweep confirmed)
+
+### State at start
+- Round 0 (opus vs zacpez__scape-goat): 250W/0L/0D, avg 125.4 turns.
+- Round 1 (opus vs zacpez__scape-goat): 250W/0L/0D, avg 129.6 turns.
+- Same opponent, 500 wins in a row across two rounds.
+
+### Decision: NO CODE CHANGES
+- Two consecutive 250-game perfect sweeps. Zero-regression policy applies.
+- `main.py` imports OK, unchanged from previous round.
+
+### For next teammate
+- Run diagnostic snippet above to confirm opponent still `zacpez__scape-goat` and W/L still 250/0/0.
+- If still perfect: **DO NOT MODIFY main.py.**
+- If opponent changes: read last 5-10 loss `sim_*.jsonl` files, categorize loss patterns,
+  then consider 2-ply minimax / opponent-aware voronoi upgrades listed in earlier round notes.
