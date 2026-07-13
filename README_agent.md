@@ -2362,3 +2362,58 @@ Modified body-crowding penalty in `score()` — replaced m4-only signal with m2+
      AND surrounded by our own body (m2 >= 4 threshold?).
 - Losses in this round were ALL at head positions with 2+ own-body cells in Manhattan-2
   radius — good gating criterion for future coil-detection features.
+
+## Round 3 (this session) — opus-4-7 — NO CHANGES
+
+### State at start
+- Prior round: **247W / 3L / 0D** vs `tyrelh__tyrelh-python` (98.8% win rate).
+- Avg game length ~156 turns — high-quality games (not opponent suicide).
+- Backup snapshot: `main.py.bak_r4_249w1l_josh` (from earlier session).
+
+### Analysis of 3 losses
+All 3 losses occurred at 300-390 turns; snakes were long (22-29 length).
+Each loss was a **self-coil terminal position** where all 4 move options were
+lethal (walls + own body). Traps were set 5-15 turns earlier along the right/left wall
+in tight body coils. Current m2+m4 crowding penalty didn't prevent them.
+
+Example: sim_2.jsonl turn 387 — head at (10,7), L=29. Body forms tight
+right-wall coil from y=0 to y=9 along x=9 and x=10. All 4 neighbors were own body.
+
+### Decision: NO CODE CHANGES
+- Any change risks regressing 247 wins.
+- The 3 losses are hard problems (multi-turn coil detection, not simple m2/m4).
+- With 5-round match and 98.8% win rate already established, keeping stable code
+  is expected to preserve strong score.
+
+### If future rounds show regressions or opponent change
+Diagnostic:
+```bash
+python3 -c "
+import json,glob,os
+last=max(int(x) for x in os.listdir('/logs/rounds'))
+w=l=d=0; T=[]; opp=set()
+for f in glob.glob(f'/logs/rounds/{last}/sim_*.jsonl'):
+    L=open(f).read().splitlines()
+    if not L: continue
+    last_json=json.loads(L[-1]); T.append(len(L))
+    winner=last_json.get('winnerName','')
+    if last_json.get('isDraw'): d+=1
+    elif winner=='opus-4-7': w+=1
+    else: l+=1
+    first=json.loads(L[0])
+    if 'board' in first:
+        for s in first['board']['snakes']:
+            if s['name']!='opus-4-7': opp.add(s['name'])
+print(f'round {last}: W={w} L={l} D={d} avg={sum(T)/max(1,len(T)):.0f} opp={opp}')
+"
+```
+
+### Ideas for coil-avoidance (if next teammate wants to try)
+1. **Trapped-space detection**: after picking move, simulate 3-5 turns of straight-line
+   flood-fill (advancing tail each turn). If space collapses to <= my_len, penalize hard.
+2. **Body-shape penalty**: count Manhattan-3 body cells that DON'T include the tail.
+   High count = coil tightening. Weight >5 for my_len >= 25.
+3. **Wall-hugging avoidance**: if head is on edge (x=0 or x=w-1 or y=0 or y=h-1) AND
+   the two adjacent parallel body cells are both on the same edge, we're spiraling.
+4. **Testing**: replay the 3 loss trajectories from t-15 to t-5 and check that the fix
+   diverges. Verify no divergence on 100+ random winning-game states.
