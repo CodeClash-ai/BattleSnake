@@ -1916,3 +1916,39 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   safety-aware food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim
   length-scaled, clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive keep-pace
   growth, deterministic-opponent H2H intercept). Tools: vs_nagini.py, /tmp/ab_nagini.py.
+
+## Round 2 of 5 (this task, opus-4-8) — nagini, RE-CONFIRMED NO CODE CHANGE (growth tweaks regress in A/B)
+- Opponent STILL `xtagon__nagini` (DETERMINISTIC greedy food-seeker, H2H-aware YIELDS to longer
+  snakes, NO space mgmt; opp_nagini.py). Results: round 0 won 205-44, round 1 won 202-47 (~81%).
+- **Loss analysis (round 1, ALL 47 losses, /tmp/deathcause.py):** 42/47 OPUS was SHORTER at
+  death (0 equal, 5 longer); 9 edge, 8 corner. DIFFERENT from round-0's "equal-length self-coil"
+  finding — this round it's a GROWTH RACE. Traced sim_146 turn-by-turn (/tmp/trace.py): we start
+  EVEN (L3=L3), but from ~T8 nagini pulls ahead L5>L4 and grows steadily (eats ~every 8 turns)
+  while WE stall (L12, hp draining = not eating) and get out-lasted/trapped (died T131 at (8,0),
+  opp L19). The sim (sim_test) DOES reproduce this (food spawn 15%/turn matches real engine; the
+  losses are EARLY/normal-food, NOT the food-flood late-game trap of eremetic/gigantic).
+- **Experiments A/B'd vs real opp on identical seeds (/tmp/ab.py N off; NEW=main.py vs
+  OLD=/tmp/old_main.py=committed; baseline noise floor = 10-2 @off1, 11-1 @off101):**
+  1. `truly_behind = my_len < max_enemy_len` (drop the >=12 gate, chase food HARD whenever
+     strictly behind): NEW 8-4 vs OLD 10-2 @off1 — **REGRESSED** (dives into contested food/H2H).
+  2. `_pace_margin` mid-enemy 8->8 (>=8 instead of >=12) + behind_or_even food weight 7->8.5 +
+     on-food bonus 70->80: NEW 8-4 vs OLD 10-2 @off1 — **REGRESSED** (same over-aggression).
+  => Scalar/food growth boosts REGRESS vs nagini (confirmed by the round-1 nagini teammate too:
+  tail-follow tweak also regressed 13-3->12-4). More aggressive food chasing walks us into
+  H2H-loss cells / contested-food traps against this deterministic greedy food-seeker. The
+  safety-aware food ranking that COSTS us the growth race is ALSO what keeps us alive; boosting
+  raw food pull trades survival for length and nets a LOSS.
+- **Decision: NO code change.** Reverted both variants; main.py byte-identical to committed.
+  Verified: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3
+  fuzz_test.py` => crashes=0 illegal=0 maxt_ms=24.97 (<500 limit).
+- **Next teammate — the ONLY promising UNEXPLORED lever is STRUCTURAL (nagini is DETERMINISTIC +
+  H2H-aware, YIELDS to longer snakes, has NO space mgmt):** naive food-weight boosts REGRESS
+  (proven twice this round). Instead try a SURGICAL growth: when even/behind, only chase food
+  that is STRICTLY UNCONTESTED (we're strictly closer: our_dist < enemy_dist) so we grow WITHOUT
+  walking into H2H/contested traps — leave the safety-ranked ranking for contested food. And when
+  we're LONGER, since nagini DODGES cells we can reach (H2H-aware) and has no space mgmt, add an
+  AGGRESSION/CUTOFF term using `_voronoi_owned` to body-block/shrink its territory (the H2H
+  INTERCEPT exploit in main.py does NOT apply — nagini dodges, won't walk into it). A/B ANY change
+  multi-seed via `/tmp/ab.py <N> <off>` (offs 1/101/555; N<=12 for the 30s cmd timeout — nagini
+  games run LONG). Baseline is 10-2 @off1 / 11-1 @off101; do NOT ship anything that A/B-regresses.
+  main.py has all prior layers. Tools: vs_nagini.py, /tmp/ab.py, /tmp/deathcause.py, /tmp/trace.py.
