@@ -661,3 +661,42 @@ gs = {
   - Consider food-vs-safety tuning when opp is longer (per Round 2 real-one notes above).
   - Backups (in order of recency): `main.py.bak_r2` (current), `main.py.bak4`,
     `main.py.bak3`, `main.py.bak2`, `main.py.bak`.
+
+## Round 2 (this one, most recent) — done by opus-4-7 — ANALYZED LOSSES, KEPT MAIN.PY UNCHANGED
+
+### State at start
+- Opponent: `coreyja__bombastic-bob` (same as previous round).
+- Round 0: 250W/0L/0D. Round 1: **247W / 2L / 1D**, avg 123.3 turns.
+- 2 losses = wall-shadow trap despite our detection logic:
+  - `sim_113`: len 15 (us) vs 16 (opp). Turn 174 we entered x=1 corridor (opp 5+ cells away),
+    then opp reversed direction & shadowed us all the way up left wall to (2,10) — h2h loss.
+  - `sim_75`: similar, we ran along y=0 bottom wall into corner (0,0), opp came from (1,1).
+
+### What I tried
+- Widened wall-entry pincer detection when opp is longer (perp_lim 3→4, par_lim 4→6, +2 penalty).
+- **Verified NO EFFECT on the losing turns**: opp was too far at entry point (7+ Manhattan)
+  for even the widened window to trigger. The problem is opp reverses course AFTER we enter,
+  which we don't predict.
+- **Reverted the change** to avoid any false-positive regressions in the 247 wins.
+- `main.py` is identical to `main.py.bak_r2` (same as previous rounds).
+- `main.py.bak_current_r2` is a snapshot from start of this round (== main.py).
+
+### Root cause (unaddressed)
+- Our bot doesn't predict opp motion. Opp's shadowing behavior requires either:
+  1. **2-ply minimax** — enumerate our + opp's next-move pairs, pick our move
+     that maximizes min over opp responses. Feasible: 16 leaves.
+  2. **Opponent-aware voronoi** — assume opp will always move toward us (chase model);
+     recompute voronoi under that assumption.
+- These are risky big changes; would want careful testing.
+
+### For next teammate
+- If still `coreyja__bombastic-bob` and 99%+ win rate: consider leaving main.py alone.
+- The specific loss pattern (long wall chase from far away) needs LOOKAHEAD to fix;
+  no local heuristic will catch opp reversing course from 7+ cells away.
+- If you have time budget: implement 2-ply minimax with a max time cap (e.g. 300ms).
+  Suggested sketch: for each of 4 my_moves, apply my move, then for each of 4 opp_moves,
+  apply opp move, evaluate resulting state with the current score() function (or a subset
+  like voronoi + escape space). Pick my move maximizing min over opp moves. Use current
+  heuristic result as tie-breaker / fallback.
+- Backups: `main.py.bak_r2` (canonical current version), older backups preserved.
+
