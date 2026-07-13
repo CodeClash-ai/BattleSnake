@@ -2134,3 +2134,70 @@ Pattern: opponent shadows us 2 cells perpendicular from wall while we hug wall, 
      below my_len at any step, penalize heavily.
 - Backups: `main.py.bak_r2_theapx_r2_start` (this round), `main.py.bak_r1_theapx_start`,
   and many older ones.
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT xtagon__nagini, ANALYZED THEN REVERTED
+
+### State at start
+- **NEW OPPONENT**: `xtagon__nagini` (not seen before).
+- Round 0: **243W / 7L / 0D** (97.2%), avg 103.9 turns, max 227.
+- All 7 losses = classic wall-shadow deaths.
+
+### Loss pattern (all 7)
+- We walk along a wall (or into a corner), longer opp shadows at perp_gap=1-2, par_gap=0-3.
+- Opp follows us to corner, h2h kill or space starvation.
+- Examples:
+  - sim_101 (52t, len 7 vs 9): we entered right wall at (10,0)-(10,10) corner, opp at (8,1)→(9,9)
+  - sim_47 (48t, len 6 vs 8): left wall (0,7)→(0,0), opp (2,7)→(1,0) shadow
+  - sim_134 (88t): same left wall shadow
+  - sim_160 (102t): bottom y=0 wall (3,0)→(10,0), opp shadow at y=1-2
+  - sim_204, sim_216, sim_131: similar
+
+### What I tried (REVERTED)
+Added LONGER-OPP SHADOW boost to two blocks in wall-shadow detection:
+1. In `par_gap == 0 and perp_gap <= 3` block: +15 to +30 penalty when opp longer.
+2. In `moving_away else` branch: +12 to +20 penalty when opp longer and shadowing.
+
+### Why it didn't work
+- Both changes fired symmetrically for opposite directions. E.g. at sim_47 T38 with me at (0,7):
+  DOWN→(0,6) got +12 penalty. UP→(0,8) got +22 penalty (closer to corner ahead).
+  So the fix pushed bot toward DOWN — the WORSE direction (opp shadows us to (0,0)).
+- The corner_factor / runway logic is BACKWARDS for this pattern: opp is shadowing perpendicular,
+  which direction we run doesn't matter much — but the "closer to corner ahead = more penalty"
+  logic pushed bot AWAY from corner ahead = INTO the opp shadow.
+- Reverted; running the diff test showed 0/1549 divergences on winning games AND 0/614 divergences
+  on the 7 loss games. The fix simply didn't activate in the loss trajectory decision points
+  because they were dominated by voronoi differential in single choices.
+
+### Testing infrastructure I built
+- `/tmp/replay.py` — replay a specific (sim, turn) through current bot; verify move.
+- Diff-test script (inline) — compare old vs new bot across many game states.
+  Loads modules with `importlib.util.spec_from_file_location`. See history in this note.
+
+### Decision: NO CODE CHANGES (reverted)
+- Backup `main.py.bak_r1_xtagon_start` = current main.py (no change from prior round).
+- 97.2% win rate stands.
+
+### For next teammate — actionable ideas
+The 7 losses are the CLASSIC wall-shadow pattern:
+  - Longer opp at perp_gap=1-2, par_gap 0-3, opp follows us along wall until corner.
+
+To FIX this reliably you need MORE STATE:
+1. **PREDICT opp will continue shadowing**. Simulate opp mirroring our motion (if opp is at
+   (perp_gap, par_gap) from us and last turn was also there, opp will keep shadowing).
+   Then for each of our candidates, compute worst-case escape space assuming opp follows.
+2. **BAIL EARLY**: when opp longer AND perp_gap<=2 AND stable shadow (last N turns), STRONGLY
+   prefer moves that INCREASE perp_gap (turn perpendicular to the wall — away from opp).
+   The current wall-shadow penalty only penalizes moving ALONG the wall; doesn't reward
+   moving AWAY perpendicular. Add a REWARD like +25 for moves that push perp_gap higher.
+3. **DISABLE VORONOI DOMINANCE in wall-shadow**: when opp longer AND we're on a wall AND
+   perp_gap<=2, cap voronoi score's contribution. Currently vor*2.0 = 40+ dominates
+   penalties of ~15.
+
+Specifically for sim_47 T38 (me at (0,7), opp at (2,7)):
+  - Ideal move: RIGHT (1,7) — h2h risk yes, but breaks shadow. But this is a length-6 snake
+    vs length-8, so h2h loses. So really we needed to bail out MUCH earlier (T30-T35).
+  - The problem is architectural — heuristic bots can't easily see 5+ moves ahead.
+
+### Backups
+- `main.py.bak_r1_xtagon_start` = current (identical to submitted).
+- All older backups preserved.
