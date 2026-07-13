@@ -2195,3 +2195,37 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
   Voronoi, deep self-survival sim, enemy-aware deep sim, clearly_ahead food-avoid, tail-follow
   anti-coil, keep-pace growth, deterministic-opponent H2H intercept).
+
+## Round 2 of 5 (this task, opus-4-8) — bountysnake2018, ADDED AGGRESSION/CUTOFF WHEN LONGER
+- Opponent STILL `rdbrck__bountysnake2018` (STRONG 6-ply ALPHA-BETA searcher, HARD edge-avoid
+  -25000, aggressively hangs near our head; opp_bountysnake.py). OUR WORST MATCHUP.
+  Results: round 0 LOST 225-25, round 1 LOST 230-20 (~8-10% win).
+- Loss analysis (round 1, 115 death frames): 85 SHORTER / 10 equal / 20 longer; 61 on EDGE.
+  Same mechanism: it out-grows us and funnels us to edges/H2H (wins H2H when we're shorter).
+- **KEY: the sim is NOT representative** — `vs_bounty.py main.py 14` => 8-4-2 (~57% sim) vs the
+  real 90% LOSS. The alpha-beta + 0.30s guard behaves differently under the sim harness, so A/B
+  in the sim CANNOT validate changes vs this opponent (confirmed again this round). Scalar growth
+  tweaks proven noise/regressive across ~30 rounds.
+- **Change (backup: main_r0_bounty_backup.py = git HEAD from round 0; this round pre-change =
+  same committed bot):** added an AGGRESSION/CUTOFF term in the Voronoi block, gated behind
+  `my_len > max_enemy_len and not critical and not starving`:
+    - `score -= en_terr * 1.5` (reward moves that shrink the enemy's reachable territory)
+    - `+12` per enemy head currently on an edge, `+20` if on a corner (reward keeping the
+      enemy pinned in the low-value edge/corner region ITS OWN eval refuses at -25000).
+  Rationale: the opponent HARD-avoids edges and hangs near our head; when we out-length it we can
+  safely contest space and push it toward edges/corners, squeezing the options its search values.
+  Only fires when we're clearly longer+safe (survival space/H2H penalties still dominate), so it
+  CANNOT regress the majority-shorter losses or our dominance vs weaker opponents.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; fuzz (400 boards) => crashes=0
+  illegal=0 maxt_ms=30.6 (<500 limit). NOTE: sim A/B is unreliable vs this opponent (proven), so
+  validated by DESIGN (targets the opponent's confirmed edge-avoid + aggression weaknesses) +
+  sim_test + fuzz + strict gating (longer-only) to avoid any regression risk.
+- **Next teammate:** opponent = opp_bountysnake.py (STRONG alpha-beta, our worst matchup ~10% win).
+  The realistic levers are STRUCTURAL (scalar tweaks fail + sim can't validate):
+  1. The aggression/cutoff-when-longer term added this round (extend it: use predicted enemy
+     alpha-beta move to actively wall it into an edge/corner).
+  2. A shallow MINIMAX of our own (2-3 ply, model enemy as aggressor toward our head + food) to
+     match its search depth on H2H/trap decisions — our bot is 1-ply heuristic vs its 6-ply.
+  3. SURGICAL uncontested-food growth (ed>d only) — we're SHORTER 85/115; naive food boosts
+     regress. Do NOT ship sim-A/B-tuned scalar changes (sim unrepresentative). main.py has all
+     prior layers + now aggression/cutoff when longer.

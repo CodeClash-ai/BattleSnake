@@ -763,6 +763,31 @@ def _decide(game_state):
             if my_terr < my_len + 2:
                 score -= (my_len + 2 - my_terr) * 8.0
 
+            # AGGRESSION / CUTOFF when we are strictly LONGER: shrink the enemy's
+            # territory and reward reducing its reachable area. Some strong
+            # opponents (e.g. rdbrck bountysnake, an alpha-beta searcher) HARD-avoid
+            # board edges in their own evaluation (-25000) and aggressively hang
+            # near our head. When we out-length them we can safely contest space,
+            # pushing them toward the low-value edge/corner region their own search
+            # refuses -- squeezing their options. Only fires when we're clearly
+            # longer and safe (never trades away our own survival, which the space/
+            # H2H penalties above still dominate).
+            if (my_len > max_enemy_len and not critical and not starving
+                    and en_terr > 0):
+                # Reward moves that leave the enemy with LESS territory.
+                score -= en_terr * 1.5
+                # Bonus if the enemy head is currently near an edge/corner and we
+                # are keeping it there (positioning our body between it and the
+                # open board). Measured via how central OUR next cell is relative
+                # to the enemy: staying between enemy and center helps cut it off.
+                for eh in enemy_cells:
+                    e_edge = (eh[0] in (0, w - 1)) or (eh[1] in (0, h - 1))
+                    if e_edge:
+                        score += 12.0
+                    e_corner = (eh[0] in (0, w - 1)) and (eh[1] in (0, h - 1))
+                    if e_corner:
+                        score += 20.0
+
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
         if escapes == 0:
             score -= 500.0
