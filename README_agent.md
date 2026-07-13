@@ -2064,3 +2064,48 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   race without contested-food/H2H traps. A/B ANY change multi-seed (/tmp/ab_t.py <new> <old> N off,
   offs 1/101/555; nohup+poll, games run LONG). Do NOT ship regressions (we win ~70%). main.py has
   all prior layers + now the near-equal H2H-funnel penalty.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `zakwht__zakwht-2018` (DETERMINISTIC BFS), NO CODE CHANGE (growth tweaks = noise/regressive)
+- **Opponent = `zakwht__zakwht-2018`** — a 2018 Java port (SmartSnake). Source saved to
+  `opp_zakwht.py` (git show origin/human/zakwht/zakwht-2018:main.py, 213 lines). Strategy:
+  BFS (first-step-of-shortest-path). Mode: health<=50 -> HUNGRY (goToFood->goToAttack->goToTail);
+  longer than all -> ATTACK (goToAttack->goToFood->goToTail); else HUNGRY. **DETERMINISTIC.**
+  H2H-aware: when NOT longer than an enemy it FENCES OFF the 4 cells around that enemy's head
+  (so it YIELDS to us when we're >= its length). When LONGER it ATTACKS (BFS toward cells
+  adjacent to our head). NO space/flood management — just BFS. Grows MODERATE (median final L12,
+  max L24). Test: `python3 vs_zakwht.py main.py <N>` (created; games run LONG, N<=24 in bg — use
+  `nohup python3 -u vs_zakwht.py main.py 24 > /tmp/vsz.txt 2>&1 &` + poll; N>~10 exceeds 30s timeout).
+- **Round 0 result: won 172-78** (~69%, /logs/rounds/0/results.json). Loss analysis
+  (/tmp/zak_loss.py, rebuild from note): **73/78 losses OPUS was SHORTER at death** (2 equal,
+  3 longer); 37/78 on edge. Same GROWTH-RACE vector as cornelius/elon/famished/beames/hungry/
+  tyrelh — the food-seeking opponent out-grows us and out-lasts / cuts us off (ATTACK mode) /
+  H2H-kills us as the bigger snake.
+- **Experiments A/B'd vs real opp on identical seeds (/tmp/ab_zak.py NEW vs OLD=committed,
+  alternates start; baseline sim ~46% (11-13/24), harsher than real 69%):**
+  1. v1 = `_pace_margin` mid-enemy `6 if >=12 else 1` -> `6 if >=10 else 3` (keep growing to a
+     bigger lead mid-game): NEW (9,11,0) == OLD (9,11,0) @off1 — EXACTLY NEUTRAL.
+  2. v2 = v1 pace-margin + `truly_behind` gate `max_enemy_len>=12` -> `>=8` (chase food HARD when
+     behind a mid-length enemy): NEW (9,11,0) vs OLD (10,10,0) @off101 — SLIGHTLY WORSE (regressed
+     1 game). More aggressive food chasing walks us into contested-food/H2H traps.
+  => Scalar growth/pace tweaks are NOISE-FLOOR or slightly regressive, EXACTLY as ~30 prior rounds
+  found across all deterministic food-seeking opponents. Not worth the regression risk on a bot
+  that WON the real match 172-78.
+- **Decision: NO code change.** Kept the proven ~69% bot stable. Verified: syntax OK;
+  `python3 sim_test.py 30` => 30/0/0; main.py byte-identical to committed.
+- **Next teammate — the ONLY promising UNEXPLORED lever is STRUCTURAL (zakwht is DETERMINISTIC +
+  H2H-aware, YIELDS to us when we're >= its length, has NO space mgmt):**
+  1. **The H2H-INTERCEPT exploit in main.py (predicted_enemy_cell) currently imports opp_hungry —
+     it does NOT apply to zakwht** because zakwht DODGES our head when it's shorter (H2H-aware,
+     fences off our head cells). It only walks toward our head in ATTACK mode when it's LONGER,
+     when it already wins the H2H — so intercept can't help. Don't waste time re-pointing it.
+  2. **CUT IT OFF / BODY-BLOCK when we're >= its length:** zakwht treats the 4 cells around OUR
+     head as WALLS (it won't enter them) and has NO space management. So when we're equal/longer
+     we can shrink its reachable territory (we have `_voronoi_owned`) or wall it into a dead-end
+     it can't foresee. This is the real structural exploit and is UNTRIED.
+  3. **SURGICAL uncontested-food growth:** the growth race is lost because naive food boosts
+     regress (proven). Try eating ONLY strictly-uncontested food (our_dist < enemy_dist) early to
+     build a lead without contested-food/H2H traps — leave safety-ranked ranking for contested food.
+  A/B ANY change multi-seed via `/tmp/ab_zak.py <new> <old> <N> <off>` (rebuild from this note;
+  loads new vs committed vs opp_zakwht, identical seeds, alternates start; offs 1/101/555; nohup+
+  poll, games run LONG). Do NOT ship anything that A/B-regresses vs committed (we win ~69%).
+  main.py has all prior layers. Tools: vs_zakwht.py, /tmp/ab_zak.py, /tmp/zak_loss.py, /tmp/oppgrow.py.
