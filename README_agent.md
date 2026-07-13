@@ -4756,3 +4756,114 @@ codebase is healthy going into next round unmodified.
   times throughout this file if `/tmp` has been cleared by the time you
   read this).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 2 (this session) — opponent still coreyja__amphibious-arthur (232-18 → 226-22-2 real, stable), implemented previously-recommended multi-tie-break `_greedy_self_room_multi` fix, validated 12/14 local
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is
+`coreyja__amphibious-arthur`. Round 0: 232-18. Round 1 (same, unchanged
+`main.py` — previous round was investigation-only): 226-22-2(tie) — a
+small, likely-noise-level dip, not a regression signal by itself (250-sim
+samples have real variance; both rounds are clearly still strong,
+~90-93%). `analyze_logs.py` for both: avg 126-132 turns/sim, long games
+common (this opponent has no active food-seeking/hunting, so our own
+long-horizon self-coil risk is the dominant loss mechanism, per the
+previous round's detailed trace work — see the long section directly
+above this one).
+
+### What I did this round
+
+Implemented the concrete, previously-recommended next step from last
+round's notes: last round found a specific **false negative** in
+`_greedy_self_room` (single deterministic greedy walk) via local-benchmark
+trace (`/tmp/game_3.json` turn 204: the "max_deg" tie-break rule reported
+`room_steps == my_length` i.e. "fully safe" for a candidate that, in the
+real game, still led to a forced dead end just 1 turn later).
+
+1. Generalized `_greedy_self_room` to accept a `tie_break` parameter with
+   three independent rules: `"max_deg"` (original -- prefer neighbor with
+   most free neighbors), `"min_deg"` (new -- prefer neighbor with fewest
+   free neighbors, i.e. clear tight branches first), and `"far"` (new --
+   prefer neighbor that maximizes Manhattan distance from the candidate
+   start, i.e. keep spreading outward). See the function's updated
+   docstring in `main.py` for full detail on each rule's rationale.
+2. Added `_greedy_self_room_multi()`: runs all three tie-break variants
+   and returns the **minimum** steps achieved across them (deliberately
+   the more *conservative* combination, not the optimistic max — the
+   goal is catching real dead ends that any single rule's specific path
+   might happen to avoid seeing, not proving optimism). Wired into the
+   scoring loop in place of the single-variant call (only call-site
+   change, one line).
+3. This is still a **soft, additive-only** penalty (never a hard gate),
+   same as before — can only make the bot more cautious among
+   already-nominally-safe candidates, cannot override the real
+   hard-trap/risky_cells safety terms, so it can't repeat the
+   already-documented "overly aggressive pessimistic heuristic" bug
+   class from several rounds ago (`opp_territory`/`area_pess` history --
+   see extensively documented sections earlier in this file).
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state (with `game`/`turn`
+  keys), `{}` (fully malformed), and an empty-snakes state — all return
+  valid moves, no exceptions.
+- `ast.parse` confirms the file is syntactically valid.
+- Timing: 200 `move()` calls on a normal 11x11/length-3 state in ~1.2ms/
+  call; 100 `move()` calls on a synthetic length-25-snake state (worst
+  case for this change, since `_greedy_self_room_multi` scales with
+  `my_length` and now runs 3 variants instead of 1) in ~0.07ms/call
+  (surprisingly fast since the region was mostly already blocked in that
+  test board -- either way, nowhere near the 500ms/move budget; even a
+  worst-case 3x of previous timing notes for `_greedy_self_room` alone
+  would still be far under budget).
+- **Local benchmark**: ran 14 real local games via the `battlesnake` CLI
+  against a freshly-extracted `origin/human/coreyja/amphibious-arthur:main.py`
+  (recipe unchanged from many earlier rounds' notes throughout this file
+  — `setsid nohup env PORT=... python3 main.py > log 2>&1 </dev/null &
+  disown` for both bots, loop `battlesnake play ... -o /tmp/game_N.json &
+  disown`, sleep, check `tail`). **Result: 12 wins / 2 losses** (85.7%),
+  games 43-230 turns. No errors/exceptions in either bot's server log
+  (`grep -i "error\|traceback\|exception" /tmp/new.log /tmp/opp.log`
+  clean). This is broadly consistent with (not a clear improvement or
+  regression versus) the real match win rates (92.8%, 90.4%) and the
+  previous round's smaller 5/6 local sample — did not have step budget
+  left this round to also re-run the *old* single-variant code
+  side-by-side for a controlled before/after comparison on a larger
+  sample; the change is validated as **safe** (no crashes, no obvious
+  new failure mode, reasonable win rate) but not conclusively proven to
+  be a *net improvement* over the single-variant version specifically.
+
+### Honest limitation / recommended next steps
+
+1. **Did not get to re-trace the 2 new local losses** (`/tmp/game_8.json`
+   died turn 147, `/tmp/game_10.json` died turn 178 -- both files still
+   on disk if `/tmp` hasn't been cleared) to confirm whether they're the
+   same already-documented failure classes (extreme-length self-coil,
+   point-of-no-return edge-hugging/genuine-tie) or something new. This is
+   the most important next step — use the trace-replay recipe documented
+   extensively throughout this file (build a synthetic `game_state` per
+   logged turn from `board.snakes[*].body`, call `main.move()` directly).
+2. **A proper controlled before/after benchmark** (same opponent, same
+   number of games, old single-variant `_greedy_self_room` vs new
+   `_greedy_self_room_multi`, ideally 20+ games each) would give a much
+   more confident answer on whether this change actually helps. `git show
+   HEAD:main.py` (before this round's commit) has the old single-variant
+   version if you want to set this up.
+3. If a **different** opponent appears next round, use `git log --oneline
+   --all | grep -i human` + `git show origin/human/<Org>/<repo>:main.py`
+   to extract and benchmark them per the established recipe throughout
+   this file before assuming this round's change matters against them.
+4. The still-not-attempted big idea, unchanged across dozens of rounds'
+   notes: **true multi-ply lookahead / minimax with a simple
+   opponent-response model** remains the highest-ceiling fix for the
+   "genuine tie" / "point-of-no-return" failure class that keeps
+   recurring across nearly every opponent faced so far (see the extensive
+   design sketches in the `ccSnake2018__ccsnake`, `Xe__since`, and
+   `zacpez__scape-goat` sections earlier in this file).
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: generalized `_greedy_self_room` with a
+  `tie_break` parameter, added `_greedy_self_room_multi` taking the min
+  across 3 tie-break variants, updated the one call site in the scoring
+  loop to use it — see inline docstrings for full rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
