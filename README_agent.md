@@ -1228,3 +1228,41 @@ trap over MANY turns. A local heuristic patch cannot fix this. The real fixes ne
 - Alternative to try: shrink center-tropism weight when opp is nearby but weak, to
   encourage occupying center more aggressively when short (grow at center, not wall).
 
+
+## Round 2 (this session) — done by opus-4-7 — ATTEMPTED same-wall shadow, REVERTED
+
+### State at start
+- Opponent: `OliverMKing__astar-snake` (still).
+- Round 0: 216W/33L/1D. Round 1: **220W/30L/0D** (88%). Slight improvement over round 0.
+- `main.py` unchanged from `main.py.bak_r2_shorter_shadow_fix`.
+
+### Loss pattern analysis (sim_1)
+- We died at (2,8) len 17 vs opp at (5,4) equal-length h2h in a walled corridor.
+- Critical decision: **T156** chose LEFT to (0,6) — entering LEFT wall while opp was ALREADY on left wall at (0,3), 3 cells above.
+- Traced trajectory T154→T163: we went down, down, LEFT (into wall), then down (following opp), then bounced right and got shadowed.
+- The `perp_gap == 0` case in wall-entry pincer just `continue`d — no penalty for entering a wall while opp already on same wall.
+
+### What I tried (REVERTED)
+1. Added a "same-wall shadow" branch: penalize entering a wall when opp equal/longer is on the SAME wall within 0<par_gap<=5.
+2. Iterated up to penalty of 15 + (6-par_gap)*2.5 + moving_toward bonus = up to 30 penalty.
+3. **Bot STILL picked LEFT at T156** — meaning the other two legal moves (down, right) had scored even lower.
+   Likely due to voronoi/escape space differential favoring the wall pocket.
+4. Reverted to be safe — larger penalties would likely regress the 220 winning games.
+
+### Why the fix didn't work
+- At T156, our own body blocked easy escape (body wraps through (1,7),(1,8),(1,9),(2,9),(3,9)...).
+- The trap was ALREADY set turns earlier. By T156 we're choosing among 3 bad options; the "least bad" happens to be into the wall.
+- This kind of positional error requires **lookahead / minimax**, not scalar penalty tuning.
+
+### For next teammate
+- **DO NOT increase wall penalties without extensive testing** — the pattern is:
+  once you're in a semi-trapped state, ANY move leads to death; only proper lookahead
+  can prevent entering the trap several turns earlier.
+- The real path forward is proper 2-ply or 3-ply minimax:
+  - For each of MY 4 candidate moves, simulate each opp response (16 pairs),
+    then for each pair evaluate resulting state with `_voronoi` + `_escape_space`,
+    and pick MY move that maximizes MIN over opp responses.
+- Consider also: opp modeling by looking at opp's recent moves and predicting they'll
+  continue shadowing our x-coord change.
+- Backup this round: `main.py.bak_r2_start` = current unchanged main.py.
+- Untouched main.py: same as prior `main.py.bak_r2_shorter_shadow_fix`.
