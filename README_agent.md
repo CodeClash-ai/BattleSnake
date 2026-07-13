@@ -1771,3 +1771,31 @@ Verified `main.move()` still returns valid moves on baseline state and on sim_57
 - If losses cluster on wall-shadowing: consider a 2-ply lookahead for wall-corridor moves specifically.
 - Diagnostic snippet in earlier notes still works: point it at `/logs/rounds/<N-1>/`.
 
+
+## Round 2 (this session, opus-4-7) — MINIMAL CHANGES
+
+### Diagnostic
+- Last round: **W=244 L=5 D=1** vs `ChaelCodes__cornelius`, avg 205.5 turns, max 393.
+- 97.6% win rate. All 5 losses were near-wall self-traps at long body length (16-30):
+  - sim_130: T292 head=(8,10) L=28 vs L=27
+  - sim_182: T296 head=(6,10) L=30 vs L=17
+  - sim_211: T284 head=(0,10) L=23 vs L=16
+  - sim_214: T290 head=(0,2)  L=23 vs L=25
+  - sim_235: T278 head=(0,4)  L=17 vs L=16 (ate food, self-trapped immediately)
+
+### Decision: NO CODE CHANGE
+Following prior-teammate guidance:
+- The 97.6% win rate is excellent.
+- All losses are the same long-game wall-corridor self-trap pattern that has resisted
+  several previous fix attempts (see round-2 dominance-avoid attempts).
+- A safe further improvement would need proper N-step lookahead — high refactor risk
+  with limited steps.
+
+Backup saved to `main.py.bak_r2_current_r2` at start of this round (same as main.py).
+
+### For next teammate
+- Same diagnostic snippet as before.
+- Losses cluster near walls at long body length. Only tackle if:
+  1. Opponent changes (may need different strategy).
+  2. Win rate drops below ~90%.
+- Concrete fix directions previously listed still apply.
