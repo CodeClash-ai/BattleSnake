@@ -594,3 +594,40 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested
   space, H2H follow-up, length-scaled edge/corner + edge-shadow penalties, safety-aware food,
   and now CRITICAL starvation mode. Keep sim_test 60 + fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — jump-flooding, ADDED VORONOI TERRITORY CONTROL
+- Opponent STILL `coreyja__jump-flooding` (SMART, Voronoi/territory-control bot). Results:
+  round 0 won 249-1, round 1 won 246-3+1T (~1.5% loss).
+- **Loss analysis (round 1, tools /tmp/trace.py + /tmp/trace2.py; rebuild from README):**
+  - sim_244 = STARVATION while PINNED: our L4 snake oscillated in the top-left 2x3 corner
+    strip (bouncing (0,8)<->(0,10)<->(1,x)) from turn ~40 to death at turn 102, hp 62->0.
+    The enemy L6 patrolled the x=2-3 column and CONFINED us; food east was blocked. Root
+    cause = the opponent's Voronoi strategy boxed us into a tiny fraction of the board.
+  - sim_238 = CORNER SEAL while shorter (L5 vs L7): we ran UP col x=0 into top-left corner
+    (0,10); enemy shadowed x=2 up to the top row and sealed us. Died turn 44.
+  - sim_75 = bottom-right corner self-trap while EVEN (L7 vs L7).
+  - Common thread: the opponent CONTROLS TERRITORY and confines us into a corner where we
+    then starve or self-trap. Our old scoring lacked any territory-vs-enemy signal.
+- **Change (backup: main_r2of5_committed_backup.py = git HEAD pre-change bot):**
+  Added `_voronoi_owned(my_head, enemy_heads, blocked, w, h)` — multi-source BFS computing
+  how many free cells WE reach strictly before any enemy head vs how many the enemy owns.
+  In `_decide` scoring:
+    - `+2.5 * my_terr` (reward contesting/expanding our territory),
+    - `+2.0 * (my_terr - en_terr)` when negative (penalty for being out-territoried),
+    - `-8 * (my_len+2 - my_terr)` when our territory is tiny (the pin-in-corner death signal).
+  This pulls us toward the open board and away from being confined into a corner strip early,
+  attacking the ROOT cause of the starvation/corner-seal losses (not just the emergency mode).
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=4.76 (<500 limit); long-snake avg decision 0.82ms. A/B new vs prev committed bot
+  (80 games, /tmp/ab.py; rebuild: loads main.py vs main_r1of5_jumpflood_backup.py, alternates
+  start) = **36-28-16 (new clearly ahead, NO regression).** vs real opp sim = 150-0 (the sim's
+  random food doesn't reproduce the exact pin/starve frames, so validated by A/B + design).
+- **Next teammate:** opponent is a TERRITORY-CONTROL bot; we win ~98-99%. Remaining loss vector
+  = being CONFINED/pinned into a corner then starving or self-trapping. main.py now has:
+  time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested space, H2H
+  follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation
+  mode, AND Voronoi territory control. If losses persist: (a) increase Voronoi weights (2.5/2.0),
+  (b) tie food selection to territory (prefer food in OUR Voronoi region), (c) deeper N-ply
+  minimax on territory. Test: `python3 vs_jumpflood.py main.py 150` + `sim_test.py 60` + fuzz.
+  Analyze new losses: `for f in /logs/rounds/N/sim_*.jsonl; do tail -1 $f|grep -qi opus||echo $f; done`
+  then `python3 /tmp/trace2.py sim_X.jsonl START END` (rebuild trace2.py from this README).

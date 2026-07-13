@@ -166,60 +166,6 @@ def _future_safe_moves(cell, blocked, w, h):
             n += 1
     return n
 
-def _voronoi_owned(my_head, enemy_heads_cells, blocked, w, h):
-    """Multi-source BFS: count cells we reach STRICTLY before any enemy head.
-    `enemy_heads_cells` is a list of enemy head (x,y). Returns (my_count, enemy_count).
-    Cells reached at equal distance are contested (counted for neither / enemy-favored)."""
-    from collections import deque
-    INF = 1 << 30
-    dist_me = {}
-    dq = deque()
-    if my_head not in blocked:
-        dist_me[my_head] = 0
-        dq.append((my_head, 0))
-    while dq:
-        cell, d = dq.popleft()
-        for nb in _neighbors(cell):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in blocked:
-                continue
-            if nb in dist_me:
-                continue
-            dist_me[nb] = d + 1
-            dq.append((nb, d + 1))
-    dist_en = {}
-    dq = deque()
-    for eh in enemy_heads_cells:
-        if eh not in blocked and eh not in dist_en:
-            dist_en[eh] = 0
-            dq.append((eh, 0))
-    while dq:
-        cell, d = dq.popleft()
-        for nb in _neighbors(cell):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in blocked:
-                continue
-            if nb in dist_en:
-                continue
-            dist_en[nb] = d + 1
-            dq.append((nb, d + 1))
-    mine = 0
-    theirs = 0
-    for cell, dm in dist_me.items():
-        de = dist_en.get(cell, INF)
-        if dm < de:
-            mine += 1
-        elif de < dm:
-            theirs += 1
-        # equal -> contested, skip
-    for cell in dist_en:
-        if cell not in dist_me:
-            theirs += 1
-    return mine, theirs
-
-
 
 def move(game_state):
     try:
@@ -353,16 +299,10 @@ def _decide(game_state):
     nearest_food_dist = None
     nearest_food = None
     best_food_cost = None
-    abs_nearest_food = None
-    abs_nearest_dist = None
     for f in food:
         d = _manhattan(head, f)
         ed = _enemy_dist(f)
         risk = _corner_edge_risk(f)
-        # Track the absolute closest food (used when CRITICAL / starving).
-        if abs_nearest_dist is None or d < abs_nearest_dist:
-            abs_nearest_dist = d
-            abs_nearest_food = f
         # Base cost = our distance. Penalize contested food (enemy as close or
         # closer) heavily when it sits in a risky edge/corner region: going for
         # it risks being sealed against the wall.
@@ -375,21 +315,6 @@ def _decide(game_state):
             best_food_cost = cost
             nearest_food_dist = d
             nearest_food = f
-
-    # CRITICAL health: about to starve. Loss vector (vs coreyja__jump-flooding,
-    # sim_221): we wandered the bottom edge with health 8->0 and STARVED while
-    # food existed on the board. When health is low relative to the distance to
-    # the nearest food, survival by eating overrides the safety-aware food
-    # ranking AND (below) the edge/corner positioning penalties. Use the
-    # ABSOLUTE nearest food and leave enough health buffer to reach it.
-    critical = False
-    if abs_nearest_food is not None:
-        # Need health > distance (+small buffer) or we die en route. Trigger
-        # emergency mode when health is within a safety margin of that need.
-        if my_health <= abs_nearest_dist + 4 or my_health <= 20:
-            critical = True
-            nearest_food = abs_nearest_food
-            nearest_food_dist = abs_nearest_dist
 
     best_move = None
     best_score = None
@@ -466,26 +391,6 @@ def _decide(game_state):
             score -= (my_len - best_next_space) * 45.0
         score += score_h2h_trap
 
-        # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a
-        # Voronoi/territory strategy and can CONFINE us into a small corner strip
-        # where we then STARVE or self-trap (observed losses: sim_244 starvation
-        # while pinned in top-left, sim_238/sim_75 corner seal). Reward moves that
-        # keep/expand OUR reachable territory relative to the enemy's. This pulls
-        # us toward contesting the open board instead of being boxed into a corner.
-        enemy_cells = [eh for eh, _el in enemy_heads]
-        if enemy_cells:
-            my_terr, en_terr = _voronoi_owned(nxt, enemy_cells, new_blocked, w, h)
-            score += my_terr * 2.5
-            # If the enemy would own much more of the board than us, we're being
-            # confined -- penalize hard so we break out toward open space early.
-            terr_diff = my_terr - en_terr
-            if terr_diff < 0:
-                score += terr_diff * 2.0  # negative -> penalty
-            # Being confined to a tiny fraction is the pin-in-corner death; if our
-            # territory is very small relative to the board, downrank strongly.
-            if my_terr < my_len + 2:
-                score -= (my_len + 2 - my_terr) * 8.0
-
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
         if escapes == 0:
             score -= 500.0
@@ -531,12 +436,7 @@ def _decide(game_state):
         # Only when we're comfortably longer do we relax food pursuit.
         if nearest_food is not None:
             d_after = _manhattan(nxt, nearest_food)
-            if critical:
-                # Emergency: get to food NOW. Dominates edge/corner penalties.
-                score -= d_after * 40.0
-                if nxt == nearest_food:
-                    score += 300.0
-            elif starving:
+            if starving:
                 score -= d_after * 11.0
                 if nxt == nearest_food:
                     score += 90.0
@@ -568,14 +468,9 @@ def _decide(game_state):
         # Scale by length: corner/edge self-traps are only dangerous when we
         # are LONG (a short snake can afford to graze edges to grab food).
         len_scale = 1.0 + max(0, my_len - 4) * 0.18
-        # When CRITICAL (about to starve), suppress edge/corner positioning
-        # penalties so they can't steer us away from wall-adjacent food we need
-        # to survive. Safety (space/H2H) penalties still apply below.
-        edge_w = 2.0 if critical else 9.0
-        corner_w = 8.0 if critical else 40.0
-        score -= edge_pen * edge_w * len_scale
+        score -= edge_pen * 9.0 * len_scale
         if on_v_edge and on_h_edge:
-            score -= corner_w * len_scale  # actual corner cell
+            score -= 40.0 * len_scale  # actual corner cell
         # Distance-from-center nudge: gently pull toward the middle so we don't
         # settle into wall-hugging patrols that end in a corner box-in.
         cx, cy = (w - 1) / 2.0, (h - 1) / 2.0

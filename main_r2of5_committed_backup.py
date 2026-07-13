@@ -166,60 +166,6 @@ def _future_safe_moves(cell, blocked, w, h):
             n += 1
     return n
 
-def _voronoi_owned(my_head, enemy_heads_cells, blocked, w, h):
-    """Multi-source BFS: count cells we reach STRICTLY before any enemy head.
-    `enemy_heads_cells` is a list of enemy head (x,y). Returns (my_count, enemy_count).
-    Cells reached at equal distance are contested (counted for neither / enemy-favored)."""
-    from collections import deque
-    INF = 1 << 30
-    dist_me = {}
-    dq = deque()
-    if my_head not in blocked:
-        dist_me[my_head] = 0
-        dq.append((my_head, 0))
-    while dq:
-        cell, d = dq.popleft()
-        for nb in _neighbors(cell):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in blocked:
-                continue
-            if nb in dist_me:
-                continue
-            dist_me[nb] = d + 1
-            dq.append((nb, d + 1))
-    dist_en = {}
-    dq = deque()
-    for eh in enemy_heads_cells:
-        if eh not in blocked and eh not in dist_en:
-            dist_en[eh] = 0
-            dq.append((eh, 0))
-    while dq:
-        cell, d = dq.popleft()
-        for nb in _neighbors(cell):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in blocked:
-                continue
-            if nb in dist_en:
-                continue
-            dist_en[nb] = d + 1
-            dq.append((nb, d + 1))
-    mine = 0
-    theirs = 0
-    for cell, dm in dist_me.items():
-        de = dist_en.get(cell, INF)
-        if dm < de:
-            mine += 1
-        elif de < dm:
-            theirs += 1
-        # equal -> contested, skip
-    for cell in dist_en:
-        if cell not in dist_me:
-            theirs += 1
-    return mine, theirs
-
-
 
 def move(game_state):
     try:
@@ -465,26 +411,6 @@ def _decide(game_state):
         if best_next_space < my_len:
             score -= (my_len - best_next_space) * 45.0
         score += score_h2h_trap
-
-        # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a
-        # Voronoi/territory strategy and can CONFINE us into a small corner strip
-        # where we then STARVE or self-trap (observed losses: sim_244 starvation
-        # while pinned in top-left, sim_238/sim_75 corner seal). Reward moves that
-        # keep/expand OUR reachable territory relative to the enemy's. This pulls
-        # us toward contesting the open board instead of being boxed into a corner.
-        enemy_cells = [eh for eh, _el in enemy_heads]
-        if enemy_cells:
-            my_terr, en_terr = _voronoi_owned(nxt, enemy_cells, new_blocked, w, h)
-            score += my_terr * 2.5
-            # If the enemy would own much more of the board than us, we're being
-            # confined -- penalize hard so we break out toward open space early.
-            terr_diff = my_terr - en_terr
-            if terr_diff < 0:
-                score += terr_diff * 2.0  # negative -> penalty
-            # Being confined to a tiny fraction is the pin-in-corner death; if our
-            # territory is very small relative to the board, downrank strongly.
-            if my_terr < my_len + 2:
-                score -= (my_len + 2 - my_terr) * 8.0
 
         # Avoid moving into a cell with no follow-up (guaranteed death next turn).
         if escapes == 0:
