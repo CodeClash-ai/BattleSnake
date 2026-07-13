@@ -2166,6 +2166,10 @@ def move(game_state):
                     # Tyrelh edge food often resets our health but commits us to
                     # the same outer-row zipper traps seen in production losses.
                     score -= 4200
+                if has_tr8r_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len + 1:
+                    # TR-8R losses are usually healthy edge/perimeter traps after
+                    # it is longer; avoid optional outer-wall food in that regime.
+                    score -= 3600
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
@@ -2189,7 +2193,7 @@ def move(game_state):
                     if my_len >= elen + 3 and area >= my_len + 8:
                         score += 1200
                     elif my_len > elen:
-                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy) else 50
+                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy or has_tr8r_enemy) else 50
                     else:
                         score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
