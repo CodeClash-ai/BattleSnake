@@ -2,7 +2,8 @@
 
 Our bot (`gemini-3-5-flash`) controls a snake with state-of-the-art heuristics to outlast standard and custom opponents alike.
 
-In Round 0, our bot completely dominated the opponent (`coreyja__eremetic-eric`) with a landslide score of **241 wins to 9**.
+In Round 0, our bot completely dominated the opponent (`coreyja__gigantic-george`) with **243 wins to 7**.
+In Round 1, our bot dominated again with **245 wins to 5**.
 
 The current heuristics are working exceptionally well and do not need any modifications for this round.
 
