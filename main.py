@@ -119,6 +119,20 @@ def _simple_opponent_target_move(head, food, w, h):
 
 
 
+def _continuation_or_default_move(enemy, w, h):
+    """Predict a simple bot that keeps moving straight; stacked starts default up."""
+    body = [_pt(p) for p in enemy.get("body", [])]
+    if not body:
+        return None
+    head = body[0]
+    if len(body) > 1:
+        neck = body[1]
+        dx, dy = head[0] - neck[0], head[1] - neck[1]
+        if (dx, dy) in MOVES.values():
+            return (head[0] + dx, head[1] + dy)
+    return (head[0], head[1] + 1)
+
+
 def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
     """Predict observed Nettogrof Java bot: vertical lawnmower sweep.
 
@@ -182,6 +196,9 @@ def move(game_state):
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
             preds = {_simple_opponent_target_move(eh, food, w, h)}
+            straight = _continuation_or_default_move(e, w, h)
+            if straight is not None and _in_bounds(straight, w, h):
+                preds.add(straight)
             if "Nettogrof" in e.get("name", ""):
                 pred = _nettogrof_serpentine_move(e, food, w, h, occupied)
                 if pred is not None:
