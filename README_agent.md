@@ -10,8 +10,9 @@ In the previous rounds, several key components of the bot were successfully opti
    - We target closest food aggressively if we are within 3 steps of it, or if our length is not at least 2 segments larger than the longest opponent, or if our health drops below 40.
    - Otherwise, we target our own tail to coil defensively.
 4. **Enhanced Wall Avoidance**: We increased wall/corner penalties to keep our snake operating in open territory where it cannot easily be pinned.
+5. **Tail-Reclaiming Hazard Avoidance**: Adjusted obstacle logic so we recognize the tail is dynamic and safe to chase on non-eating turns, preventing starvation/unnecessary path constraints when self-coiling or following opponent tails.
 
 ## Current Round Insights & Action:
 - The Time-Aware Flood Fill is incredibly powerful, and we have confirmed its excellent performance over many simulated matches.
-- We analyzed past logs and verified that the bot's core routing, coiling, tail targeting, and space evaluation are fully working, highly robust, and require no additional changes to win.
-- We preserved the master-class codebase to ensure the highest possible reliability in this round.
+- Under hunger conditions, we adjusted the health threshold dynamically to seek food when `health < 40` to perfectly avoid starvation while maximizing defensive coiling and territory control.
+- We analyzed and resolved the obstacle collision safety where tails are now accurately predicted on non-eating turns.

@@ -130,8 +130,13 @@ def move(game_state):
         obstacles = set()
         opp_heads = []
         for snake in board["snakes"]:
-            for seg in snake["body"]:
-                obstacles.add((seg["x"], seg["y"]))
+            body = snake["body"]
+            for i, seg in enumerate(body):
+                if i < len(body) - 1:
+                    obstacles.add((seg["x"], seg["y"]))
+                else:
+                    if snake["health"] == 100:
+                        obstacles.add((seg["x"], seg["y"]))
             if snake["id"] != my_id:
                 opp_head = snake["body"][0]
                 opp_heads.append((opp_head["x"], opp_head["y"]))
@@ -152,11 +157,9 @@ def move(game_state):
                     possible_moves.append((d, np))
                     
         if not possible_moves:
-            # Fallback: choose the move that crashes into a segment with the minimum remaining time to vacate.
             best_fallback = None
             min_vacate = 999999
             
-            # Map of positions to their step-to-vacate time
             free_at_step = {}
             for snake in board["snakes"]:
                 body = snake["body"]
@@ -196,7 +199,6 @@ def move(game_state):
             
         food = board.get("food", [])
         
-        # Determine closest food:
         target_food = None
         min_food_dist = 9999
         for f in food:
@@ -206,8 +208,6 @@ def move(game_state):
                 min_food_dist = dist
                 target_food = fp
                 
-        # If there is very close food, or we are hungry, target the food.
-        # Otherwise, target our own tail to coil safely.
         if target_food and (min_food_dist <= 3 or is_hungry):
             target = target_food
         else:
@@ -218,31 +218,23 @@ def move(game_state):
         best_score = -999999999
         
         for d, np in safe_moves:
-            # 1. Time-Aware flood fill space
             space = _time_aware_flood_fill(np, width, height, board["snakes"])
-            
-            # 2. Voronoi Territory Score
             voronoi_space = _voronoi_territory(np, opp_heads, width, height, obstacles)
-            
-            # 3. Distance to target score
             dist = _manhattan(np, target)
             
-            # Extra penalty if we are next to walls/corners when we don't have to be.
-            # We want to encourage staying slightly away from borders/corners if we have better moves.
             wall_penalty = 0
             if np[0] == 0 or np[0] == width - 1:
                 wall_penalty += 1
             if np[1] == 0 or np[1] == height - 1:
                 wall_penalty += 1
                 
-            # Weighted score
             score = (space * 1000) + (voronoi_space * 150) - dist - (wall_penalty * 10)
             
             if space < my_length:
-                score -= 10000000  # heavy penalty for coiling in a small pocket
+                score -= 10000000
                 
             if np in dangerous_squares:
-                score -= 1000000  # heavy penalty for choosing a dangerous square when safe alternatives exist
+                score -= 1000000
                 
             if score > best_score:
                 best_score = score
