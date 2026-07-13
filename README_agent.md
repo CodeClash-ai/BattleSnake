@@ -4148,3 +4148,135 @@ yet attempted, see the many `ccSnake2018__ccsnake`/`Xe__since`/
   has the exact pre-this-round `main.py` if a revert/diff is needed —
   recreate via `git show HEAD:main.py` before this round's commit if
   that file is gone by the time you read this.
+
+## Round (this session) — opponent = Spenca__vulture-snake, traced losses (mix of forced H2H + self-coil, both well-known classes), confirmed strong local benchmark, NO code change
+
+`/logs/rounds/0/results.json`: opponent this round is **`Spenca__vulture-snake`**
+(a real 2017 port -- greedy-toward-closest-food, then "circle/orbit" the food
+defensively once adjacent; has full collision avoidance + desperation
+fallback; stateful+random via Python module globals in the *original* port,
+though our extracted copy at `/tmp/opp_main.py` is only used for local
+benchmarking, not committed). Real result: **sonnet-5 242 / opponent 6 /
+ties 2** out of 250 (96.8%). `analyze_logs.py /logs/rounds/0`: avg 89.3
+turns/sim (min 12, max 251).
+
+Note: this exact opponent (`Spenca__vulture-snake`, "Rung 18/50") has also
+been faced by a **parallel/unrelated ladder session** (model `opus-4-8`,
+completely different `main.py` implementation -- see `git log --oneline
+--all | grep -i Spenca` for those commits, e.g. `git show
+e251fb6:README_agent.md`). Their notes (search "vulture" in that file) are
+a good read: they found their losses were **almost entirely their own
+self-coils when long+healthy** (opponent itself stays short, patrols/orbits
+food, rarely poses direct pressure) and added a "worst-case 2-ply
+anti-coil" signal + an 8-ply pure-self-survival greedy simulation to
+target it, with mixed/partial success (their own notes say the deepest
+enemy-assisted seals still weren't fully fixed). Their code is a different
+implementation, not directly portable, but confirms this opponent's
+general character: weak/patrols, but our own long-horizon self-coiling is
+the dominant loss vector against it, not opponent skill -- consistent with
+what I found below.
+
+### Traced our own real losses this round (6 losses total: sim_5, sim_11,
+### sim_22, sim_121, sim_131, sim_142)
+
+Checked all 6 via each sim's body state near the death turn (recipe:
+same as many rounds' notes throughout this file -- for each sim, find the
+turn where `sonnet-5` disappears from `board.snakes`, look at the
+previous turn's head positions/lengths for both snakes):
+
+- **`sim_11` (died turn 189, length 13)** -- fully traced via literal
+  board-state replay: our snake spent ~25 turns (T164-188) in a large,
+  slow loop around the top-left/top region (no food eaten, health
+  91->68, length constant at 13) and ended up back near its starting
+  area of that loop, at which point it only had 3 legal candidates left:
+  two real dead-end pockets (area 6 each, well below our own length of
+  13 -- genuinely too small to fit our body) and one "open" direction
+  (area 90) that was in `risky_cells` because the opponent (length 14,
+  one cell away) could also move there. **Confirmed via direct
+  `main.move()` replay that the current code correctly computes all of
+  this and is forced to choose the least-bad of three bad options** --
+  this is the same "genuinely forced choice, not a scoring bug" class
+  documented in this file's `tim-hub__awesome-snake` section (see
+  above) and several others. The real fixable moment (if any) was
+  several turns earlier, when the snake first committed to that
+  large aimless loop -- not something a 1-ply/few-term heuristic can
+  see coming since every step of the loop looked individually safe and
+  reasonably food/space-scored at the time.
+- **`sim_121`, `sim_142`, `sim_22`, `sim_5`** -- all show the opponent
+  *far* from our snake at time of death (Manhattan distance 4-8+ cells)
+  while our own head ends up in/near a corner or fully enclosed pocket
+  -- the well-established "pure self-coil, opponent uninvolved" class
+  (same signature as several previous rounds' traces against other weak
+  opponents, e.g. the `coreyja__bombastic-bob` section above). `sim_5`
+  in particular: our snake reached **length 23 on the 11x11 (121-cell)
+  board** before dying -- the same "ran out of board at extreme length"
+  class flagged multiple times earlier in this file (see the
+  `rdbrck__btas` section's `sim_90`, length 35, for a more extreme
+  version of the identical pattern).
+- **`sim_131`** -- opponent moderately close (length 16 vs our 18) at
+  time of death; didn't fully trace given step budget, but shape is
+  consistent with the "opponent-assisted" pincer/corridor-race class
+  documented extensively elsewhere in this file (`Xe__since`,
+  `ccSnake2018__ccsnake` sections) rather than a locatable same-turn
+  scoring bug.
+
+### Why no code change was made this round
+
+Every loss traced maps cleanly onto one of the (many-rounds-documented,
+already extensively investigated) failure classes this file has
+established require **real multi-ply lookahead** to fix, not another
+local heuristic weight tweak -- and this file's history includes several
+concrete examples of speculative attempts at partial fixes for exactly
+this class (opponent-heading projection, `opp_territory`/`area_pess`
+pessimistic-BFS variants) that were later found to be ineffective or
+actively harmful and reverted. Given:
+- the real win rate is already strong (242/6/2, 96.8%),
+- a fresh 4-game local benchmark against a freshly-extracted
+  `origin/human/Spenca/vulture-snake:main.py` (same recipe as dozens of
+  earlier rounds -- `setsid nohup env PORT=... python3 main.py & disown`
+  for both bots, `battlesnake play ...` backgrounded+disowned, sleep,
+  check `tail`) came back **4/4 clean wins** (16-93 turns) with the
+  *current, unmodified* `main.py` -- no regression, no new bug found,
+- the traced losses are either genuinely-forced (sim_11) or classic
+  long-horizon self-coils (sim_121/142/22/5) that this file's very
+  extensive prior history (30+ rounds of notes) shows are NOT reliably
+  fixable via more local-weight tuning, only via real lookahead (never
+  yet attempted, still the single highest-ceiling idea on this file's
+  many-rounds-recurring backlog),
+- only ~5 steps of budget remained after this investigation,
+
+I judged it safer to leave a clear diagnostic record (this section) than
+to ship an untested speculative tweak. `main.py` is **unchanged** this
+round.
+
+### Recommendation for next round
+
+1. If `/logs/rounds/1/results.json` (once it exists) shows the same
+   opponent and a similar (or better) win rate, no action needed --
+   this is consistent with a bot near its practical 1-ply-plus-heuristics
+   ceiling against a real, if not-very-threatening, opponent.
+2. If a **different** opponent appears, use `git log --oneline --all |
+   grep -i human` + `git show origin/human/<Org>/<repo>:main.py` to
+   extract and benchmark them per the established recipe throughout
+   this file before assuming this round's analysis applies.
+3. The still-not-attempted big idea, reconfirmed relevant yet again this
+   round (`sim_11`'s forced 3-way choice, and the repeated extreme-length
+   self-coils in sim_5/121/142/22): **true multi-ply lookahead / minimax
+   with a simple opponent-response model**, OR, more specifically for
+   the "aimless long loop with no food eaten" pattern seen in `sim_11`,
+   a lighter-weight idea worth trying first: **periodically bias toward
+   the nearest food more strongly even at high health** if the snake has
+   gone > some threshold of turns without eating and isn't in any
+   immediate danger (a simple turn-counter check, no new BFS needed,
+   very cheap) -- this would reduce how often the snake ends up drifting
+   into an aimless multi-turn loop that can coincidentally collide with
+   a patrolling opponent's path several turns later. Not implemented
+   this round due to step budget, but low-risk/cheap to try and validate
+   first via the same trace-replay + local-benchmark recipe used
+   throughout this file.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round -- investigation only, see
+  above).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
