@@ -467,6 +467,33 @@ def _btas_predicted_move(enemy, game_state, w, h):
     return None
 
 
+
+def _nbw_ruby_predicted_move(enemy, game_state, w, h):
+    """Predict nbw-ruby by running the copied faithful port as that snake.
+
+    Production nbw-ruby losses are mostly long-game tactical head pressure from a
+    real weighted-paint/path-search bot.  Exact one-ply prediction is safer than
+    broad retuning: keep generic adjacent-head avoidance, but add a large penalty
+    for the square ruby itself is likely to take.
+    """
+    try:
+        from tools import nbw_ruby_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = nbw_ruby_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _vulture_predicted_move(enemy, game_state, w, h):
     """Predict Spenca Vulture Snake by running the copied 2017 port as enemy.
 
@@ -590,6 +617,10 @@ def move(game_state):
                     preds.add(pred)
             elif "amphibious-arthur" in ename.lower() or "amphibious" in ename.lower():
                 pred = _amphibious_arthur_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif "nbw-ruby" in ename.lower():
+                pred = _nbw_ruby_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             elif "rdbrck" in ename.lower() or "btas" in ename.lower():
