@@ -360,7 +360,7 @@ def _decide(game_state):
     # toward that cell to force a guaranteed head-to-head win (it won't yield).
     predicted_enemy_cell = None
     try:
-        import opp_zakwht as _oh
+        import opp_hungry as _oh
         if len(snakes) == 2:
             for sn in snakes:
                 if sn["id"] == you["id"]:
@@ -532,20 +532,6 @@ def _decide(game_state):
     if (not critical) and (truly_behind or behind_or_even) and abs_nearest_food is not None:
         nearest_food = abs_nearest_food
         nearest_food_dist = abs_nearest_dist
-        # WINNABLE-FOOD PREFERENCE (vs deterministic BFS opponent, zakwht): if the
-        # absolute-nearest food is one an enemy is STRICTLY closer to, we'd lose that
-        # race and waste moves. Prefer instead the closest food we can reach first
-        # (our_dist <= enemy_dist); leave the abs-nearest only if none is winnable.
-        if _enemy_dist(abs_nearest_food) < abs_nearest_dist and len(food) > 1:
-            best_win = None; best_win_d = None
-            for f in food:
-                d = _manhattan(head, f)
-                if d <= _enemy_dist(f):
-                    if best_win_d is None or d < best_win_d:
-                        best_win_d = d; best_win = f
-            if best_win is not None:
-                nearest_food = best_win
-                nearest_food_dist = best_win_d
 
     # Flag: the chosen food sits in a corner region AND is contested by an enemy that
     # is as close or closer, AND we are NOT longer. Chasing it risks running into a

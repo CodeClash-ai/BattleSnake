@@ -2109,3 +2109,33 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   loads new vs committed vs opp_zakwht, identical seeds, alternates start; offs 1/101/555; nohup+
   poll, games run LONG). Do NOT ship anything that A/B-regresses vs committed (we win ~69%).
   main.py has all prior layers. Tools: vs_zakwht.py, /tmp/ab_zak.py, /tmp/zak_loss.py, /tmp/oppgrow.py.
+
+## Round 2 of 5 (this task, opus-4-8) — zakwht, FIXED PREDICTION MODEL + WINNABLE-FOOD PREFERENCE
+- Opponent STILL `zakwht__zakwht-2018` (DETERMINISTIC BFS, H2H-aware yields to us when we're >=
+  its length, NO space mgmt; opp_zakwht.py). Results: round 0 won 172-78, round 1 won 165-85 (~66%).
+- Loss vector = being SHORTER (growth race): the deterministic BFS opponent beats us to single food.
+- **TWO changes (backup: main_r1of5_zakwht_r2_backup.py = git HEAD pre-change bot):**
+  1. **Fixed prediction model:** the H2H-intercept exploit imported `opp_hungry` (WRONG model for
+     zakwht). Re-pointed to `import opp_zakwht as _oh` (line 363) so `predicted_enemy_cell` is the
+     ACTUAL zakwht next cell. When we're strictly LONGER, zakwht enters ATTACK mode and walks toward
+     our head (no fencing) -> it CAN walk into an H2H it loses, so accurate prediction enables the
+     intercept (+260 exact / +40 adjacent). A/B neutral (we're usually shorter so it rarely fires),
+     but strictly MORE CORRECT and non-regressive across offs 1/101/555 (all identical to committed).
+  2. **WINNABLE-FOOD PREFERENCE** (line ~534): when behind_or_even/truly_behind and the abs-nearest
+     food is one the enemy is STRICTLY closer to (we'd LOSE that BFS race and waste moves), instead
+     target the closest food we can reach first (our_dist <= enemy_dist). Only falls back to
+     abs-nearest if NO food is winnable. Directly attacks the growth-race loss vs a deterministic
+     BFS opponent (don't cede moves chasing food we can't win; grab uncontested growth).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; fuzz (600 boards) => crashes=0
+  illegal=0 maxt_ms=30.9 (<500 limit). A/B vs real opp (ab_zak.py NEW=v2 vs OLD=committed, identical
+  seeds): off1 NEW 4-4 vs OLD 3-5 (+1 win); off101 NEW 6-2 == OLD 6-2 (neutral). Small net gain,
+  ZERO regressions. (The sim is HARSHER than real ~33% vs 66%, so absolute numbers are pessimistic;
+  the change is validated by DESIGN + A/B no-regression.)
+- **Next teammate:** opponent = opp_zakwht.py (DETERMINISTIC BFS, H2H-aware, NO space mgmt). Loss
+  vector = SHORTER (growth race). This round adds winnable-food preference + correct prediction.
+  Scalar food/pace boosts are NOISE/regressive (proven prior rounds). Remaining STRUCTURAL levers:
+  (a) CUT IT OFF when >= its length (it fences the cross around our head + has no space mgmt -> we
+  can body-block/shrink its Voronoi), (b) deeper multi-ply simulation exploiting determinism. A/B
+  via `python3 ab_zak.py <new> <old> <N> <off>` (offs 1/101/555; N<=8 for 30s cmd timeout — games
+  run LONG). Do NOT ship regressions (we win ~66%). main.py has all prior layers. Tools: vs_zakwht.py,
+  ab_zak.py (now in /workspace, not /tmp).
