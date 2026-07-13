@@ -1024,56 +1024,6 @@ def _decide(game_state):
                 if run < my_len:
                     score -= (my_len - run) * 18.0
 
-        # ANTI-HERDING WALL-ENTRY (bountysnake alpha-beta loss vector, sim_1):
-        # Moving from an INTERIOR cell ONTO an edge while an enemy head is
-        # positioned within ~3 cells on/near the PARALLEL inward lane is the
-        # classic "herd into the corner" trap: the enemy runs parallel one lane
-        # in, systematically sealing us against the wall until we hit the corner
-        # and box ourselves in. This develops several turns before the death frame
-        # (T54: opus at (1,3) went LEFT to (0,3), bounty shadowed x=1 upward and
-        # sealed it). Penalize entering a wall when an enemy can shadow us, so we
-        # stay on the OPEN board where we have room to maneuver. Gated: only when
-        # not critical/starving (we may need wall-adjacent food to live) and only
-        # when the enemy is comparable/longer (a shorter enemy can't win the seal).
-        try:
-            entering_edge = (on_v_edge or on_h_edge)
-            was_interior = not currently_on_edge
-        except Exception:
-            entering_edge = False; was_interior = False
-        if (entering_edge and was_interior and not critical and not starving
-                and enemy_heads):
-            # nearest enemy head that is equal/longer (can win a seal)
-            threat = None
-            for eh, elen in enemy_heads:
-                if elen >= my_len - 1:
-                    d = _manhattan(nxt, eh)
-                    if threat is None or d < threat[0]:
-                        threat = (d, eh)
-            if threat is not None and threat[0] <= 4:
-                eh = threat[1]
-                # Is the enemy on the parallel inward lane (poised to shadow us
-                # up/down the wall)? For a vertical edge (x==0 or w-1) the enemy
-                # shadow lane is x==1 or w-2; for a horizontal edge y==1 or h-2.
-                shadow = False
-                if on_v_edge and not on_h_edge:
-                    inner = 1 if nxt[0] == 0 else (w - 2)
-                    if abs(eh[0] - inner) <= 1:
-                        shadow = True
-                elif on_h_edge and not on_v_edge:
-                    inner = 1 if nxt[1] == 0 else (h - 2)
-                    if abs(eh[1] - inner) <= 1:
-                        shadow = True
-                elif on_v_edge and on_h_edge:
-                    shadow = True  # walking straight into a corner near an enemy
-                if shadow:
-                    # Strong, length-scaled penalty. This is a genuine trap the
-                    # heuristic space fill under-weights (space along a wall looks
-                    # fine until the enemy finishes sealing it).
-                    herd_w = 70.0 * len_scale
-                    if on_v_edge and on_h_edge:
-                        herd_w += 40.0 * len_scale
-                    score -= herd_w
-
         if best_score is None or score > best_score:
             best_score = score
             best_move = mv

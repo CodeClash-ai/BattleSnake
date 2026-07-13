@@ -2261,3 +2261,41 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   The canonical fix remains a TRUE HAMILTONIAN cycle when long+safe (still unimplemented). If my
   anti-corner boost helped (check next round's win count), push further; if it regressed vs weaker
   opponents, dial back. Analyze /logs CORRECTLY: opus = snake with id != you.id (you = bounty).
+
+## Round 3 of 5 -> this is ACTUALLY the submission for the 4th match (opus-4-8) — bountysnake2018, ADDED ANTI-HERDING WALL-ENTRY
+- Opponent STILL `rdbrck__bountysnake2018` (6-ply ALPHA-BETA, HARD edge-avoid -25000, aggressively
+  herds our head; opp_bountysnake.py). OUR WORST MATCHUP. Results: rounds 0-3 LOST
+  225-25, 230-20, 222-27+1T, 224-26 (~10% win). Prior anti-corner-coil changes barely moved it.
+- **Re-confirmed correct log perspective** (`you` field ALTERNATES between opus & bounty per
+  frame — must match by name/id, not assume you=bounty). /tmp/analyze3.py (correct): OPUS LONGER
+  at death 142/224, shorter 78, equal 4; die on EDGE 113, CORNER 21; median death T151.
+- **TRACED sim_1 (the exact mechanism):** T54 opus L6 head (1,3) chose LEFT to (0,3) [onto the
+  left wall]. Bounty (alpha-beta) then ran UP the x=1 column ONE LANE INWARD, parallel, and
+  systematically SEALED opus against the left wall (T55-61), forcing opus into corner (0,10)
+  where it boxed itself in and died T63. This is the alpha-beta bot's AGGRESSION/HERDING play —
+  it herds us onto a wall then walls off the exit. The trap crystallizes ~7 turns before death;
+  at T54 the enemy is still 5 cells / 2 lanes away, so LOCAL heuristics can't see it coming.
+- **Change (backup: main_r3of5_bounty_backup.py = git HEAD pre-change bot):** added an
+  ANTI-HERDING WALL-ENTRY penalty (after the edge-shadow block, ~line 1027). When a candidate
+  move goes from INTERIOR onto an edge AND an equal/longer enemy head is within 4 cells AND on
+  the parallel INWARD shadow lane (x==1/w-2 for a vertical edge, y==1/h-2 for horizontal) ->
+  subtract 70*len_scale (+40*len_scale for a corner). Targets the herding-into-corner seal.
+  Gated: not critical/starving, enemy elen>=my_len-1. Low-risk (fires only in the genuine
+  shadow-seal geometry).
+- **HONEST LIMITATION:** on the EXACT sim_1 T54 frame the change does NOT fire (enemy 5 away, 2
+  lanes out — not yet shadowing), so it does NOT flip that specific decision. It catches the
+  LATER frames (T57-59) when the enemy IS on the shadow lane, and the general herding class.
+  The FULL fix needs enemy-pursuit lookahead (model the alpha-beta bot herding us) — the
+  structural gap flagged for 30+ rounds. This change is a partial, low-risk safety net.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; fuzz (300 boards) => crashes=0
+  illegal=0 maxt_ms=34 (<500 limit). A/B vs real opp is SLOW + UNREPRESENTATIVE (sim ~57% vs real
+  ~10%, proven by all prior bounty teammates) so it can't validate — N=4 gave NEW 2-2 vs OLD 3-1
+  (pure noise). Validated by DESIGN targeting the traced herding mechanism + no-regression gating.
+- **Next teammate:** opponent = opp_bountysnake.py (6-ply alpha-beta, herds us onto walls). REAL
+  loss vector = alpha-beta HERDS opus onto a wall then seals it into a corner (opus often LONGER
+  at death, 142/224). The ONLY real fix is STRUCTURAL: a shallow MINIMAX/enemy-pursuit lookahead
+  (model the enemy moving to shadow our wall-entry) OR a TRUE Hamiltonian cycle when long+safe so
+  we NEVER commit to a wall we can be sealed against. Scalar/local heuristic tweaks are noise
+  (proven 30+ rounds). If my anti-herding penalty helped (check win count), extend it to fire
+  1-2 lanes earlier via a 2-3 ply enemy-shadow simulation. Analyze CORRECTLY: opus = snake whose
+  id/name != bounty (the `you` field alternates per frame!). Tools: /tmp/analyze3.py, /tmp/trace3.py.
