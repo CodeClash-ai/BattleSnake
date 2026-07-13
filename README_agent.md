@@ -874,3 +874,36 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
   edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep 8-ply self-
   survival sim. Keep sim_test 60 + fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — pinky-snek, FIXED ENEMY-ASSISTED SELF-COIL SEAL
+- Opponent STILL `moxuz__pinky-snek` (WEAK semi-random; opp_pinky_snek.py, non-deterministic).
+  Results: round 0 won 249-1, round 1 won 248-2.
+- **Loss analysis (round 1: sim_248, sim_28):** BOTH were OUR self-coils while LONG + FULL
+  HEALTH (OPUS L20 hp94; L15 hp92) — the enemy body + its short-horizon reachable cells
+  SEALED us into a coil pocket. Traced sim_248 turn-by-turn: at T153 (head (4,5), free moves
+  U(4,6)/D(4,4)/R(5,5)) the bot went RIGHT into the coil; by T156 only 1 forced move remained
+  -> dead-end at T158. The pure `_deep_self_survival` sim (which IGNORES the enemy) rated all
+  3 moves as surv=8, min_sp~80 -> couldn't distinguish the fatal coil from the safe escape,
+  because the ENEMY body (at (3,3)-(6,4)) is what walls off the pocket exit.
+- **Change (backup: main_r1of5_pinky_selfcoil_backup.py = git HEAD pre-change bot):**
+  1. Added `_enemy_reach_cells(enemy_head, blocked, w, h, steps)` — BFS of cells the enemy
+     head can occupy within `steps` moves.
+  2. Added an ENEMY-AWARE DEEP SURVIVAL check in `_decide` scoring (only when my_len>=8):
+     flood the enemy's reachable cells (steps=4) + enemy bodies as static blockers, then
+     re-run the greedy self-sim from the candidate move. If we die within 8 turns under this
+     conservative model, subtract (8 - e_surv) * 22. This detects enemy-assisted seals that
+     the pure self-sim misses. steps=4 was tuned: at T153 it gives up=surv8/min28 (SAFE),
+     down=surv0, right=surv0 (DEAD) — perfect discrimination. steps>=6 was too conservative
+     (blocked everything). Only the candidate cell `nxt` is un-blocked to avoid self-veto.
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16 (<500 limit); reconstructed sim_248
+  T153 now decides **UP (escape)** instead of the fatal RIGHT; `python3 vs_pinky.py main.py 50`
+  => 49-0-1 (~98-100%, the draw is noise floor; NO regression).
+- **Next teammate:** opponent = opp_pinky_snek.py (WEAK semi-random, non-deterministic). Check
+  /logs/rounds/N/sim_0.jsonl first. If unchanged -> submit as-is. Our ONLY loss vector is the
+  enemy-assisted / pure self-coil while long+healthy; this round adds enemy-aware deep sim to
+  catch it. If losses persist, tune the steps (4) / weight (22) or make it length-scaled.
+  main.py has: time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested
+  space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL
+  starvation, Voronoi territory, deep 8-ply self-survival sim, AND now enemy-aware deep sim.
+  Test: `python3 vs_pinky.py main.py 50` (keep N<=60, deep-sim cost + 30s cmd timeout) + fuzz.

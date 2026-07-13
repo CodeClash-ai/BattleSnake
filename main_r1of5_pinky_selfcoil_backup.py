@@ -220,25 +220,6 @@ def _voronoi_owned(my_head, enemy_heads_cells, blocked, w, h):
     return mine, theirs
 
 
-def _enemy_reach_cells(enemy_head, blocked, w, h, steps):
-    """BFS: set of cells the enemy head can reach within `steps` moves.
-    Used to make the deep self-survival sim ENEMY-AWARE: cells the enemy can
-    occupy soon are treated as blocked, so we detect enemy-assisted seals
-    (funneling us into a wall pocket) that pure self-sim misses."""
-    from collections import deque
-    seen = {enemy_head: 0}
-    dq = deque([enemy_head])
-    while dq:
-        c = dq.popleft()
-        if seen[c] >= steps:
-            continue
-        for nb in _neighbors(c):
-            if _in_bounds(nb, w, h) and nb not in blocked and nb not in seen:
-                seen[nb] = seen[c] + 1
-                dq.append(nb)
-    return set(seen)
-
-
 def _deep_self_survival(head, my_body_cells, static_blocked, w, h, depth=8):
     """Greedily simulate our own snake forward `depth` turns, each turn moving
     to the neighbor that maximizes flood-fill space (tail retreats each turn).
@@ -558,26 +539,6 @@ def _decide(game_state):
             score -= (8 - surv_turns) * 45.0
         if min_sp < my_len:
             score -= (my_len - min_sp) * 6.0
-
-        # ENEMY-AWARE DEEP SURVIVAL (anti enemy-assisted seal): the pure self-sim
-        # above ignores the enemy, so it misses funnels where the enemy actively
-        # walls off our escape (loss vector: sim_248/sim_28 -- we were long+healthy,
-        # the enemy body + its short-horizon reachable cells sealed us into a coil
-        # pocket). We flood the cells the ENEMY head can reach within a few moves
-        # and treat them as blocked, then re-run the greedy self-sim. If we die
-        # within the horizon under this conservative model, downrank the move.
-        # Only apply when we have a real body (avoids early-game over-caution).
-        if my_len >= 8 and enemy_heads:
-            blocked_now = enemy_body_cells | set(my_body)
-            enemy_soon = set()
-            for eh, _el in enemy_heads:
-                enemy_soon |= _enemy_reach_cells(eh, blocked_now, w, h, 4)
-            sim_static_e = (enemy_body_cells | enemy_soon) - set(my_body)
-            # don't block the cell we're actually moving into
-            sim_static_e.discard(nxt)
-            e_surv, e_minsp = _deep_self_survival(nxt, sim_body, sim_static_e, w, h, depth=8)
-            if e_surv < 8:
-                score -= (8 - e_surv) * 22.0
 
         # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a
         # Voronoi/territory strategy and can CONFINE us into a small corner strip
