@@ -382,12 +382,6 @@ def _decide(game_state):
     # vector (it out-lengths us and cuts us off / wins H2H). Consider ourselves
     # "behind" if not clearly ahead by >=2.
     behind_or_even = my_len <= max_enemy_len + 1  # not clearly longer
-    # When we are COMFORTABLY longer than the opponent, we do NOT need to grow.
-    # Chronic loss vector vs amphibious-arthur: we grow to L30-44 while the
-    # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
-    # solid length lead, extra length only makes self-coiling MORE likely, so we
-    # actively AVOID food to keep the body short and manageable.
-    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 4) and (my_len >= 10)
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
     # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
@@ -558,14 +552,10 @@ def _decide(game_state):
         # remove our own body (we model it dynamically); keep enemy bodies static
         sim_static = enemy_body_cells - set(my_body)
         sim_body = [nxt] + my_body[:-1]
-        # Depth scales with our length: the longer we are, the further ahead a
-        # coil develops, so a fixed depth-8 horizon can't see it (loss vector vs
-        # amphibious-arthur: we die at L30-44 by coiling). Cap for speed.
-        deep_depth = min(20, max(8, my_len // 2))
-        surv_turns, min_sp = _deep_self_survival(nxt, sim_body, sim_static, w, h, depth=deep_depth)
-        if surv_turns < deep_depth:
+        surv_turns, min_sp = _deep_self_survival(nxt, sim_body, sim_static, w, h, depth=8)
+        if surv_turns < 8:
             # we hit a dead-end within the horizon -> strong coil penalty
-            score -= (deep_depth - surv_turns) * 45.0
+            score -= (8 - surv_turns) * 45.0
         if min_sp < my_len:
             score -= (my_len - min_sp) * 6.0
 
@@ -667,17 +657,8 @@ def _decide(game_state):
                 score -= d_after * 7.0
                 if nxt == nearest_food:
                     score += 70.0
-            elif clearly_ahead:
-                # We hold a solid length lead: growing further only increases our
-                # self-coil risk. Actively AVOID eating -- move so we DON'T land on
-                # food, and prefer staying a little away from it. Safety/space
-                # signals dominate; this just removes the growth pressure.
-                if nxt == nearest_food:
-                    score -= 25.0
-                else:
-                    score += d_after * 0.4
             else:
-                # We're modestly longer; only mild pull so we don't ignore free
+                # We're clearly longer; only mild pull so we don't ignore free
                 # nearby food but prioritize safe positioning/space.
                 score -= d_after * 1.5
                 if nxt == nearest_food:

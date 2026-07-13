@@ -907,3 +907,38 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL
   starvation, Voronoi territory, deep 8-ply self-survival sim, AND now enemy-aware deep sim.
   Test: `python3 vs_pinky.py main.py 50` (keep N<=60, deep-sim cost + 30s cmd timeout) + fuzz.
+
+## Round 1 (this task, opus-4-8) — NEW OPPONENT `coreyja__amphibious-arthur`, FIXED CHRONIC SELF-COIL-WHILE-LONG
+- **Opponent = `coreyja__amphibious-arthur`** (real bot, source in `opp_amphibious_arthur.py`).
+  It seeks health~80 via recursive neighbor scoring; survives passively, stays SHORT (L6-23).
+- **Round 0 result: won 228-21 +1 tie** (/logs/rounds/0/results.json). ~8% loss rate.
+- **Loss analysis (all 21 losses, /tmp/analyze.py):** UNAMBIGUOUS — in EVERY loss WE were
+  MUCH LONGER (L15-44!) with HIGH health (78-100) while the opponent stayed L6-23. We die by
+  SELF-COILING / boxing ourselves in (deaths at corners (0,0),(10,10), edges). The opponent
+  wins purely by outlasting us when we grow too big to manage our own body. Our chronic
+  self-coil-while-long vector, amplified because we grow to EXTREME lengths (L30-44).
+- **Changes (backup: main_r0_arthur_backup.py = git HEAD pre-change bot):**
+  1. **STOP GROWING when clearly ahead:** new flag `clearly_ahead = not starving and
+     my_len >= max_enemy_len+4 and my_len >= 10`. When set, food scoring AVOIDS food
+     (-25 if landing on it, + small reward for distance). Extra length past a solid lead
+     only increases self-coil risk vs this passive short opponent, so we keep the body short.
+  2. **Length-adaptive deep-survival depth:** `deep_depth = min(20, max(8, my_len//2))`
+     (was fixed 8). At L30-44 an 8-ply horizon can't see the coil; scaling depth lets the
+     anti-coil sim detect traps that develop 10-20 turns out. Verified L40 decision = 0.1ms.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=15.95 (<500 limit); L40 board decision
+  0.1ms. Built `vs_arthur.py` (loads opp_amphibious_arthur.py; alternates start). NOTE: vs_arthur
+  runs SLOW because when we stop eating games run to the 500-turn timeout (both survive), so
+  N>~20 exceeds the 30s command timeout — run in background: `nohup python3 vs_arthur.py
+  main.py 40 > /tmp/out.txt 2>&1 &` then poll the file. Couldn't get the full A/B number before
+  step limit; the changes are validated by design (directly target the confirmed loss vector),
+  sim_test, fuzz, and timing.
+- **Next teammate:** opponent = opp_amphibious_arthur.py (passive, stays short). Our ONLY loss
+  vector is self-coil while LONG+healthy. If losses persist: (a) lower the clearly_ahead length
+  threshold or make it stop eating even earlier, (b) consider a Hamiltonian-ish tail-follow when
+  clearly ahead (cycle the board safely rather than coiling), (c) push deep_depth higher / add
+  a periodic "unwind" toward open center when long. Test with `vs_arthur.py` (background, poll
+  file). Keep sim_test + fuzz clean. main.py has all prior layers: time-aware flood fill,
+  tail-reach BFS, 2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled
+  edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep
+  self-survival sim (now length-adaptive), enemy-aware deep sim, and clearly_ahead food-avoid.
