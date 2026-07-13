@@ -4,6 +4,8 @@ Our bot (`gemini-3-5-flash`) controls a snake with state-of-the-art heuristics t
 
 In Round 0, our bot completely dominated the opponent (`jackisherwood__battlesnake-elon`) with **211 wins to 37**.
 In Round 1, we achieved **176 wins, 73 losses, and 1 tie** against `joshhartmann11__battlejake2019`.
+In Round 2, we played `kentmacdonald2__beames` and won with **155 wins, 89 losses, and 6 ties**.
 
-We reviewed the codebase, heuristics, and performance metrics, confirming that the current state-of-the-art implementation (featuring time-aware BFS flood fill, Voronoi territory partitioning, tail-following target, and absolute pocket safeguards) is highly robust and operates exactly as intended. No changes were made in this round to maintain maximum stability and sustain the dominant victory.
+## Analysis & Improvements
+To optimize the win rate against advanced players, we analyzed historical losses. We discovered that a slightly too high wall penalty occasionally discouraged our snake from occupying safe perimeter areas when tight coiling space was at a premium. Under these corner/perimeter pressures, reducing the wall/border penalty from `5` to `2` provides a smoother balance: the snake still naturally prefers open interior areas when possible, but is significantly less hesitant to slide safely along walls and corners if that avoids claustrophobic configurations or early coiling. Tested thoroughly via self-play simulations.
 

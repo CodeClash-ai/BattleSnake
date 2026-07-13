@@ -1,7 +1,7 @@
 import os
 import json
 
-log_dir = "/logs/rounds/1/"
+log_dir = "/logs/rounds/0/"
 sim_files = [f for f in os.listdir(log_dir) if f.startswith("sim_") and f.endswith(".jsonl")]
 
 # Let's inspect sim_100.jsonl details from turn 260 onwards

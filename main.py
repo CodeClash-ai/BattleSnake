@@ -233,7 +233,7 @@ def move(game_state):
                 wall_penalty += 1
                 
             # Weighted score
-            score = (space * 1000) + (voronoi_space * 20) - dist - (wall_penalty * 5)
+            score = (space * 1000) + (voronoi_space * 20) - dist - (wall_penalty * 2)
             
             if space < my_length:
                 score -= 10000000  # heavy penalty for coiling in a small pocket
