@@ -452,6 +452,9 @@ def move(game_state):
         enemy_next_pred = []
         enemy_possible_next = set()
         random_longer_enemy_next = set()
+        random_direct_enemy_next = []
+        has_randomish_enemy = False
+        randomish_equal_threat = False
         has_jump_flooding_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
@@ -487,16 +490,49 @@ def move(game_state):
             # Any legal enemy move may immediately partition space even if we
             # win head-to-heads against shorter snakes.  Use these cells as a
             # conservative one-ply space estimate below.
+            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
+            awesome_like = ("awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
+            awesome_scores = {}
+            if is_randomish:
+                has_randomish_enemy = True
+                # Awesome-Snake chooses randomly among the highest immediate
+                # cell scores: adjacent food beats empty, empty beats body/wall.
+                # Bob/Scape-Goat are closer to random-legal, handled by using
+                # all legal next heads as direct collision candidates.
+                raw_body = set()
+                for sn0 in snakes:
+                    for seg0 in sn0.get("body", []):
+                        raw_body.add(_pt(seg0))
+                for d0 in MOVES.values():
+                    ep0 = _add(eh, d0)
+                    if not _in_bounds(ep0, w, h):
+                        awesome_scores[ep0] = -100
+                    elif ep0 in raw_body:
+                        awesome_scores[ep0] = -1
+                    elif ep0 in food_cells:
+                        awesome_scores[ep0] = 1
+                    else:
+                        awesome_scores[ep0] = 0
+                best_awesome_score = max(awesome_scores.values() or [-100])
             for d in MOVES.values():
                 ep = _add(eh, d)
                 if _in_bounds(ep, w, h) and ep not in occupied:
                     enemy_possible_next.add(ep)
-                    # Bombastic Bob and Scape-Goat are random-ish among legal non-body moves.
-                    # If such an opponent is equal/longer, avoid stepping into a
-                    # position where one random move leaves us with no clean escape
-                    # next turn (logged Bob/Scape-Goat losses had this shape).
-                    if ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower()) and elen >= my_len:
-                        random_longer_enemy_next.add(ep)
+                    if is_randomish:
+                        # Direct head collision risk: for Awesome only the max-
+                        # scored cells are actually chosen; for the purely random
+                        # bots any legal cell can be selected.
+                        if elen >= my_len and ((not awesome_like) or awesome_scores.get(ep, -100) == best_awesome_score):
+                            random_direct_enemy_next.append((ep, elen))
+                        # Random-ish bots become dangerous as soon as they are
+                        # equal/longer, including the turn after they take
+                        # adjacent food.  Logged Awesome-Snake losses came from
+                        # following a length-1-short enemy into an edge pocket
+                        # just before it ate and became equal/longer.
+                        if elen >= my_len or (elen + 1 >= my_len and ep in food_cells):
+                            random_longer_enemy_next.add(ep)
+                        if elen >= my_len - 1:
+                            randomish_equal_threat = True
 
         candidates = []
         for name, delta in MOVES.items():
@@ -521,7 +557,7 @@ def move(game_state):
                 # jump-flooding also has an exact greedy Voronoi predictor; broad
                 # adjacent blocking trapped us in logged corner losses.
                 ename = e.get("name", "").lower()
-                if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename:
+                if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename:
                     continue
                 if _manhattan(nxt, eh) == 1 and elen >= my_len:
                     h2h_risk = True
@@ -573,6 +609,24 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_randomish_enemy and randomish_equal_threat:
+                # Random legal-move opponents do not deliberately give us safe
+                # inward exits; when lengths are close, board edges/corners make
+                # one unlucky random step enough to seal us in.  Bias toward the
+                # interior before the trap is forced.
+                near_random_dist = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_random_dist <= 8:
+                    score += edge_dist * 600
+                    if edge_dist == 0:
+                        score -= 8000
+                    elif edge_dist == 1:
+                        score -= 2500
+                    # Also avoid one-cell-wide corridors close to the enemy body,
+                    # even if they are not on the board edge yet.
+                    if area < 30 or choke_risk:
+                        score -= (30 - min(area, 30)) * 650 + choke_risk * 9000
+                    if safe_area < 35:
+                        score -= (35 - safe_area) * 500
             if has_jump_flooding_enemy and enemy_max_len >= my_len and edge_dist == 0:
                 # Jump-flooding's Voronoi bot often chases us along the outer row/
                 # column and lets the board edge close the trap.  When it is at
@@ -599,18 +653,18 @@ def move(game_state):
                         continue
                     future_safe_exits += 1
                 if future_safe_exits == 0:
-                    score -= 25000
+                    score -= 60000
                 elif future_safe_exits == 1:
-                    score -= 3500
+                    score -= 9000
             score -= center_dist * 2            # stay roughly central
             # Food urgency.  In long games against area/Voronoi bots, the main
             # remaining failure mode is starving while our large space terms keep
             # us orbiting a safe-looking region.  Make low-health food pressure
             # nonlinear, but leave healthy early-game behaviour mostly unchanged.
             if health < 15:
-                food_weight = 130
+                food_weight = 900
             elif health < 30:
-                food_weight = 80
+                food_weight = 220
             elif health < 50:
                 food_weight = 35
             else:
@@ -634,9 +688,12 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (500 if health < 30 else (100 if health < 60 else 20)) + (800 if enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (100 if health < 60 else 20))) + (800 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
+            for ep, elen in random_direct_enemy_next:
+                if nxt == ep and my_len <= elen:
+                    score -= 500000000
             for eh, e in zip(enemy_heads, enemies):
                 elen = e.get("length", len(e.get("body", [])))
                 if my_len >= elen + 3 and _manhattan(nxt, eh) == 1 and area >= my_len + 8:
