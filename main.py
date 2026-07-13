@@ -678,6 +678,33 @@ def _cornelius_predicted_move(enemy, game_state, w, h):
     return None
 
 
+
+def _famished_frank_predicted_move(enemy, game_state, w, h):
+    """Predict coreyja Famished Frank by running the copied A* food/corner port.
+
+    Frank greedily A* paths to food until target length, then corners, with
+    tail/random fallbacks.  Production losses are often exact longer-head
+    pressure after Frank outgrows us, so feed its one-ply next cell into the
+    existing predicted-collision scoring.
+    """
+    try:
+        from tools import famished_frank_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = famished_frank_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _battlejake2019_predicted_move(enemy, game_state, w, h):
     """Predict joshhartmann11 battleJake2019 by running the copied 2019 port.
 
@@ -797,6 +824,7 @@ def move(game_state):
         has_tantilla_enemy = False
         has_cornelius_enemy = False
         has_battlejake_enemy = False
+        has_famished_frank_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -808,7 +836,13 @@ def move(game_state):
             is_tantilla = "tantilla" in ename.lower() or "morganconrad" in ename.lower()
             is_cornelius = "cornelius" in ename.lower() or "chaelcodes" in ename.lower()
             is_battlejake = "battlejake" in ename.lower() or "joshhartmann11" in ename.lower()
-            if is_battlejake:
+            is_famished = "famished-frank" in ename.lower() or "famished" in ename.lower()
+            if is_famished:
+                has_famished_frank_enemy = True
+                pred = _famished_frank_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_battlejake:
                 has_battlejake_enemy = True
                 pred = _battlejake2019_predicted_move(e, game_state, w, h)
                 if pred is not None:

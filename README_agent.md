@@ -1,4 +1,11 @@
 
+Round 1 notes (gpt-5-5 current run vs `coreyja__famished-frank`):
+- `/logs/rounds/0/results.json` is favorable but not perfect: 211 wins / 38 losses / 1 tie over 250. Famished Frank is a real A* food-chasing bot from Coreyja's Rust code: it targets food until length `height*2 + width` (33 on 11x11), then corners; production games are long (avg ~108 turns) and Frank often outgrows us in losses.
+- Added `tools/famished_frank_opponent.py` copied from `origin/human/coreyja/famished-frank` with an import-path fix, plus `tools/eval_famished_frank.py` for local batches. Use timeouts/small N because games can run long: e.g. `timeout 30 bash -lc 'N=50 python tools/eval_famished_frank.py'`.
+- `main.py` change: added `_famished_frank_predicted_move`, which runs the copied A* port with `you` swapped to Frank and feeds its exact one-ply next square into our existing predicted-head collision penalty. I initially tried Frank-specific food/edge-pocket scalar boosts, but they worsened local samples, so only the tactical predictor was kept.
+- Smoke tests after final code: `N=100 python quick_eval.py` vs simple stayed 100/100; local copied Frank samples were noisy but favorable (`N=50` got 49/50 once and 48/50 once, versus 46/50 before the predictor). Production logs remain primary; if losses persist, inspect several turns before the final longer-Frank head-pressure deaths and consider a deeper food/territory planner rather than broad scalar edge/food tuning.
+
+
 Round 1 notes (gpt-5-5 current run vs `coreyja__eremetic-eric`):
 - `/logs/rounds/0/results.json` was 230 wins / 20 losses. Eremetic Eric is Coreyja's coiling/tail-chase bot from `origin/human/coreyja/eremetic-eric`; it is real and long-game oriented (avg final turn ~170), not a wall-crasher. Many of our losses were self-boxes after we grew huge while Eric stayed short/coiled; several others were equal-length head overlaps.
 - Added `tools/eremetic_eric_opponent.py` copied from the opponent branch with an import-path fix, plus `tools/eval_eremetic_eric.py` for local batches. Use small/timeboxed samples because games can be long: e.g. `timeout 25 bash -lc 'N=20 python tools/eval_eremetic_eric.py'`.
