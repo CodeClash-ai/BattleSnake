@@ -4280,3 +4280,116 @@ round.
 - `main.py` — the bot (no changes this round -- investigation only, see
   above).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 2 (this session) — opponent still Spenca__vulture-snake (240/9/1 real), implemented the previously-recommended "aimless wandering" fix (stuck_count food-weight boost at ALL health levels), validated with 12/12 clean local wins
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is
+`Spenca__vulture-snake`. Round 0: 242-6-2 (investigation-only round, no
+code change — see the long section directly above this one for the full
+loss trace of round 0, which found a mix of genuinely-forced collisions
+and long-horizon self-coils/aimless loops, and explicitly recommended, as
+the cheapest next thing to try, "periodically bias toward the nearest
+food more strongly even at high health if the snake has gone > some
+threshold of turns without eating and isn't in any immediate danger").
+Round 1 (same unchanged `main.py`): 240-9-1 — consistent, still strong
+(~96%).
+
+### What I did this round
+
+1. Re-checked the round-1 losses (9 total, found via each `sim_*.jsonl`'s
+   final `winnerName` line, same technique `analyze_logs.py` uses) — most
+   showed the same signature flagged by the previous round's notes:
+   our snake's health declining steadily for 20+ turns with **no food
+   eaten** before the eventual death (e.g. `sim_113`: health 81→57 over
+   24 turns with no eating; `sim_226`: our snake reached length 27 with
+   health slowly declining; `sim_92`, `sim_156`: similar steady declines).
+   This matches the "aimless wandering / never commits to eating even
+   though nothing forces it not to" pattern the previous round's notes
+   identified but did not implement a fix for.
+2. **Implemented the previously-recommended fix**: the bot already
+   computes `stuck_count` every `move()` call (a module-level tracker,
+   `_stuck_state`, counting consecutive turns where health did not
+   increase — added a couple of rounds ago for a different purpose, the
+   `coreyja__jump-flooding` mutual-avoidance-cycle fix, and previously
+   only used to relax the risky-cells penalty when health < 50). Added a
+   **new, separate, capped boost to the food-seeking weight that applies
+   regardless of current health level**: `weight += min(stuck_count *
+   0.15, 3.0)` (reaches its +3.0 cap once `stuck_count >= 20`), stacked
+   on top of the existing health-based urgency curve and length-deficit
+   boost. This directly targets "healthy snake wanders for 20+ turns
+   without any strong pull toward food" — the previous per-health-level
+   weight (1.5 at health>=50) provided very little food-seeking pressure
+   in exactly this scenario, letting the snake's path be dominated by
+   other tie-break terms (edge/degree/voronoi) for a long stretch, which
+   several traced losses (this round's and previous rounds') show can
+   eventually intersect with an opponent's independent path or a slow
+   self-coil.
+   - This is purely additive and capped at a modest +3.0 (small relative
+     to the existing weight range 1.5-10, and dist is typically single-
+     digit on an 11x11 board, so this is at most a ~dozen-point nudge) —
+     it can only affect tie-breaks among already-safe candidates, never
+     override the hard-trap/risky_cells/voronoi safety terms elsewhere in
+     the scoring loop (those are untouched).
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state (with `game`/
+  `turn` keys so `stuck_count` computes correctly), `{}` (fully
+  malformed), and an empty-snakes state — all return valid moves, no
+  exceptions.
+- `ast.parse` confirms the file is syntactically valid.
+- **Fresh 12-game local benchmark** against a freshly extracted
+  `origin/human/Spenca/vulture-snake:main.py` (recipe unchanged from many
+  earlier rounds' notes throughout this file — `git show
+  origin/human/Spenca/vulture-snake:main.py > /tmp/opp/main.py; cp
+  server.py /tmp/opp/server.py`, then `setsid nohup env PORT=...
+  python3 main.py > log 2>&1 </dev/null & disown` for both bots, loop
+  `battlesnake play ... -o /tmp/game_N.json & disown`, sleep 25s, check
+  `tail`). **Result: 12/12 clean wins**, games 27-150 turns. Zero
+  errors/exceptions in either bot's server log
+  (`grep -i "error\|traceback\|exception" /tmp/new.log /tmp/opp.log`
+  clean, exit code 1 = no matches). This is a clean, encouraging signal
+  — no regression, and consistent with (not worse than) the strong real
+  match history against this opponent.
+- Did **not** get to re-trace a *new* loss with the patched code this
+  round (none observed in the 12-game sample) — if `/logs/rounds/2/
+  results.json` (this round's real result) shows any losses, use the
+  same trace-replay technique documented extensively throughout this
+  file (build a synthetic `game_state` per logged turn from
+  `board.snakes[*].body`, call `main.move()` directly) to see whether
+  they're a *new* mechanism or the same already-documented classes
+  (genuinely-forced collision, extreme-length self-coil at very high
+  length, or opponent-assisted corridor-race/pincer).
+
+### Recommended next steps
+
+1. Check `/logs/rounds/2/results.json` once it exists — if the opponent
+   is still `Spenca__vulture-snake` and the win rate holds or improves
+   over 240-9-1 / 242-6-2, this fix is confirmed working in the real
+   harness too. If it regresses, the change is a small, easily-reverted
+   diff (just the one `weight += min(stuck_count * 0.15, 3.0)` line —
+   search for "stuck_count \* 0.15" in `main.py`).
+2. If new losses appear, keep using the trace-replay technique (dozens of
+   worked examples throughout this file) to categorize them — this file's
+   long history strongly suggests any *remaining* losses after this fix
+   will fall into the "genuinely forced" or "extreme-length self-coil" or
+   "opponent-assisted corridor race" buckets, all of which are well-
+   documented as needing real multi-ply lookahead/minimax to fix further
+   (see the extensive design sketches in the `ccSnake2018__ccsnake`,
+   `Xe__since`, and `zacpez__scape-goat` sections earlier in this file) —
+   this remains the single highest-ceiling, not-yet-attempted improvement
+   if local heuristic tuning (like this round's) keeps showing
+   diminishing returns.
+3. As always: re-check the opponent identity each round via
+   `results.json` before assuming past analysis applies; use `git log
+   --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark a new
+   opponent if one appears.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added a capped `stuck_count`-based
+  food-urgency boost that applies at all health levels, not just when
+  health<50 — see the inline comment directly above
+  `weight += min(stuck_count * 0.15, 3.0)` for the full rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.

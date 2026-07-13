@@ -624,6 +624,26 @@ def move(game_state):
                 # harder without ever overriding the health-based curve
                 # or safety terms.
                 weight += min(length_deficit * 0.3, 1.5)
+                # Additional capped boost when we've gone a long stretch
+                # without making any health progress (stuck_count, computed
+                # above), REGARDLESS of current health level -- targets a
+                # distinct traced failure mode from the low-health
+                # starvation loop above: a healthy snake that wanders far
+                # from any food for 20+ turns (every individual step looked
+                # locally fine/safe at the time) and, purely by chance,
+                # ends up colliding with an opponent's independent path or
+                # self-coiling into a pocket several turns later, with no
+                # food ever having been a strong enough draw to redirect it
+                # sooner (see README_agent.md, "Spenca__vulture-snake"
+                # sections, for several traced real-match losses matching
+                # this exact shape -- health declining steadily for 20+
+                # turns with no eating, well before health<50 kicks in the
+                # existing urgency curve above). Capped at +3.0 (reached at
+                # stuck_count>=20) so it can only ever nudge tie-breaks
+                # among already-safe candidates, never override the
+                # hard-trap/risky_cells/voronoi safety terms elsewhere in
+                # this loop.
+                weight += min(stuck_count * 0.15, 3.0)
                 score -= dist * weight
                 if dist == 0:
                     score += 20  # immediate food bonus
