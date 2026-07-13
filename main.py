@@ -452,6 +452,7 @@ def move(game_state):
         enemy_next_pred = []
         enemy_possible_next = set()
         random_longer_enemy_next = set()
+        has_jump_flooding_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -464,6 +465,7 @@ def move(game_state):
                 if pred is not None:
                     preds.add(pred)
             elif "jump-flooding" in ename.lower():
+                has_jump_flooding_enemy = True
                 pred = _jump_flooding_predicted_move(e, snakes, w, h)
                 if pred is not None:
                     preds.add(pred)
@@ -519,7 +521,7 @@ def move(game_state):
                 # jump-flooding also has an exact greedy Voronoi predictor; broad
                 # adjacent blocking trapped us in logged corner losses.
                 ename = e.get("name", "").lower()
-                if "ccsnake" in ename or "ccsnake2018" in ename:
+                if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename:
                     continue
                 if _manhattan(nxt, eh) == 1 and elen >= my_len:
                     h2h_risk = True
@@ -571,6 +573,19 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_jump_flooding_enemy and enemy_max_len >= my_len and edge_dist == 0:
+                # Jump-flooding's Voronoi bot often chases us along the outer row/
+                # column and lets the board edge close the trap.  When it is at
+                # least as long and already nearby, strongly prefer edge moves that
+                # run back toward mid-board instead of deeper into a corner.
+                if enemy_heads and min(_manhattan(nxt, eh) for eh in enemy_heads) <= 3:
+                    corner_dist = min(
+                        nxt[0] + nxt[1],
+                        nxt[0] + (h - 1 - nxt[1]),
+                        (w - 1 - nxt[0]) + nxt[1],
+                        (w - 1 - nxt[0]) + (h - 1 - nxt[1]),
+                    )
+                    score += corner_dist * 4000 - 7500
             if enemies and area > 20:
                 score -= choke_risk * 2200
             if random_longer_enemy_next:
