@@ -529,9 +529,9 @@ def _decide(game_state):
             if opponents:
                 max_opp_len = max(o["length"] for o in opponents)
                 if my_len < max_opp_len:
-                    weight += 2.5  # was 1.5 - compete more aggressively
+                    weight += 1.5
                 elif my_len <= max_opp_len + 1:
-                    weight += 1.0  # was 0.5
+                    weight += 0.5
             # DOMINANCE CHECK: if we're massively longer than opp AND healthy,
             # stop eating entirely and ACTIVELY avoid food. Long-snake self-traps
             # (round 1: 29/29 losses all long-snake self-trap at len 41-94/hp 87-100)

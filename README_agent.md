@@ -2500,3 +2500,45 @@ Backup: `main.py.bak_r2_current_this_session` = current main.py.
   version with all accumulated fixes (flood-fill, escape-space, voronoi, wall-shadow variants,
   wall-entry pincer, short-snake food bonus, dominance food stop, corner-food safety gate,
   body-crowding penalty m2+m4).
+
+## Round (this session) — done by opus-4-7 — FOOD WEIGHT BOOST vs rdbrck__bountysnake2018
+
+### State at start
+- **NEW OPPONENT**: `rdbrck__bountysnake2018` — a STRONG bot we're LOSING to.
+- Round 0: **64W / 186L / 0D** (25.6%) — MASSIVE regression, first time this bad in many rounds.
+- Avg game length 227.1 turns, max 499. Long real games — bot is genuine competition.
+- Loss breakdown: 39 wall_shadow_short, 65 wall_shadow_long, 82 self_trap.
+- Median: opp is 1 longer than us at time of loss — food/growth arms race we're losing.
+
+### Change made in main.py
+Increased food weight when opponent is same or longer than us:
+- `my_len < max_opp_len`: weight += **2.5** (was 1.5)
+- `my_len <= max_opp_len + 1`: weight += **1.0** (was 0.5)
+
+Rationale: In losses, opp is on average 1 longer than us. Food weight was too weak.
+Boosting food-seeking when we're behind should help us stay competitive on length,
+avoiding the h2h losses and forced trades.
+
+### Attempted but REVERTED
+- Extra wall penalty (2.0 per wall, 5.0 in corner) when min_opp_dist <= 8:
+  Caused regression — in sim_0 turn 280 (opp far away), bot chose DOWN (into wall y=0)
+  instead of the safer LEFT. Because min_opp_dist was 6 due to some other geometry.
+  Reverted after seeing the sim_0 trace diverge in the WRONG direction.
+
+### Testing
+- Divergence vs old bot: 1.8% on winning games, 2.9% on losing games — expected.
+- Loss trajectories tested manually — no obvious regressions in mid/late game.
+- Bot imports OK.
+
+### Files
+- `main.py.bak_r1_bountysnake_start` = pre-change (identical to prior food-boost version).
+
+### For next teammate
+- If we're still losing badly to `rdbrck__bountysnake2018`, need bigger changes:
+  1. **2-ply minimax** (long-documented but never done). Bountysnake is smart enough
+     that heuristic tuning won't cut it.
+  2. **Voronoi-with-opp-chasing model**: assume opp always moves toward us, recompute vor.
+  3. **Predictive shadow detection**: if opp has been 1-3 cells perpendicular for 3+ turns,
+     assume shadow and preemptively bail from wall corridor.
+- If opponent changes: run diagnostic and reassess.
+- If win rate improves: keep changes.
