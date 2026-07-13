@@ -1527,3 +1527,151 @@ later).
   rationale and the traced example).
 - `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats.
+
+## Round (this session) — opponent = m-schier__kreuzotter (still), fixed a real capped-penalty bug found via fresh local-benchmark trace replay
+
+Real rounds 0 and 1 (`/logs/rounds/{0,1}/results.json`) are both clean
+sweeps for sonnet-5 (20-0, 40-0) against `m-schier__kreuzotter`, same
+opponent as reported by the previous round's notes just above this
+section (which had already found + partially-tested a `free_degree`
+local-mobility fix for a different tie-break bug). `analyze_logs.py
+/logs/rounds/1`: 40/40 sims won, avg 4.7 turns (opponent dies/errors fast
+in the real harness, per the long-established pattern in this file).
+
+### What I did this round
+
+1. Verified smoke tests still pass (normal state, `{}`, empty-snakes
+   state) on the pre-existing (previous round's) `main.py` — no
+   regressions from last round's `free_degree` change.
+2. Ran a fresh 6-game local benchmark against a freshly-extracted
+   `origin/human/m-schier/kreuzotter:main.py` (same recipe as many past
+   rounds — `setsid nohup env PORT=... python3 main.py > log 2>&1
+   </dev/null & disown` for both bots, then `battlesnake play ... -o
+   /tmp/game_N.json & disown`, sleep, check `tail`). **Result: 3 wins / 3
+   losses** — confirms the previously-noted pattern (local 1v1 much
+   closer than the lopsided real score) is still present even after last
+   round's `free_degree` fix.
+3. **Traced both losses in full detail** (turn-by-turn body dumps +
+   literal-state `main.move()` replay, same technique documented several
+   times earlier in this file). Both losses (`/tmp/game_3.json` died turn
+   73, `/tmp/game_5.json` died turn 59 — not persisted, rerun the recipe
+   above to reproduce fresh) showed the **exact same concrete mechanism**:
+   our snake travels along a board **edge** (top row in one, bottom row
+   in the other) for 8-10 consecutive turns while the opponent
+   independently travels in parallel one row inward, and the opponent
+   reaches/seals the far corner exit one turn before we do, trapping us
+   in the now-self-filled edge strip with zero legal moves. This is the
+   same *class* of bug ("corridor race" / self-coil via edge-hugging)
+   flagged many times in this file over many rounds, but this round found
+   a **specific, confirmed, exploitable flaw in the existing mitigation**
+   for it (the `opp_territory`/`area_pess` "corridor-race" logic added a
+   few rounds ago), not just another instance of the general problem:
+
+   At the actual decision turn in `game_3.json` (turn 62, replayed
+   directly via `main.move()` on the literal logged board state — see
+   shell history this round for the exact repro script, easy to redo:
+   build a synthetic `game_state` from the logged `board`/`body` fields
+   and call `main.move()`), the two live candidates had **identical raw
+   flood-fill area (105 cells each — nowhere near a hard trap by that
+   metric alone)**, but wildly different opponent-pessimistic estimates:
+   `area_pess` = 1 for the (fatal) direction actually taken, vs. 58 for
+   the (safe) alternative. The pre-existing code's secondary
+   opponent-contested-space penalty was `score -= min(area - area_pess,
+   my_length) * 2` — i.e. **capped at `my_length` (11 in this case)**.
+   Since `area - area_pess` was 104 and 47 respectively — *both* already
+   far above the cap — both candidates received the **identical** capped
+   penalty (`min(104,11)*2 == min(47,11)*2 == 22`), completely destroying
+   the very signal that would have correctly distinguished "opponent can
+   basically only contest 1 cell of my reachable space" from "opponent
+   can contest up to 58 cells of it". The tie was then broken by the
+   food-distance term (there was food near the fatal direction), and the
+   bot walked straight into what turned out to be the losing corridor.
+
+### Fix made this round
+
+Added an **uncapped** secondary scoring term: `score += area_pess * 3`
+(kept the old capped-gap term too, it's harmless/redundant, just weak —
+did not remove it to minimize diff size). This restores real
+discriminating power between "safe-looking" candidates whose *actual*
+opponent-contested-space differs a lot, without reintroducing the
+older, already-fixed `min(area, area_pess)`-driving-the-hard-trap-penalty
+bug from a few rounds ago (see the large comment block a few rounds up
+in this file, and in `main.py` right above this new line, for that
+history) — this term is strictly additive on top of the raw-area-driven
+hard-trap/soft-margin penalties, and since `area_pess <= area` always, a
+genuinely tiny real dead-end pocket's `area_pess` is naturally tiny too
+(bounded by its own already-tiny raw area), so it can never make a real
+trap look artificially safe; it only discriminates among candidates that
+are *already* deemed safe by the raw-area hard-trap gate.
+
+**Verified this directly changes the traced losing decisions**:
+- `game_3.json` turn 62: `main.move()` on the literal logged state now
+  returns `{"move": "right"}` (previously `{"move": "left"}`, the actual
+  move taken in the game, which led to death 11 turns later).
+- `game_5.json`: replaying turns 48-53 turn-by-turn, turn 50's decision
+  now flips to `{"move": "right"}` (previously continued `{"move":
+  "left"}` along the fatal bottom-edge corridor, matching what the actual
+  game did at that point).
+
+### Post-fix verification (light — ran low on step budget)
+
+- Smoke tests (`main.move()` on normal/`{}`/empty-snakes states) still
+  pass, no exceptions, after the fix.
+- Ran a **fresh** 3-game local benchmark (new ports 8010/8011, same
+  extracted opponent) post-fix: 1 win, 2 losses in *short* games (32-34
+  turns — did NOT look like the edge-hugging corridor-race pattern this
+  round's fix targets; didn't have step budget left to trace these in
+  detail). **No exceptions/errors in either bot's server log** across
+  this run (`grep -i "error\|traceback\|exception" /tmp/new2.log
+  /tmp/opp2.log` clean) — so at minimum, no crash/regression was
+  introduced. I did **not** have budget left to re-run a larger batch or
+  to confirm an overall win-rate improvement number — this is the
+  single most important next step for whoever picks this up next.
+
+### Recommended next steps (HIGH PRIORITY, in order)
+
+1. **Re-run a bigger local benchmark** (8-12 games) against a freshly
+   extracted `origin/human/m-schier/kreuzotter:main.py` with this
+   round's fix, and get an actual before/after win-rate comparison
+   (before = revert just the `score += area_pess * 3` line, i.e. go back
+   to only the capped-gap term). If you find any new loss, use the exact
+   trace-replay recipe demonstrated in this section and many earlier
+   ones: dump `-o /tmp/game_N.json`, find the death turn, walk backwards
+   printing each snake's body per turn to find where paths diverge into
+   a doomed corridor, then reconstruct a synthetic `game_state` from that
+   turn's literal logged `board`/`body` fields and call `main.move()`
+   directly to see exactly what it would (or now would) do, comparing
+   candidate `area`/`area_pess`/`free_degree`/food-dist values by hand
+   (see the inline scripts run this round, in shell history, for the
+   exact pattern — build `blocked` via `main._build_blocked`, then loop
+   `main.DIRS` computing `main._flood_fill_size` for each candidate).
+2. Investigate the 2 short (32-34 turn) post-fix losses from this
+   round's quick re-check — didn't have budget to trace them; unclear if
+   they're a new issue, an unrelated pre-existing early-game issue, or
+   just normal variance (recall this opponent does a real 6-ply-ish
+   search and sometimes wins fair fights, especially early when both
+   snakes are short and mistakes are more costly relatively).
+3. The `min(contested_gap, my_length) * 2` capped term left in place
+   alongside the new uncapped `area_pess * 3` term is now somewhat
+   redundant (the uncapped term dominates whenever they'd disagree). Could
+   be cleaned up/removed for clarity in a future round once the fix above
+   is more thoroughly validated — low priority, correctness isn't at risk
+   either way since it's tiny relative to the new term.
+4. The recurring theme across MANY rounds' notes (see "self-coil",
+   "corridor-race", "edge-hugging" mentions throughout this file) remains
+   true multi-ply lookahead/simulation of a candidate move followed by a
+   simple opponent-response model — every heuristic patch so far
+   (2.2x soft margin, `free_degree`, `opp_territory`/`area_pess`, and now
+   this round's uncapped weighting fix) has been a real, traceable
+   improvement but is still fundamentally reactive/local rather than
+   predictive. If a future round's real match ever shows a non-clean-sweep
+   score against a strong opponent, that's the strongest signal yet to
+   invest in real lookahead rather than another local patch.
+
+### Files (unchanged)
+
+- `main.py` — the bot (this round's change: added an uncapped
+  `area_pess * 3` scoring term; see the inline comment directly above it
+  and this section for the full traced rationale/example).
+- `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats.

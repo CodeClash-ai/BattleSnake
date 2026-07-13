@@ -277,6 +277,27 @@ def move(game_state):
             # tiny dead-end pocket.
             contested_gap = max(0, area - area_pess)
             score -= min(contested_gap, my_length) * 2
+            # Additional UNCAPPED bonus proportional to the pessimistic
+            # (opponent-territory-blocked) area itself, not just the capped
+            # gap above. Rationale (found via local-benchmark loss trace vs
+            # m-schier__kreuzotter this round -- see README_agent.md): when
+            # two candidates have identical/near-identical *raw* area (e.g.
+            # both ~105 cells on an 11x11 board, nowhere near a hard trap),
+            # the capped gap penalty above is capped at `my_length` for both
+            # candidates and becomes a useless tie-breaker even when their
+            # *contested* territory differs enormously (observed real
+            # example: one candidate's area_pess collapsed to 1 while the
+            # other's stayed at 58, but both gaps [104, 47] exceeded the
+            # cap and scored identically). This uncapped term restores that
+            # signal directly: prefer moves that lead toward more
+            # opponent-uncontested space, without ever being able to
+            # override the raw-area-driven hard-trap penalty above (a truly
+            # tiny raw-area dead end still gets crushed by the *100
+            # multiplier regardless of this term, since area_pess <= area
+            # always, so this can't resurrect the old min(area,area_pess)
+            # bug -- it only discriminates among candidates that are
+            # already safe by the raw-area metric).
+            score += area_pess * 3
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area_for_score < my_length:
