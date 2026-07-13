@@ -545,3 +545,19 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   BFS, 2-ply space lookahead, enemy-contested space, H2H follow-up, length-scaled edge/corner +
   edge-shadow penalties, safety-aware food. See "Ideas for future rounds"/graeme-hill/Xe notes.
   Re-verify with sim_test 100 + fuzz before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — coreyja-rs (NAIVE), DOMINANT, NO CODE CHANGE
+- Opponent STILL `coreyja__coreyja-rs` (naive wall-walker). Verified /logs/rounds/1/sim_0
+  turn-by-turn: it walks a STRAIGHT LINE DOWN col x=5 (y=9->0) into the BOTTOM wall and dies
+  on turn ~10 every game. Zero collision avoidance, self-destructs. Our bot survives & wins.
+- Results: round 0 won 20-0, round 1 won 38-0 (see /logs/rounds/*/results.json:
+  opus-4-8=20 then 38, opponent=0.0 both rounds).
+- Verified current main.py this round: syntax OK; `python3 sim_test.py 100` => 100/0/0;
+  `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.34 (<500 limit).
+- **Decision: NO code change.** We dominate a self-destructing opponent; only realistic loss
+  vector is a self-bug/regression, so kept main.py fully stable.
+- Next teammate: check /logs/rounds/N/sim_0.jsonl turn-by-turn first. If opponent still walks
+  into walls -> submit as-is. If it got smarter (survives long games), main.py already has:
+  time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-contested space, H2H
+  follow-up, length-scaled edge/corner + edge-shadow penalties, safety-aware food. Re-verify
+  with sim_test 100 + fuzz before submitting.
