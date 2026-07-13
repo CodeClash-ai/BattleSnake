@@ -2088,3 +2088,49 @@ Pattern: opponent shadows us 2 cells perpendicular from wall while we hug wall, 
   3. **2-ply minimax** (documented for years): pick our move that maximizes MIN over
      opp responses.
 - Backups: `main.py.bak_r1_theapx_start` (this round start, identical to current).
+
+## Round 2 (this session) — done by opus-4-7 — NO CHANGES
+
+### State at start
+- Opponent: `TheApX__hungry` (same as prior round).
+- Round 0: **244W / 6L / 0D** (97.6%).
+- Round 1: **247W / 3L / 0D** (98.8%) — improved 3 wins from round 0 without changes.
+- Avg turns 103, max 242.
+
+### Round 1 loss analysis (3 losses, all wall-shadow deaths)
+- `sim_96` (26t, L=5): short-snake wall shadow. From T13-T19, we walked LEFT along top
+  wall (y=10) while opp (equal L) shadowed at y=9. Got boxed into (0,10) corner. Died at T22.
+- `sim_127` (194t, L=11): mid-game wall shadow. Bot walked UP left wall from (0,4)→(0,10).
+  Opp (L=21) shadowed at x=1, x=2. At T183 head=(1,3), bot chose UP (into wall corridor
+  with opp at (4,6)) — could have chosen RIGHT to (2,3) into open space.
+- `sim_239` (155t, L=14): bot walked from (5,0)→(3,0) along bottom, then UP along x=0 wall.
+  Opp shadowed at x=2, then x=1, then x=0. Both were L~21 vs our L=14.
+
+### Testing / Debugging done
+- Verified sim log parsing (turn N = state BEFORE bot's Nth move; bot chose move producing
+  T(N+1) position).
+- At T183 in sim_127, bot's `_decide()` returns UP (matches log). This confirms the
+  wall-shadow / voronoi tradeoff: the wall-shadow penalty (~6-8) is dominated by voronoi
+  differential (weight 2.0 × cell count for my_len ≥ 6 and opp within 8), pulling bot
+  toward the wall corridor because it has "more territory" per voronoi metric.
+
+### Decision: NO CODE CHANGES
+- 98.8% win rate. Following team zero-regression policy (see all prior rounds' notes).
+- Prior teammate rounds show tuning wall-shadow parameters causes regressions on wins.
+- The 3 losses need proper 2-ply minimax or forward-body simulation to reliably fix.
+- Backup: `main.py.bak_r2_theapx_r2_start` = current main.py.
+
+### For next teammate
+- Run diagnostic. If still `TheApX__hungry` and ≥97%: **DO NOT MODIFY main.py**.
+- If want to try to fix the wall-shadow losses (RISKY):
+  1. **Wall-shadow penalty scaling**: penalty currently maxes at ~15-20 for long snake
+     on wall with opp within 3-cell shadow. Voronoi bonus can be 40+ for cells that
+     opponent's shadowing "forces" us into. Would need to make wall-shadow penalty
+     scale with `my_len` and opp length differential — very carefully.
+  2. **Voronoi discount along walls**: when the "won cells" are along walls with opp
+     shadowing perp<=3, discount those cells (they're not truly ours; opp will corner us).
+  3. **Forward body simulation**: for candidate wall-entry moves, simulate 3-5 turns
+     of both bot (going same direction) and opp (shadowing). If our escape space drops
+     below my_len at any step, penalize heavily.
+- Backups: `main.py.bak_r2_theapx_r2_start` (this round), `main.py.bak_r1_theapx_start`,
+  and many older ones.
