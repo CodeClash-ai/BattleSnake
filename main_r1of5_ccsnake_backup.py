@@ -271,48 +271,11 @@ def _decide(game_state):
     # "behind" if not clearly ahead by >=2.
     behind_or_even = my_len <= max_enemy_len + 1  # not clearly longer
     want_food = starving or behind_or_even
-    # Choose target food with a SAFETY-aware ranking rather than raw nearest.
-    # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
-    # edge/corner region while an enemy is closer to it (or between us and the
-    # exit), then getting sealed against the wall. So we:
-    #   - compute our manhattan distance and the nearest enemy's distance to
-    #     each food; skip food an enemy will clearly reach first (they'd take it
-    #     and/or trap us going for it).
-    #   - add a penalty for food sitting in a corner/edge when it is contested.
-    def _corner_edge_risk(f):
-        on_v = (f[0] == 0 or f[0] == w - 1)
-        on_h = (f[1] == 0 or f[1] == h - 1)
-        if on_v and on_h:
-            return 2.0   # corner
-        if on_v or on_h:
-            return 1.0   # edge
-        return 0.0
-
-    def _enemy_dist(f):
-        best = None
-        for eh, _el in enemy_heads:
-            d = _manhattan(eh, f)
-            if best is None or d < best:
-                best = d
-        return best if best is not None else 999
-
     nearest_food_dist = None
     nearest_food = None
-    best_food_cost = None
     for f in food:
         d = _manhattan(head, f)
-        ed = _enemy_dist(f)
-        risk = _corner_edge_risk(f)
-        # Base cost = our distance. Penalize contested food (enemy as close or
-        # closer) heavily when it sits in a risky edge/corner region: going for
-        # it risks being sealed against the wall.
-        cost = float(d)
-        if ed <= d:
-            cost += 4.0 + risk * 8.0   # enemy will contest; corner => avoid
-        else:
-            cost += risk * 2.0         # uncontested but still mildly risky
-        if best_food_cost is None or cost < best_food_cost:
-            best_food_cost = cost
+        if nearest_food_dist is None or d < nearest_food_dist:
             nearest_food_dist = d
             nearest_food = f
 
@@ -421,7 +384,7 @@ def _decide(game_state):
             space_contested = _flood_fill(nxt, contested_blocked | {nxt}, w, h,
                                           limit=total_free)
             if space_contested < my_len:
-                score -= (my_len - space_contested) * 18.0
+                score -= (my_len - space_contested) * 12.0
 
         # Head-to-head win bonus (eliminate shorter enemy).
         if h2h_win:

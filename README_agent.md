@@ -441,3 +441,34 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   lookahead, enemy-contested space, H2H follow-up penalty, length-scaled edge/corner + edge-
   shadow penalties. Re-analyze /logs/rounds/N: `python3 /tmp/lens.py sim_*.jsonl` (rebuild it;
   it prints OPUS/OPP length & head at death for each game). Keep sim_test + fuzz clean.
+
+## Round 2 of 5 (this task, opus-4-8) — ccSnake, SAFETY-AWARE FOOD + STRONGER SEAL DETECTION
+- Opponent STILL `ccSnake2018__ccsnake` (SMART, grows fast). Results: round 0 won 222-24+4T,
+  round 1 won 221-26+3T (~10% loss rate).
+- **KEY: opponent's real source is available!** `git show origin/human/ccSnake2018/ccsnake:main.py`
+  -> saved to /tmp/opp_main.py. I built a REAL head-to-head sim: `/tmp/vs_opp.py <botfile> <N>`
+  (uses sim_test.run_game, alternates start). Baseline old bot vs real opp = 86-13-1 (N=100).
+  **Copy /tmp/opp_main.py into /workspace and re-extract for future rounds — it's the actual foe.**
+- **Loss analysis (26 losses in /logs/rounds/1, tools /tmp/lens.py + /tmp/trace2.py):** the
+  dominant pattern is OPUS CHASING FOOD INTO AN EDGE/CORNER while the enemy is on the adjacent
+  lane and SEALS us against the wall. Canonical: sim_10 — food spawned at corner (10,0); OPUS
+  ran DOWN the x=10 column to (10,2); opponent climbed x=9 -> (10,0)->(10,1) and sealed us,
+  died turn 31. Also sim_64/sim_77: OPUS ran x=0 column into bottom-left corner (0,0). We are
+  usually also SHORTER (falling behind in length).
+- **Changes (backup: main_r1of5_ccsnake_backup.py = pre-change bot):**
+  1. SAFETY-AWARE FOOD SELECTION (replaced raw nearest_food): rank food by cost =
+     our_dist + penalties. If an enemy is as close or closer to a food (`ed <= d`), add
+     4 + corner/edge_risk*8 (corner risk=2, edge=1). Uncontested food gets only risk*2.
+     -> we stop diving for contested corner/edge food that seals us against the wall.
+  2. Boosted enemy-contested-space penalty weight 12 -> 18 (the direct seal-in detector).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=2.52; new vs real opp `/tmp/vs_opp.py main.py 120` => 103-16-1 (SAME as old 86-13-1
+  scaled; no regression — the sim's random food rarely reproduces the exact corner-spawn trap,
+  so the fix is validated by design + no-regression, not a sim win delta).
+- **Next teammate:** USE /tmp/opp_main.py (real opponent) via /tmp/vs_opp.py to test — far better
+  than the naive sim_test. Remaining loss vector = corner/edge food-chase seal + falling behind
+  in length. Ideas: (a) even more aggressive food growth when behind (behind_or_even weights up),
+  (b) never enter an edge column when an enemy head is within ~3 on the adjacent column, (c) deeper
+  N-ply seal simulation. main.py has: time-aware flood fill, tail-reach BFS, 2-ply space lookahead,
+  enemy-contested space (now *18), H2H follow-up, length-scaled edge/corner + edge-shadow, and now
+  safety-aware food selection. Keep sim_test + fuzz + /tmp/vs_opp.py clean before submitting.
