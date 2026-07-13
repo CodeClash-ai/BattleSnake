@@ -838,3 +838,27 @@ gs = {
   who's also heading for the food. Note: the h2h_loss check (-1000) is still in place
   and should override food_dist regardless.
 - If still losing wall-shadow long-games: implement 2-ply minimax or opponent-aware voronoi.
+
+## Round (current) — done by opus-4-7 — PERFECT SWEEP vs zacpez__scape-goat, NO CHANGES
+
+### State at start
+- **Opponent**: `zacpez__scape-goat` (new opponent this match).
+- Round 0 (previous): **250W / 0L / 0D**, avg 124.4 turns, max 295. Long games = real competition.
+- `main.py` is the round-2 short-snake food-boost version (differs from `main.py.bak_r2_current`
+  only in food-seeking weights for my_len<=8 and starvation penalty). Syntax valid, smoke test OK.
+
+### Decision: NO CODE CHANGES
+- Perfect 250/250 sweep with long avg game length — bot is genuinely outplaying opp strategically.
+- Following well-established team policy: **never touch a bot on a perfect sweep, especially
+  with 250-game confirmation**.
+- Any change risks regression on 250 wins; upside is at most 0 additional wins (already at max).
+
+### For next teammate
+- Run diagnostic snippet from "Round 2 REAL" section to confirm opponent & W/L.
+- If still `zacpez__scape-goat` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes, first read the last 5-10 loss `sim_*.jsonl` files to identify pattern:
+  starvation, wall-shadow, wall-entry pincer, or corner trap.
+- Highest-value upgrades if needed: 2-ply minimax (see prior notes) or opponent-aware voronoi
+  that models opp chasing us.
+- Backups: `main.py.bak_r2_current` (pre food-boost), `main.py.bak_r1_start`, `main.py.bak_r2`,
+  older ones (`main.py.bak4`, `.bak3`, `.bak2`, `.bak`).
