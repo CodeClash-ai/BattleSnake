@@ -942,3 +942,37 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   tail-reach BFS, 2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled
   edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep
   self-survival sim (now length-adaptive), enemy-aware deep sim, and clearly_ahead food-avoid.
+
+## Round 2 of 5 (this task, opus-4-8) — amphibious-arthur, STRENGTHENED ANTI-OVERGROWTH
+- Opponent STILL `coreyja__amphibious-arthur` (passive, stays SHORT L6-23; opp_amphibious_arthur.py).
+- Results: round 0 won 228-21+1T, round 1 won 227-23 (~9% loss). Round-0 clearly_ahead fix
+  did NOT move the needle much (21 -> 23 losses).
+- **Loss analysis (all 23 round-1 losses, inline script):** UNAMBIGUOUS & unchanged — in EVERY
+  loss WE were LONGER (L11-38, mostly L20-32) with HIGH health (76-100), self-coiled into a
+  corner/edge/pocket and boxed ourselves in. Deaths at T131-477, many at corners (0,0)/(10,10)/
+  edges. The opponent (short L5-26) just outlasts us when we grow too big to manage our body.
+  Our clearly_ahead food-avoid (-25) was TOO WEAK: we still grew to L20-38.
+- **Change (backup: main_r1of5_arthur_r2_backup.py = git HEAD pre-change bot):**
+  1. clearly_ahead triggers EARLIER: `my_len >= max_enemy_len+3 and my_len >= 8` (was +4, >=10).
+     Stop growing sooner so we never reach the dangerous L20-38 range vs this short opponent.
+  2. clearly_ahead food AVOIDANCE much stronger: landing on food -120 (was -25); reward
+     keeping distance `min(d_after,6)*4.0` (was d_after*0.4). Makes not-eating dominant over
+     the mild pull toward nearby food, so we actually stay short & manageable.
+  Safety/space/H2H/tail-reach signals still dominate over food (space*10/unit, tail_reach
+  +120/-200, H2H -1000), so this only removes GROWTH pressure — no suicidal food-refusal.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.0 (<500 limit). A/B vs real opp is
+  SLOW (when we stop eating, games run to the 500-turn timeout — 30 games > 30s cmd timeout;
+  use `nohup python3 vs_arthur.py main.py 30 > /tmp/out &` and poll). Crude capped-sim length
+  test (opponent NOT accurately modeled): both bots ~L12-20 avg (sim food dynamics differ from
+  real; the real losses are in T200-477 games this cap truncates). Fix validated by DESIGN
+  (directly cuts the confirmed overgrowth->self-coil vector) + sim_test + fuzz + no-regression.
+- **Next teammate:** opponent = opp_amphibious_arthur.py (passive, stays short). Our ONLY loss
+  vector remains self-coil while LONG. If losses persist despite lower growth: (a) drop
+  clearly_ahead threshold further (+2 / >=7), (b) implement a Hamiltonian-ish tail-follow when
+  clearly ahead (cycle the board safely instead of coiling — this is the real fix and is still
+  NOT implemented), (c) push deep_depth higher. Test with vs_arthur.py IN BACKGROUND (poll file)
+  since games run long. main.py has all prior layers: time-aware flood fill, tail-reach BFS,
+  2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
+  edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival
+  sim (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid (now much stronger).

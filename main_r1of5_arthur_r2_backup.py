@@ -387,7 +387,7 @@ def _decide(game_state):
     # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
     # solid length lead, extra length only makes self-coiling MORE likely, so we
     # actively AVOID food to keep the body short and manageable.
-    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 3) and (my_len >= 8)
+    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 4) and (my_len >= 10)
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
     # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
@@ -669,14 +669,13 @@ def _decide(game_state):
                     score += 70.0
             elif clearly_ahead:
                 # We hold a solid length lead: growing further only increases our
-                # self-coil risk (chronic loss vector: we grow to L30-44 then
-                # self-coil). Actively AVOID eating: strongly penalize landing on
-                # food and reward keeping distance from it so we stay short and
-                # manageable. Safety/space signals still dominate.
+                # self-coil risk. Actively AVOID eating -- move so we DON'T land on
+                # food, and prefer staying a little away from it. Safety/space
+                # signals dominate; this just removes the growth pressure.
                 if nxt == nearest_food:
-                    score -= 120.0
+                    score -= 25.0
                 else:
-                    score += min(d_after, 6) * 4.0
+                    score += d_after * 0.4
             else:
                 # We're modestly longer; only mild pull so we don't ignore free
                 # nearby food but prioritize safe positioning/space.
