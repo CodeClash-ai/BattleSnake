@@ -854,33 +854,6 @@ def _tr8r_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
-
-def _feisty_snake_predicted_move(enemy, game_state, w, h):
-    """Exact one-ply predictor for tbgiles FeistySnake-2019.
-
-    The copied port matches production logs for this matchup and is deterministic.
-    Use it only as a tactical next-head predictor; broader Feisty-specific scalar
-    tuning is handled in the main scorer below.
-    """
-    try:
-        from tools import feisty_snake_opponent
-        pseudo = {
-            "game": game_state.get("game", {}),
-            "turn": game_state.get("turn", 0),
-            "board": game_state.get("board", {}),
-            "you": enemy,
-        }
-        mv = feisty_snake_opponent.move(pseudo).get("move")
-        if mv in MOVES:
-            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
-            nxt = _add(head, MOVES[mv])
-            if _in_bounds(nxt, w, h):
-                return nxt
-    except Exception:
-        return None
-    return None
-
-
 def _battlejake2019_predicted_move(enemy, game_state, w, h):
     """Predict joshhartmann11 BattleJake variants by running copied ports.
 
@@ -1156,7 +1129,6 @@ def move(game_state):
         has_jerrykott_enemy = False
         has_untimely_enemy = False
         has_woofers_enemy = False
-        has_feisty_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1180,7 +1152,6 @@ def move(game_state):
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
-            is_feisty = "feisty-snake" in ename.lower() or "tbgiles" in ename.lower() or "feisty" in ename.lower()
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1194,12 +1165,7 @@ def move(game_state):
                 except Exception:
                     pass
             else:
-                if is_feisty:
-                    has_feisty_enemy = True
-                    pred = _feisty_snake_predicted_move(e, game_state, w, h)
-                    if pred is not None:
-                        preds.add(pred)
-                elif is_woofers:
+                if is_woofers:
                     has_woofers_enemy = True
                     pred = _woofers_java_predicted_move(e, game_state, w, h)
                     if pred is not None:
@@ -1418,7 +1384,7 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "feisty-snake" in ename or "tbgiles" in ename or "feisty" in ename or "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
+                if "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
@@ -1433,8 +1399,6 @@ def move(game_state):
                             soft = 260
                         elif "bounty" in ename or "bountysnake2018" in ename:
                             soft = 220
-                        elif "feisty-snake" in ename or "tbgiles" in ename or "feisty" in ename:
-                            soft = 320
                         elif "woofers" in ename or "walter" in ename:
                             soft = 320
                         elif "elon" in ename or "jackisherwood" in ename:
@@ -1518,32 +1482,6 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
-            if has_feisty_enemy and enemy_max_len >= my_len - 1:
-                # Feisty is a strong A*/flood-fill bot; our production losses were
-                # usually healthy long games where Feisty was equal/longer and we
-                # drifted onto the outer wall or into one-exit corridors.  Keep this
-                # narrow (only when not longer) so we still grow/attack when ahead.
-                score += edge_dist * 320
-                if edge_dist == 0:
-                    score -= 6200
-                elif edge_dist == 1:
-                    score -= 1400
-                clean_exits = 0
-                for nn in _neighbors(nxt):
-                    if not _in_bounds(nn, w, h) or nn in future_blocked:
-                        continue
-                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
-                        continue
-                    clean_exits += 1
-                if clean_exits == 0:
-                    score -= 45000
-                elif clean_exits == 1 and (edge_dist == 0 or safe_area < 24):
-                    score -= 16000
-                if choke_risk and (edge_dist <= 1 or safe_area < 28):
-                    score -= choke_risk * 3600
-                if safe_area < max(18, my_len + 1):
-                    score -= (max(18, my_len + 1) - safe_area) * 900
-
             if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
                 # BattleJake2019 can survive long while staying much shorter; our
                 # round-0 losses while ahead were self-boxes from taking/continuing
@@ -2307,7 +2245,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0) + (1000 if has_feisty_enemy and enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
