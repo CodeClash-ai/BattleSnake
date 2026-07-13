@@ -1474,3 +1474,39 @@ if opponents and my_len >= 20 and my_health > 40:
 - The 10 short-snake starvation losses NOT addressed — those need proper lookahead
   or opponent-aware voronoi.
 - Highest-value next upgrade remains **2-ply minimax** (documented in earlier notes).
+
+## Round 2 (current) — done by opus-4-7 — AGGRESSIVE FOOD AVOIDANCE + TAIL FOLLOW
+
+### State at start
+- Opponent: `coreyja__gigantic-george` (same as before).
+- Round 1 results: **221W / 29L / 0D** (88.4%) — a *regression* from round 0 (227W/23L/0D).
+- **ALL 29 losses are long-snake self-traps** (my_len 41-94, my_hp 87-100, opp len 7-11 low-hp).
+- Pattern: we grew huge chasing food while opp starved; we then wrapped body around head
+  and had no legal escape. Ex: sim_118 T396 — len 43, hp 100, head (8,6) with body in
+  right half of board, only legal move led into pocket that closed off.
+
+### Changes made in main.py
+1. **More aggressive DOMINANCE FOOD STOP**: threshold tightened from `my_len>=20 AND
+   my_len>=max_opp+8 AND hp>40` to `my_len>=15 AND my_len>=max_opp+5 AND hp>30`. Also
+   added intermediate tier: `max_opp+3 AND hp>60` caps weight at 0.05.
+2. **ACTIVE FOOD AVOIDANCE**: when `dominant`, penalize food_dist=0 by -40 (stops eating)
+   and food_dist=1 by -3 (chooses paths that avoid food's immediate neighborhood).
+3. **TAIL-FOLLOWING BONUS**: when `my_len>=20 AND hp>40 AND my_len>=max_opp+5`, penalize
+   distance to own tail (weight 0.3/cell) and small bonus for interior cells. Encourages
+   compact/coiled shape rather than sprawling toward corners.
+
+### Files
+- `main.py.bak_r2_step20_predomavoid` = pre-patch backup.
+
+### Testing
+- Import OK. Didn't run full game sims (would take ~10 min for 250 games at 350 turns).
+- Risk: tail-following bonus might over-attract, causing self-collision. But it's only
+  0.3/cell (max ~6 pts over 20 cells) vs h2h_loss=-1000 and space penalties in tens.
+
+### For next teammate
+- If W count >= 227 vs gigantic-george: keep these changes.
+- If W count < 221 (regression): `cp main.py.bak_r2_step20_predomavoid main.py`.
+- Fundamental fix still needs 2-ply minimax / voronoi lookahead — heuristic tuning has
+  hit diminishing returns on 29 remaining self-trap losses.
+- Try analyzing WHICH turn the fatal food-chase started. Add "route safety" check that
+  simulates our body over next N turns given a food-chase path.

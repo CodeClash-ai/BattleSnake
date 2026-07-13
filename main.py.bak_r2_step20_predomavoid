@@ -533,27 +533,14 @@ def _decide(game_state):
                 elif my_len <= max_opp_len + 1:
                     weight += 0.5
             # DOMINANCE CHECK: if we're massively longer than opp AND healthy,
-            # stop eating entirely and ACTIVELY avoid food. Long-snake self-traps
-            # (round 1: 29/29 losses all long-snake self-trap at len 41-94/hp 87-100)
-            # come from eating when we don't need to.
-            dominant = False
-            if opponents and my_len >= 15 and my_health > 30:
+            # stop eating entirely. Long-snake self-traps (README: 9 losses in
+            # round 0 vs gigantic-george at len 36-68) come from eating when we
+            # don't need to. Zero-out food attraction; don't ADD to score either.
+            if opponents and my_len >= 20 and my_health > 40:
                 max_opp_len_x = max(o["length"] for o in opponents)
-                # Progressive dominance thresholds
-                if my_len >= max_opp_len_x + 5:
+                if my_len >= max_opp_len_x + 8:
                     weight = 0.0
-                    dominant = True
-                elif my_len >= max_opp_len_x + 3 and my_health > 60:
-                    weight = min(weight, 0.05)
             s -= weight * c["food_dist"]
-            # ACTIVE FOOD AVOIDANCE when dominant: stepping on food = growing =
-            # self-trap risk. Penalize both direct food (food_dist=0) and cells
-            # in food's immediate neighborhood.
-            if dominant and c["food_dist"] is not None:
-                if c["food_dist"] == 0:
-                    s -= 40.0  # heavy penalty for eating when dominant
-                elif c["food_dist"] == 1:
-                    s -= 3.0   # mild avoidance of adjacent food (choice pressure)
             # SHORT-SNAKE EATING BONUS: strong incentive to actually eat when adjacent.
             # In sim_99 (nbw-ruby loss), we starved at len=3 because differential
             # of food_dist=0 vs food_dist=2 was only ~8 pts, less than voronoi/esc diff.
@@ -849,18 +836,6 @@ def _decide(game_state):
                 s -= 20.0  # very dangerous
             if wn <= 3:
                 s -= 40.0  # basically dead
-        # DOMINANT tail-following bonus: when we're massively longer than opp and
-        # healthy, prefer moves that stay close to our own tail. Encourages
-        # compact/coiled body shape and reduces self-trap risk.
-        if opponents and my_len >= 20 and my_health > 40:
-            max_opp_len_z = max(o["length"] for o in opponents)
-            if my_len >= max_opp_len_z + 5:
-                _mt = (you["body"][-1]["x"], you["body"][-1]["y"])
-                _px, _py = c["pos"]
-                _tail_d = abs(_mt[0]-_px) + abs(_mt[1]-_py)
-                s -= _tail_d * 0.3
-                if 1 <= _px <= w-2 and 1 <= _py <= h-2:
-                    s += 2.0
         # Wall / edge distance shrinkage penalty when we're close to walls AND long
         return s
 
