@@ -336,6 +336,84 @@ def _voronoi_area(my_start, opp_starts, blocked, width, height):
     return sum(1 for o in owner.values() if o == "me")
 
 
+def _advance_body(body, move_to, food_set):
+    """Simulate one snake advancing to `move_to` (a tuple). Returns the new
+    body (list of tuples) reflecting standard Battlesnake growth rules: if
+    `move_to` is a food cell, the snake grows (keeps its whole previous body
+    plus the new head); otherwise the tail cell is dropped as usual."""
+    ate = move_to in food_set
+    if ate:
+        return [move_to] + list(body)
+    return [move_to] + list(body[:-1])
+
+
+def _blocked_from_bodies(bodies, exclude_body=None):
+    """Build a blocked-cell set from a list of bodies (each a list of (x,y)
+    tuples), using the same tail-vacates-next-turn approximation as
+    `_build_blocked` (a snake that just grew -- duplicate last two segments
+    -- keeps its tail blocked). If `exclude_body` is one of the bodies in
+    the list (by identity), that body's OWN HEAD (index 0) is skipped when
+    blocking -- used so a flood fill can validly start at a snake's own new
+    head cell without it appearing blocked."""
+    blocked = set()
+    for body in bodies:
+        if not body:
+            continue
+        n = len(body)
+        just_ate = n >= 2 and body[-1] == body[-2]
+        for i, seg in enumerate(body):
+            if body is exclude_body and i == 0:
+                continue
+            if i == n - 1 and not just_ate:
+                continue
+            blocked.add(seg)
+    return blocked
+
+
+def _opponent_worst_case_area(nxt, my_new_body, opp, blocked_now, other_bodies,
+                               width, height, food_set, cap):
+    """Real (not speculative-territory) 1-ply adversarial lookahead: assume
+    the single `opp` snake gets to pick its own next move AFTER seeing that
+    we've committed to `nxt`, choosing whichever of its own legal moves
+    minimizes OUR resulting flood-fill area the most (a paranoid/minimax
+    worst-case assumption -- cheap since there's normally exactly one
+    opponent in this game format).
+
+    This directly targets the many-rounds-documented "genuine 1-ply tie"
+    failure class (see README_agent.md -- dozens of traced examples across
+    many opponents, most recently and persistently OliverMKing__astar-snake,
+    where two candidate moves have IDENTICAL raw flood-fill area/Voronoi
+    territory at the moment of decision, and only diverge in safety once an
+    opponent's very next real move seals a chokepoint). Unlike the old,
+    already-removed `opp_territory`/`area_pess` mechanism (which pessimistically
+    blocked every cell an opponent could reach within a fixed multi-move
+    horizon -- found to be uninformative/actively harmful on a small board,
+    see README_agent.md history), this simulates the opponent's actual
+    *single* next legal move, not a many-move reachable-set, so it cannot
+    inflate an entire large open region into looking dangerous merely
+    because an opponent could eventually wander into part of it.
+
+    Returns the minimum resulting area across the opponent's legal moves
+    (or None if the opponent has no legal moves / doesn't exist, i.e. no
+    extra info available)."""
+    opp_body = [(seg["x"], seg["y"]) for seg in opp["body"]]
+    opp_head = opp_body[0]
+    worst = None
+    for dx, dy in DIRS.values():
+        opp_nxt = (opp_head[0] + dx, opp_head[1] + dy)
+        if not _in_bounds(opp_nxt, width, height):
+            continue
+        if opp_nxt in blocked_now:
+            continue
+        opp_new_body = _advance_body(opp_body, opp_nxt, food_set)
+        leaf_bodies = [my_new_body, opp_new_body] + other_bodies
+        leaf_blocked = _blocked_from_bodies(leaf_bodies, exclude_body=my_new_body)
+        area = _flood_fill_size(nxt, leaf_blocked, width, height, cap)
+        if worst is None or area < worst:
+            worst = area
+    return worst
+
+
 def _bfs_nearest_food_dist(start, blocked, width, height, food_set):
     """Shortest-path distance (BFS) from start to nearest food, avoiding
     blocked cells. Returns None if unreachable."""
@@ -484,6 +562,18 @@ def move(game_state):
         # risky_cells / winnable_cells below).
         opp_next_cells = risky_cells | winnable_cells
 
+        # Setup for a real (not speculative-territory) 1-ply adversarial
+        # opponent-response lookahead -- see _opponent_worst_case_area's
+        # docstring above for the full rationale. Only meaningful/cheap to
+        # do exactly in the standard 1v1 format (2 snakes total); with more
+        # opponents we'd need to pick which one to model adversarially, so
+        # we conservatively skip this extra term rather than guess (falls
+        # back to the existing, already-validated single-ply heuristics --
+        # zero behavior change in that rarer case).
+        my_body_t = [(seg["x"], seg["y"]) for seg in my_body]
+        _other_snakes = [s for s in snakes if s["id"] != my_id]
+        single_opp = _other_snakes[0] if len(_other_snakes) == 1 else None
+
         best_name = None
         best_score = float("-inf")
         for name, nxt in candidates:
@@ -606,6 +696,35 @@ def move(game_state):
             # turn over turn while the safer alternative kept 2-3x more).
             voronoi_mine = _voronoi_area(nxt, opp_heads, blocked, width, height)
             score += voronoi_mine * 6
+
+            # Real 1-ply adversarial opponent-response lookahead (only in
+            # the standard 1v1 case -- see setup comment above and
+            # _opponent_worst_case_area's docstring for full rationale).
+            # This is the many-rounds-recurring "real multi-ply lookahead"
+            # idea, finally attempted here in a narrowly-scoped, low-risk
+            # form: rather than trying to model the opponent's full
+            # heuristic, just assume they play adversarially against OUR
+            # space (a standard, safe paranoid/minimax assumption), one
+            # real move deep. This directly targets the single most
+            # persistent traced failure across this file's history: two
+            # candidates that are EXACTLY tied on every current-turn metric
+            # (raw area, Voronoi territory) but diverge as soon as the
+            # opponent's very next move is accounted for (e.g. one path's
+            # only chokepoint back to open space is one cell the opponent
+            # can reach next turn; the other's isn't). Purely additive --
+            # cannot override the hard-trap/soft-margin gates above, which
+            # are still driven by the *raw*, non-speculative area, so this
+            # cannot repeat the previously-documented "pessimistic area
+            # override" bug class (see the extensive opp_territory/area_pess
+            # history elsewhere in this file).
+            if single_opp is not None:
+                my_new_body = _advance_body(my_body_t, nxt, food_set)
+                opp_worst_area = _opponent_worst_case_area(
+                    nxt, my_new_body, single_opp, blocked, [],
+                    width, height, food_set, cap,
+                )
+                if opp_worst_area is not None:
+                    score += min(opp_worst_area, area_for_score) * 4
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area_for_score < my_length:
