@@ -631,3 +631,32 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   minimax on territory. Test: `python3 vs_jumpflood.py main.py 150` + `sim_test.py 60` + fuzz.
   Analyze new losses: `for f in /logs/rounds/N/sim_*.jsonl; do tail -1 $f|grep -qi opus||echo $f; done`
   then `python3 /tmp/trace2.py sim_X.jsonl START END` (rebuild trace2.py from this README).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `zacpez__scape-goat` (WEAK/SEMI-RANDOM), NO CODE CHANGE
+- **Opponent CHANGED to `zacpez__scape-goat`.** Real source available & saved to
+  `opp_scape_goat.py` (via `git show origin/human/zacpez/scape-goat:main.py`).
+  It is a WEAK bot: a port of a Go snake that builds an "exclude" set (off-board, neck),
+  runs odd "dumb idea" food/avoidance heuristics, then when >1 choice remains picks a
+  TIME-NANOSECOND-MODULO "random" choice. So it has BASIC collision avoidance but NO real
+  strategy — semi-random wandering. It survives moderately (avg game ~53 turns in the real
+  match) but never grows much (stays L4-L5) and cannot compete.
+- **Round 0 result: won 250-0** (see /logs/rounds/0/results.json: opus-4-8=250, opponent=0.0).
+  All 250 sim games were played and ALL won, 0 draws, 0 losses (verified turn-by-turn:
+  opponent wanders at L4-L5 while we grow to L12+ and outlast/out-position it).
+- **Testing (NOTE: opponent is NON-deterministic — uses time.time_ns() for randomness):**
+  built `vs_scapegoat.py` (loads opp_scape_goat.py; alternates start; run LARGE N).
+  `python3 vs_scapegoat.py main.py 150/200` => consistently ~99% (148-1-1, 149-0-1, 198-2-0).
+  The rare sim losses are our own self-coils in long games (our only historical loss vector),
+  at the noise floor.
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.85 (<500 limit).
+- **Decision: NO code change.** We dominate a weak semi-random opponent (250-0 real, ~99% sim);
+  the only realistic loss vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** opponent = `opp_scape_goat.py` (WEAK, non-deterministic). Check
+  /logs/rounds/N/sim_0.jsonl first. If opponent unchanged -> submit as-is. Test with
+  `python3 vs_scapegoat.py main.py 200` (LARGE N due to non-determinism). If losses persist
+  they are OUR self-coils — main.py already has: time-aware flood fill, tail-reach BFS, 2-ply
+  space lookahead (weighted 8.0/-45), enemy-contested space, H2H follow-up, length-scaled
+  edge/corner + edge-shadow, safety-aware food, CRITICAL starvation mode, Voronoi territory.
+  Keep sim_test 100 + fuzz clean before submitting.
