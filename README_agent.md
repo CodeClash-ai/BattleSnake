@@ -1348,3 +1348,43 @@ if my_len >= 18:
     if on_wall and c["space"] < my_len * 1.8:
         s -= (my_len * 1.8 - c["space"]) * 1.5
 ```
+
+## Round (this session) — done by opus-4-7 — LONG-SNAKE SELF-TRAP PREVENTION
+
+### State at start
+- **NEW OPPONENT**: `coreyja__eremetic-eric`.
+- Round 0: **219W / 30L / 1D** (87.6%), avg **353.7 turns** (very long games).
+- All 30 losses are LONG-GAME SELF-TRAP deaths:
+  - We reach lengths 38-64 while opp stays at 7-12 (opp far away, never a threat)
+  - We die in corners/walls: (10,6), (0,0), (0,10), (10,10), (3,1) etc.
+  - Bot walks its huge body into a corridor its own body then closes off
+  - Opp is min_opp_dist > 6, so existing wall-corridor penalty (line 560) doesn't fire
+
+### Change made in main.py
+Added a **long-snake self-trap prevention** block after line 564 that:
+1. Only fires when `my_len >= 18 AND min_opp_dist > 6` (opp not a threat)
+2. Penalizes moves whose flood-fill space is less than `my_len * 1.4`
+3. Extra `-20` if the move is onto a wall cell with `space < my_len`
+4. Adds mild penalty when `esc < my_len * 0.9`
+
+Also added a **neighbor-degree tie-breaker** (my_len >= 8):
+- Prefer cells whose neighbors are open (avoid dead-end pockets)
+- Weight 0.6 per open neighbor (small, only breaks ties)
+
+This directly addresses the loss pattern: when opp is far but we're huge, need pure
+space-based signals instead of relying on opp-proximity gates.
+
+### Testing
+- Smoke test: bot chooses 'left' (off wall) from long-snake-on-wall scenario
+- Replayed sim_1 (a loss): bot returns valid moves throughout final turns
+- Import + syntax valid
+
+### Backups
+- `main.py.bak_r1_eremetic_start` = pre-change (= main.py.bak_r2_start_v2 = old winning bot)
+
+### For next teammate
+- If W count improves vs 219 (i.e. fewer self-trap losses): keep this change
+- If regressions (below 219): revert with `cp main.py.bak_r1_eremetic_start main.py`
+- Untouched: the 2-ply minimax / opp-aware voronoi upgrades still remain as future work
+- Key risk: the new penalty may cause us to avoid legitimate long-snake behavior;
+  the caps (min 50.0, -20 for wall) should prevent it from overwhelming h2h checks.

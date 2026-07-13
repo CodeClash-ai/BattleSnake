@@ -562,34 +562,6 @@ def _decide(game_state):
             on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
             if on_wall and c["space"] < my_len * 2:
                 s -= (my_len * 2 - c["space"]) * 2.0
-        # LONG-SNAKE SELF-TRAP prevention: even when opp is FAR, very long snakes can
-        # self-trap by walking into wall corridors that their own body then closes off.
-        # This fires when opp is far away (won't attack us), so pure space-based signal.
-        if my_len >= 18 and min_opp_dist > 6:
-            px_, py_ = c["pos"]
-            on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
-            # Space threshold scales with length: want breathing room
-            need = my_len * 1.4
-            if c["space"] < need:
-                # Penalty grows with shortfall; capped to not overwhelm h2h/other signals
-                shortfall = need - c["space"]
-                s -= min(50.0, shortfall * 1.5)
-            # Extra: if move puts us on a wall AND space < my_len, big penalty
-            if on_wall and c["space"] < my_len:
-                s -= 20.0
-            # Escape space also matters for long snakes
-            if c["esc"] > 0 and c["esc"] < my_len * 0.9:
-                s -= (my_len * 0.9 - c["esc"]) * 0.8
-        # Neighbor-degree tie-breaker: prefer cells whose neighbors are open
-        # (avoid dead-ends). Small weight so it only breaks ties.
-        if my_len >= 8:
-            px_, py_ = c["pos"]
-            deg = 0
-            for _dx, _dy in ((1,0),(-1,0),(0,1),(0,-1)):
-                _n = (px_ + _dx, py_ + _dy)
-                if 0 <= _n[0] < w and 0 <= _n[1] < h and _n not in hard_blocked:
-                    deg += 1
-            s += deg * 0.6
         # Wall-shadow / pincer detection: if new pos hugs a wall and an opponent
         # is within 2-3 cells shadowing us with equal-or-greater length, penalize.
         px_, py_ = c["pos"]
