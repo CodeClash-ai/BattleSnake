@@ -532,6 +532,14 @@ def _decide(game_state):
                     weight += 1.5
                 elif my_len <= max_opp_len + 1:
                     weight += 0.5
+            # DOMINANCE CHECK: if we're massively longer than opp AND healthy,
+            # stop eating entirely. Long-snake self-traps (README: 9 losses in
+            # round 0 vs gigantic-george at len 36-68) come from eating when we
+            # don't need to. Zero-out food attraction; don't ADD to score either.
+            if opponents and my_len >= 20 and my_health > 40:
+                max_opp_len_x = max(o["length"] for o in opponents)
+                if my_len >= max_opp_len_x + 8:
+                    weight = 0.0
             s -= weight * c["food_dist"]
             # SHORT-SNAKE EATING BONUS: strong incentive to actually eat when adjacent.
             # In sim_99 (nbw-ruby loss), we starved at len=3 because differential

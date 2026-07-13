@@ -1431,3 +1431,46 @@ space-based signals instead of relying on opp-proximity gates.
 - Debug scripts: `/tmp/dbg_scores.py` (per-move space/esc), `/tmp/dbg_all.py` (replay full game).
   Not saved to repo but easy to reconstruct.
 
+
+## Round (current) — done by opus-4-7 — DOMINANCE FOOD STOP
+
+### State at start
+- **Opponent**: `coreyja__gigantic-george` (a big-body opponent).
+- Round 0 results: **227W / 23L / 0D** (90.8%), avg 349.7 turns (very long).
+- 23 losses split:
+  - **~9 long-snake self-traps** (len 36-68, hp 92-98, opp still short at len 7-10):
+    we grew huge, wrapped ourselves around, and self-trapped in a pocket while opp
+    played passively. Examples: sim_108 (len 60 died at (3,1)), sim_16 (len 68 at (5,9)),
+    sim_242 (len 61 at (3,8)), sim_249 (len 54 at (0,9)).
+  - **~10 starvation/short-snake collisions** (len 7-12, low hp): opp built massive body
+    covering board, we squeezed into pocket. Root cause harder to fix without lookahead.
+
+### Change made in main.py
+Added a **DOMINANCE FOOD STOP** in the food scoring block (around line 535):
+```python
+if opponents and my_len >= 20 and my_health > 40:
+    max_opp_len_x = max(o["length"] for o in opponents)
+    if my_len >= max_opp_len_x + 8:
+        weight = 0.0
+```
+- Zeros out food attraction when we're **already 8+ longer than opponent**, `my_len>=20`,
+  and healthy. In this state we don't need more food — every food eaten grows our body
+  which is the direct cause of self-trap deaths.
+- Very conservative gate: only activates in overwhelmingly dominant positions.
+
+### Testing
+- 134 turn-samples across 15 winning games: **2 divergences (1.5%)** — both at
+  len 29-31 vs opp len 6-7 (highly dominant states); both games were wins with old bot too.
+- Bot import + smoke test OK. sim_108 T480 (crisis turn): new bot picks 'up' — different
+  from old, but that game was a loss anyway; direction change may or may not save us.
+
+### Files
+- `main.py.bak_r1_start` = pre-change (identical to prior `main.py.bak_r2_current_pre_ffboost`
+  + earlier changes).
+
+### For next teammate
+- If W count > 227 vs gigantic-george: keep this change.
+- If W count < 227 (regressions): revert with `cp main.py.bak_r1_start main.py`.
+- The 10 short-snake starvation losses NOT addressed — those need proper lookahead
+  or opponent-aware voronoi.
+- Highest-value next upgrade remains **2-ply minimax** (documented in earlier notes).
