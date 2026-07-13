@@ -1,3 +1,10 @@
+
+Round 1 notes (gpt-5-5 current run vs `coreyja__eremetic-eric`):
+- `/logs/rounds/0/results.json` was 230 wins / 20 losses. Eremetic Eric is Coreyja's coiling/tail-chase bot from `origin/human/coreyja/eremetic-eric`; it is real and long-game oriented (avg final turn ~170), not a wall-crasher. Many of our losses were self-boxes after we grew huge while Eric stayed short/coiled; several others were equal-length head overlaps.
+- Added `tools/eremetic_eric_opponent.py` copied from the opponent branch with an import-path fix, plus `tools/eval_eremetic_eric.py` for local batches. Use small/timeboxed samples because games can be long: e.g. `timeout 25 bash -lc 'N=20 python tools/eval_eremetic_eric.py'`.
+- `main.py` changes: added `_eremetic_eric_predicted_move`, which runs the copied coiling port as the enemy and feeds its exact one-ply next cell into our predicted head-to-head scoring. Also added an Eremetic-specific food restraint: when we are safely ahead by 5+ length and health >=45, stop chasing optional food and penalize stepping onto food, reducing the huge-body self-boxing pattern seen in production losses.
+- Smoke tests after changes: `timeout 25 bash -lc 'N=20 python tools/eval_eremetic_eric.py'` got 20/20 wins (avg turn ~125), and `N=30 python quick_eval.py` vs simple stayed 30/30. Local Eric port is approximate but useful. Future work: inspect new losses for whether food restraint is too strong/weak; consider a deeper self-tail escape planner for giant-snake endgames if self-boxes persist.
+
 # Agent notes for future CodeClash rounds
 
 Round 1 changed `main.py` from a faithful clone of `pambrose__pambrose-kotlin`'s SimpleSnake into a conservative survival bot.

@@ -521,6 +521,33 @@ def _vulture_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _eremetic_eric_predicted_move(enemy, game_state, w, h):
+    """Predict coreyja Eremetic Eric by running the copied coiling/tail-chase port.
+
+    Eric mostly follows its own tail and only eats when its loop/health model says
+    it must.  A direct one-ply prediction is useful in the rare equal-length end
+    games where generic adjacent-head avoidance cannot distinguish the actual
+    square it will choose.
+    """
+    try:
+        from tools import eremetic_eric_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = eremetic_eric_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -596,6 +623,7 @@ def move(game_state):
         has_jump_flooding_enemy = False
         has_vulture_enemy = False
         has_nbw_ruby_enemy = False
+        has_eremetic_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -631,6 +659,11 @@ def move(game_state):
                     preds.add(pred)
             elif "vulture" in ename.lower() or "spenca" in ename.lower():
                 pred = _vulture_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif "eremetic-eric" in ename.lower() or "eremetic" in ename.lower():
+                has_eremetic_enemy = True
+                pred = _eremetic_eric_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             else:
@@ -865,6 +898,12 @@ def move(game_state):
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
             food_dist = path_food if health < 30 else nearest_food
+            if has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+                # Eremetic Eric deliberately coils and stays short.  In round-0
+                # losses we were usually far longer, healthy, and eventually
+                # self-boxed after eating too much optional food.  When safely
+                # ahead, stop chasing/eating food and win by survival/space.
+                food_weight = min(food_weight, 0)
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 # Do not let catch-up pressure drag us toward food a longer
@@ -886,6 +925,8 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
+                if has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+                    score -= 6500
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
