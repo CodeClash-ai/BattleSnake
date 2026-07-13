@@ -1,18 +1,16 @@
-import os
 import json
 
-log_dir = "/logs/rounds/1/"
-# Let's inspect sim_100.jsonl details from turn 120 onwards
-with open(os.path.join(log_dir, "sim_100.jsonl")) as f:
+log_path = "/logs/rounds/0/sim_100.jsonl"
+with open(log_path, 'r') as f:
     lines = f.readlines()
 
-print("SIM 100 TURNS 120 to 132:")
-for line in lines:
-    data = json.loads(line)
+print(f"Total turns: {len(lines)}")
+# Find where the game ends and our snake's final turns
+for turn_idx in range(len(lines) - 5, len(lines)):
+    data = json.loads(lines[turn_idx])
+    turn = data.get("turn")
+    print(f"--- Turn {turn} ---")
     if "board" in data:
-        turn = data["turn"]
-        if 120 <= turn <= 132:
-            print(f"Turn {turn}:")
-            for s in data["board"]["snakes"]:
-                print(f"  Snake {s['name']}: Head: ({s['head']['x']},{s['head']['y']}), Len: {s['length']}, Health: {s['health']}")
-                print(f"    Body: {s['body']}")
+        for s in data["board"]["snakes"]:
+            print(f"  Snake {s['name']}: Head: ({s['head']['x']},{s['head']['y']}), Len: {s['length']}, Health: {s['health']}")
+            print(f"    Body: {s['body']}")
