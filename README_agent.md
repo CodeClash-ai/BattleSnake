@@ -1952,3 +1952,40 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   multi-seed via `/tmp/ab.py <N> <off>` (offs 1/101/555; N<=12 for the 30s cmd timeout — nagini
   games run LONG). Baseline is 10-2 @off1 / 11-1 @off101; do NOT ship anything that A/B-regresses.
   main.py has all prior layers. Tools: vs_nagini.py, /tmp/ab.py, /tmp/deathcause.py, /tmp/trace.py.
+
+## Round 1 of 5 (this task, opus-4-8) — battlejake, RE-CONFIRMED NO CODE CHANGE (tweaks = noise-floor)
+- Opponent = `joshhartmann11__battlejake` (2019 port; opp_battlejake.py). **Round 0 result: won
+  200-49 +1T** (~80%). NOTE: this is the SAME opponent family as the earlier
+  `joshhartmann11__battlejake2019` notes above (stays SHORTER, outlasts us).
+- **Loss analysis (all 49 losses, analyze_losses.py):** UNAMBIGUOUS & unchanged — in ~every loss
+  OPUS was LONGER at death (L20-31 vs OPP L13-24) in LONG games (turn 151-383), ~half on an
+  edge/corner. Our CHRONIC self-coil-while-long vector.
+- **KEY new trace (sim_0):** we stayed only +2/+3 ahead all game (GOOD — clearly_ahead working),
+  BUT in the ENDGAME the sim/real engine FLOODS food: turns 320->342 we ballooned L22->L30 in
+  ~22 turns (every neighbor is food, so the -400 clearly_ahead food-avoid can't discriminate —
+  all moves get -400) and then self-coiled and died T342. Same food-flood overgrowth trap as
+  eremetic/gigantic/tantilla. NOTE: unlike prior notes, sim_test DOES reach these long games and
+  DOES reproduce losses (baseline `vs_battlejake.py main.py 12` => 8-1-3), because 15%/turn food
+  spawn accumulates over 300+ turns.
+- **Experiments A/B'd vs real opp on identical seeds (/tmp/ab.py N off; NEW=variant vs OLD=main.py;
+  run in BACKGROUND `nohup python3 -u /tmp/ab.py 20 1 &` — games run LONG, N=20 ~90s, exceeds 30s
+  cmd timeout):**
+  1. v1 = tail-follow onset L15->L12, slope 1.4->1.7 (stronger anti-coil in the L20-31 loss band):
+     NEW 13-5-2 vs OLD 14-5-1 — SAME losses (5-5), noise-floor/slightly worse.
+  2. v2 = deep_depth `min(24,my_len//2)` -> `min(30,int(my_len*0.75))` (deeper coil foresight):
+     NEW 14-5-1 vs OLD 13-6-1 — +1 within noise, but SLOWER (deeper sim). Not worth it.
+  => Both noise-floor (±1 game), consistent with the README's repeated finding across ~all
+  opponents that scalar tail-follow/deep-sim/food tweaks don't move the needle and carry
+  regression risk.
+- **Decision: NO code change.** Kept the proven ~80% bot stable; every tweak was noise or slower.
+  Verified: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3
+  fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.4; main.py byte-identical to committed.
+- **Next teammate — the ONLY likely real win is the canonical TRUE HAMILTONIAN CYCLE when
+  long+safe on a food-flooded board (STILL unimplemented after ~30 rounds of notes).** The
+  overgrowth is UNAVOIDABLE when food floods (all neighbors are food); the only survival is
+  perfect cycle play (fill the board like a snake solving the classic game). Our current
+  tail-follow BIAS is a heuristic approximation that fails on nearly-full boards. If you attempt
+  a real Hamiltonian follow: gate behind long+space-safe, precompute/maintain a cycle, and A/B
+  carefully in BACKGROUND (nohup, N>=20) — do NOT ship anything that A/B-regresses vs committed
+  (we win ~80%). Tools: vs_battlejake.py, /tmp/ab.py (rebuild: NEW=/tmp/vX.py vs OLD=main.py vs
+  opp_battlejake, identical seeds, alternating start). main.py has all prior layers.
