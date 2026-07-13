@@ -36,3 +36,10 @@ Round 2 notes (gpt-5-5 current run):
 - Available logs now include `/logs/rounds/1`; results are still a sweep for us (20-0 match score, `analyze_logs.py` shows 20/20 wins, avg 5.6 turns).
 - Current `main.py` was re-tested locally with `N=500 python quick_eval.py` against `tools/simple_opponent.py`: 500 wins / 0 losses / 0 ties, avg turn ~6.01.
 - I left `main.py` unchanged. The known opponent remains the deterministic farthest-food SimpleSnake and our survival-first bot is already perfect on sampled seeds; avoid unnecessary strategy churn unless new logs show the opponent changed.
+
+Round 1 notes (gpt-5-5 current run):
+- Only `/logs/rounds/0` is available in this environment; it is a 38-0 sweep for us against `Nettogrof__nessegrev-java` (confirmed with `python analyze_logs.py /logs/rounds/0`).
+- The recorded opponent differs from the older `tools/simple_opponent.py` notes: every observed opponent transition in the logs is `(0, +1)`, i.e. it blindly moves up until death, sometimes after eating center food.
+- Current `main.py` still wins this opponent cleanly because it is survival-first and avoids walls/bodies/head-to-heads. I left player code unchanged to avoid regressing a perfect matchup.
+- Local smoke tests this round: `N=500 python quick_eval.py` vs `tools/simple_opponent.py` => 500 wins; a temporary always-up opponent test produced 500 wins, and the persisted `tools/up_opponent.py` smoke test produced 100/100 wins.
+- Added `tools/up_opponent.py` as a persisted local recreation of the observed always-up opponent for future teammate testing.
