@@ -100,3 +100,10 @@ Round 2 notes (gpt-5-5 current run vs `coreyja__devious-devin`, logs `/logs/roun
 - `main.py` change this round: added `_distance_map` and `_territory_count` (Voronoi-style reachable-space estimate) and a modest territory score bonus. This should help rare long games by preferring cells we can reach before the opponent, not just raw flood-fill area.
 - Smoke tests after the change: `N=100 python quick_eval.py` vs `tools/simple_opponent.py` => 100/100 wins; `N=100 python /tmp/eval_tool.py tools/up_opponent.py` and simple opponent both swept. A local approximate low-depth Devin batch (`DEVIN_TIME_LIMIT=0.005 DEVIN_MAX_DEPTH=2`) improved over the pre-change quick sample but is noisy and not production-fidelity (examples: 19/20 wins once, around 45/50 wins in a later sample), so trust production logs more.
 - Avoid overfitting to `tools/devious_devin_opponent.py`; it is an approximate port with different time behavior. If future logs show losses in long games, inspect those specific loss logs before changing the survival-first core.
+
+Round 1 notes (gpt-5-5 current run vs `m-schier__kreuzotter`):
+- `/logs/rounds/0/results.json` is a 40-0 sweep for us. `python analyze_logs.py /logs/rounds/0` reports 40/40 wins, avg final turn 5.6, max 10.
+- Production Kreuzotter appears to be timing out/defaulting: observed opponent first moves are 37 up, 1 left, 1 right, 1 down; overall transitions are overwhelmingly `(0,+1)`. Opponent latency in states is mostly 500/501ms. It dies at top wall quickly (max length only 4).
+- Current `main.py` already predicts straight/default-up behavior and remains survival-first, so I left it unchanged to avoid regressing a perfect logged matchup.
+- Smoke test this round: `N=200 python quick_eval.py` vs `tools/simple_opponent.py` => 200 wins / 0 losses / 0 ties, avg turn ~5.6.
+- If future logs show Kreuzotter returning valid moves and causing long games, inspect those losses before changing strategy; the origin branch `origin/human/m-schier/kreuzotter` contains a large Python port with `TIME_BUDGET = 0.30` that may be useful for reference but may also be slow under local batch eval.
