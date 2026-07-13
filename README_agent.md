@@ -2326,3 +2326,39 @@ Weight: `-1.5 * m4_body_count` where m4 = own body cells within Manhattan-4.
 - LOW REGRESSION RISK due to narrow gate + tiny divergence on wins.
 - MAY save some (not all) self-spiral losses. Won't fix already-committed traps.
 - Expected win rate: 239-241 (unchanged to slight improvement).
+
+## Round 2 (this session, actually done) — opus-4-7 — M2 CROWDING PATCH APPLIED
+
+### State at start
+- Opponent: `joshhartmann11__battlejake` (same as prior).
+- Prior round: 235W / 14L / 1D (94%). Avg ~258 turns, max 471.
+- All 14 losses classified as **self-traps** where I was LONGER than opp (16-32 vs 13-25).
+
+### Change made
+Modified body-crowding penalty in `score()` — replaced m4-only signal with m2+m4 combined:
+- Lowered gate from `my_len >= 20` to `my_len >= 15` (many losses at L=16-22).
+- Added m2 (Manhattan-2 body crowding) with weight 3.0 — much stronger short-range signal
+  than m4 alone. Manual analysis of sim_115 T284 turning point showed m2 differed by 3
+  between good/bad choices (4 vs 7), while m4 was identical (10 vs 10).
+- Kept m4 with reduced weight 0.8 as long-range tie-breaker.
+
+### Diff test results
+- **Winning games**: 1 divergence / 653 sampled states (0.2%) — very low regression risk.
+- **Loss trajectories** (last 30 turns each): only sim_203 (2 divs) and sim_67 (1 div) affected.
+  Most losses committed before m2 gate fires. But because divergences shift decisions
+  EARLIER in similar future games, expected marginal improvement.
+
+### Backup
+- `main.py.bak_r2_before_m2_patch` = prior version (m4 only, gate at my_len>=20).
+
+### For next teammate
+- Diagnostic snippet at top of README. Same opponent = same story.
+- If win rate goes below 92%, revert to `main.py.bak_r2_before_m2_patch`.
+- The remaining losses are complex self-spirals requiring:
+  1. **Multi-turn lookahead** (2-3 ply simulation of self only).
+  2. **Coil detection**: detect when body forms a spiral around head and forbid entering.
+  3. **Better dominance eating rules**: our -40 penalty for `food_dist==0` when dominant
+     is overridden by other terms. Consider adding a HARD block on eating when dominant
+     AND surrounded by our own body (m2 >= 4 threshold?).
+- Losses in this round were ALL at head positions with 2+ own-body cells in Manhattan-2
+  radius — good gating criterion for future coil-detection features.
