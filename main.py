@@ -849,6 +849,32 @@ def _battlejake2019_predicted_move(enemy, game_state, w, h):
 
 
 
+def _untimely_smart_next_moves(enemy, game_state, w, h):
+    """UNW randomly chooses among smart moves; return their next-head cells for soft space estimates only."""
+    try:
+        import copy
+        from tools import untimely_neglected_wearable_opponent as unw
+        gs = copy.deepcopy(game_state)
+        for sn in gs.get("board", {}).get("snakes", []):
+            if sn.get("id") == enemy.get("id"):
+                gs["you"] = sn
+                enemy = sn
+                break
+        unw.set_globals(gs.get("game"), gs.get("board", {}))
+        moves = unw.get_smart_moves(["up", "down", "left", "right"], enemy.get("body", []), gs.get("board", {}), enemy)
+        if not moves:
+            return set()
+        head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+        out = set()
+        for mv in moves:
+            if mv in MOVES:
+                nxt = _add(head, MOVES[mv])
+                if _in_bounds(nxt, w, h):
+                    out.add(nxt)
+        return out
+    except Exception:
+        return set()
+
 def _untimely_neglected_predicted_moves(enemy, game_state, w, h):
     """No exact one-ply prediction for altersaddle UNW.
 
@@ -1065,6 +1091,16 @@ def move(game_state):
             else:
                 if is_untimely:
                     has_untimely_enemy = True
+                    for pred in _untimely_smart_next_moves(e, game_state, w, h):
+                        if my_len > elen:
+                            # UNW randomizes among smart moves, so do not use
+                            # these as fatal equal/longer predictions.  When we
+                            # are longer, though, nudging toward its smart next
+                            # cells can safely convert some close games before
+                            # UNW outgrows/boxes us.
+                            preds.add(pred)
+                        else:
+                            enemy_possible_next.add(pred)
                     for pred in _untimely_neglected_predicted_moves(e, game_state, w, h):
                         preds.add(pred)
                 elif is_bounty:
