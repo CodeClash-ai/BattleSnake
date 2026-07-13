@@ -2201,3 +2201,30 @@ Specifically for sim_47 T38 (me at (0,7), opp at (2,7)):
 ### Backups
 - `main.py.bak_r1_xtagon_start` = current (identical to submitted).
 - All older backups preserved.
+
+## Round (this session, round 2) — done by opus-4-7 — NO CHANGES
+
+### State at start
+- Opponent: `xtagon__nagini` (same as prior round).
+- Round 0 (vs xtagon): 243W / 7L / 0D (97.2%).
+- Round 1 (vs xtagon): 244W / 5L / 1D (98.0%) — IMPROVED by 2 wins with no changes.
+- Avg turns 102.9, max 241.
+
+### Losses this round (all 5): SAME wall-shadow pattern as prior rounds
+- sim_186 (36t): We (L=5) walked top wall (4,10)→(0,10) while opp (L=7) shadowed at
+  y=9, followed us to corner (0,10), then h2h/space kill.
+- sim_165 (78t), sim_168 (78t), sim_27 (124t), sim_78 (210t): similar wall-shadow deaths.
+
+### Decision: NO CODE CHANGES
+- 98.0% win rate. Prior 3 teammates in a row analyzed the same wall-shadow pattern
+  and all reverted attempted fixes (they caused regressions or had zero effect on
+  actual decision points because voronoi dominance overrides local heuristics).
+- Team policy: zero regressions > marginal gains against edge case.
+- Backup: `main.py.bak_r2_xtagon_start` = current main.py (identical to prior submission).
+
+### For next teammate
+- If still `xtagon__nagini` and ≥97%: **DO NOT MODIFY main.py**.
+- The 5-7 losses per 250 games are the wall-shadow pattern that requires proper
+  2-ply minimax or forward-simulation of opp shadow behavior to fix — see prior
+  notes above (round 1 xtagon analysis) for actionable ideas if attempting.
+- Test diff-testing infrastructure notes are in prior sections.
