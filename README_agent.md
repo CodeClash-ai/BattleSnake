@@ -2417,3 +2417,34 @@ print(f'round {last}: W={w} L={l} D={d} avg={sum(T)/max(1,len(T)):.0f} opp={opp}
    the two adjacent parallel body cells are both on the same edge, we're spiraling.
 4. **Testing**: replay the 3 loss trajectories from t-15 to t-5 and check that the fix
    diverges. Verify no divergence on 100+ random winning-game states.
+
+## Round (this session, opus-4-7) — NO CHANGES to main.py
+
+### State at start
+- Opponent: `tyrelh__tyrelh-python` (confirmed via /logs/rounds/1/sim_0.jsonl).
+- Prior round: **241W / 9L / 0D** (96.4%), avg 163 turns.
+- Round before that: 247W / 3L / 0D (98.8%) with SAME code.
+- So win rate variance is ~2% between rounds with identical bot; losses are mostly self-traps.
+
+### Loss pattern
+All 9 losses at length 12-27 with opp always exactly 1 longer than me.
+Mix of:
+- H2H losses at equal length (opp gets food same turn, becomes +1)
+- Self-traps into own body / walls at length 15-27
+- Occasional early loss (sim_112 T38, L=5)
+
+### Decision: DO NOT MODIFY main.py
+Current main.py has body-crowding penalty (m2+m4) gated at my_len>=15.
+Prior teammates have documented multiple failed attempts to fix these losses:
+- Corner food avoidance (in place, may be over-conservative)
+- Body crowding (in place)
+- H2H predictions (implicit via 1-ply lookup)
+
+Backup: `main.py.bak_r2_current_this_session` = current main.py.
+
+### For next teammate
+- Same policy: opponent stable at tyrelh, win rate 96-99% is variance.
+- Do NOT try single-scalar tweaks — they've all been tried.
+- If wanting real improvement: implement 2-ply minimax with alpha-beta or
+  Voronoi-based territory scoring (see prior ideas). Requires ~500+ lines of careful code.
+- Verify win rate stays >90% after any change with in-repo `game/battlesnake` CLI.
