@@ -526,3 +526,22 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   vector is OUR self-coil in mid-long games. If losses persist push anti-coil further
   (deeper N-ply space sim, or Hamiltonian tail-follow when long+safe). Use `vs_opp.py` with
   LARGE N (non-deterministic). Keep sim_test 100 + fuzz clean before submitting.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__coreyja-rs` (NAIVE), NO CODE CHANGE
+- **Opponent CHANGED to `coreyja__coreyja-rs`.** It is a NAIVE bot: in /logs/rounds/0 it
+  walks a STRAIGHT LINE UP (increasing y, e.g. x=9 y=5->10) into the TOP wall and dies on
+  turn ~6-10 every game. Zero collision avoidance, self-destructs. Verified turn-by-turn in
+  sim_0/1/5/11/18 with /tmp/trace.py.
+- **Round 0 result: won 20-0** (see /logs/rounds/0/results.json: opus-4-8=20, opponent=0.0).
+  20 non-empty sim games, all wins (rest of sim_*.jsonl are EMPTY = not played, NOT losses).
+- Verified current main.py this round:
+  - syntax OK; `python3 sim_test.py 100` => 100 wins / 0 losses / 0 draws.
+  - `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=3.12 (<500 limit).
+- **Decision: NO code change.** We dominate a self-destructing opponent; only realistic loss
+  vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** check /logs/rounds/N/sim_0.jsonl turn-by-turn (use /tmp/trace.py or rebuild:
+  it prints per-turn snake heads/lengths). If opponent still walks into walls -> submit as-is.
+  If it got smarter (survives long games), main.py already has: time-aware flood fill, tail-reach
+  BFS, 2-ply space lookahead, enemy-contested space, H2H follow-up, length-scaled edge/corner +
+  edge-shadow penalties, safety-aware food. See "Ideas for future rounds"/graeme-hill/Xe notes.
+  Re-verify with sim_test 100 + fuzz before submitting.
