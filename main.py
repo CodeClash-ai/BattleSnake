@@ -137,9 +137,11 @@ def move(game_state):
 
         enemies = [s for s in snakes if s.get("id") != my_id]
         enemy_heads = [_pt(s["head"] if "head" in s else s["body"][0]) for s in enemies]
-        enemy_next_pred = {
-            _simple_opponent_target_move(eh, food, w, h) for eh in enemy_heads
-        }
+        enemy_next_pred = []
+        for e in enemies:
+            eh = _pt(e["head"] if "head" in e else e["body"][0])
+            elen = e.get("length", len(e.get("body", [])))
+            enemy_next_pred.append((_simple_opponent_target_move(eh, food, w, h), elen))
 
         candidates = []
         for name, delta in MOVES.items():
@@ -177,10 +179,12 @@ def move(game_state):
                 score += 60 if health < 60 else 15
             if h2h_risk:
                 score -= 10000
-            # Known opponent often deterministically moves into one square; if
-            # equal length this would tie, so avoid unless there is no choice.
-            if nxt in enemy_next_pred:
-                score -= 5000
+            # Known opponent often deterministically moves into one square.
+            # Avoid equal/longer head-to-heads, but if we are longer this is a
+            # controlled attack and should be preferred.
+            for pred, elen in enemy_next_pred:
+                if nxt == pred:
+                    score += 2500 if my_len > elen else -5000
             candidates.append((score, name, nxt, area, h2h_risk))
 
         if candidates:
