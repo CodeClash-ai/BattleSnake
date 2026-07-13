@@ -68,3 +68,10 @@ Round 1 notes (gpt-5-5 current run vs `coreyja__improbable-irene`):
 - Observed opponent transitions in these logs are overwhelmingly `(0,+1)` (76 of 83), with only a few first/early horizontal moves. It usually drives into the top wall; current straight/default-up prediction and survival-first policy already cover it.
 - Re-ran `N=200 python quick_eval.py` vs `tools/simple_opponent.py`: 200 wins / 0 losses / 0 ties. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
 - Added `tools/improbable_irene_opponent.py`, copied from `origin/human/coreyja/improbable-irene`, with env knobs `IRENE_TIME_LIMIT` and `IRENE_MAX_ITERATIONS` defaulting low for local testing. Caution: even with low limits it can be CPU-heavy/slow in batch play and does not reproduce the logged early wall deaths under all settings; kill stray processes if experimenting.
+
+Round 2 notes (gpt-5-5 current run vs `coreyja__improbable-irene`, logs `/logs/rounds/1`):
+- `/logs/rounds/1/results.json` is another 20-0 sweep for us; `python analyze_logs.py /logs/rounds/1` reports 20/20 wins, avg final turn 5.75, max 10.
+- Opponent behavior is still effectively a wall-crasher/straight mover in production logs: transition counts in round 1 are `(0,+1)` 85 times, `(0,-1)` 9 times, `(-1,0)` once; first moves are 17 up, 2 down, 1 left. Our existing survival-first bot plus straight/default-up prediction already handles this.
+- Re-ran `N=100 python quick_eval.py` vs `tools/simple_opponent.py`: 100 wins / 0 losses / 0 ties, avg turn 5.94. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
+- Tooling change only: `analyze_logs.py` now prints opponent head-delta transition counters and first-transition counters, which makes it easier to spot whether future opponents are still defaulting/continuing straight or have changed strategy.
+- Caution: local batch attempts against `tools/improbable_irene_opponent.py` can hang/timeout and leave defunct processes even with low `IRENE_TIME_LIMIT`; the production logs are more reliable for this matchup.

@@ -26,6 +26,8 @@ turns = []
 starts = collections.Counter()
 deaths = []
 opponents = collections.Counter()
+transitions = collections.Counter()
+first_transitions = collections.Counter()
 
 for path in sorted(glob.glob(os.path.join(LOGDIR, "sim_*.jsonl")), key=sim_key):
     states = []
@@ -57,6 +59,23 @@ for path in sorted(glob.glob(os.path.join(LOGDIR, "sim_*.jsonl")), key=sim_key):
     s0 = states[0]["board"]
     starts[tuple((sn["name"], sn["head"]["x"], sn["head"]["y"]) for sn in s0.get("snakes", []))] += 1
 
+    # Opponent head deltas are useful for recognizing simple deterministic bots
+    # (e.g. always-up/straight-line wall deaths).
+    prev_heads = {}
+    for i, st in enumerate(states):
+        for sn in st["board"].get("snakes", []):
+            n = sn["name"]
+            if n == NAME:
+                continue
+            head = (sn["head"]["x"], sn["head"]["y"])
+            if n in prev_heads:
+                ph = prev_heads[n]
+                delta = (head[0] - ph[0], head[1] - ph[1])
+                transitions[(n, delta)] += 1
+                if i == 1:
+                    first_transitions[(n, delta)] += 1
+            prev_heads[n] = head
+
     if len(states) >= 2:
         prev = states[-2]
         prev_alive = {sn["name"]: sn for sn in prev["board"].get("snakes", [])}
@@ -73,6 +92,12 @@ else:
 print("starts top")
 for k, v in starts.most_common(10):
     print(v, k)
+print("opponent transitions top")
+for (n, d), v in transitions.most_common(12):
+    print(v, n, d)
+print("opponent first transitions top")
+for (n, d), v in first_transitions.most_common(12):
+    print(v, n, d)
 print("sample deaths")
 for d in deaths[:20]:
     print(d)
