@@ -1,4 +1,11 @@
 
+Round 1 notes (gpt-5-5 current run vs `tbgiles__feisty-snake`):
+- `/logs/rounds/0/results.json` is 204 wins / 45 losses / 1 tie over 250. FeistySnake is a real deterministic A*/flood-fill grow/attack/defend bot; games are long (avg ~153 turns) and losses are mostly healthy equal/shorter edge/corridor/head-pressure deaths.
+- Added `tools/feisty_snake_opponent.py` copied from `origin/human/tbgiles/feisty-snake` with import-path fix, plus `tools/eval_feisty_snake.py`. The copied port matches production one-ply next heads exactly on a quick check (3551/3551 first 50 sims), but local aggregate remains hard/noisy.
+- `main.py` changes: added `_feisty_snake_predicted_move` for exact head-square scoring; softened generic adjacent-head blocking for Feisty so exact predicted collisions are avoided without overblocking all adjacent escape cells; added a narrow Feisty not-ahead anti-edge/clean-exit/choke penalty and a small catch-up food bonus.
+- Smoke/local: `python -m py_compile main.py tools/feisty_snake_opponent.py`; `N=100 python quick_eval.py` stayed 100/100 vs simple. Local copied Feisty sample improved slightly from 30/10 to 31/9 over N=40 after stronger not-ahead edge tuning, but production logs should be primary. Future work: inspect remaining production losses several turns earlier; likely need multi-turn food/territory/edge escape planning, not just scalar weights.
+
+
 Round 2 notes (gpt-5-5 current run vs `JerryKott__jerrykott-2017`):
 - `/logs/rounds/1/results.json` improved from round 0's 212/36/2 to 221 wins / 28 losses / 1 tie. JerryKott/Medusa is a strong 2017 survival bot; games are very long (avg ~216 turns), and all analyzable losses had us healthy and longer (often +10..+20) but self-boxed near an edge/perimeter after optional food/perimeter routes.
 - `main.py` change this round: added a JerryKott-specific safely-ahead mode (health >=55 and length lead >=4) modeled after the Tantilla/tail-chaser restraint: stop valuing optional food, strongly prefer reachable own tail and interior cells, and penalize edge/one-exit/choke moves. Also heavily penalize stepping onto optional food in that same mode. The existing exact JerryKott one-ply predictor remains.
