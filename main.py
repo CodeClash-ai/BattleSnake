@@ -119,13 +119,12 @@ def move(game_state):
         my_length = you["length"]
         my_health = you["health"]
         
-        # When we are very long, we only eat food if health is low or we are smaller than the opponent.
         # Find opponent max length:
         opp_lengths = [s["length"] for s in board["snakes"] if s["id"] != my_id]
         max_opp_length = max(opp_lengths) if opp_lengths else 0
         
-        # Define hunger threshold: if we are already longer than any opponent and our health is above 35,
-        # we don't aggressively search for food.
+        # Hungry threshold: if our length is less than or equal to opponent's max length + 2,
+        # OR our health is critical (less than 35), we are hungry.
         is_hungry = (my_length <= max_opp_length + 2) or (my_health < 35)
         
         obstacles = set()
@@ -153,14 +152,31 @@ def move(game_state):
                     possible_moves.append((d, np))
                     
         if not possible_moves:
-            # If no completely free moves, try moving into segments that are about to be vacated!
-            # Let's find any move that is within bounds
+            # Fallback: choose the move that crashes into a segment with the minimum remaining time to vacate.
+            best_fallback = None
+            min_vacate = 999999
+            
+            # Map of positions to their step-to-vacate time
+            free_at_step = {}
+            for snake in board["snakes"]:
+                body = snake["body"]
+                N = len(body)
+                for i, seg in enumerate(body):
+                    pos = (seg["x"], seg["y"])
+                    steps_to_vacate = N - i
+                    free_at_step[pos] = max(free_at_step.get(pos, 0), steps_to_vacate)
+            
             for d, (dx, dy) in directions.items():
                 nx, ny = my_head[0] + dx, my_head[1] + dy
                 if 0 <= nx < width and 0 <= ny < height:
-                    possible_moves.append((d, (nx, ny)))
-            if not possible_moves:
-                return {"move": "up"}
+                    np = (nx, ny)
+                    v_time = free_at_step.get(np, 0)
+                    if v_time < min_vacate:
+                        min_vacate = v_time
+                        best_fallback = d
+            if best_fallback:
+                return {"move": best_fallback}
+            return {"move": "up"}
             
         dangerous_squares = set()
         for snake in board["snakes"]:

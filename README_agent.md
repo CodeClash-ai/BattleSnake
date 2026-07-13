@@ -30,3 +30,8 @@ In Round 1, we analyzed the matches against the tough opponent `ChaelCodes__corn
 
 7. **Fallback Move Selection**:
    - If no strictly obstacle-free squares exist (e.g., when completely cornered or surrounded), we fall back to choosing a move within bounds instead of defaulting to `"up"`. This gives the snake a chance to walk into segments that are about to be vacated on the exact turn.
+
+## Key Improvements in Round 2
+1. **Intelligent Fallback Move Selection**:
+   - In extremely tight situations where no completely free move is available (where previous turns yielded empty lists of possible moves), we no longer guess `"up"`.
+   - Instead, we perform a smart obstacle inspection to find the move that crashes into an occupied cell with the **minimum remaining time to vacate** (typically opponent/self tail-segments that are about to move). This minimizes the likelihood of outright instant loss, giving the snake a fighting chance of walking safely onto a spot that clears up in the same turn.
