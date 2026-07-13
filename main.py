@@ -710,6 +710,7 @@ def move(game_state):
         has_eremetic_enemy = False
         has_gigantic_george_enemy = False
         has_flipez_crystal_enemy = False
+        has_battlesnake_elon_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -764,6 +765,7 @@ def move(game_state):
                 if pred is not None:
                     preds.add(pred)
             elif "battlesnake-elon" in ename.lower() or "jackisherwood" in ename.lower() or "elon" in ename.lower():
+                has_battlesnake_elon_enemy = True
                 pred = _battlesnake_elon_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
@@ -954,6 +956,35 @@ def move(game_state):
                             score -= (12 - safe_area) * 7000
                         if edge_dist == 0 and near_flipez <= 5 and safe_area < 35:
                             score -= (35 - safe_area) * 900
+            if has_battlesnake_elon_enemy and enemy_max_len >= my_len:
+                # BattleSnakeElon often tail-chases/collision-avoids along compact
+                # body walls.  The sole round-1 production loss came from following
+                # a slightly longer Elon across the top-left edge: static flood-fill
+                # looked huge, but our chosen moves left zero/one clean next-turn
+                # exits once Elon's plausible next head squares were considered.
+                # Keep the earlier soft adjacent-head policy (exact predictor handles
+                # direct collisions), but reject edge/body-pocket moves with no
+                # clean escape while Elon is at least as long.
+                near_elon = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_elon <= 6 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    if clean_exits == 0:
+                        score -= 70000
+                    elif clean_exits == 1:
+                        score -= 16000 if edge_dist <= 1 or near_elon <= 3 else 7000
+                    # Small interior preference, but not so large that it overrides
+                    # clear space/food in normal mid-board positions.
+                    score += edge_dist * 180
+                    if edge_dist == 0 and safe_area < 35:
+                        score -= (35 - safe_area) * 700 + 5000
+                    if choke_risk and safe_area < 40:
+                        score -= choke_risk * 4500
             if has_nbw_ruby_enemy and enemy_max_len >= my_len:
                 # nbw-ruby's weighted-paint bot is especially good at turning the
                 # board edge plus its body into a zipper trap.  Round-1 losses were
