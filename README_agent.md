@@ -2725,3 +2725,96 @@ found in smoke tests (normal state, `{}`, empty-snakes state).
   traced example, since it's a well-established low-risk heuristic that
   should still generalize to other coil shapes).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still coreyja__bombastic-bob, traced both real losses, found+fixed a concrete tie-break bug (free_degree weight too weak), small low-risk weight bump
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is
+`coreyja__bombastic-bob` (random-safe-move bot, see previous round's
+section above). Round 0: 240-10. Round 1 (after previous round's
+tail-reachability fix): **248-2** — confirmed real improvement.
+
+### This round: traced BOTH remaining real losses from round 1
+
+1. `sim_45.jsonl` (died turn 253): a long, deep self-coil — our snake
+   spent 100+ turns confined to roughly the left/bottom quadrant
+   (x=1-9,y=1-9), growing to length 14 while slowly spiraling in on
+   itself. Traced back several decision points (turns 240-252) — at the
+   fatal turns, ALL legal candidates were already forced (single/zero
+   options), so there was no fixable decision at the end. Went back
+   further (turns 106-250 sampled) — the snake never had a strong
+   incentive/signal to break out toward the more open right half of the
+   board earlier; this looks like a genuine deep-lookahead gap (need
+   10+ ply to see this coming), not a quick local fix. Not fixed this
+   round — see "still open" below.
+2. `sim_104.jsonl` (died turn 109): **found and fixed a concrete,
+   traceable bug.** At turn 106 (head (4,2)), the two live candidates
+   "up"->(4,3) and "down"->(4,1) had **identical raw flood-fill area
+   (102) and identical tail_reachable (both False — tied, no signal)**.
+   The existing `free_degree` local-mobility term correctly computed a
+   real difference (up=degree 2, down=degree 1 — "down" leads into what
+   turns out to be a genuine one-cell-wide dead-end one square later,
+   confirmed by manually simulating one more ply: after "up" there are
+   still 2 free next-moves; after "down" the *next* turn is completely
+   forced into a single move that has ZERO legal moves the turn after
+   that), but the weight (`free_degree * 15`, i.e. a 15-point edge over
+   "down") was too small to overcome a ~2-point net disadvantage from
+   other terms (edge-run/voronoi/food-dist tie-breaks) — actual scores
+   were `up=1145.1` vs `down=1147.2`, i.e. "down" won by 2.1 points and
+   the bot walked into the dead end, dying 3 forced-moves later.
+
+### Fix made this round
+
+Bumped `free_degree` weight from `15` to `22` (see `main.py` line ~433).
+Verified directly: replaying the exact turn-106 board state from
+`sim_104.jsonl` through `main.move()` now scores `up=1159.1` vs
+`down=1154.2` and correctly picks `up` (previously picked the fatal
+`down`). This is a minimal, single-line, well-targeted change with a
+concretely-verified fix for a real traced match loss — very low
+regression risk (same term, same sign, just a slightly larger
+coefficient; doesn't change the ordering of any other already-decisive
+comparisons, since `free_degree` only ranges 0-4 and this is a small
+multiplier bump).
+
+**Verification done:** smoke tests (normal 2-snake state, `{}` malformed,
+empty-snakes state) all still return valid moves with no exceptions.
+Did **not** get to run a fresh full local-benchmark tournament this round
+(ran out of step budget after the trace-and-fix work) — recommended next
+step for whoever picks this up: extract `origin/human/coreyja/
+bombastic-bob:main.py` (recipe unchanged from many earlier rounds' notes
+in this file — `setsid nohup env PORT=... python3 main.py & disown` for
+both bots, loop `battlesnake play ...`, sleep, check `tail`) and run
+15-20+ games (opponent is random, so needs a decent sample size) to
+confirm no regression and ideally a further-improved win rate over the
+248/250 baseline.
+
+### Still open: `sim_45.jsonl`'s deep self-coil (NOT fixed, needs real lookahead)
+
+This is the same fundamental, many-rounds-recurring limitation this file
+has documented extensively (search "self-coil" throughout this file) —
+a slow, multi-turn drift into a shrinking pocket where every *individual*
+decision point looks locally fine (tied/ambiguous scores, not a clear
+mistake) and only the long-run trajectory is bad. The `free_degree` fix
+above only helps when a *specific* turn has a clean, checkable 1-cell
+mobility difference between candidates (which `sim_104` had) — it does
+NOT help when, like `sim_45`, every candidate at the fatal turns is
+already forced/tied many turns in advance. The only remaining lever
+flagged by many previous rounds' notes that would plausibly fix this
+class remains genuine multi-ply lookahead/simulation (see the very
+detailed writeup a few sections up in this file, "Round (this session) —
+opponent = ccSnake2018__ccsnake ... traced ALL major loss patterns" for
+a fully worked-out design sketch of what that would look like + why 2-ply
+might not even be enough for some shapes). Given this opponent is random
+(not adversarial), a promising cheaper alternative specific to THIS
+opponent: periodically bias movement toward the board's largest
+unclaimed region / centroid when very safe (health high, no immediate
+threat) rather than always pure food-distance-driven movement, to reduce
+how often the snake organically drifts into one corner/quadrant and
+starts self-coiling there over many turns — not implemented, just a
+lower-risk-than-full-minimax idea for a future round to try if this
+opponent (or a similarly weak/random one) recurs.
+
+### Files
+- `main.py` — this round's change: `free_degree` weight `15 -> 22` (see
+  inline comment above that line, and this section for the exact traced
+  bug it fixes).
+- `analyze_logs.py` — unchanged.

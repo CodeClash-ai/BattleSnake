@@ -430,7 +430,7 @@ def move(game_state):
                 nb = (nxt[0] + ddx, nxt[1] + ddy)
                 if _in_bounds(nb, width, height) and nb not in blocked:
                     free_degree += 1
-            score += free_degree * 15
+            score += free_degree * 22
 
             # Preference to stay away from edges/corners (more escape routes).
             # Strengthened + length-scaled after a traced real-match loss
