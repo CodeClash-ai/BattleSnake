@@ -223,6 +223,34 @@ def _shortest_food_distance(pos, food_cells, w, h, blocked):
     return 99
 
 
+
+def _tail_path_distance(pos, tail, w, h, blocked):
+    """BFS distance from pos to our tail, allowing the tail square as a target.
+
+    In long games where we are much longer than Eremetic Eric, the safest
+    strategy is to keep a route back to our own tail instead of consuming every
+    food pellet and filling the board.
+    """
+    if tail is None:
+        return 99
+    b = set(blocked)
+    b.discard(pos)
+    b.discard(tail)
+    seen = {pos}
+    q = [(pos, 0)]
+    qi = 0
+    while qi < len(q):
+        cur, d = q[qi]
+        qi += 1
+        if cur == tail:
+            return d
+        nd = d + 1
+        for n in _neighbors(cur):
+            if _in_bounds(n, w, h) and n not in b and n not in seen:
+                seen.add(n)
+                q.append((n, nd))
+    return 99
+
 def _enemy_reachable_count(start, enemy_heads, w, h, blocked, limit=200):
     """Reachable cells for larger enemies, allowing them to start at their heads."""
     if not enemy_heads:
@@ -602,6 +630,8 @@ def move(game_state):
         my_id = you.get("id")
         my_head = _pt(you["head"] if "head" in you else you["body"][0])
         my_len = you.get("length", len(you.get("body", [])))
+        my_body = [_pt(p) for p in you.get("body", [])]
+        my_tail = my_body[-1] if my_body else None
         health = you.get("health", 100)
         food = [_pt(f) for f in board.get("food", [])]
         food_cells = set(food)
@@ -783,6 +813,7 @@ def move(game_state):
             center_dist = _manhattan(nxt, ((w - 1) // 2, (h - 1) // 2))
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
             choke_risk = _articulation_risk(nxt, w, h, future_blocked)
+            tail_dist = _tail_path_distance(nxt, my_tail, w, h, future_blocked)
 
             score = 0
             score += area * 80                  # never trap ourselves
@@ -904,6 +935,16 @@ def move(game_state):
                 # self-boxed after eating too much optional food.  When safely
                 # ahead, stop chasing/eating food and win by survival/space.
                 food_weight = min(food_weight, 0)
+                # Also actively preserve our own tail route.  Eric is not trying
+                # to outgrow us; most remaining production losses are self-boxes
+                # after we become 40+ cells long.  A reachable tail is a better
+                # safety signal than raw flood-fill in these endgames.
+                if tail_dist >= 99:
+                    score -= 30000
+                else:
+                    score += max(0, 30 - tail_dist) * 350
+                    if area < my_len // 3:
+                        score -= (my_len // 3 - area) * 500
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 # Do not let catch-up pressure drag us toward food a longer
@@ -926,7 +967,7 @@ def move(game_state):
                     score += (health - path_food) * 8000
             if nxt in food_cells:
                 if has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
-                    score -= 6500
+                    score -= 12000
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
