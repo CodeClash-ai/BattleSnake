@@ -715,25 +715,6 @@ def _decide(game_state):
         center_dist = abs(nxt[0] - cx) + abs(nxt[1] - cy)
         score -= center_dist * 0.15
 
-        # ANTI-WALL-HUG (nbw-ruby loss vector): when we are LONG and CURRENTLY on
-        # an edge with an enemy present, actively REWARD moving to an interior
-        # (non-edge) cell. Penalizing edges alone is swamped by flood-fill space
-        # (which is similar along a wall); an explicit escape bonus tips ties toward
-        # peeling off the wall before we get funneled into a corner and sealed.
-        try:
-            cur_on_v = (head[0] == 0 or head[0] == w - 1)
-            cur_on_h = (head[1] == 0 or head[1] == h - 1)
-            currently_on_edge = cur_on_v or cur_on_h
-        except Exception:
-            currently_on_edge = False
-        if my_len >= 8 and currently_on_edge and max_enemy_len >= my_len - 2 \
-                and not critical:
-            nxt_on_edge = on_v_edge or on_h_edge
-            if not nxt_on_edge:
-                score += 22.0 * len_scale   # peel off the wall into open board
-            elif (on_v_edge and on_h_edge):
-                score -= 30.0 * len_scale    # heading further into a corner: bad
-
         # Edge-shadow penalty: the observed losses vs the smart opponent were
         # both cases where we moved ONTO an edge/corner and the enemy shadowed
         # us one lane inward, running parallel and sealing our exits until we hit

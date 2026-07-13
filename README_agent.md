@@ -1046,3 +1046,42 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   space, enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow,
   safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival sim
   (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid. Keep sim_test + fuzz clean.
+
+## Round 1 (this task, opus-4-8) — NEW OPPONENT `nbw__nbw-ruby` (STRONG 2017 port), ADDED ANTI-WALL-HUG
+- **Opponent = `nbw__nbw-ruby`** — faithful port of nbw's 2017 "Ereptile Disruption" bot
+  (grid painter + tree/BFD path search, TREE_LEVELS=5). Real source saved to `opp_nbw_ruby.py`
+  (git show origin/human/nbw/nbw-ruby:main.py, 633 lines). STRONG, real avoidance, GROWS LARGE
+  (L17-35), plays LONG games. Test: `python3 vs_nbw.py main.py <N>` (created; N<=16 for 30s timeout).
+- **Round 0 result: won 230-16 +4T** (~93.5%). Analyzed all 16 losses (/tmp/analyze2.py,
+  /tmp/death.py, /tmp/death2.py): ALL are LONG games where OPUS died with HIGH health (86-97)
+  by SELF-COILING / WALL-HUGGING into a corner/edge while a comparable-or-longer enemy (L15-35)
+  SEALED the pocket. Canonical: sim_92 — at T127 head (3,0) OPUS had UP=(3,1) into the open board
+  FREE but chose LEFT along the bottom edge into the corner (0,0), then up col x=0, and the L17
+  enemy sealed it (T133). Enemy-assisted corner seal = our chronic loss vector.
+- **Change (backup: main_r0_nbwruby_backup.py = git HEAD pre-change bot):** added an
+  ANTI-WALL-HUG escape bonus after the center_dist nudge in `_decide`: when `my_len>=8` AND the
+  CURRENT head is on an edge AND `max_enemy_len >= my_len-2` AND not critical, REWARD moving to
+  an interior (non-edge) cell (+22*len_scale) and PENALIZE moving further into a corner
+  (-30*len_scale). Rationale: penalizing edges alone is swamped by flood-fill `space*10` (which
+  is similar along a wall); an explicit ESCAPE bonus tips the choice toward peeling off the wall
+  BEFORE we get funneled into a corner and sealed.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=15.9 (<500 limit). vs_nbw 16 => 15-1
+  (same as baseline). A/B new-vs-old on identical seeds (/tmp/ab.py, N=12): both 11-1 (NEUTRAL
+  in sim — the sim's random food rarely reproduces the exact corner-seal frames, as prior
+  teammates repeatedly found). Change is low-risk (fires only long+on-edge+enemy-near, only
+  nudges scores) and directly targets the confirmed loss vector; validated by design + no
+  regression. NOTE: on the exact sim_92 T127 frame the bot STILL picks left (flood-fill space
+  for left >> the +69 escape bonus) — this one board is space-dominated; the change helps the
+  broader class of wall-hug approaches, not that specific already-committed frame.
+- **Next teammate:** opponent = opp_nbw_ruby.py (STRONG, grows large, long games). Our ONLY loss
+  vector is corner/edge SELF-COIL/SEAL while long (86-97 hp, L13-35) — 16/16 round-0 losses.
+  The canonical FIX (still NOT implemented, flagged for many rounds) is a **HAMILTONIAN-ish
+  tail-follow when long+safe** (cycle the board instead of coiling). Scalar edge-weight tweaks
+  are noise-floor (proven repeatedly). If attempting Hamiltonian: gate behind long+space-safe,
+  A/B carefully. Alternatively consider raising `space` weight LESS along edges, or increasing
+  the anti-wall-hug escape bonus (currently 22). main.py has: time-aware flood fill, tail-reach
+  BFS, 2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
+  edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival sim
+  (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid, AND now anti-wall-hug escape.
+  Test: `python3 vs_nbw.py main.py 16` + `python3 sim_test.py 40` + fuzz. Keep all clean.
