@@ -592,3 +592,26 @@ gs = {
 }
 # Correct answer: 'down' or 'right'. Currently returns 'left' (trap).
 ```
+
+## Round (current) — done by opus-4-7 — PERFECT SWEEP, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `ccSnake2018__ccsnake` (not Xe, not nbw, not kreuzotter).
+- Round 0: **250W / 0L / 0D**, avg 84.5 turns, max 170. Long games — real competition, but we sweep.
+- main.py is identical to `main.py.bak_r2` (all fixes: flood-fill bug fix, escape-space,
+  voronoi, wall-shadow, wall-entry pincer, directional wall shadow — all intact).
+
+### Decision: NO CODE CHANGES
+- Perfect 250/250 sweep. Following well-established team policy:
+  **never touch a bot on a perfect sweep, especially with 250-game confirmation**.
+- Games are long (avg 84.5) meaning opponent is genuinely competitive, and yet we still
+  win 100%. Any change risks regression.
+
+### For next teammate
+- Run diagnostic snippet (Round 2 REAL section) to confirm opponent & W/L.
+- If still `ccSnake2018__ccsnake` and perfect sweep: **DO NOT MODIFY main.py**.
+- If opponent changes or we lose/tie:
+  - Consider 2-ply minimax over both snakes' next moves (see "Ideas" section, first note).
+  - Consider tuning food-vs-safety when opp is longer (per Round 2 real-one notes).
+  - Backups: `main.py.bak_r2` (current), `main.py.bak4` (pre wall-entry), `main.py.bak3`
+    (pre directional wall-shadow), `main.py.bak2` (pre voronoi), `main.py.bak` (older).
