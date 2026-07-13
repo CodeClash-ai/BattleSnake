@@ -3222,3 +3222,130 @@ still parses and smoke-tests pass on normal/`{}`/empty-snakes states).
   confirmed to fix the concrete traced example** — see limitation above.
   Safe/no-op at health >= 50 (unchanged flat -1000 there).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still coreyja__jump-flooding, tuned edge/wall-hugging weights to address a traced "parallel-edge pincer into corner" loss pattern
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is
+`coreyja__jump-flooding` (pure greedy Voronoi-territory bot, no food-
+seeking). Round 0: 188-26-36(tie). Round 1 (after previous round's
+stuck-tracker/relaxed-risky-penalty fix): **199-20-31** — a real
+improvement (fewer losses, fewer ties), confirming that fix helped.
+`analyze_logs.py /logs/rounds/1`: avg 36.2 turns/sim, max 143.
+
+### Traced multiple remaining round-1 losses — found a clear, consistent, different mechanism from the previously-documented "starvation cycle" (that one is now largely fixed)
+
+Identified all 20 real losses via each `sim_*.jsonl`'s final `winnerName`
+line (same technique `analyze_logs.py` uses). Traced several
+(`sim_110`, `sim_150`, `sim_168`, `sim_176`, `sim_177`) via full
+turn-by-turn body dumps. **All five show the exact same shape**: our
+snake (short, length 4-6) travels along one full board edge (bottom row,
+top row, or a column) for 8-10 consecutive turns, while the opponent
+travels in parallel one row/column inward, moving in the same direction
+at roughly the same pace (often converging on food near the far corner).
+Our snake reaches the corner; the opponent's body (now often 1 segment
+longer, having just eaten) is immediately adjacent; the corner cell's
+*only* non-body-blocked neighbor is a cell the longer opponent can also
+reach next turn (flagged `risky_cells`, correctly) — but since it is the
+*only* legal candidate at that point (own body fills the rest), the bot
+is forced to take it anyway and loses the resulting head-to-head.
+
+**This is a genuine "point of no return" problem, not a same-turn scoring
+bug**: verified via direct `main.move()` replay (recipe: build a
+synthetic `game_state` per logged turn from `board.snakes[*].body`, call
+`main.move()` directly — see many earlier rounds' notes elsewhere in this
+file for the exact dict shape) that at the turns where the trap became
+*visible* (a real risky_cells hit), there was only one legal candidate
+left — no local fix at that turn can help. The actual decision point is
+several turns *earlier* (e.g. turn 18-21 in the `sim_176` trace), where
+the two candidates (continue along the edge vs. break inward) were
+scored *almost exactly tied* (a ~10-point gap out of ~1200), with the
+existing `wall_run` self-corridor penalty present but too weak at low
+`wall_run` values / short snake length (`len_scale` is 1.0 for any
+`my_length <= 4`, i.e. no extra discouragement at all for a short snake)
+to break the tie toward the safer option.
+
+### Change made this round
+
+Tuned three existing weights in the scoring loop (no new mechanism, no
+new BFS/data structures — low risk):
+- `wall_run` self-corridor penalty coefficient: `1.0 -> 2.5`.
+- `edge_dist` staying-away-from-edges bonus: `1.2 -> 2.2` per cell.
+- `proximity_mult` (doubles the wall_run penalty when an opponent is
+  near) trigger distance: `<=8 -> <=10` Manhattan cells, so it engages
+  slightly earlier relative to an approaching opponent.
+
+**Honest caveat on validation methodology**: literal-state replay
+(feeding the *exact* recorded board states from the old real-match losses
+into `main.move()` with the new weights) still picks the same moves at
+the *already-forced* turns (e.g. turns 20-27 of `sim_176`, where only 1-2
+legal candidates exist by then) — this is expected and doesn't mean the
+fix is useless, it means those specific literal states are downstream of
+an earlier decision that the fix *does* change (e.g. `sim_176` turn 18
+flips from `down` to `up` with the new weights). You **cannot** validate
+a fix like this via literal-recorded-state replay beyond the first
+diverging decision, because every subsequent recorded state assumes the
+*old* trajectory (the real opponent would have reacted differently to a
+different move from us) — a real local-benchmark rerun (actual games,
+opponent reacting live) is the only valid way to check this, which is
+what was done next.
+
+### Local benchmark this round (real validation)
+
+Extracted opponent fresh (`git show
+origin/human/coreyja/jump-flooding:main.py > /tmp/opp/main.py; cp
+server.py /tmp/opp/server.py`) and ran **12 real local games** via the
+`battlesnake` CLI against the tuned `main.py` (standard recipe from many
+earlier rounds' notes in this file — `setsid nohup env PORT=... python3
+main.py > log 2>&1 </dev/null & disown` for both bots, loop `battlesnake
+play ...` backgrounded + disowned, sleep, check `tail`). **Result: 10
+wins / 0 losses / 2 draws** (games 20-93 turns). Zero losses in this
+sample is a good sign (previous local behavior wasn't benchmarked before
+this round, but the real match rate was ~79.6% win / 8% loss / 12.4%
+draw — this local sample, while small, shows 0 losses and a slightly
+lower draw rate, consistent with (not proof of, but consistent with) an
+improvement). No errors/exceptions in either bot's server log.
+
+### Verification done
+
+- Smoke tests (`main.move()` on normal 2-snake state, `{}` malformed
+  state, empty-snakes state) — all still return valid moves, no
+  exceptions.
+- 12-game local benchmark as above: 10W/0L/2D, no crashes.
+- Confirmed via diff that this round's change is a minimal 3-line
+  weight-only diff (`diff /tmp/main_backup.py main.py` — backup not
+  persisted, recreate via `git show HEAD:main.py` before this round's
+  commit if you want to re-diff).
+
+### Recommended next steps
+
+1. **Run a bigger local benchmark** (20+ games) to get more statistical
+   confidence in the 10/0/2 result — this round's sample is still small.
+2. If new losses appear, use the same literal-state replay technique
+   (build synthetic `game_state` from logged turns, call `main.move()`)
+   to find the *first diverging decision point* (not just the final
+   forced turns) — remember per the caveat above, you must find where
+   two candidates are still close in score and a real alternative
+   exists, not just where the bot is already boxed in.
+3. The fundamental "point of no return" pattern documented here (commit
+   to an edge run several turns before it becomes visibly dangerous) is
+   the same general family flagged by MANY earlier rounds' notes
+   throughout this file (search "corridor race", "self-coil", "edge-
+   hugging", "pincer") against several different opponents — still not
+   fully solved by any local weight tuning attempted across all these
+   rounds. Real multi-ply lookahead/opponent-response simulation remains
+   the highest-ceiling not-yet-attempted fix if local weight tuning
+   keeps showing diminishing returns (see the detailed design sketches
+   in the `ccSnake2018__ccsnake` and `Xe__since` sections earlier in this
+   file).
+4. As always: re-check `/logs/rounds/2/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: tuned `wall_run` penalty coefficient
+  1.0->2.5, `edge_dist` bonus 1.2->2.2, `proximity_mult` trigger distance
+  8->10 — see inline comments at those lines, and this section for the
+  full traced rationale + validation caveat).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.

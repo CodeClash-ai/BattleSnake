@@ -548,7 +548,7 @@ def move(game_state):
             on_v_edge = x == 0 or x == width - 1
             on_h_edge = y == 0 or y == height - 1
             len_scale = 1.0 + max(0, my_length - 4) * 0.15
-            score += edge_dist * 1.2
+            score += edge_dist * 2.2
             if on_v_edge or on_h_edge:
                 score -= 9.0 * len_scale
                 if on_v_edge and on_h_edge:
@@ -615,8 +615,8 @@ def move(game_state):
                     (abs(x - ox) + abs(y - oy) for ox, oy in opp_heads),
                     default=99,
                 )
-                proximity_mult = 2.0 if nearest_opp_dist <= 8 else 1.0
-                score -= wall_run * wall_run * 1.0 * len_scale * proximity_mult
+                proximity_mult = 2.0 if nearest_opp_dist <= 10 else 1.0
+                score -= wall_run * wall_run * 2.5 * len_scale * proximity_mult
 
             # Avoid hazard cells (extra health drain per turn in maps/rulesets
             # that have them, e.g. Royale). No-op on rulesets with no hazards
