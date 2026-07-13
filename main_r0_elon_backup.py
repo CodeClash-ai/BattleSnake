@@ -594,7 +594,7 @@ def _decide(game_state):
                 # in a compact loop and STOP running along edges into corners.
                 tf_w = 2.0
                 if my_len >= 15:
-                    tf_w = 2.0 + (my_len - 15) * 1.1   # stronger in L15-30 band (elon losses cluster ~L24)
+                    tf_w = 2.0 + (my_len - 15) * 0.6   # up to strong at L50+
                 # At EXTREME length on a food-flooded board (chronic loss vector
                 # vs gigantic-george: we grow to L86-91 on a 121-cell board and
                 # self-coil), the ONLY survivable strategy is to keep the body a

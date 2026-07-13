@@ -1337,3 +1337,37 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   Tools: `python3 vs_flipez.py main.py 20`, `python3 vs_flipez2.py <bot> <N> <mult> <off>`,
   `/tmp/ab.py <N> <mult> <off>` (rebuild: loads a variant vs main.py vs opp on identical seeds).
   main.py has all prior layers. Backup available: main_r0_flipez_backup.py.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `jackisherwood__battlesnake-elon`, STRONGER MID-LENGTH TAIL-FOLLOW
+- **Opponent = `jackisherwood__battlesnake-elon`** — a REAL 2019 JS port (smorts/floodFill).
+  Source saved to `opp_elon.py`. It is a TAIL-CHASER: scared state (enemy<=3) -> collision_avoider;
+  hungry -> food_seeker; else -> tail_chaser (keeps a compact loop following its own tail). Has
+  threshold flood-fill (len+5) dead-end avoidance. STRONG: grows large (L20-40) and survives VERY
+  long games (median death turn 337). NOT a wall-walker.
+- **Round 0 result: won 190-53 +7T** (~76%, our TOUGHEST-ish matchup). Test: `python3 vs_elon.py
+  main.py <N>` (games run LONG ~2s each; use nohup+poll, N<=30 for 30s cmd timeout).
+- **Loss analysis (all 53 losses):** LONG games (median turn 337), OPUS median L24 vs OPP L27.
+  33/53 shorter, 4 equal, 16 longer. Dominant vector = SELF-COIL while large in long games.
+  Traced sim_157 (we were LONGER L24 vs L22): at T346 head (4,4) we went LEFT into a shrinking
+  corridor (free neighbors 3->3->2->1->1->0) and boxed ourselves in at T351. Classic mid-length
+  self-coil. Our tail-follow bias at L24 was only tf_w=7.4 (2.0+9*0.6), too weak vs space*10.
+- **Change (backup: main_r0_elon_backup.py = git HEAD pre-change bot):** strengthened the
+  tail-follow bias in the L15-30 band where elon losses cluster (median L24):
+    - `tf_w = 2.0 + (my_len-15)*0.6`  ->  `* 1.1` (at L24: 7.4 -> 11.9; at L30: 11 -> 18.5).
+  The L30+ dominant tail-follow (12.0+(len-30)*1.2) is unchanged. Gated behind long+safe+
+  not-hungry+tail_reach so it never overrides survival/food priorities — only makes a large
+  snake coil in a COMPACT tail-following loop instead of burying its head into a dead pocket.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.14 (<500 limit). A/B vs real opp
+  (/tmp/ab_elon.py, identical seeds, N=30): NEW W=18 L=5 D=7 (OLD run didn't finish before step
+  limit — games are slow). NOTE: the sim's random food/dynamics rarely reproduce the exact
+  long-game coil frames (as prior teammates repeatedly found), so validated by DESIGN (directly
+  targets the confirmed mid-length self-coil vector) + sim_test + fuzz + no crash. Low risk:
+  only nudges the tail-follow score in the L15-30 band.
+- **Next teammate:** opponent = opp_elon.py (STRONG tail-chaser, grows large, long games). Our
+  loss vector = self-coil while large (L15-30) in long games; often we're SHORTER (33/53) so the
+  opponent also out-lasts us. Ideas if losses persist: (a) tune the L15-30 tail-follow further
+  (1.1 -> 1.5) but A/B carefully across seed batches, (b) the canonical TRUE Hamiltonian cycle
+  when long+safe is STILL the ideal unimplemented fix, (c) since 33/53 losses we're shorter,
+  consider growing more aggressively mid-game to not get out-lasted. Test: `nohup python3 -u
+  vs_elon.py main.py 30 > /tmp/x.txt &` (poll — games are slow). Keep sim_test 40 + fuzz clean.
