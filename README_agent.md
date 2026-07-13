@@ -1809,3 +1809,133 @@ trusting the fix** -- see next steps.
   above that line for rationale; **needs the discrepancy above resolved
   before considering this a confirmed improvement**).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still nbw__nbw-crystal, confirmed strong (247/3), investigated remaining 3 losses, NO code change (reverted an unproven experiment)
+
+`/logs/rounds/{0,1}/results.json`: opponent `nbw__nbw-crystal` both rounds.
+Round 0 (pre the previous round's Voronoi fix): 239-8-3 (ties). Round 1
+(post-fix, current `main.py` unchanged from that point): **247-3**, a real
+improvement, confirming last round's Voronoi-partition fix (`_voronoi_area`,
+replacing the old removed `opp_territory`/`area_pess` mechanism) is working
+and safe in the real harness. `analyze_logs.py /logs/rounds/1`: avg 12.1
+turns/sim, max 81.
+
+### Fresh local benchmark this round (before any change)
+
+Extracted `origin/human/nbw/nbw-crystal:main.py` to `/tmp/opp/main.py` (a
+real Crystal-lang port: Voronoi-flood pathing + "survival mode" wall-
+hugging fallback — see its own module docstring) and ran **16 real local
+games** via the `battlesnake` CLI against the current, unmodified
+`main.py` (standard recipe from many earlier rounds' notes — `setsid
+nohup env PORT=... python3 main.py > log 2>&1 </dev/null & disown` for
+both bots, then loop `battlesnake play ...` backgrounded+disowned, sleep,
+check `tail`). **Result: 16/16 clean wins**, games 6-49 turns. This is
+fully consistent with the real 247/3 (~99%) win rate — the remaining
+losses are rare enough that even 16 local trials didn't reproduce one.
+
+### Traced all 3 real losses from round 1 in detail (concrete root cause, NOT fixed this round)
+
+Identified the 3 losing sims (`sim_46.jsonl`, `sim_52.jsonl`,
+`sim_136.jsonl`) via the `winnerName`/`isDraw` final-line parse (same
+technique `analyze_logs.py` uses). Traced `sim_136.jsonl` turn-by-turn in
+full (turns 41-55) plus a literal-state `main.move()` replay at each
+decision point (recipe: build a synthetic `game_state` dict from each
+turn's logged `board.snakes[*].body` fields, call `main.move()` directly
+-- see many earlier rounds' notes in this file for the exact pattern).
+
+**Concrete mechanism (distinct from previously-fixed bugs)**: our snake
+(length 6) walked itself into a narrow column along the board's right
+edge (x=10, y=9 down to y=0) while the opponent (length 7, a wall-
+hugging/"survival mode" bot per its own docstring) independently walked
+along the bottom-left, eventually reaching row y=0/y=1 and blocking the
+column's only exit cell ((9,0)/(9,1)) one turn before we needed it —
+sealing us in with **zero legal moves**. This is the same general
+"corridor race" family flagged many times in this file, but I confirmed
+via direct replay that **at the actual pivotal decision turn (turn 50)**,
+the bot's choice was already a forced/no-good-options situation: the
+"safe-looking" alternative (`down`, toward the opponent) was correctly
+flagged `risky_cells` (a real potential head-to-head loss against a
+longer opponent) and got the -1000 penalty, while the move actually taken
+(`right`) had a **raw flood-fill area of 110 cells and Voronoi territory
+of 110** (i.e. *looked completely safe* by every current metric — the
+opponent hadn't reached anywhere near that region yet). The trap only
+became visible 1-2 turns later once the opponent's body had physically
+advanced into the corridor's exit — fundamentally a **multi-turn-ahead
+opponent-trajectory prediction problem**, not a bug in the existing
+same-turn safety/space metrics (which were all working exactly as
+designed, just inherently short-sighted).
+
+### Experiment tried this round (NOT kept — reverted)
+
+Implemented a cheap "opponent heading projection": extrapolate each
+opponent's current straight-line heading (head minus neck segment) a
+few cells forward, and use that small projected-cell set as an
+additional, capped (`min(gap, my_length) * 4`) secondary penalty on the
+flood-fill area score — deliberately structured to be incapable of
+overriding the hard-trap gate the way the old, already-removed
+`opp_territory`/`area_pess` mechanism could (see extensive prior-round
+history elsewhere in this file about that class of bug).
+
+**Verified it does NOT fix the traced loss**: replayed the exact turn-50
+board state from `sim_136.jsonl` with the patched code — the opponent's
+actual heading at that moment was `(+1, 0)` (rightward), so the
+projection only shadowed cell `(10,1)`, whereas the opponent's *real*
+subsequent path in the actual game turned downward/leftward along the
+row (it was wall-following, not moving in a straight line) — a pure
+straight-line extrapolation is the wrong model for a wall-hugging
+opponent that changes direction at boundaries. The patched `main.move()`
+on that exact state still returned `right` (unchanged, still the losing
+move). Since the change added real code/complexity/risk without
+demonstrably fixing anything (and I did not have step budget left this
+round to re-run a full local benchmark to check for unintended side
+effects on *other* scenarios), I reverted it (`git checkout -- main.py`)
+rather than ship an unproven change. `main.py` is unchanged from the
+version described in the previous round's section above ("replaced
+uninformative opp_territory heuristic with Voronoi race territory").
+
+### Recommendation for next round
+
+Given a strong, reproducible real result (247/3) and a clean 16/16 local
+sweep, I judged this not to be an urgent problem, and prioritized *not*
+shipping a speculative, unverified change over squeezing out the last
+~1% of win rate. If you want to keep investigating this specific failure
+class, the real fix needs genuine opponent-behavior modeling, not a
+straight-line projection — e.g.:
+
+1. **Model the opponent as "greedy toward walls/corners"** specifically
+   (this opponent's own docstring literally says it has a "survival
+   mode" that hugs walls when isolated) rather than "continues in a
+   straight line" — e.g., bias the projection to also consider turning
+   at the next wall/corner it's heading toward, or just run a real
+   BFS-based simulation of the opponent's own algorithm (we have its
+   source at `/tmp/opp/main.py` — recipe: `git show
+   origin/human/nbw/nbw-crystal:main.py > /tmp/opp/main.py`) as a
+   built-in opponent-move predictor for a genuine 1-2 ply minimax. This
+   is the biggest, most "real" fix but also the most work/risk.
+2. Simpler alternative: instead of predicting the opponent's future path
+   at all, penalize *our own* candidate moves that require committing to
+   a long, narrow (`free_degree <= 2` for several consecutive cells)
+   corridor with only one connection back to the open board, regardless
+   of opponent position — i.e., treat "point of no return" corridors as
+   inherently risky even when nominally safe right now. This would need
+   a short BFS/DFS along the corridor from the candidate cell to detect
+   "single connected path with only 1 branch point", which is more
+   targeted than a full projection and doesn't depend on modeling the
+   opponent's behavior at all (would guard against self-inflicted traps
+   too, not just opponent-caused ones).
+3. As always: re-check `/logs/rounds/2/results.json` once it exists — if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's analysis still
+   applies. If it's still `nbw__nbw-crystal` and still ~247/3 or better,
+   this specific corridor-race class remains the only known concrete
+   improvement opportunity, but is now a well-understood, well-documented
+   one (unlike in previous rounds) for whoever wants to invest more step
+   budget in option 1 or 2 above.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round; reverted an experiment,
+  see above).
+- `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats.
