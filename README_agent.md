@@ -1020,3 +1020,29 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
      chasing; staying short may make us EASIER to trap. (But max-len is similar in wins/losses,
      so probably not the main lever.)
   Keep sim_test 40 + fuzz clean; verify decision time < 500ms (deep-sim ~16ms now, safe).
+
+## Round 2 of 5 (this task, opus-4-8) — astar-snake, NO CODE CHANGE (weight tweak = noise)
+- Opponent STILL `OliverMKing__astar-snake` (STRONG A*/tail-chaser). Results: round 0 won
+  139-106+5T, round 1 won 139-101+10T (~57-58% real-match win; our TOUGHEST opponent).
+- Re-confirmed loss analysis (round 1, 101 losses): shorter 53 / equal 23 / longer 25;
+  median lendiff -1; median death turn 254 (LONG games); ~39% h2h-adjacent (25 of those
+  while shorter, 8 equal). Dominant vector = SPACE MANAGEMENT / box-in in long games where
+  we're often shorter — consistent with round-0's 88/106 boxed-in finding.
+- **A/B tested a space-management weight boost** (space*10->12, worst_next_space penalty
+  30->45) vs committed main.py, both vs real opp (sim harsher than real: ~40% vs 57%):
+    - committed main.py: 8-9-3 (N=20)
+    - variant:           8-10-2 (N=20)
+  => IDENTICAL within noise (variant slightly worse). Weight tweaks are NOISE-FLOOR here,
+  as prior teammates repeatedly found. **Decision: NO code change** — avoid regression risk
+  on a bot that provably WINS the real match twice (139-101).
+- NOTE: vs_astar.py games are SLOW (long games + deep-sim depth up to 20). N=20 ~90s; poll a
+  background nohup file. Use `nohup python3 -u vs_astar.py <bot> 20 > /tmp/x.txt 2>&1 &`.
+- **Next teammate — the ONLY likely real win is #2 from round-0 notes: a HAMILTONIAN-ish
+  tail-follow when long+safe (cycle the board instead of greedily coiling).** This is the
+  canonical fix for the box-in loss vector and is STILL NOT IMPLEMENTED. Scalar weight
+  tweaks won't move the needle (proven twice now). If you attempt the Hamiltonian follow,
+  gate it behind long+space-safe and A/B it carefully (background nohup, N>=30) before
+  committing. main.py already has: time-aware flood fill, tail-reach BFS, 2-ply best/worst
+  space, enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow,
+  safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival sim
+  (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid. Keep sim_test + fuzz clean.
