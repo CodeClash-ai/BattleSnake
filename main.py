@@ -664,6 +664,33 @@ def _battlesnake_elon_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+def _sisiutl_predicted_move(enemy, game_state, w, h):
+    """Predict MorganConrad Sisiutl by running the copied faithful port.
+
+    Sisiutl is an aggressive nearest-food / smaller-snake attacker, quite
+    different from MorganConrad's Tantilla tail chaser.  Earlier generic
+    MorganConrad detection accidentally routed Sisiutl through the Tantilla
+    predictor/restraint.  Use the exact Sisiutl port for one-ply head pressure.
+    """
+    try:
+        from tools import sisiutl_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = sisiutl_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
+
 def _tantilla_predicted_move(enemy, game_state, w, h):
     """Run the copied MorganConrad/tantilla port for a one-ply prediction."""
     try:
@@ -1045,6 +1072,7 @@ def move(game_state):
         has_flipez_crystal_enemy = False
         has_battlesnake_elon_enemy = False
         has_tantilla_enemy = False
+        has_sisiutl_enemy = False
         has_cornelius_enemy = False
         has_battlejake_enemy = False
         has_famished_frank_enemy = False
@@ -1064,7 +1092,8 @@ def move(game_state):
             preds = set()
             is_ccsnake = "ccsnake" in ename.lower() or "ccsnake2018" in ename.lower()
             is_flipez = "flipez" in ename.lower() or "flipez-crystal" in ename.lower()
-            is_tantilla = "tantilla" in ename.lower() or "morganconrad" in ename.lower()
+            is_sisiutl = "sisiutl" in ename.lower()
+            is_tantilla = "tantilla" in ename.lower() or ("morganconrad" in ename.lower() and not is_sisiutl)
             is_cornelius = "cornelius" in ename.lower() or "chaelcodes" in ename.lower()
             is_battlejake = "battlejake" in ename.lower() or "joshhartmann11" in ename.lower()
             is_famished = "famished-frank" in ename.lower() or "famished" in ename.lower()
@@ -1146,6 +1175,11 @@ def move(game_state):
                 elif is_cornelius:
                     has_cornelius_enemy = True
                     pred = _cornelius_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_sisiutl:
+                    has_sisiutl_enemy = True
+                    pred = _sisiutl_predicted_move(e, game_state, w, h)
                     if pred is not None:
                         preds.add(pred)
                 elif is_tantilla:
@@ -2005,6 +2039,12 @@ def move(game_state):
                     # first-class objective instead of letting static space terms
                     # keep us orbiting safely but shorter.
                     food_weight += min(520, 180 + (enemy_max_len - my_len) * 45)
+                    food_dist = path_food
+                if has_sisiutl_enemy:
+                    # Sisiutl always seeks food unless it can attack a shorter
+                    # snake.  Keep up in length so its attack mode does not turn
+                    # into long edge/body squeezes.
+                    food_weight += min(420, 150 + (enemy_max_len - my_len) * 45)
                     food_dist = path_food
                 # Do not let catch-up pressure drag us toward food a longer
                 # opponent can reach first; use uncontested food unless starving.
