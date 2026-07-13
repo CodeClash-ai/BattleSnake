@@ -27,6 +27,12 @@ def info():
 
 
 def start(game_state):
+    # Reset stateful local opponent predictors between games.
+    try:
+        from tools import vulture_snake_opponent
+        vulture_snake_opponent.start(game_state)
+    except Exception:
+        pass
     return None
 
 
@@ -410,6 +416,34 @@ def _btas_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _vulture_predicted_move(enemy, game_state, w, h):
+    """Predict Spenca Vulture Snake by running the copied 2017 port as enemy.
+
+    Vulture has stateful food-circling behavior that generic nearest/straight
+    predictors miss in the rare long games.  The local port keeps module-global
+    state; ``start`` resets it at game boundaries and this function is called
+    once per turn, so it usually tracks the production opponent closely enough
+    for tactical head/space scoring.
+    """
+    try:
+        from tools import vulture_snake_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = vulture_snake_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -483,6 +517,7 @@ def move(game_state):
         has_randomish_enemy = False
         randomish_equal_threat = False
         has_jump_flooding_enemy = False
+        has_vulture_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -507,6 +542,10 @@ def move(game_state):
                 pred = _btas_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
+            elif "vulture" in ename.lower() or "spenca" in ename.lower():
+                pred = _vulture_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
             else:
                 preds.add(_simple_opponent_target_move(eh, food, w, h))
                 straight = _continuation_or_default_move(e, w, h)
@@ -521,11 +560,14 @@ def move(game_state):
             # Any legal enemy move may immediately partition space even if we
             # win head-to-heads against shorter snakes.  Use these cells as a
             # conservative one-ply space estimate below.
-            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
+            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower() or "vulture" in ename.lower() or "spenca" in ename.lower())
             awesome_like = ("awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
+            vulture_like = ("vulture" in ename.lower() or "spenca" in ename.lower())
             awesome_scores = {}
             if is_randomish:
                 has_randomish_enemy = True
+                if vulture_like:
+                    has_vulture_enemy = True
                 # Awesome-Snake chooses randomly among the highest immediate
                 # cell scores: adjacent food beats empty, empty beats body/wall.
                 # Bob/Scape-Goat are closer to random-legal, handled by using
@@ -560,9 +602,9 @@ def move(game_state):
                         # adjacent food.  Logged Awesome-Snake losses came from
                         # following a length-1-short enemy into an edge pocket
                         # just before it ate and became equal/longer.
-                        if elen >= my_len or (elen + 1 >= my_len and ep in food_cells):
+                        if elen >= my_len or ((not vulture_like) and elen + 1 >= my_len and ep in food_cells):
                             random_longer_enemy_next.add(ep)
-                        if elen >= my_len - 1:
+                        if elen >= (my_len if vulture_like else my_len - 1):
                             randomish_equal_threat = True
 
         candidates = []
@@ -654,17 +696,18 @@ def move(game_state):
                 # interior before the trap is forced.
                 near_random_dist = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
                 if near_random_dist <= 8:
-                    score += edge_dist * 600
+                    edge_mul = 0.45 if has_vulture_enemy else 1.0
+                    score += edge_dist * int(600 * edge_mul)
                     if edge_dist == 0:
-                        score -= 8000
+                        score -= int(8000 * edge_mul)
                     elif edge_dist == 1:
-                        score -= 2500
+                        score -= int(2500 * edge_mul)
                     # Also avoid one-cell-wide corridors close to the enemy body,
                     # even if they are not on the board edge yet.
                     if area < 30 or choke_risk:
-                        score -= (30 - min(area, 30)) * 650 + choke_risk * 9000
+                        score -= int(((30 - min(area, 30)) * 650 + choke_risk * 9000) * edge_mul)
                     if safe_area < 35:
-                        score -= (35 - safe_area) * 500
+                        score -= int((35 - safe_area) * 500 * edge_mul)
             if has_jump_flooding_enemy and enemy_max_len >= my_len and edge_dist == 0:
                 # Jump-flooding's Voronoi bot often chases us along the outer row/
                 # column and lets the board edge close the trap.  When it is at
