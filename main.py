@@ -260,6 +260,53 @@ def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
             return p
     return prefs[0]
 
+
+def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
+    """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
+    otherwise hunt our head when it is at least tied for biggest.  The original
+    neighbor order is left,right,down,up; matching that helps avoid forced
+    adjacent head-to-head losses in endgames.
+    """
+    body = [_pt(p) for p in enemy.get("body", [])]
+    if not body:
+        return None
+    head = body[0]
+    elen = enemy.get("length", len(body))
+    lengths = [sn.get("length", len(sn.get("body", []))) for sn in snakes]
+    biggest = max(lengths or [elen])
+    # If behind or hungry, Xe chooses nearest food; otherwise in a 2-snake tied/
+    # leading game it hunts the opponent head.
+    if food and (elen < biggest or enemy.get("health", 100) <= 30):
+        target = min(food, key=lambda f: _manhattan(head, f))
+    if target is None:
+        return None
+    occ = set()
+    for sn in snakes:
+        for p in sn.get("body", []):
+            occ.add(_pt(p))
+    # Its port only treats occupied heads as strictly deadly in neighbor filtering
+    # due to an original bug, but a final safety guard avoids bodies.  Predict a
+    # safe, in-bounds first A* step with the original directional tie-break.
+    prefs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    best = None
+    best_key = None
+    for i, d in enumerate(prefs):
+        p = _add(head, d)
+        if not _in_bounds(p, w, h) or p in occ:
+            continue
+        danger = 0
+        for sn in snakes:
+            if sn.get("id") == enemy.get("id"):
+                continue
+            sh = _pt(sn["head"] if "head" in sn else sn["body"][0])
+            if _manhattan(p, sh) == 1:
+                danger += 50
+        key = (_manhattan(p, target) + danger, i)
+        if best_key is None or key < best_key:
+            best_key = key
+            best = p
+    return best
+
 def move(game_state):
     try:
         board = game_state["board"]
@@ -285,11 +332,19 @@ def move(game_state):
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
-            preds = {_simple_opponent_target_move(eh, food, w, h)}
-            straight = _continuation_or_default_move(e, w, h)
-            if straight is not None and _in_bounds(straight, w, h):
-                preds.add(straight)
-            if "Nettogrof" in e.get("name", ""):
+            ename = e.get("name", "")
+            is_xe = "Xe" in ename or "since" in ename.lower()
+            preds = set()
+            if is_xe:
+                pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            else:
+                preds.add(_simple_opponent_target_move(eh, food, w, h))
+                straight = _continuation_or_default_move(e, w, h)
+                if straight is not None and _in_bounds(straight, w, h):
+                    preds.add(straight)
+            if "Nettogrof" in ename:
                 pred = _nettogrof_serpentine_move(e, food, w, h, occupied)
                 if pred is not None:
                     preds.add(pred)
@@ -386,12 +441,12 @@ def move(game_state):
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
             if enemies and my_len <= enemy_max_len:
-                food_weight += min(90, 25 + (enemy_max_len - my_len) * 12)
+                food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
             score -= nearest_food * food_weight
             if nxt in food_cells:
-                score += (500 if health < 30 else (100 if health < 60 else 20)) + (350 if enemies and my_len <= enemy_max_len else 0)
+                score += (500 if health < 30 else (100 if health < 60 else 20)) + (800 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
-                score -= 500000
+                score -= 10000000
             for eh, e in zip(enemy_heads, enemies):
                 elen = e.get("length", len(e.get("body", [])))
                 if my_len >= elen + 3 and _manhattan(nxt, eh) == 1 and area >= my_len + 8:
@@ -406,7 +461,7 @@ def move(game_state):
                     elif my_len > elen:
                         score += 50
                     else:
-                        score -= 50000
+                        score -= 1000000
             candidates.append((score, name, nxt, area, h2h_risk))
 
         if candidates:
