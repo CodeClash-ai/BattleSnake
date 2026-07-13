@@ -630,6 +630,25 @@ def _battlesnake_elon_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+def _tantilla_predicted_move(enemy, game_state, w, h):
+    """Run the copied MorganConrad/tantilla port for a one-ply prediction."""
+    try:
+        import copy
+        from tools import tantilla_opponent
+        gs = copy.deepcopy(game_state)
+        gs["you"] = copy.deepcopy(enemy)
+        chosen = tantilla_opponent.calculate_move(gs)
+        d = chosen.get("dir") if isinstance(chosen, dict) else None
+        if d in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[d])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -711,6 +730,7 @@ def move(game_state):
         has_gigantic_george_enemy = False
         has_flipez_crystal_enemy = False
         has_battlesnake_elon_enemy = False
+        has_tantilla_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -719,7 +739,13 @@ def move(game_state):
             preds = set()
             is_ccsnake = "ccsnake" in ename.lower() or "ccsnake2018" in ename.lower()
             is_flipez = "flipez" in ename.lower() or "flipez-crystal" in ename.lower()
-            if is_flipez:
+            is_tantilla = "tantilla" in ename.lower() or "morganconrad" in ename.lower()
+            if is_tantilla:
+                has_tantilla_enemy = True
+                pred = _tantilla_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_flipez:
                 has_flipez_crystal_enemy = True
                 pred = _flipez_crystal_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -1123,6 +1149,30 @@ def move(game_state):
                         score -= choke_risk * 6000
                     if safe_area < max(24, my_len // 2) and tail_dist >= 99:
                         score -= (max(24, my_len // 2) - safe_area) * 900
+            if has_tantilla_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                # Tantilla is a tail-chasing survival bot that usually stays
+                # short.  The round-0 losses were not tactical collisions; we
+                # had grown to 17-36 cells, kept taking optional food, and
+                # eventually self-boxed while Tantilla remained length 6-8.
+                # Once safely ahead, stop growing and make tail reachability /
+                # non-edge space the main objective.
+                food_weight = min(food_weight, 0)
+                if tail_dist >= 99:
+                    score -= 120000
+                else:
+                    score += max(0, 35 - tail_dist) * 1800
+                    if tail_dist <= 6:
+                        score += 12000
+                score += edge_dist * 900
+                if edge_dist == 0:
+                    score -= 9000
+                elif edge_dist == 1:
+                    score -= 2500
+                need_area = max(14, my_len // 2)
+                if area < need_area:
+                    score -= (need_area - area) * 5000
+                if choke_risk:
+                    score -= choke_risk * 5000
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 if has_flipez_crystal_enemy:
@@ -1154,7 +1204,9 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
-                if has_gigantic_george_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+                if has_tantilla_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                    score -= 25000
+                elif has_gigantic_george_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 80000 if (my_len >= 35 and my_len >= enemy_max_len + 20) else 12000
                 elif has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 12000
