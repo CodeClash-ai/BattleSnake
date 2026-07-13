@@ -1118,3 +1118,35 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
   Voronoi territory, deep self-survival sim (length-adaptive), enemy-aware deep sim, clearly_ahead
   food-avoid, anti-wall-hug escape, AND now the TAIL-FOLLOW anti-coil bias.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__eremetic-eric` (COILING TAIL-CHASER), FIXED OVERGROWTH
+- **Opponent = `coreyja__eremetic-eric`** — a "coiling" snake that chases its own tail
+  (small food heuristic). Real source saved to `opp_eremetic_eric.py`
+  (git show origin/human/coreyja/eremetic-eric:main.py, 356 lines). It stays SHORT (L7-16),
+  survives LONG (400-856 turn games), and outlasts us. Test: `python3 vs_eremetic.py main.py <N>`
+  (N<=8 for 30s cmd timeout; games are LONG — use nohup+poll for larger N).
+- **Round 0 result: won 241-9** (/logs/rounds/0/results.json). Analyzed all 9 losses
+  (`python3 analyze_losses.py sim_X.jsonl ...`): UNAMBIGUOUS chronic vector — in EVERY loss
+  OPUS grew to **L49-96** (!) in 400-856 turn games and SELF-COILED / boxed itself in on the
+  121-cell 11x11 board while the opponent stayed L7-16 and outlasted us. Extreme overgrowth.
+- **ROOT CAUSE of the overgrowth:** the old `clearly_ahead` food-avoidance only penalized the
+  single `nearest_food` cell (-120). Over hundreds of turns we incidentally wandered onto OTHER
+  food cells and kept growing to absurd lengths. Threshold was also too high (+3/>=8).
+- **Changes (backup: main_r0_eremetic_backup.py = git HEAD pre-change bot):**
+  1. Added `food_set = set(food)`. In the `clearly_ahead` branch, HARD-penalize landing on
+     **ANY** food cell (`nxt in food_set`) by **-400** (was -120 only for nearest_food). This
+     stops all incidental growth, not just growth toward the nearest food.
+  2. Lowered the `clearly_ahead` trigger: `my_len >= max_enemy_len + 2 and my_len >= 7`
+     (was +3, >=8). Stop growing EARLIER vs this short opponent so we never reach the deadly
+     L49-96 range. Safety/space (space*10/unit), H2H (-1000), tail-reach still dominate, so
+     no suicidal food-refusal (verified sim_test 40/0/0, fuzz clean).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.24. A/B new vs old on IDENTICAL seeds:
+  N=8 new 8-0-0 vs old 7-0-1; N=20 new 19-0-1 vs old 18-0-2 — consistent improvement (converts
+  draws to wins), ZERO regressions.
+- **Next teammate:** opponent = opp_eremetic_eric.py (COILING tail-chaser, stays short, long
+  games). Our ONLY loss vector remains overgrowth->self-coil. If losses persist: (a) lower
+  clearly_ahead threshold further (+1 / >=6), (b) cap max length harder, (c) the canonical
+  Hamiltonian tail-follow when long+safe (still not implemented). Test: `python3 vs_eremetic.py
+  main.py 8` (or nohup for larger N — games run 400-800 turns). Keep sim_test 40 + fuzz clean.
+  main.py has all prior layers + now HARD any-food avoidance when clearly ahead.

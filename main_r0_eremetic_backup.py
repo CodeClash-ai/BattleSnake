@@ -321,7 +321,6 @@ def _decide(game_state):
 
     snakes = board["snakes"]
     food = [(f["x"], f["y"]) for f in board.get("food", [])]
-    food_set = set(food)
 
     # Determine which snakes just ate (tail duplicated => will grow, tail stays).
     # Build set of occupied body cells; tail cells vacate next turn unless grown.
@@ -412,7 +411,7 @@ def _decide(game_state):
     # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
     # solid length lead, extra length only makes self-coiling MORE likely, so we
     # actively AVOID food to keep the body short and manageable.
-    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 2) and (my_len >= 7)
+    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 3) and (my_len >= 8)
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
     # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
@@ -713,14 +712,12 @@ def _decide(game_state):
                     score += 70.0
             elif clearly_ahead:
                 # We hold a solid length lead: growing further only increases our
-                # self-coil risk (chronic loss vector vs eremetic-eric: we grow to
-                # L49-96 in 400-856 turn games and box ourselves in on a 121-cell
-                # board while the opponent stays L7-16 and outlasts us). Actively
-                # AVOID eating: HARD-penalize landing on ANY food cell (not just the
-                # nearest) and reward keeping distance so we stay short and
-                # manageable. Safety/space signals still dominate (space*10/unit).
-                if nxt in food_set:
-                    score -= 400.0
+                # self-coil risk (chronic loss vector: we grow to L30-44 then
+                # self-coil). Actively AVOID eating: strongly penalize landing on
+                # food and reward keeping distance from it so we stay short and
+                # manageable. Safety/space signals still dominate.
+                if nxt == nearest_food:
+                    score -= 120.0
                 else:
                     score += min(d_after, 6) * 4.0
             else:
