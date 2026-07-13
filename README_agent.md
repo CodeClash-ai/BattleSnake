@@ -15,3 +15,15 @@ In Round 0, our bot completely dominated the opponent (`jackisherwood__battlesna
 
 3. **Voronoi Territory Partitioning & Head-to-Head Avoidance**:
    - Maintained territory control and avoided head-to-head collisions with larger/equal size opponent snakes.
+
+## Round 2 Strategy & Updates
+
+1. **Strategic Food Avoidance**:
+   - When we are already significantly larger than the opponent, growing further only makes navigation harder, limits space, and leads to accidental trapping.
+   - We introduced a conditional hunger mechanism: if our length is already at least 2 greater than the opponent's max length AND our health is safe (above 35), we disable aggressive food targeting.
+
+2. **Tail Following and Coiling Target**:
+   - When we are not hungry, we target our own tail (`you["body"][-1]`) instead of food. This aligns our pathing with our own movement, allowing safe tail-following and coiling patterns, significantly improving longevity.
+
+3. **Fallback Move Selection**:
+   - If no strictly obstacle-free squares exist (e.g., when completely cornered or surrounded), we fall back to choosing a move within bounds instead of defaulting to `"up"`. This gives the snake a chance to walk into segments that are about to be vacated on the exact turn.

@@ -119,6 +119,15 @@ def move(game_state):
         my_length = you["length"]
         my_health = you["health"]
         
+        # When we are very long, we only eat food if health is low or we are smaller than the opponent.
+        # Find opponent max length:
+        opp_lengths = [s["length"] for s in board["snakes"] if s["id"] != my_id]
+        max_opp_length = max(opp_lengths) if opp_lengths else 0
+        
+        # Define hunger threshold: if we are already longer than any opponent and our health is above 35,
+        # we don't aggressively search for food.
+        is_hungry = (my_length <= max_opp_length + 2) or (my_health < 35)
+        
         obstacles = set()
         opp_heads = []
         for snake in board["snakes"]:
@@ -144,7 +153,14 @@ def move(game_state):
                     possible_moves.append((d, np))
                     
         if not possible_moves:
-            return {"move": "up"}
+            # If no completely free moves, try moving into segments that are about to be vacated!
+            # Let's find any move that is within bounds
+            for d, (dx, dy) in directions.items():
+                nx, ny = my_head[0] + dx, my_head[1] + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    possible_moves.append((d, (nx, ny)))
+            if not possible_moves:
+                return {"move": "up"}
             
         dangerous_squares = set()
         for snake in board["snakes"]:
@@ -164,7 +180,7 @@ def move(game_state):
             
         food = board.get("food", [])
         
-        if food:
+        if food and is_hungry:
             target_food = None
             min_dist = 9999
             for f in food:
@@ -175,10 +191,12 @@ def move(game_state):
                     target_food = fp
             target = target_food
         else:
-            target = _board_center(width, height)
+            # If not hungry or no food, target our own tail to safely coil/follow ourselves!
+            my_tail = (you["body"][-1]["x"], you["body"][-1]["y"])
+            target = my_tail
             
         best_move = safe_moves[0][0]
-        best_score = -99999999
+        best_score = -999999999
         
         for d, np in safe_moves:
             # 1. Time-Aware flood fill space
