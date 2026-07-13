@@ -677,6 +677,42 @@ def _cornelius_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _battlejake2019_predicted_move(enemy, game_state, w, h):
+    """Predict joshhartmann11 battleJake2019 by running the copied 2019 port.
+
+    BattleJake is mostly deterministic filters (wall/body/head danger, food when
+    hungry/small, flee heads, go straight) with a random fallback.  A one-ply
+    copy is useful for exact longer/equal head collisions; strategic scoring
+    below handles its remaining edge/self-box endgames.
+    """
+    try:
+        import random
+        from tools import battlejake2019_opponent
+        # Make the port's rare random fallback deterministic and side-effect light.
+        state = random.getstate()
+        random.seed(17 + int(game_state.get("turn", 0)))
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = battlejake2019_opponent.move(pseudo).get("move")
+        random.setstate(state)
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        try:
+            random.setstate(state)
+        except Exception:
+            pass
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -760,6 +796,7 @@ def move(game_state):
         has_battlesnake_elon_enemy = False
         has_tantilla_enemy = False
         has_cornelius_enemy = False
+        has_battlejake_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -770,7 +807,13 @@ def move(game_state):
             is_flipez = "flipez" in ename.lower() or "flipez-crystal" in ename.lower()
             is_tantilla = "tantilla" in ename.lower() or "morganconrad" in ename.lower()
             is_cornelius = "cornelius" in ename.lower() or "chaelcodes" in ename.lower()
-            if is_cornelius:
+            is_battlejake = "battlejake" in ename.lower() or "joshhartmann11" in ename.lower()
+            if is_battlejake:
+                has_battlejake_enemy = True
+                pred = _battlejake2019_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_cornelius:
                 has_cornelius_enemy = True
                 pred = _cornelius_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -1002,6 +1045,30 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
+                # BattleJake2019 can survive long while staying much shorter; our
+                # round-0 losses while ahead were self-boxes from taking/continuing
+                # corner-edge routes.  Once safely ahead, stop valuing optional
+                # growth and strongly prefer interior, tail-reachable, non-choke
+                # moves so the shorter opponent eventually crashes first.
+                score += edge_dist * 1200
+                if edge_dist == 0:
+                    score -= 18000
+                elif edge_dist == 1:
+                    score -= 4500
+                if tail_dist >= 99:
+                    score -= 90000
+                else:
+                    score += max(0, 34 - tail_dist) * 1500
+                    if tail_dist <= 7:
+                        score += 10000
+                need_area = max(18, my_len // 2)
+                if area < need_area:
+                    score -= (need_area - area) * 6500
+                if safe_area < max(22, my_len // 2):
+                    score -= (max(22, my_len // 2) - safe_area) * 1200
+                if choke_risk:
+                    score -= choke_risk * 7000
             if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
                 # Cornelius often stays smaller while we overgrow; production
                 # losses were self-boxes along edges/top loops, not starvation.
@@ -1292,6 +1359,8 @@ def move(game_state):
                         food_weight = max(food_weight, 140)
                     else:
                         food_weight = min(food_weight, 25)
+            if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
+                food_weight = min(food_weight, 0)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
@@ -1306,7 +1375,9 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
-                if has_tantilla_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
+                    score -= 30000
+                elif has_tantilla_enemy and health >= 55 and my_len >= enemy_max_len + 8:
                     score -= 25000
                 elif has_gigantic_george_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 80000 if (my_len >= 35 and my_len >= enemy_max_len + 20) else 12000
