@@ -1156,6 +1156,7 @@ def move(game_state):
         has_untimely_enemy = False
         has_woofers_enemy = False
         has_sneaky_enemy = False
+        has_snek_two_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1180,6 +1181,9 @@ def move(game_state):
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
             is_sneaky = "sneaky-snake" in ename.lower() or "hirethissnake" in ename.lower()
+            is_snek_two = "snek-two" in ename.lower() or "aleksiy325" in ename.lower()
+            if is_snek_two:
+                has_snek_two_enemy = True
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -2152,6 +2156,47 @@ def move(game_state):
                     score -= (need_area - area) * 5000
                 if choke_risk:
                     score -= choke_risk * 5000
+            if has_snek_two_enemy and health >= 60 and my_len >= enemy_max_len + 5:
+                # Snek-two is a strong minimax/Voronoi bot that often wins only after
+                # we grow much longer, keep taking optional perimeter food, and close
+                # a loop around ourselves.  In this healthy-ahead regime, switch from
+                # growth to tail-chasing/interior survival.  Keep this narrow: when
+                # equal/behind or hungry, the generic food/space race is still better.
+                near_snek = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                # Prefer converting the length lead by taking territory near Snek-two
+                # instead of orbiting remote wall food until we self-box.
+                score -= near_snek * 900
+                if near_snek == 1 and my_len >= enemy_max_len + 4 and safe_area >= max(20, my_len // 2):
+                    score += 18000
+                if tail_dist >= 99:
+                    score -= 150000
+                else:
+                    score += max(0, 40 - tail_dist) * 2200
+                    if tail_dist <= 8:
+                        score += 20000
+                score += edge_dist * 2600
+                if edge_dist == 0:
+                    score -= 42000
+                elif edge_dist == 1:
+                    score -= 12000
+                need_area = max(22, my_len // 2)
+                if area < need_area:
+                    score -= (need_area - area) * 9000
+                if safe_area < max(24, my_len // 2):
+                    score -= (max(24, my_len // 2) - safe_area) * 1800
+                clean_exits = 0
+                for nn in _neighbors(nxt):
+                    if not _in_bounds(nn, w, h) or nn in future_blocked:
+                        continue
+                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                        continue
+                    clean_exits += 1
+                if clean_exits == 0:
+                    score -= 90000
+                elif clean_exits == 1 and edge_dist <= 1:
+                    score -= 30000
+                if choke_risk:
+                    score -= choke_risk * 9000
             if has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
                 # JerryKott/Medusa is excellent at surviving while shorter; our
                 # recorded losses against it are almost all healthy, longer-snake
@@ -2239,6 +2284,8 @@ def move(game_state):
                         food_weight = max(food_weight, 120)
                     else:
                         food_weight = min(food_weight, 25)
+            if has_snek_two_enemy and health >= 60 and my_len >= enemy_max_len + 5:
+                food_weight = min(food_weight, 0)
             if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
                 food_weight = min(food_weight, 0)
             if has_bountysnake2018_enemy and health >= 55 and my_len >= enemy_max_len + 6:
@@ -2259,7 +2306,9 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
-                if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
+                if has_snek_two_enemy and health >= 60 and my_len >= enemy_max_len + 5:
+                    score -= 250000
+                elif has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
                     score -= 30000
                 elif has_tantilla_enemy and health >= 55 and my_len >= enemy_max_len + 8:
                     score -= 25000
