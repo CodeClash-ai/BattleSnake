@@ -101,6 +101,30 @@ def _nearest_food_distance(pos, food):
     return min(_manhattan(pos, f) for f in food)
 
 
+def _enemy_reachable_count(start, enemy_heads, w, h, blocked, limit=200):
+    """Reachable cells for larger enemies, allowing them to start at their heads."""
+    if not enemy_heads:
+        return 0
+    b = set(blocked)
+    for eh in enemy_heads:
+        b.discard(eh)
+    seen = set()
+    q = []
+    for eh in enemy_heads:
+        if _in_bounds(eh, w, h) and eh not in seen:
+            seen.add(eh)
+            q.append(eh)
+    qi = 0
+    while qi < len(q) and len(seen) < limit:
+        p = q[qi]
+        qi += 1
+        for n in _neighbors(p):
+            if _in_bounds(n, w, h) and n not in b and n not in seen:
+                seen.add(n)
+                q.append(n)
+    return len(seen)
+
+
 def _simple_opponent_target_move(head, food, w, h):
     """Predict the known opponent: farthest-food (or center) with x priority."""
     if food:
@@ -235,9 +259,20 @@ def move(game_state):
 
             score = 0
             score += area * 100                 # never trap ourselves
+            # If a much larger opponent survives into the endgame, avoid
+            # voluntarily entering tiny one/two-cell pockets it controls.
+            # This is deliberately a late/tactical penalty so early wall-
+            # crashing opponents are still beaten by pure survival.
+            bigger_heads = [
+                _pt(e["head"] if "head" in e else e["body"][0])
+                for e in enemies
+                if e.get("length", len(e.get("body", []))) >= my_len + 3
+            ]
+            if bigger_heads and area <= max(6, my_len // 3):
+                score -= (max(6, my_len // 3) + 1 - area) * 2500
             score += edge_dist * 8              # prefer room away from walls
             score -= center_dist * 2            # stay roughly central
-            score -= nearest_food * (10 if health < 35 else 1)
+            score -= nearest_food * (12 if health < 35 else 8)
             if nxt in food_cells:
                 score += 60 if health < 60 else 15
             if h2h_risk:

@@ -81,3 +81,10 @@ Round 1 notes (gpt-5-5 current run vs `graeme-hill__snakebot`):
 - Observed opponent pathing often moves straight until a wall/edge then turns (transition counts: up 209, left 84, right 63, down 15). It still dies quickly in all logged games; current survival-first `main.py` handles it cleanly.
 - Re-ran `N=200 python quick_eval.py` vs `tools/simple_opponent.py`: 200 wins / 0 losses / 0 ties, avg turn ~5.9. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
 - Added `tools/graeme_hill_snakebot.py`, copied from `origin/human/graeme-hill/snakebot`, as a reference recreation of this opponent. Caution: it is CPU-heavy/slow under the local batch runner even after lowering the default env-controlled `GRAEME_TIME_BUDGET`; use small N and expect possible no-state/timeouts.
+
+Round 2 notes (gpt-5-5 current run vs `graeme-hill__snakebot`, logs `/logs/rounds/1`):
+- New logs are no longer perfect: `/logs/rounds/1/results.json` is 58-1 for us. The sole loss is `sim_232.jsonl`, a long 328-turn game where Graeme grew to length 31 and we stayed length 20, then got boxed in.
+- `python analyze_logs.py /logs/rounds/1` reports 58 wins / 1 loss, avg final turn ~12; most games still end very early by opponent wall/body crash.
+- Made a conservative `main.py` adjustment: normal food attraction is stronger (`nearest_food * 8` instead of almost zero when healthy) so we grow more in rare long games, while still staying survival-first; also added a small late/endgame penalty for stepping into tiny pockets when a much larger enemy exists.
+- Retested `N=200 python quick_eval.py` vs `tools/simple_opponent.py`: 200/200 wins, avg turn ~3.7 (faster than before because food pressure changes paths).
+- Future work if Graeme losses continue: build a faster local eval harness for `tools/graeme_hill_snakebot.py` or add explicit opponent-territory/minimax in long games. Direct local batch vs that tool can be slow/time out.
