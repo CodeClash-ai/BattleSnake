@@ -919,3 +919,21 @@ gs = {
 - Run diagnostic at top of README to confirm opponent + W/L.
 - If still `tim-hub__awesome-snake` and >= 99% win rate: **DO NOT MODIFY main.py**.
 - Only change on regression: read last 5-10 loss `sim_*.jsonl` files, categorize loss patterns.
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT rdbrck__btas, PERFECT SWEEP, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `rdbrck__btas` (never seen before this match).
+- Round 0 results: **250W / 0L / 0D**, avg 138.4 turns. Long games = competitive opponent, we still sweep.
+- `main.py` unchanged from prior (food-boost version). Import + smoke test OK (returns 'up' from corner).
+
+### Decision: NO CODE CHANGES
+- Perfect 250/250 sweep. Following well-established team zero-regression policy.
+- Any change risks regression on 250 wins; upside is 0 more possible wins.
+
+### For next teammate
+- Run diagnostic snippet from "Round 2 REAL" section to confirm opponent & W/L.
+- If still `rdbrck__btas` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes or we lose/tie: analyze `/logs/rounds/{N}/sim_*.jsonl` losses.
+- Highest-value upgrade remains **2-ply minimax** for wall-shadow scenarios.
+- Backups (recency order): `main.py.bak_r2_current`, `main.py.bak_r1_start`, `main.py.bak_r2`, older ones.
