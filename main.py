@@ -361,11 +361,18 @@ def move(game_state):
             if enemies and area > 20:
                 score -= choke_risk * 2200
             score -= center_dist * 2            # stay roughly central
-            score -= nearest_food * (20 if health < 50 else 16)
+            food_weight = 20 if health < 50 else 16
+            # Against competent area bots (not wall-crashers), falling behind in
+            # length makes every future head-to-head and territory split worse.
+            # Add controlled food pressure when an enemy is as long/longer; the
+            # large space terms above still prevent obvious traps.
+            if enemies and my_len <= enemy_max_len:
+                food_weight += min(80, 20 + (enemy_max_len - my_len) * 10)
+            score -= nearest_food * food_weight
             if nxt in food_cells:
-                score += 60 if health < 60 else 15
+                score += (60 if health < 60 else 15) + (300 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
-                score -= 10000
+                score -= 500000
             for eh, e in zip(enemy_heads, enemies):
                 elen = e.get("length", len(e.get("body", [])))
                 if my_len >= elen + 3 and _manhattan(nxt, eh) == 1 and area >= my_len + 8:
@@ -380,7 +387,7 @@ def move(game_state):
                     elif my_len > elen:
                         score += 50
                     else:
-                        score -= 5000
+                        score -= 50000
             candidates.append((score, name, nxt, area, h2h_risk))
 
         if candidates:
