@@ -1159,13 +1159,13 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename:
+                if "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
-                        h2h_soft_penalty = max(h2h_soft_penalty, 250 if ("elon" in ename or "jackisherwood" in ename) else 150)
+                        h2h_soft_penalty = max(h2h_soft_penalty, 450 if "zakwht" in ename else (250 if ("elon" in ename or "jackisherwood" in ename) else 150))
                     continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
@@ -1416,50 +1416,6 @@ def move(game_state):
                             score -= (24 - safe_area) * 450
                         if choke_risk and safe_area < 34:
                             score -= choke_risk * 3000
-            if has_zakwht_2018_enemy:
-                # zakwht-2018 is deterministic BFS: when shorter and healthy it
-                # goes into ATTACK mode (path to our head/adjacent cells), and
-                # otherwise it greedily paths to food with broad avoidance of our
-                # adjacent head squares.  Logged round-0 losses are mostly us
-                # staying shorter/equal and getting edge/corridor squeezed.
-                near_zakwht = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
-                zak_behind = enemy_max_len >= my_len
-                zak_much_behind = enemy_max_len >= my_len + 2
-                if zak_behind and (near_zakwht <= 7 or edge_dist <= 1):
-                    clean_exits = 0
-                    for nn in _neighbors(nxt):
-                        if not _in_bounds(nn, w, h) or nn in future_blocked:
-                            continue
-                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
-                            continue
-                        clean_exits += 1
-                    score += edge_dist * (360 if zak_much_behind else 220)
-                    if edge_dist == 0:
-                        score -= 9500 if zak_much_behind else 5200
-                    elif edge_dist == 1:
-                        score -= 2400 if zak_much_behind else 1200
-                    if clean_exits == 0:
-                        score -= 70000
-                    elif clean_exits == 1 and (edge_dist <= 1 or near_zakwht <= 3):
-                        score -= 22000 if zak_much_behind else 12000
-                    if safe_area < 28:
-                        score -= (28 - safe_area) * (620 if zak_much_behind else 380)
-                    if choke_risk and safe_area < 38:
-                        score -= choke_risk * 3800
-                # Once clearly ahead, zakwht attacks instead of outgrowing us; avoid
-                # optional perimeter self-boxes and do not chase every healthy food.
-                if health >= 55 and my_len >= enemy_max_len + 6:
-                    score += edge_dist * 450
-                    if edge_dist == 0:
-                        score -= 7000
-                    elif edge_dist == 1:
-                        score -= 1800
-                    if tail_dist >= 99:
-                        score -= 30000
-                    else:
-                        score += max(0, 24 - tail_dist) * 700
-                    if choke_risk:
-                        score -= choke_risk * 3800
             if has_nagini_enemy and enemy_max_len >= my_len:
                 # Nagini is food-seeking but weakly models head-to-heads.  Our
                 # round-0 losses usually came after Nagini grew longer by several
@@ -1803,12 +1759,6 @@ def move(game_state):
                     # food whenever we are not longer, otherwise it snowballs length.
                     food_weight += min(460, 170 + (enemy_max_len - my_len) * 55)
                     food_dist = path_food
-                if has_zakwht_2018_enemy:
-                    # zakwht's HUNGRY mode races nearest food exactly; if we are
-                    # not longer, keep reachable-food pressure high enough that it
-                    # cannot snowball length uncontested.
-                    food_weight += min(420, 160 + (enemy_max_len - my_len) * 50)
-                    food_dist = path_food
                 if has_nagini_enemy:
                     # Race Nagini for reachable food when behind; it otherwise
                     # snowballs length and wins head-to-heads.
@@ -1835,8 +1785,6 @@ def move(game_state):
                 food_weight = min(food_weight, 0)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
-            if has_zakwht_2018_enemy and health >= 55 and my_len >= enemy_max_len + 7:
-                food_weight = min(food_weight, 3)
             score -= food_dist * food_weight
             if health < 15:
                 # In production Pinky losses we sometimes orbited safe space until
@@ -1873,14 +1821,10 @@ def move(game_state):
                     # Tyrelh edge food often resets our health but commits us to
                     # the same outer-row zipper traps seen in production losses.
                     score -= 4200
-                if has_zakwht_2018_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len:
-                    # Healthy outer-wall food is a common route into zakwht body/head
-                    # corridors once it is equal or longer.
-                    score -= 4200
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0) + (1200 if has_zakwht_2018_enemy and enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
