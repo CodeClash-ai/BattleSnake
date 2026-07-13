@@ -1085,3 +1085,36 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival sim
   (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid, AND now anti-wall-hug escape.
   Test: `python3 vs_nbw.py main.py 16` + `python3 sim_test.py 40` + fuzz. Keep all clean.
+
+## Round 2 of 5 (this task, opus-4-8) — nbw-ruby, ADDED TAIL-FOLLOW ANTI-COIL BIAS
+- Opponent STILL `nbw__nbw-ruby` (STRONG 2017 port, grows large, long games; opp_nbw_ruby.py).
+- Results: round 0 won 230-16+4T, round 1 won 223-23+4T (~9% loss).
+- **Loss analysis (round 1, 23 losses, /tmp/death2.py + /tmp/board.py):** UNCHANGED, unambiguous
+  chronic vector — in EVERY loss OPUS died LONG (L15-33) + HIGH health (85-100) by SELF-COILING
+  into a tidy packed block and boxing itself in, while the opponent just outlasts us. Canonical:
+  sim_33 T174 — OPUS L18 hp94 coiled its body into a 2-3-wide vertical column (x=3-5) with the
+  head buried at (5,5), open board unused to the right/top. Flood-fill/space CANNOT distinguish a
+  tidy self-coil from real freedom (both reach many cells at that instant).
+- **Change (backup: main_prev_committed_backup.py = git HEAD pre-change bot):** implemented a
+  TAIL-FOLLOW BIAS (the canonical fix flagged unimplemented for MANY rounds). Added `_bfs_dist()`
+  (plain shortest-path BFS over free cells). In `_decide` scoring, when `my_len>=8 and not
+  starving and not critical and tail_reach`: `score -= _bfs_dist(nxt, my_tail, new_blocked)*2.0`.
+  Rewards keeping the head close (in path distance) to the tail -> body stays a LOOSE LOOP that
+  chases its tail instead of packing into a dead block. Weight 2.0 is gentle so space (x10),
+  H2H, food still dominate — it only breaks ties toward the un-coiled path.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.09 (<500 limit). RECONSTRUCTED sim_33:
+  at T170 (head (4,6)) the NEW bot picks RIGHT (toward open board) where the OLD bot picked DOWN
+  (into the coil) — the tail-follow bias correctly peels us off the coil earlier. A/B vs real opp
+  on identical seeds (N=24): NEW 23-1, OLD 23-1 (the sim's random food rarely reproduces the exact
+  late-game coil frames, as prior teammates found; no regression, and the frame test confirms the
+  fix engages). Low-risk: fires only long+safe+not-hungry, only nudges scores.
+- **Next teammate:** opponent = opp_nbw_ruby.py (STRONG, grows large). Our ONLY loss vector is the
+  long+healthy self-coil. This round adds the tail-follow bias. If losses persist: (a) raise the
+  tail-follow weight (2.0 -> 3-4) but A/B carefully to avoid it fighting the food pull, (b) make it
+  length-scaled, (c) a full Hamiltonian cycle when very long+safe. Test: `python3 vs_nbw.py main.py
+  16` (N<=16 for 30s timeout; games long + deep-sim). Keep sim_test 40 + fuzz clean. main.py has:
+  time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested space, H2H
+  follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
+  Voronoi territory, deep self-survival sim (length-adaptive), enemy-aware deep sim, clearly_ahead
+  food-avoid, anti-wall-hug escape, AND now the TAIL-FOLLOW anti-coil bias.

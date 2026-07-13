@@ -158,30 +158,6 @@ def _can_reach(start_cell, target, static_blocked, snakes_bodies, w, h):
     return False
 
 
-def _bfs_dist(start_cell, target, static_blocked, w, h):
-    """Plain BFS shortest-path distance from start_cell to target over free
-    cells (static_blocked are walls). Returns int distance or None if
-    unreachable. Used for a tail-follow bias (anti-coil)."""
-    if start_cell == target:
-        return 0
-    from collections import deque
-    dq = deque([(start_cell, 0)])
-    seen = {start_cell}
-    while dq:
-        cur, d = dq.popleft()
-        for nb in _neighbors(cur):
-            if nb == target:
-                return d + 1
-            if nb in seen or not _in_bounds(nb, w, h):
-                continue
-            if nb in static_blocked:
-                continue
-            seen.add(nb)
-            dq.append((nb, d + 1))
-    return None
-
-
-
 def _future_safe_moves(cell, blocked, w, h):
     """Count in-bounds, non-blocked neighbors of `cell` (escape options)."""
     n = 0
@@ -568,25 +544,6 @@ def _decide(game_state):
         if worst_next_space < my_len:
             score -= (my_len - worst_next_space) * 30.0
         score += score_h2h_trap
-
-        # TAIL-FOLLOW BIAS (anti-coil): our chronic loss vector across ALL
-        # opponents is self-coiling while LONG + healthy -- we neatly pack our
-        # own body into a region and box ourselves in even though open board is
-        # available (see round-1 sim_33: L18 hp94 coiled into a 3-wide column).
-        # Flood-fill/space can't distinguish a tidy self-coil from real freedom
-        # because both reach many cells at that instant. The canonical fix is to
-        # FOLLOW OUR TAIL: keep the head close (in path-distance) to the tail so
-        # the body stays a loose loop instead of a dead-packed block. We reward
-        # a SHORT path from the candidate head to the tail cell; a coil move
-        # tends to increase that path (head buries itself away from the tail).
-        # Only when long, safe, and not chasing food, so it never overrides
-        # survival/food priorities.
-        if my_len >= 8 and not starving and not critical and tail_reach:
-            td = _bfs_dist(nxt, my_tail, new_blocked, w, h)
-            if td is not None:
-                # Closer to tail is better; scale gently so space (x10) still
-                # dominates but ties/near-ties break toward the un-coiled path.
-                score -= td * 2.0
 
         # DEEP SELF-SURVIVAL SIM (anti-coil): 2-ply lookahead can't see traps
         # that develop 5+ turns out when an enemy is actively sealing us into a
