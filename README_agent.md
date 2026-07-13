@@ -1178,3 +1178,53 @@ the "neighbor degree" tie-breaker on top.
 - `main.py.bak_r2_current` — earlier (706-line) version, 99.2% in round 0.
 - `main.py.bak_r2_shorter_shadow_fix` — identical to current `main.py`.
 - Both give same moves on the 6 round-1 losses per debug replay.
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT OliverMKing__astar-snake, REVERTED PATCH
+
+### State at start
+- **NEW OPPONENT**: `OliverMKing__astar-snake`.
+- Round 0: **216W / 33L / 1D** (86.4%), avg 230.4 turns. LONGEST avg turns seen; strong opponent.
+- 33 losses categorized:
+  - 21 wall deaths, 2 corner deaths, 10 "other" (self-trap in mid-board).
+
+### Loss analysis
+- Wall deaths: bot walks along wall, opp shadows or same-wall approaches. At death turn, bot
+  usually had ONLY ONE legal move — the trap was set several turns earlier.
+- E.g., sim_105 T182 death — but T180 already had only 1 legal move (forced left).
+- E.g., sim_11 T277 death — T272 onward bot had only 1-2 legal moves.
+- The failure is EARLIER, when bot chose to enter/travel along wall with high space/vor.
+
+### What I tried
+- Added "same-wall shadow" detection: penalize moves to a wall cell when opp is on the
+  same wall within 4 cells (perp_gap==0, par_gap<=4). Complements existing wall-entry
+  logic which explicitly excluded perp_gap==0.
+- Tested on sim_11 T268-T276 and sim_105 T174-T178: **NO DIVERGENCE** from old bot.
+  The bot at these turns is choosing wall moves for good reasons (only legal option)
+  or the shadow condition doesn't trigger (opp too far at decision time).
+
+### Decision: REVERTED
+- `main.py` restored to pre-patch version (identical to `main.py.bak_r2_shorter_shadow_fix`).
+- Patch would add complexity without helping the observed losses.
+- Backup of the attempted patch is in `main.py.bak_r1_start_new` (or rather the OLD is there).
+
+### KEY INSIGHT for next teammate
+The observed losses are NOT localizable to one bad move. They're STRATEGIC failures where
+the bot's positional evaluation (voronoi + escape + space) sends it into a slowly-tightening
+trap over MANY turns. A local heuristic patch cannot fix this. The real fixes needed:
+
+1. **2-ply or 3-ply minimax** with proper opp modeling (astar-snake actually plays smart chase).
+2. **Length-aware territory analysis**: when bot is on wall, prefer moves that reduce
+   perimeter of controlled region (avoid stretching along walls). Compute "compactness"
+   of my reachable region and prefer moves that keep it compact.
+3. **Simulated own-body advance in flood fill**: currently `_escape_space` handles this
+   for depth up to my_len+2, but with my_len=20+, time budget/depth cutoff means far
+   cells appear reachable when they're not.
+
+### For next teammate
+- Backups (recency): `main.py.bak_r1_start_new` = same as main.py = pre-patch/current.
+  Older backups preserved (`bak_r2_shorter_shadow_fix`, `bak_r2_before_shorter_shadow`, etc.)
+- If you want to try 2-ply minimax: it's not simple. Time budget for /move is small,
+  and 4×4 = 16 simulations per turn is doable but each must re-run voronoi/escape.
+- Alternative to try: shrink center-tropism weight when opp is nearby but weak, to
+  encourage occupying center more aggressively when short (grow at center, not wall).
+
