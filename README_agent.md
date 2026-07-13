@@ -1126,3 +1126,55 @@ gs = {
   - Longer-term: self-body-projection in flood fill (simulate our own body advancing).
 - Backups (recency order): `main.py.bak_r2_current`, `main.py.bak_r1_start`,
   `main.py.bak_r2`, older ones (`main.py.bak4`, `.bak3`, `.bak2`, `.bak`).
+
+## Round 2 (this session) — done by opus-4-7 — NO CODE CHANGES
+
+### State at start
+- Opponent unchanged: `coreyja__amphibious-arthur`.
+- Round 0: **248W/2L/0D** (99.2%), avg 201.7 turns.
+- Round 1: **244W/6L/0D** (97.6%), avg 195.8 turns — slight regression (4 wins).
+  The regression may be within variance for 250 games (~1.6%). Round 1 used
+  the same "shorter-shadow-fix" `main.py` from prior session.
+
+### Loss analysis (round 1)
+Six losses: sim_131 (starvation, len=5), sim_157/68 (equal-length h2h),
+sim_59 (moved into longer opp), sim_174/248 (self-trap spiral death when
+much longer than opp).
+
+**sim_248 spiral trap analysis** (verified with debug replay):
+- Turn 530, head at (6,6) len=47. Both UP (6,7) and RIGHT (7,6) had 31
+  raw reachable cells. Our bot picked RIGHT — the wrong choice; it led into
+  a tightening spiral of our own body. UP would have led to open space.
+- `_escape_space` returned 0 for BOTH moves (long-snake time limit maxed
+  out). No signal to distinguish. `_voronoi` similarly didn't help.
+- **Older `main.py.bak_r2_current` picks the same wrong moves in all 6 losses.**
+  So the -4-wins regression is likely game-state variance, not a code bug.
+
+### Decision: NO CODE CHANGES
+- 97.6% winrate is high; food/wall-shadow heuristics already handle most cases.
+- The spiral-death fix requires either 2-ply lookahead or a "longest simple
+  path" heuristic — significant work, high regression risk with only ~6 steps left.
+- Verified `main.py` imports and returns valid moves.
+
+### For next teammate — CONCRETE IDEAS FOR SPIRAL DEATH FIX
+The critical missing piece: distinguishing UP=(6,7) from RIGHT=(7,6) at turn 530
+of sim_248 when both have identical raw-flood-fill counts.
+
+Options (in order of value/risk):
+1. **Tie-break by "neighbor degree"**: for each candidate cell, count how many
+   of ITS OWN neighbors are open. UP=(6,7) has 3 open neighbors, RIGHT=(7,6)
+   has 2. Add small weight (~0.5) to tie-break.
+2. **2-step lookahead flood-fill**: for each candidate cell, take max escape
+   space over its own neighbors. Adds compute cost but not risky logic-wise.
+3. **Longest-path heuristic** (Hamiltonian-ish): DFS bounded depth ~my_len
+   to estimate max path length starting from candidate. Best signal but
+   expensive; needs iterative deepening with time budget.
+
+Safest incremental patch: `_escape_space` currently returns 0 when start cell
+is time-limited. Change it to return raw reachable count as fallback, and use
+the "neighbor degree" tie-breaker on top.
+
+### Backups
+- `main.py.bak_r2_current` — earlier (706-line) version, 99.2% in round 0.
+- `main.py.bak_r2_shorter_shadow_fix` — identical to current `main.py`.
+- Both give same moves on the 6 round-1 losses per debug replay.
