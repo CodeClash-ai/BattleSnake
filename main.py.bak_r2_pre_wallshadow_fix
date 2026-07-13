@@ -1,0 +1,719 @@
+"""
+Battlesnake bot: safety-first with heuristic evaluation.
+
+Strategy:
+- Enumerate legal moves (in-bounds, avoid our body except tail if not growing,
+  avoid other snake bodies except their tails if they're not growing).
+- Avoid head-to-head losses (opponent head could reach same square and is >=
+  our length). If we're longer, we consider such moves as good.
+- Score remaining moves by:
+    * flood-fill space we can reach (must be >= our length ideally),
+    * distance to nearest food (weighted more when health low),
+    * center-tropism (mild),
+    * penalty for edges/corners,
+    * bonus for cutting off shorter opponents (head-to-head kill option).
+"""
+
+from collections import deque
+
+DIRS = {
+    "up": (0, 1),
+    "down": (0, -1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
+
+
+def info():
+    return {
+        "apiversion": "1",
+        "author": "opus-4-7",
+        "color": "#8A2BE2",
+        "head": "beluga",
+        "tail": "bolt",
+    }
+
+
+def start(game_state):
+    return None
+
+
+def end(game_state):
+    return None
+
+
+def _in_bounds(p, w, h):
+    return 0 <= p[0] < w and 0 <= p[1] < h
+
+
+def _occupied(board_state, p):
+    return p in board_state
+
+
+def _build_occupancy(snakes, ignore_tails_of=None):
+    """Return set of occupied cells. If a snake's tail is going to move (didn't
+    just eat), we can (optionally) treat it as free. ignore_tails_of is a set
+    of snake ids whose tail should be considered free."""
+    if ignore_tails_of is None:
+        ignore_tails_of = set()
+    occ = set()
+    for s in snakes:
+        body = s["body"]
+        # If snake just ate (health==100 AND length grew this turn), tail stays.
+        # Approximation: if body last two segments overlap, tail is duplicated
+        # -> won't move.
+        tail_stays = len(body) >= 2 and body[-1] == body[-2]
+        for i, seg in enumerate(body):
+            if i == len(body) - 1 and not tail_stays and s["id"] in ignore_tails_of:
+                continue
+            occ.add((seg["x"], seg["y"]))
+    return occ
+
+
+def _flood_fill(start, blocked, w, h, limit=None):
+    if start in blocked or not _in_bounds(start, w, h):
+        return 0
+    seen = {start}
+    q = deque([start])
+    count = 0
+    while q:
+        x, y = q.popleft()
+        count += 1
+        if limit is not None and count >= limit:
+            return count
+        for dx, dy in DIRS.values():
+            n = (x + dx, y + dy)
+            if n in seen:
+                continue
+            if not _in_bounds(n, w, h):
+                continue
+            if n in blocked:
+                continue
+            seen.add(n)
+            q.append(n)
+    return count
+
+
+def _escape_space(start, snakes, my_id, w, h, my_len, growing=False, limit=None):
+    """
+    BFS from `start` where snake segments become passable over time as tails
+    recede. Returns the number of distinct cells we can reach WITHIN my_len
+    turns from now. If this is >= my_len, we're likely safe from self-trap.
+    """
+    if not _in_bounds(start, w, h):
+        return 0
+    # Build cell -> earliest time it becomes free (0 = already free).
+    free_at = {}
+    for s in snakes:
+        body = s["body"]
+        tail_stays = len(body) >= 2 and body[-1] == body[-2]
+        L = len(body)
+        for i, seg in enumerate(body):
+            p = (seg["x"], seg["y"])
+            t_free = (L - i)
+            if tail_stays:
+                t_free += 1
+            if s["id"] == my_id and growing:
+                t_free += 1
+            if p in free_at:
+                free_at[p] = min(free_at[p], t_free)
+            else:
+                free_at[p] = t_free
+
+    # Bound the search depth so long-lived snakes' tails don't inflate the count.
+    max_time = my_len + 2
+    start_time = 1
+    if free_at.get(start, 0) > start_time:
+        return 0
+    seen = {start: start_time}
+    q = deque([(start, start_time)])
+    count = 0
+    while q:
+        (x, y), t = q.popleft()
+        count += 1
+        if limit is not None and count >= limit:
+            return count
+        if t >= max_time:
+            continue
+        nt = t + 1
+        for dx, dy in DIRS.values():
+            n = (x + dx, y + dy)
+            if n in seen:
+                continue
+            if not _in_bounds(n, w, h):
+                continue
+            if free_at.get(n, 0) > nt:
+                continue
+            seen[n] = nt
+            q.append((n, nt))
+    return count
+
+
+
+def _bfs_distance(start, targets, blocked, w, h, max_dist=None):
+    """Shortest path length from start to any target avoiding blocked cells."""
+    if not targets:
+        return None
+    if start in targets:
+        return 0
+    seen = {start}
+    q = deque([(start, 0)])
+    while q:
+        (x, y), d = q.popleft()
+        if max_dist is not None and d >= max_dist:
+            continue
+        for dx, dy in DIRS.values():
+            n = (x + dx, y + dy)
+            if n in seen:
+                continue
+            if not _in_bounds(n, w, h):
+                continue
+            if n in blocked and n not in targets:
+                continue
+            if n in targets:
+                return d + 1
+            seen.add(n)
+            q.append((n, d + 1))
+    return None
+
+
+def _voronoi(my_start, opp_starts, blocked, w, h):
+    """Multi-source BFS. Returns count of cells my_start reaches strictly
+    before any opp_start. Blocked cells cannot be traversed. Ties are contested
+    (not counted for either side)."""
+    my_dist = {my_start: 0}
+    opp_dist = {}
+    q_my = deque([my_start])
+    q_opp = deque()
+    for op in opp_starts:
+        if op not in opp_dist:
+            opp_dist[op] = 0
+            q_opp.append(op)
+
+    # Alternate expansion: BFS my side one layer, then opp one layer.
+    my_frontier = deque([my_start])
+    opp_frontier = deque(opp_starts)
+    depth = 0
+    max_depth = w * h
+    while (my_frontier or opp_frontier) and depth < max_depth:
+        # Expand my one layer
+        nf = deque()
+        while my_frontier:
+            x, y = my_frontier.popleft()
+            for dx, dy in DIRS.values():
+                n = (x + dx, y + dy)
+                if not _in_bounds(n, w, h):
+                    continue
+                if n in blocked:
+                    continue
+                if n in my_dist:
+                    continue
+                # Only claim if opp hasn't claimed earlier
+                if n in opp_dist and opp_dist[n] < depth + 1:
+                    continue
+                my_dist[n] = depth + 1
+                nf.append(n)
+        my_frontier = nf
+        # Expand opp one layer
+        nf = deque()
+        while opp_frontier:
+            x, y = opp_frontier.popleft()
+            for dx, dy in DIRS.values():
+                n = (x + dx, y + dy)
+                if not _in_bounds(n, w, h):
+                    continue
+                if n in blocked:
+                    continue
+                if n in opp_dist:
+                    continue
+                if n in my_dist and my_dist[n] < depth + 1:
+                    continue
+                opp_dist[n] = depth + 1
+                nf.append(n)
+        opp_frontier = nf
+        depth += 1
+
+    my_cells = 0
+    for c, md in my_dist.items():
+        od = opp_dist.get(c)
+        if od is None or md < od:
+            my_cells += 1
+    return my_cells
+
+
+
+
+def _worst_case_next_escape(my_new_head, my_prev_body, opp, snakes, my_id, w, h, my_len, my_growing):
+    """
+    Look one ply ahead: after I move to my_new_head, for each possible opp
+    move, compute my flood-fill space. Return the minimum (worst case).
+    my_prev_body: my body BEFORE the move (list of (x,y) tuples).
+    """
+    # Simulate my new body after move: prepend new head, drop tail unless growing.
+    new_my_body = [my_new_head] + list(my_prev_body)
+    if not my_growing:
+        new_my_body = new_my_body[:-1]
+    my_body_set = set(new_my_body)
+    # Opponent body: after their move, drop tail unless they just ate.
+    opp_body_pts = [(seg["x"], seg["y"]) for seg in opp["body"]]
+    opp_growing = len(opp_body_pts) >= 2 and opp_body_pts[-1] == opp_body_pts[-2]
+    opp_head = (opp["head"]["x"], opp["head"]["y"])
+    worst = None
+    tried = 0
+    for dx, dy in DIRS.values():
+        onh = (opp_head[0] + dx, opp_head[1] + dy)
+        if not _in_bounds(onh, w, h):
+            continue
+        # Skip moves that would kill opp instantly (into own body except tail).
+        # Approximation: don't skip; even suicidal moves are worth considering
+        # as "opp doesn't take that" (but they cost us nothing if opp died).
+        # Simpler: if onh is on opp's own body (not their tail), skip.
+        if onh in opp_body_pts[:-1] or (opp_growing and onh == opp_body_pts[-1]):
+            continue
+        # Also skip if onh is on our new body (opp would die from us).
+        if onh in my_body_set:
+            continue
+        new_opp_body = [onh] + opp_body_pts
+        if not opp_growing:
+            new_opp_body = new_opp_body[:-1]
+        # Build blocked set
+        blocked = set(my_body_set)
+        blocked.update(new_opp_body)
+        blocked.discard(my_new_head)  # start cell for flood fill
+        # Flood fill from my_new_head
+        space = _flood_fill(my_new_head, blocked, w, h, limit=my_len * 3 + 10)
+        tried += 1
+        if worst is None or space < worst:
+            worst = space
+    if worst is None:
+        return my_len * 3  # no opp move possible; assume fine
+    return worst
+
+
+
+def move(game_state):
+    try:
+        return _decide(game_state)
+    except Exception:
+        return {"move": "up"}
+
+
+def _decide(game_state):
+    board = game_state["board"]
+    w, h = board["width"], board["height"]
+    you = game_state["you"]
+    my_id = you["id"]
+    my_head = (you["head"]["x"], you["head"]["y"])
+    my_len = you["length"]
+    my_health = you["health"]
+
+    snakes = board["snakes"]
+    food = [(f["x"], f["y"]) for f in board["food"]]
+    food_set = set(food)
+
+    # Occupancy: all snake bodies. Tails will move (usually) so we can pass
+    # through where a tail is, IF the snake didn't just eat.
+    hard_blocked = set()      # walls of any snake body, treating tails as movable
+    body_blocked = set()      # includes tails (for stricter checks)
+    for s in snakes:
+        body = s["body"]
+        tail_stays = len(body) >= 2 and body[-1] == body[-2]
+        for i, seg in enumerate(body):
+            p = (seg["x"], seg["y"])
+            body_blocked.add(p)
+            if i == len(body) - 1 and not tail_stays:
+                # tail will move away next turn; still blocked THIS step because
+                # the tail is currently there and other snakes'/our new head
+                # collides. But when we step, tail also moves, so it's free.
+                continue
+            hard_blocked.add(p)
+
+    # Opponents info
+    opponents = [s for s in snakes if s["id"] != my_id]
+
+    # For each direction, evaluate.
+    candidates = []
+    for name, (dx, dy) in DIRS.items():
+        nx, ny = my_head[0] + dx, my_head[1] + dy
+        np = (nx, ny)
+        if not _in_bounds(np, w, h):
+            continue
+        if np in hard_blocked:
+            continue
+
+        # Head-to-head check: any opponent whose head is adjacent to np and
+        # length >= mine will kill us (or tie if equal length).
+        h2h_loss = False
+        h2h_kill = False
+        for opp in opponents:
+            oh = (opp["head"]["x"], opp["head"]["y"])
+            # opponent could move to np
+            if abs(oh[0] - nx) + abs(oh[1] - ny) == 1:
+                if opp["length"] >= my_len:
+                    h2h_loss = True
+                else:
+                    h2h_kill = True
+
+        # Compute flood fill available from np, treating our new head as blocked.
+        blocked_for_ff = set(hard_blocked)
+        # NOTE: do NOT add np here; flood_fill starts from np. Adding it made space=0 (bug fixed).
+        # Add our current head as blocked (we no longer occupy it; but our body
+        # segments minus tail remain).
+        # Actually, hard_blocked already contains all our body except tail.
+        # Our head is in body[0] which is in hard_blocked. Good.
+
+        # Also treat cells adjacent to bigger opponent heads as risky (they
+        # might step there). Not strictly blocked but reduce score.
+
+        space = _flood_fill(np, blocked_for_ff, w, h, limit=my_len * 4 + 20)
+        # Better metric: escape space simulating tail retreat.
+        # Detect if we just ate (health==100 and body last two equal).
+        my_body = you["body"]
+        my_growing = len(my_body) >= 2 and my_body[-1] == my_body[-2]
+        esc = _escape_space(np, snakes, my_id, w, h, my_len, growing=my_growing, limit=my_len * 4 + 20)
+
+        # Distance to nearest food from np
+        food_dist = None
+        if food_set:
+            fd = _bfs_distance(np, food_set, blocked_for_ff, w, h, max_dist=w + h)
+            food_dist = fd
+
+        # Voronoi: how many cells do we reach first vs opponent heads?
+        # Treat opponents' possible next-head positions as their starting cells.
+        opp_next_starts = []
+        for _o in opponents:
+            _oh = (_o["head"]["x"], _o["head"]["y"])
+            # Opp could be at any of its adjacent cells next turn
+            for _dx, _dy in DIRS.values():
+                _np = (_oh[0] + _dx, _oh[1] + _dy)
+                if _in_bounds(_np, w, h) and _np not in hard_blocked:
+                    opp_next_starts.append(_np)
+            # Also include current head (for cells farther out that don't depend on move)
+            opp_next_starts.append(_oh)
+        vor = _voronoi(np, opp_next_starts, hard_blocked, w, h) if opp_next_starts else space
+
+        # 2-ply worst-case escape space: for wall-adjacent moves or when a
+        # threatening opponent is close, simulate opp's possible responses and
+        # check the min flood-fill space we'd have next turn. This catches
+        # shadowing/cornering that single-ply flood-fill misses.
+        worst_next = None
+        _px, _py = np
+        _on_wall = (_px == 0 or _px == w - 1 or _py == 0 or _py == h - 1)
+        _my_body_pts = [(seg["x"], seg["y"]) for seg in you["body"]]
+        _my_growing2 = len(_my_body_pts) >= 2 and _my_body_pts[-1] == _my_body_pts[-2]
+        for _opp in opponents:
+            _oh = (_opp["head"]["x"], _opp["head"]["y"])
+            _od = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
+            # Only compute for close opponents in dangerous zones to save time.
+            _near_wall = (_px <= 1 or _px >= w - 2 or _py <= 1 or _py >= h - 2)
+            if _od <= 6 and (_on_wall or _near_wall or my_len >= 8):
+                wn = _worst_case_next_escape(np, _my_body_pts, _opp, snakes,
+                                             my_id, w, h, my_len, _my_growing2)
+                if worst_next is None or wn < worst_next:
+                    worst_next = wn
+
+        candidates.append({
+            "move": name,
+            "pos": np,
+            "h2h_loss": h2h_loss,
+            "h2h_kill": h2h_kill,
+            "space": space,
+            "esc": esc,
+            "food_dist": food_dist,
+            "vor": vor,
+            "worst_next": worst_next,
+        })
+
+    if not candidates:
+        # No legal moves; try to at least stay in bounds
+        for name, (dx, dy) in DIRS.items():
+            nx, ny = my_head[0] + dx, my_head[1] + dy
+            if _in_bounds((nx, ny), w, h):
+                return {"move": name}
+        return {"move": "up"}
+
+    # Filter out obvious death (h2h loss) if we have alternatives
+    safe = [c for c in candidates if not c["h2h_loss"]]
+    # Prefer moves where our escape-space (tail-aware) >= my_len (definitely survivable).
+    # Fall back to raw flood-fill space >= my_len, then max space.
+    if safe:
+        big_esc = [c for c in safe if c["esc"] >= my_len]
+        if big_esc:
+            pool = big_esc
+        else:
+            big_enough = [c for c in safe if c["space"] >= my_len]
+            if big_enough:
+                # pick the ones with largest esc among these
+                max_esc = max(c["esc"] for c in big_enough)
+                pool = [c for c in big_enough if c["esc"] >= max_esc * 0.9]
+            else:
+                # We're getting trapped no matter what; pick the one with max esc
+                max_esc = max(c["esc"] for c in safe)
+                pool = [c for c in safe if c["esc"] == max_esc]
+                if max_esc == 0:
+                    # esc gives 0; try flood-fill
+                    max_space = max(c["space"] for c in safe)
+                    pool = [c for c in safe if c["space"] == max_space]
+    else:
+        # All moves are h2h losses; pick the one with most escape space
+        max_esc = max(c["esc"] for c in candidates)
+        pool = [c for c in candidates if c["esc"] == max_esc]
+        if max_esc == 0:
+            max_space = max(c["space"] for c in candidates)
+            pool = [c for c in candidates if c["space"] == max_space]
+
+    # Compute proximity to nearest opponent head (Manhattan) for tactical scoring.
+    min_opp_dist = 999
+    max_opp_len_near = 0
+    for _opp in opponents:
+        _oh = (_opp["head"]["x"], _opp["head"]["y"])
+        _d = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
+        if _d < min_opp_dist:
+            min_opp_dist = _d
+        if _d <= 6:
+            max_opp_len_near = max(max_opp_len_near, _opp["length"])
+
+    # Score remaining candidates
+    def score(c):
+        s = 0.0
+        # Escape space (tail-aware) is the most important survival metric
+        s += c["esc"] * 2.5
+        # Raw flood-fill space as secondary. When we are long AND opp is near,
+        # weight this much more heavily: raw flood-fill treats opp body as
+        # a wall (pessimistic vs esc which lets opp body recede). If opp is
+        # actively chasing/cornering us, esc is over-optimistic.
+        _ff_w = 0.5
+        if my_len >= 10 and min_opp_dist <= 6:
+            _ff_w = 2.0
+        if my_len >= 14 and min_opp_dist <= 6:
+            _ff_w = 3.0
+        s += c["space"] * _ff_w
+        # Voronoi territory: cells we reach first vs opponents. Strong survival signal.
+        # Weight scales with how contested the situation is.
+        _vor_w = 1.0
+        if my_len >= 6 and min_opp_dist <= 8:
+            _vor_w = 2.0
+        s += c["vor"] * _vor_w
+        # Prefer moves that don't die
+        if c["h2h_loss"]:
+            s -= 1000
+        # Head-to-head kill opportunity
+        if c["h2h_kill"]:
+            s += 30
+        # Food consideration - stronger when health low.
+        # When health is high AND we're long, chasing food into corners is risky.
+        if c["food_dist"] is not None:
+            weight = 0.3  # default: very mild pull toward food
+            if my_health < 30:
+                weight = 6.0
+            elif my_health < 50:
+                weight = 3.0
+            elif my_health < 70:
+                weight = 1.5
+            # SHORT-SNAKE BOOST: when we're small (len<=5), we're vulnerable to
+            # h2h losses vs any opponent that has eaten once. Actively grow.
+            # Prior rounds we drifted at len=3 until starvation (health 100->0).
+            # Need to dominate the space/center terms (weight * space*2 = ~2*11 = 22).
+            if my_len <= 4:
+                weight = max(weight, 4.0)
+            elif my_len <= 6:
+                weight = max(weight, 2.0)
+            elif my_len <= 8:
+                weight = max(weight, 1.0)
+            # If we're shorter than an opponent, we need to grow to survive h2h.
+            if opponents:
+                max_opp_len = max(o["length"] for o in opponents)
+                if my_len < max_opp_len:
+                    weight += 1.5
+                elif my_len <= max_opp_len + 1:
+                    weight += 0.5
+            s -= weight * c["food_dist"]
+        else:
+            if my_health < 30:
+                s -= 20
+            # If no food reachable and we're short/starving, panic penalty grows
+            if my_len <= 4 and my_health < 60:
+                s -= 10
+        # Center-tropism (stronger when we are long, to avoid corners self-trap)
+        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+        px, py = c["pos"]
+        center_weight = 0.2 + 0.05 * max(0, my_len - 10)
+        s -= center_weight * (abs(px - cx) + abs(py - cy))
+        # Wall/corner adjacency penalty scales with our length
+        wall_pen = 1.0 + 0.15 * max(0, my_len - 10)
+        if px == 0 or px == w - 1:
+            s -= wall_pen
+        if py == 0 or py == h - 1:
+            s -= wall_pen
+        # If esc is small relative to length, heavy penalty
+        if c["esc"] < my_len:
+            s -= (my_len - c["esc"]) * 3.0
+        # Long snake wall-corridor penalty: if we're long and going into a wall-adjacent
+        # cell whose flood-fill space is not comfortably larger than our length, penalize.
+        # This catches the case of walking further into a wall corridor with opp near.
+        if my_len >= 10 and min_opp_dist <= 6:
+            px_, py_ = c["pos"]
+            on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
+            if on_wall and c["space"] < my_len * 2:
+                s -= (my_len * 2 - c["space"]) * 2.0
+        # Wall-shadow / pincer detection: if new pos hugs a wall and an opponent
+        # is within 2-3 cells shadowing us with equal-or-greater length, penalize.
+        px_, py_ = c["pos"]
+        on_left = (px_ == 0)
+        on_right = (px_ == w - 1)
+        on_bot = (py_ == 0)
+        on_top = (py_ == h - 1)
+        moving_along_wall = False
+        my_dx = px_ - my_head[0]
+        my_dy = py_ - my_head[1]
+        if (on_left or on_right) and my_dy != 0:
+            moving_along_wall = True
+        if (on_bot or on_top) and my_dx != 0:
+            moving_along_wall = True
+        if moving_along_wall:
+            for _opp in opponents:
+                if _opp["length"] < my_len:
+                    continue  # only worry about equal-or-longer
+                _oh = (_opp["head"]["x"], _opp["head"]["y"])
+                # Perpendicular shadow: opp is 1-3 cells inward and roughly aligned
+                if on_left or on_right:
+                    perp_gap = abs(_oh[0] - px_)
+                    par_gap = abs(_oh[1] - py_)
+                    # Are we moving TOWARD opp along wall?
+                    par_dir = my_dy  # +1 up, -1 down
+                    opp_par_delta = _oh[1] - py_  # sign: where opp is relative to us
+                elif on_bot or on_top:
+                    perp_gap = abs(_oh[1] - py_)
+                    par_gap = abs(_oh[0] - px_)
+                    par_dir = my_dx
+                    opp_par_delta = _oh[0] - px_
+                else:
+                    continue
+                if not (1 <= perp_gap <= 3 and par_gap <= 4):
+                    continue
+                # Are we moving toward or away from opp?
+                # If par_dir has same sign as opp_par_delta, we're moving toward opp.
+                moving_toward_opp = (par_dir * opp_par_delta) > 0
+                # Compute how far to the corner in our direction of travel.
+                if on_left or on_right:
+                    if par_dir > 0:
+                        dist_to_corner_ahead = (h - 1) - py_
+                    else:
+                        dist_to_corner_ahead = py_
+                else:
+                    if par_dir > 0:
+                        dist_to_corner_ahead = (w - 1) - px_
+                    else:
+                        dist_to_corner_ahead = px_
+                # Penalty: bigger if moving toward opp; scale with how little
+                # room we have between us and the corner ahead.
+                # Being trapped: opp behind + short runway = death.
+                corner_factor = max(0, 6 - dist_to_corner_ahead)
+                base_pen = 4.0
+                if par_gap == 0 and perp_gap <= 3:
+                    # Opp is perfectly perpendicular to our new pos: they can
+                    # shadow us all the way to the corner ahead. Penalize based
+                    # on how much runway we have (less runway = worse).
+                    pen = 5.0 + max(0, 8 - dist_to_corner_ahead) * 0.8
+                    if perp_gap <= 2:
+                        pen += 3.0
+                    s -= pen
+                    break
+                if moving_toward_opp:
+                    # Bad: opp is ahead of us along the wall, we head into them
+                    # Especially bad if par_gap is small (about to meet).
+                    pen = 6.0 + 1.5 * corner_factor + max(0, 4 - par_gap) * 2.5
+                    # If perp_gap==1, opp is exactly one row inward: pure shadow.
+                    if perp_gap == 1:
+                        pen += 3.0
+                else:
+                    # We're moving away from opp along wall. Bad if we're
+                    # heading into a corner with no runway - we'll be forced
+                    # to reverse into the opp next turn.
+                    if dist_to_corner_ahead == 0:
+                        # dead-end: next turn we must move perpendicular; opp
+                        # can cover both options. Very bad if par_gap small.
+                        pen = 5.0 + max(0, 4 - par_gap) * 2.0
+                        if perp_gap == 1:
+                            pen += 3.0
+                    elif dist_to_corner_ahead <= 2 and par_gap <= 3:
+                        pen = base_pen + 1.5 * corner_factor
+                    else:
+                        pen = 0.3 * corner_factor  # mild
+                s -= pen
+                break
+
+        # Wall-entry pincer: penalize moving PERPENDICULARLY onto a wall
+        # when a longer opponent is nearby and could shadow-corner us.
+        # This complements the along-wall detection (which requires we were
+        # already on the wall). Fires when we're entering a wall for the
+        # first time with a threatening opponent aligned to trap us.
+        pxN, pyN = c["pos"]
+        entering_wall = False
+        wall_axis = None  # 'x' if on left/right wall, 'y' if on top/bot
+        if (pxN == 0 or pxN == w - 1):
+            if my_head[0] != pxN:  # we changed x-coord to land on side wall
+                entering_wall = True
+                wall_axis = 'x'
+        if (pyN == 0 or pyN == h - 1):
+            if my_head[1] != pyN:  # we changed y-coord to land on top/bot wall
+                entering_wall = True
+                wall_axis = 'y'
+        if entering_wall and my_len >= 4:
+            for _opp in opponents:
+                # Allow up to 3-shorter opps: they can still corner us if we
+                # run out of runway on the wall. Fixes wall-corner death cases.
+                if _opp["length"] < my_len - 1:
+                    continue
+                _oh = (_opp["head"]["x"], _opp["head"]["y"])
+                # For side walls: check opp is roughly inward (between us and center)
+                if wall_axis == 'x':
+                    perp_gap = abs(_oh[0] - pxN)
+                    par_gap = abs(_oh[1] - pyN)
+                else:
+                    perp_gap = abs(_oh[1] - pyN)
+                    par_gap = abs(_oh[0] - pxN)
+                if perp_gap == 0:
+                    continue  # opp on same wall as us; different scenario
+                if perp_gap <= 3 and par_gap <= 4:
+                    # Opp is aligned to shadow. Penalize entering.
+                    pen = 3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0
+                    s -= pen
+                    break
+
+        # Reduce food attraction strongly if going onto a wall while long and healthy.
+        if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
+            px_, py_ = c["pos"]
+            if px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1:
+                s -= 2.0  # cancel food incentive on wall moves
+        # Penalty for moving closer to a similarly-sized/larger opponent's head
+        # when we're long. Prevents getting cornered.
+        for _opp in opponents:
+            _oh = (_opp["head"]["x"], _opp["head"]["y"])
+            cur_d = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
+            new_d = abs(_oh[0] - c["pos"][0]) + abs(_oh[1] - c["pos"][1])
+            if my_len >= 10 and cur_d <= 3:
+                if new_d < cur_d:
+                    s -= 5.0  # discourage approaching opp when they can match us
+        # Worst-case 2-ply escape: heavy penalty if opp can force us into
+        # a tiny pocket next turn. Catches shadow/pincer cornering that
+        # single-ply flood-fill misses.
+        wn = c.get("worst_next")
+        if wn is not None:
+            if wn < my_len:
+                # Definitely trappable next turn
+                s -= (my_len - wn) * 4.0
+            if wn < my_len // 2:
+                s -= 20.0  # very dangerous
+            if wn <= 3:
+                s -= 40.0  # basically dead
+        # Wall / edge distance shrinkage penalty when we're close to walls AND long
+        return s
+
+    pool.sort(key=score, reverse=True)
+    return {"move": pool[0]["move"]}
+
+
+if __name__ == "__main__":
+    from server import run_server
+    run_server({"info": info, "start": start, "move": move, "end": end})

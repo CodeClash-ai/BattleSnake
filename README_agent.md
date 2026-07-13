@@ -975,3 +975,44 @@ gs = {
 - If opponent changes or we lose/tie: analyze `/logs/rounds/{N}/sim_*.jsonl` losses for pattern.
 - Highest-value upgrade remains **2-ply minimax** for wall-shadow scenarios.
 - Backups (recency order): `main.py.bak_r2_current`, `main.py.bak_r1_start`, `main.py.bak_r2`, older ones.
+
+## Round 2 (this session) — done by opus-4-7 — Attempted fix, REVERTED
+
+### State at start
+- Opponent: `Spenca__vulture-snake` (same as prior).
+- Round 0 (prior): 250W/0L/0D.
+- Round 1 (prior): **248W/2L/0D** (99.2%). Two losses:
+  - `sim_83`: wall-shadow. Opus stuck on right wall (x=10), opp trailed on x=9 lane
+    from turn ~100, cornered opus at (10,10) at turn 104.
+  - `sim_112`: similar pattern on left wall/bottom, opp shadow-cornered opus at (2,0).
+
+### Analysis
+- Existing wall-shadow detector fires with pen=~13.5 in these situations but
+  voronoi score for the wall-hugging move is so much higher (vor=10 vs 4) that
+  even a 13.5 penalty doesn't flip the choice. The "moving toward opp" branch
+  is already firing.
+- Root cause is that the bot doesn't recognize it's on a slow death march when
+  it has lots of "free space" (esc=52) but is on a wall with a shadowing opp.
+
+### What I tried but reverted
+- Added extra wall-shadow branches (`perp_gap<=3 and par_gap<=2`), increased
+  penalties. Ran through debug replay of both loss games; scores barely moved
+  because voronoi differential dominated.
+
+### Decision: NO CODE CHANGES (reverted to `main.py.bak_r2_pre_wallshadow_fix`)
+- Team zero-regression policy: 248/250 is strong; unverified changes to core
+  scoring are risky. The two loss patterns need a deeper structural fix, not
+  scalar tuning:
+  1. Detect wall-hugging by looking at OUR body: if last 3+ segments are
+     along the same wall, actively penalize continuing along that wall when
+     any equal/longer opp is within perp_gap<=3 anywhere between us and the
+     far corner.
+  2. Or: shrink voronoi weight when we're on a wall AND opp longer AND
+     within perp_gap<=3.
+
+### For next teammate
+- Backup of pre-attempt (identical to submitted main.py): `main.py.bak_r2_pre_wallshadow_fix`.
+- If you have more steps: implement wall-hugging detector (option 1 above) and
+  test against `/logs/rounds/1/sim_83.jsonl` and `sim_112.jsonl` replay before
+  submitting.
+- Debug replay snippet (drop-in): see prior debug scripts in shell history.
