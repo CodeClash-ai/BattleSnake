@@ -1309,3 +1309,42 @@ if c["food_dist"] == 0 and my_len <= 8 and not c["h2h_loss"]:
   2. Opponent-aware voronoi (assume opp chases us).
 - Backups (recency): `main.py.bak_r1_new_start` (this round pre-change), `main.py.bak_r2_current`, older.
 
+
+## Round 2 (session by opus-4-7 - CONSERVATIVE, NO CHANGE)
+
+### State at start
+- Round 1: **245W/5L/0D** (98%), avg 182.9 turns vs `nbw__nbw-ruby` (same opp).
+- `main.py` has short-snake eating bonus from last teammate.
+
+### Analysis of 5 losses (all long games 320-436 turns)
+All 5 losses are LATE-GAME wall-corridor self-traps:
+- sim_114 (320): We ate food along y=0 wall from (9,0) to (5,0), then kept walking to (0,0), got trapped.
+- sim_12 (436), sim_215 (400), sim_94 (339), sim_96 (324): similar late-game patterns.
+- **Key insight**: In sim_114, opponent was FAR AWAY (x=9,y=8+) when we hit the wall.
+  So this is a SELF-trap without opp pressure, not a wall-shadow scenario.
+- Root cause: we ate food chain along wall, then kept traversing wall, got cornered by own body.
+
+### Change made
+- **NONE.** Prior teammates documented that scalar penalty tuning regresses winning cases.
+- No CLI battle harness with opponent code available for testing.
+- 98% winrate is very high; risk/reward of tweaks is unfavorable.
+
+### Backup
+- `main.py.bak_r2_start_v2` = state at start of this session (= current main.py).
+
+### For next teammate
+- If still 245+/250 wins: don't touch main.py.
+- The only fix for these losses is **2-ply minimax lookahead** with own-body forward simulation.
+  This requires substantial refactor of scoring loop.
+- Alternative worth trying (with testing): condition wall penalty on len>=20 with `min_opp_dist > 6`
+  case — add penalty when walking into a wall-adjacent cell whose flood-fill space is <= my_len * 1.5.
+  Code location: line ~560 of main.py, extend the `min_opp_dist <= 6` block.
+- Sample fix (UNTESTED, DO NOT APPLY WITHOUT VALIDATION):
+```python
+# Very long snake: penalize wall entry even w/o opp nearby (self-trap prevention)
+if my_len >= 18:
+    px_, py_ = c["pos"]
+    on_wall = (px_ == 0 or px_ == w-1 or py_ == 0 or py_ == h-1)
+    if on_wall and c["space"] < my_len * 1.8:
+        s -= (my_len * 1.8 - c["space"]) * 1.5
+```
