@@ -494,6 +494,59 @@ def _vulture_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+def _astar_snake_predicted_move(enemy, game_state, w, h):
+    """Predict OliverMKing astar-snake by running the faithful local port."""
+    try:
+        from tools import astar_snake_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = astar_snake_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
+
+def _astar_snake_food_move(enemy, food, snakes, w, h):
+    """Cheap fallback: astar-snake usually A*/BFSes to nearest food/tail."""
+    body=[_pt(p) for p in enemy.get("body", [])]
+    if not body: return None
+    head=body[0]
+    targets=food[:]
+    # When healthy and not facing equal/larger opponents it often chases its tail.
+    if len(body)>3:
+        targets.append(body[-1])
+    if not targets: return None
+    blocked=set()
+    for sn in snakes:
+        for i,p in enumerate(sn.get("body", [])):
+            cell=_pt(p)
+            if i==len(sn.get("body", []))-1 and len(sn.get("body", []))>1:
+                continue
+            blocked.add(cell)
+    blocked.discard(head)
+    # Match neighbor order down, up, right, left from the port.
+    q=[(head,None)]; seen={head}; qi=0
+    targetset=set(targets)
+    while qi<len(q):
+        cur,first=q[qi]; qi+=1
+        if cur in targetset and first is not None:
+            return first
+        for d in [(0,-1),(0,1),(1,0),(-1,0)]:
+            nb=_add(cur,d)
+            if _in_bounds(nb,w,h) and nb not in blocked and nb not in seen:
+                seen.add(nb); q.append((nb, nb if first is None else first))
+    return None
+
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -600,6 +653,12 @@ def move(game_state):
                 pred = _vulture_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
+            elif "astar-snake" in ename.lower() or "olivermking" in ename.lower():
+                pred = _astar_snake_predicted_move(e, game_state, w, h)
+                if pred is None:
+                    pred = _astar_snake_food_move(e, food, snakes, w, h)
+                if pred is not None:
+                    preds.add(pred)
             else:
                 preds.add(_simple_opponent_target_move(eh, food, w, h))
                 straight = _continuation_or_default_move(e, w, h)
@@ -614,7 +673,7 @@ def move(game_state):
             # Any legal enemy move may immediately partition space even if we
             # win head-to-heads against shorter snakes.  Use these cells as a
             # conservative one-ply space estimate below.
-            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower() or "vulture" in ename.lower() or "spenca" in ename.lower() or "pinky-snek" in ename.lower() or "moxuz" in ename.lower())
+            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower() or "vulture" in ename.lower() or "spenca" in ename.lower() or "pinky-snek" in ename.lower() or "moxuz" in ename.lower() or "astar-snake" in ename.lower() or "olivermking" in ename.lower())
             awesome_like = ("awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
             vulture_like = ("vulture" in ename.lower() or "spenca" in ename.lower())
             awesome_scores = {}
@@ -687,6 +746,10 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
+                if "astar-snake" in ename or "olivermking" in ename:
+                    if _manhattan(nxt, eh) == 1 and elen >= my_len:
+                        h2h_soft_penalty = max(h2h_soft_penalty, 220)
+                    continue
                 if "rdbrck" in ename or "btas" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         h2h_soft_penalty = max(h2h_soft_penalty, 150)
