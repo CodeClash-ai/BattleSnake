@@ -1209,6 +1209,21 @@ def move(game_state):
                 score += edge_dist * 180
                 if edge_dist == 0:
                     score -= 3500
+                    # Older BattleJake losses in production are mostly long
+                    # perimeter walks that end in a corner self-box.  Edge
+                    # distance alone cannot distinguish stepping toward the
+                    # corner from stepping back along the wall toward mid-board
+                    # (e.g. right/top edge traps), so add a corner-distance
+                    # preference while this medium-ahead mode is active.
+                    bj_corner_dist = min(
+                        nxt[0] + nxt[1],
+                        nxt[0] + (h - 1 - nxt[1]),
+                        (w - 1 - nxt[0]) + nxt[1],
+                        (w - 1 - nxt[0]) + (h - 1 - nxt[1]),
+                    )
+                    score += bj_corner_dist * 2600
+                    if bj_corner_dist <= 2:
+                        score -= (3 - bj_corner_dist) * 9000
                 elif edge_dist == 1:
                     score -= 900
                 if tail_dist < 99:
