@@ -1302,3 +1302,38 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   the forced-H2H frame). A/B ANY change across MULTIPLE seed batches (13n+3, 29n+101, 17n+555)
   — single-batch results are misleading (proven above). main.py has all prior layers. Test:
   `python3 vs_flipez.py main.py 20` + `sim_test.py 40` + fuzz. Backup: main_r0_flipez_backup.py.
+
+## Round 2 of 5 (this task, opus-4-8) — flipez-crystal, RE-CONFIRMED NO CODE CHANGE (tweaks = noise/regressive)
+- Opponent STILL `Flipez__flipez-crystal` (moderate 2018 port, grows large L8-24, cuts us off;
+  opp_flipez_crystal.py). Results: round 0 won 223-22+5T, round 1 won 223-23+4T (~89% real).
+- **Loss analysis (all 23 round-1 losses, analyze_losses.py):** UNAMBIGUOUS & unchanged from
+  round 0 — in EVERY loss OPUS was SHORTER at death (OPUS L5-L15 vs OPP L6-L24). We fall
+  BEHIND in length, then get funneled/cut off/H2H-killed by the longer snake. NOT our usual
+  self-coil vector; here the opponent OUT-GROWS us.
+- **Experiments A/B'd on IDENTICAL seeds across 3 batches (7n+1, 29n+101, 17n+555), N=20 each,
+  vs real opp (sim ~78%, harsher than real 89%):**
+  1. variant: clearly_ahead +2/>=6 -> +4/>=12 AND behind_or_even +1 -> +3 (grow to a bigger
+     lead before relaxing). NEW 16/17/14 vs OLD 15/17/15 = DEAD EVEN (net 47-47).
+  2. variant2: when behind/even+healthy, chase the ABSOLUTE nearest food (raw distance) instead
+     of the safety-ranked food (win the growth race). NEW 15/16/15 vs OLD 15/17/15 = even/slightly
+     worse.
+  3. variant3: variant1 + behind food weight 7->9. NEW 14 vs OLD 15 on batch1 = REGRESSED.
+  => All food/threshold tweaks are NOISE-FLOOR or slightly regressive here, EXACTLY as the two
+  prior flipez teammates found. Scalar tuning does not move the needle vs this opponent.
+- Verified committed main.py: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=
+  /workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.33.
+- **Decision: NO code change.** Kept the proven ~89% bot stable; every tweak tested was noise
+  or a regression, and regression risk on a winning bot isn't worth it.
+- **Next teammate — the ONLY promising unexplored lever:** AGGRESSIVE CUTOFF WHEN WE ARE
+  LONGER. The opponent's `is_free_point` treats a cell as blocked ONLY if an enemy whose
+  `length >= mine` can reach it (it YIELDS to a longer snake, predicting the longer snake moves
+  toward its own nearest food). So when WE are strictly longer, Flipez actively avoids cells we
+  can reach — we can BODY-BLOCK / cut off its space and force it to trap itself. This is a
+  STRUCTURAL exploit (not a scalar tweak) and is the only thing likely to beat the ~89% ceiling.
+  Implementation sketch: when my_len > max_enemy_len, add an AGGRESSION term that rewards moves
+  reducing the enemy's Voronoi/reachable territory (we already have `_voronoi_owned`), or that
+  position our body between the enemy head and the open board / its nearest food. A/B carefully
+  across MULTIPLE seed batches (7n+1, 29n+101, 17n+555) — single-batch is misleading (proven).
+  Tools: `python3 vs_flipez.py main.py 20`, `python3 vs_flipez2.py <bot> <N> <mult> <off>`,
+  `/tmp/ab.py <N> <mult> <off>` (rebuild: loads a variant vs main.py vs opp on identical seeds).
+  main.py has all prior layers. Backup available: main_r0_flipez_backup.py.
