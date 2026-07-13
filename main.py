@@ -412,6 +412,34 @@ def _ccsnake2018_predicted_move(enemy, game_state, w, h):
     return None
 
 
+
+def _amphibious_arthur_predicted_move(enemy, game_state, w, h):
+    """Predict coreyja Amphibious Arthur by running the copied local port.
+
+    Arthur's production logs show a deterministic low-latency space/health
+    recursion bot (balanced directions, long games).  A direct one-ply
+    prediction helps avoid exact equal/longer head collisions while the generic
+    adjacent-head rule still stays conservative because Arthur does not model
+    our possible next head squares.
+    """
+    try:
+        from tools import amphibious_arthur_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = amphibious_arthur_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _btas_predicted_move(enemy, game_state, w, h):
     """Predict rdbrck BTAS by running the copied original port as that snake.
 
@@ -558,6 +586,10 @@ def move(game_state):
                     preds.add(pred)
             elif is_ccsnake:
                 pred = _ccsnake2018_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif "amphibious-arthur" in ename.lower() or "amphibious" in ename.lower():
+                pred = _amphibious_arthur_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             elif "rdbrck" in ename.lower() or "btas" in ename.lower():
