@@ -1594,3 +1594,40 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   unimplemented fix (cycle the board tightly instead of coiling). Analyze new losses:
   `cd /logs/rounds/N && python3 /workspace/analyze_losses.py sim_*.jsonl | grep -vi ...` (find
   non-opus winners first). main.py has all prior layers + now length-scaled enemy-reach anti-seal.
+
+## Round 2 of 5 (this task, opus-4-8) — battlejake2019, TESTED EDGE-SHADOW FIX, REVERTED (regressed)
+- Opponent STILL `joshhartmann11__battlejake2019` (2019 port, stays SHORTER, outlasts us;
+  opp_battlejake.py). Results: round 0 won 226-24, round 1 won 236-13 (~94.8%).
+- **Loss analysis (round 1, 13 losses, analyze_losses.py):** 12/13 OPUS was LONGER (L12-35 vs
+  L11-33), ~11/13 on EDGE/CORNER, high health — the CHRONIC long+healthy self-coil / enemy-
+  assisted seal vector. ONE exception: sim_129, an EARLY L4 loss at turn 18 — OPUS ran along
+  the TOP edge (y=10) toward the right corner while a LONGER OPP shadowed one lane inward (y=9)
+  heading to the SAME corner, sealing the wall corridor -> forced H2H at the corner. The wrong
+  decision was T13 (head (3,10)): bot went RIGHT (into the shadow, toward corner) instead of
+  LEFT (away, open board). The edge-shadow penalty didn't fire because the "run" toward the
+  corner was long (~6 cells) so `run < my_len` was False.
+- **Tried (backup: main_r1of5_battlejake_r2_backup.py = committed bot):** added a PARALLEL-
+  SHADOW-INTO-CORNER penalty: when moving ALONG an edge toward a corner with a >=our-length
+  enemy on the adjacent inward lane, close, and paralleling us toward that corner, penalize.
+  - At -220 / edist<=4 it FIXED sim_129 T13 (picks left) BUT A/B vs real opp on identical seeds
+    (N=20, /tmp/ab_bj2.py) REGRESSED: NEW 9-4-7 vs OLD 15-1-4. Too aggressive — it steered the
+    bot into worse positions when the shadow wasn't actually a trap.
+  - Tightening to -120 / edist<=2 / room<=my_len+1 made it safe but then it NO LONGER catches
+    sim_129 (edist=3 at the key frame). No net benefit.
+- **Decision: REVERTED to committed main.py.** The proven ~95% bot is better than a change that
+  regressed in A/B. sim_129 is a single early-game edge-shadow-H2H (1/13 losses); the fix for it
+  costs more than it gains. Verified reverted bot: syntax OK; sim_test 40 => 40/0/0; fuzz =>
+  crashes=0 illegal=0 maxt_ms=16.2.
+- **Next teammate:** opponent = opp_battlejake.py. Our dominant loss vector is STILL the long+
+  healthy self-coil into an edge/corner pocket that the shorter enemy seals (12/13). Scalar/
+  positional tweaks keep proving NOISE-FLOOR or regressive (as ~all prior teammates found). The
+  ONLY likely real win is the canonical TRUE HAMILTONIAN tail-follow when long+safe (cycle the
+  board tightly instead of coiling) — STILL unimplemented after many rounds. If you attempt it:
+  gate behind long+space-safe, A/B carefully across MULTIPLE seed batches (`/tmp/ab_bj2.py N`
+  compares main.py NEW vs main_r1of5_battlejake_r2_backup.py OLD, both vs opp, identical seeds;
+  games run LONG so use nohup+poll, N~20 takes ~2min). Do NOT ship anything that A/B-regresses
+  vs the committed bot — we win ~95% and regression risk isn't worth marginal single-game fixes.
+  main.py has all prior layers (time-aware flood fill, tail-reach BFS, 2-ply best/worst space,
+  enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware
+  food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim length-scaled,
+  clearly_ahead food-avoid, tail-follow anti-coil).
