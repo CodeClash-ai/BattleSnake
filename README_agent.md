@@ -1412,3 +1412,39 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   canonical TRUE Hamiltonian tail-follow when long+safe is STILL the ideal unimplemented fix.
   main.py has all prior layers + now opponent-adaptive growth (keep pace vs large-growers,
   avoid overgrowth vs short opponents).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `MorganConrad__tantilla` (COMPACT TAIL-CHASER), ANTI-OVERGROWTH + TAIL-FOLLOW
+- **Opponent = `MorganConrad__tantilla`** — a JS->Python port that `chaseYourTail` (keeps a
+  COMPACT loop following its own tail), eats only when hungry (health<20 closest food, <40
+  tail-chase). Basic collision + H2H avoidance. Stays SHORT (L7-22), survives LONG (300-600+
+  turn games) and OUTLASTS us. Real source saved to `opp_tantilla.py`. Test: `python3
+  vs_tantilla.py main.py <N>` (created; sim does NOT flood food like the real engine, so it
+  can't reproduce the loss trap — both survive to timeout).
+- **Round 0 result: won 234-16** (~93.6%). Analyzed all 16 losses (`analyze_losses.py`):
+  UNAMBIGUOUS chronic self-coil vector — in EVERY loss OPUS was MUCH LONGER (L13-52!) than the
+  opponent (L7-22) in LONG games (turn 287-613) and SELF-COILED / boxed itself in. The real
+  engine FLOODS food (14+ pieces on the 121-cell board by turn 180) so once we're long, food is
+  nearly unavoidable and we grow to L44-52, then can't manage our body.
+- **Changes (backup: main_r0_tantilla_backup.py = git HEAD pre-change bot):**
+  1. Anti-overgrowth `_enemy_small` threshold `<=16 -> <=22` and big-lead `+6 -> +5` (lines
+     ~427-431). Vs Tantilla (stays L7-22) this shuts off growth at just +2 lead across its whole
+     length range (was only <=16). Vs LARGE-growers (elon L30-43) `_enemy_small` stays false so
+     we still keep pace (verified logic table: elon L32/L30 keeps growing; tantilla L24/L22 stops).
+  2. Mid-length tail-follow bias L15-30 band `*1.1 -> *1.4` (line ~613) — tantilla losses cluster
+     L15-31; a stronger tail-follow keeps a COMPACT loop instead of coiling into a dead pocket.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.2 (<500 limit). Frame tests: the bot
+  correctly AVOIDS food when clearly_ahead (validated on sim_212 T200). NOTE: the changes are
+  NEUTRAL on the actual loss death-frames (0 moves changed) because by the last ~30 turns of a
+  coil the snake is already committed AND the board is already flooded (food unavoidable) — the
+  trap forms EARLIER. vs_tantilla sim = 11-0-1 (same as backup, no regression). Validated by
+  DESIGN (targets the confirmed overgrowth->self-coil vector) + sim_test + fuzz + no-regression.
+- **Next teammate:** opponent = opp_tantilla.py (COMPACT tail-chaser, stays short, food-floods
+  the board over long games). Our ONLY loss vector is overgrowth (L44-52) -> self-coil on a
+  nearly-full board. The REAL unimplemented fix (flagged for MANY rounds) is a TRUE HAMILTONIAN
+  CYCLE when long+safe — cycle the board tightly like the opponent instead of coiling. Scalar
+  tweaks (food weights, tail-follow scale) are NOISE-FLOOR and don't reproduce in the sim (which
+  doesn't flood food). If you attempt the Hamiltonian follow: gate behind long+space-safe, A/B
+  carefully (but note sim can't validate the trap — use frame-replay of /logs losses instead).
+  main.py has all prior layers + now `_enemy_small<=22` anti-overgrowth and stronger L15-30
+  tail-follow. Analyze losses: `python3 analyze_losses.py <sim.jsonl>`.

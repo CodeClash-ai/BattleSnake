@@ -424,10 +424,10 @@ def _decide(game_state):
     # +2 lead the opponent quickly out-grows us and out-lasts us in long games
     # (33/45 elon losses = we were SHORTER at death). So only shut off growth
     # when the enemy is genuinely short (<=16) OR we hold a big absolute lead.
-    _enemy_small = max_enemy_len <= 22
+    _enemy_small = max_enemy_len <= 16
     clearly_ahead = (not starving) and (my_len >= 6) and (
         (my_len >= max_enemy_len + 2 and _enemy_small) or
-        (my_len >= max_enemy_len + 5)
+        (my_len >= max_enemy_len + 6)
     )
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
@@ -610,7 +610,7 @@ def _decide(game_state):
                 # in a compact loop and STOP running along edges into corners.
                 tf_w = 2.0
                 if my_len >= 15:
-                    tf_w = 2.0 + (my_len - 15) * 1.4   # stronger in L15-30 band (tantilla/elon losses cluster L15-31)
+                    tf_w = 2.0 + (my_len - 15) * 1.1   # stronger in L15-30 band (elon losses cluster ~L24)
                 # At EXTREME length on a food-flooded board (chronic loss vector
                 # vs gigantic-george: we grow to L86-91 on a 121-cell board and
                 # self-coil), the ONLY survivable strategy is to keep the body a
