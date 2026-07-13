@@ -676,7 +676,7 @@ def _decide(game_state):
                 # opponent stays short by tightly following its OWN tail. Make
                 # our tail-follow bias much stronger when very long so we coil
                 # in a compact loop and STOP running along edges into corners.
-                tf_w = 2.0 + max(0, my_len - 8) * 0.8   # engage tail-follow from L8 (corner self-coils at L7-9)
+                tf_w = 2.0
                 if my_len >= 15:
                     tf_w = 2.0 + (my_len - 15) * 1.4   # stronger in L15-30 band (tantilla/elon losses cluster L15-31)
                 # At EXTREME length on a food-flooded board (chronic loss vector
@@ -956,9 +956,9 @@ def _decide(game_state):
                 # peel off the wall into open board; much stronger when clearly
                 # ahead (we should NOT be hugging walls / eating edge food when we
                 # already have a lead — it only funnels us into a corner self-coil).
-                score += (60.0 if clearly_ahead else 45.0) * len_scale
+                score += (60.0 if clearly_ahead else 22.0) * len_scale
             elif (on_v_edge and on_h_edge):
-                score -= (80.0 if clearly_ahead else 60.0) * len_scale  # into corner: bad
+                score -= (80.0 if clearly_ahead else 30.0) * len_scale  # into corner: bad
             else:
                 # Staying ON an edge (not peeling off, not yet the corner): if this
                 # move takes us CLOSER to the nearest corner along that edge, it's
@@ -972,7 +972,7 @@ def _decide(game_state):
                 d_corner_nxt = abs(nxt[0] - near_cx) + abs(nxt[1] - near_cy)
                 d_corner_cur = abs(head[0] - near_cx) + abs(head[1] - near_cy)
                 if d_corner_nxt < d_corner_cur:
-                    approach_w = 30.0
+                    approach_w = 14.0
                     if clearly_ahead:
                         approach_w = 55.0
                     score -= approach_w * len_scale

@@ -2229,3 +2229,35 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   3. SURGICAL uncontested-food growth (ed>d only) — we're SHORTER 85/115; naive food boosts
      regress. Do NOT ship sim-A/B-tuned scalar changes (sim unrepresentative). main.py has all
      prior layers + now aggression/cutoff when longer.
+
+## Round 3 of 5 (this task, opus-4-8) — bountysnake2018, FOUND LOG-PERSPECTIVE BUG + STRENGTHENED ANTI-CORNER-COIL
+- Opponent STILL `rdbrck__bountysnake2018` (6-ply ALPHA-BETA, our worst matchup). Results:
+  round 0 LOST 225-25, round 1 LOST 230-20, round 2 LOST 222-27+1T (~10% win).
+- **MAJOR DISCOVERY: prior teammates MISREAD the /logs perspective.** In /logs/rounds/N/sim_*.jsonl
+  the `you` field is the OPPONENT (name=rdbrck__bountysnake2018), NOT opus. OPUS is the OTHER
+  snake (id != you.id). So the "we're SHORTER, growth-race" analysis in ALL prior bounty notes
+  was INVERTED. Re-analyzed round 2 with correct perspective (222 losses):
+  **OPUS was LONGER at death 112/222, shorter 94, equal 16; die on EDGE 109, CORNER 32, H2H-adj
+  0 (opus dies ALONE).** The REAL vector is our CHRONIC SELF-COIL, often while LONGER, on edges/
+  corners — NOT a growth race. This explains why every growth tweak was "noise": we weren't losing
+  the growth race at all.
+- **Traced sim_1 (opus L10 vs opp L9, death T63):** opus coiled the TOP-LEFT corner region
+  (x=0-2, y=4-10) from T54-T62 at hp~100, boxing ITSELF in at (2,10). Classic corner self-coil.
+- **Change (backup: main_r2of5_bounty_backup.py = git HEAD pre-change bot):** since the confirmed
+  vector is corner self-coil at MODEST length (L7-10), strengthened the anti-corner-coil signals:
+  1. Peel-off-edge bonus 22 -> 45 (*len_scale) when on an edge and a non-edge move exists.
+  2. Corner-cell penalty 30 -> 60 (*len_scale).
+  3. Corner-approach-along-edge penalty 14 -> 30 (*len_scale).
+  4. TAIL-FOLLOW bias now engages from L8: `tf_w = 2.0 + max(0,my_len-8)*0.8` (was flat 2.0 until
+     L15). Keeps a loose loop chasing the tail at the exact L7-10 lengths where the corner coils
+     happen, instead of packing the body into the corner.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; fuzz clean. NOTE: the sim
+  (sim_test / vs_bounty.py) is NOT representative of the real alpha-beta match (~57% sim vs ~10%
+  real, proven by prior teammates), so validated by DESIGN targeting the CORRECTLY-analyzed
+  self-coil vector + sim_test + fuzz. This is the FIRST bounty change targeting the ACTUAL loss
+  mechanism (self-coil) rather than the phantom growth race.
+- **Next teammate:** opponent = opp_bountysnake.py (6-ply alpha-beta). REAL loss vector (correct
+  perspective) = OPUS self-coils into edges/corners while often LONGER (112/222 longer at death).
+  The canonical fix remains a TRUE HAMILTONIAN cycle when long+safe (still unimplemented). If my
+  anti-corner boost helped (check next round's win count), push further; if it regressed vs weaker
+  opponents, dial back. Analyze /logs CORRECTLY: opus = snake with id != you.id (you = bounty).
