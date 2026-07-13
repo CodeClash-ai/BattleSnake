@@ -231,6 +231,12 @@ def move(game_state):
                 
             score = (space * 1000) + (voronoi_space * 150) - dist - (wall_penalty * 10)
             
+            # If we are strictly smaller or equal to the opponent, prioritize food and growth more to level the playing field
+            if my_length <= max_opp_length:
+                if target_food:
+                    dist_to_food = _manhattan(np, target_food)
+                    score -= dist_to_food * 200 # Heavy weight to go to food
+
             if space < my_length:
                 score -= 10000000
                 
