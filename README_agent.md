@@ -1869,3 +1869,50 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   fires only when LONGER). A/B ANY change multi-seed via `/tmp/ab_h.py <new> <old> <N> <off>`
   (rebuild: loads new vs committed vs opp_hungry, identical seeds, alternates start). Do NOT ship
   regressions. main.py has all prior layers + now behind_or_even absolute-nearest-food contest.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `xtagon__nagini`, NO CODE CHANGE (tail-follow tweak = noise/regressive)
+- **Opponent = `xtagon__nagini`** — a 2019 Elixir port (Nagini.Solver). Source saved to
+  `opp_nagini.py` (git show origin/human/xtagon/nagini:main.py, 360 lines). Strategy: score the
+  4 directions by (collision_avoidance primary, food_seeking secondary). collision_avoidance:
+  -1 OOB, -1 body impact, -0.5 H2H-draw (equal len), +1 H2H-win (we longer), 0 free (prob 1/3
+  for possible H2H). food_seeking = 1/nearest-manhattan-food. **max_depth=0 (single-ply greedy,
+  DETERMINISTIC). It HAS H2H awareness — it YIELDS to longer snakes (won't walk into our head
+  when we're longer).** Basic greedy food-seeker, NO space/flood management. Test harness:
+  `python3 vs_nagini.py main.py <N> [off]` (created; games run LONG, N<=14 for 30s cmd timeout).
+- **Round 0 result: won 205-44 +1T** (~82%). Loss analysis (inline script over
+  /logs/rounds/0/sim_*.jsonl, using the LAST frame with BOTH snakes = death frame):
+  **43/44 losses OPUS was SHORTER at death, 1 equal, 0 longer; 21/44 on edge, 7 corner.**
+  BUT this "shorter at death" stat is MISLEADING — traced sim_106 turn-by-turn: we were
+  EQUAL/LONGER most of the game (L8 vs L6, L9 vs L7...) and at death L16 vs L16 (EQUAL). The
+  actual death was a **SELF-COIL**: we coiled our L16 body into the bottom-left corner region
+  ((0-2, 1-7) block) and boxed OURSELVES in at (3,1), T142. nagini just survived 1 turn longer
+  so it counts as "shorter". So the real vector is our CHRONIC EQUAL-LENGTH SELF-COIL (L10-16),
+  NOT a growth race (unlike cornelius/elon/famished/hungry which were genuine growth blowouts).
+- **Tried (backup: git HEAD, restored — main.py byte-identical to committed):** boosted the
+  tail-follow anti-coil bias in the L8-15 band (was flat tf_w=2.0) to `2.0+(my_len-8)*0.7` and
+  made the L15 branch use max() so it doesn't overwrite. Targets the equal-length L10-16 coils.
+  A/B vs real opp on identical seeds (/tmp/ab_nagini.py NEW vs /tmp/old_main.py OLD, N=16 off1):
+  NEW 12-4-0 vs OLD 13-3-0 — SLIGHTLY WORSE. Consistent with the README's repeated finding that
+  scalar tail-follow/anti-coil tweaks are NOISE-FLOOR (the sim rarely reproduces the exact
+  late-game coil frames). **REVERTED** — regression risk on a proven 82% bot isn't worth it.
+- Verified committed main.py: syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=
+  /workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.24; `vs_nagini.py main.py
+  12 555` => 7-5-0 (sim harsher than real 82%); main.py byte-identical to committed.
+- **Decision: NO code change.** Kept the proven ~82% bot stable.
+- **Next teammate:** opponent = opp_nagini.py (DETERMINISTIC greedy food-seeker, H2H-aware —
+  YIELDS to longer snakes, NO space mgmt). Our loss vector is the CHRONIC EQUAL-LENGTH SELF-COIL
+  (L10-16) into a corner/edge block. NOTE: the H2H-INTERCEPT exploit (in main.py via
+  predicted_enemy_cell, currently importing opp_hungry) does NOT apply here — nagini DODGES our
+  head when we're longer (H2H-aware), so it won't walk into an intercept. Two ideas: (a) since
+  nagini yields to longer snakes AND has no space mgmt, when we're LONGER we can BODY-BLOCK /
+  cut off its territory (it will avoid cells we reach) — add an aggression term using
+  `_voronoi_owned` when my_len>max_enemy_len; (b) the canonical TRUE HAMILTONIAN tail-follow
+  when long+safe is STILL the ideal unimplemented fix for the self-coil vector (scalar tweaks
+  keep proving noise — proven again this round). A/B ANY change multi-seed via
+  `/tmp/ab_nagini.py <N> <off>` (rebuild: NEW=main.py vs OLD=/tmp/old_main.py, both vs
+  opp_nagini, identical seeds; games run LONG so N<=16 fits the 30s cmd timeout). Do NOT ship
+  regressions. main.py has all prior layers (time-aware flood fill, tail-reach BFS, 2-ply
+  best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow,
+  safety-aware food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim
+  length-scaled, clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive keep-pace
+  growth, deterministic-opponent H2H intercept). Tools: vs_nagini.py, /tmp/ab_nagini.py.
