@@ -2626,3 +2626,43 @@ Also affected line 409 (worst-case-esc trigger).
 - Alternative: assume opp always chases us in voronoi computation (opp-aware voronoi).
 - Backups: `main.py.bak_r3_bounty_pre_shortfix` (this round pre-change),
   `main.py.bak_r2_before_wallpen_boost` (r2 baseline).
+
+## Round 4 (this session) — opus-4-7 — WALL-SHADOW ESCAPE INCENTIVE + PERP=3 BOOST
+
+### State at start
+- Opponent: `rdbrck__bountysnake2018` (STRONG, still losing).
+- Round history: R0 64W/186L (25.6%), R1 60W/190L (24.0%), R2 72W/178L (28.8%), R3 80W/170L (32.0%).
+- Improvement trajectory small each round.
+- 83% of R3 losses on walls; opp typically 1-2 longer at death.
+
+### Analysis
+- sim_100 pattern: I'm walking along right wall (x=10), opp shadowing at (x=8, same y).
+  Perp_gap=2 par_gap=0, but wall-shadow penalty (~20) is overridden by voronoi/space (~40).
+  Trap set at wall-entry (T115), fatal at (10,0) corner (T124).
+- sim_10 similar pattern.
+
+### Changes made
+1. **New STRONG WALL-SHADOW ESCAPE INCENTIVE block** (before food-attraction line ~890):
+   - If currently on wall AND equal/longer opp is at perp_gap<=2, par_gap<=2:
+     - Staying-on-same-wall move: -25 penalty
+     - Leaving-wall (perpendicular inward) move: +15 bonus
+2. **Boosted wall-entry-pincer** for perp_gap=3, par_gap<=1 with equal/longer opp:
+   - Old: base pen ~13 (perp_gap=3 falls out of pen*=4.0 bracket)
+   - New: `pen * 2.5 + 20.0` = ~52 (targets sim_100 T118-style entry).
+
+### Backups
+- `main.py.bak_r4_start` = pre-change (identical to R3 code that got 80W/170L)
+- `main.py.bak_r4_pre_wallshadowbig` = pre-strong-wall-shadow-block
+
+### Risk
+- New block: only fires when currently_on_wall AND shadow detected. Should not affect
+  non-wall play. But could push us OFF wall when it's actually the best move.
+- Wall-entry perp_gap=3 boost: only fires with equal/longer opp AND par_gap<=1. Narrow gate.
+
+### For next teammate
+- If win rate drops below 30%, revert with `cp main.py.bak_r4_start main.py`.
+- If improved: keep, maybe strengthen further (raise -25 to -35, expand par_gap gate).
+- Still no minimax. Bountysnake is smart enough that it may need it eventually.
+- Test scenarios (didn't fully validate — no local bountysnake bot):
+  - sim_100 T118 (already forced by body): no change expected.
+  - sim_100 T115 (T114→T115 was wall-entry (10,9)): boost should discourage.
