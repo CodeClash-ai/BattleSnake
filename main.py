@@ -349,6 +349,32 @@ def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
 
 
 
+
+def _woofers_java_predicted_move(enemy, game_state, w, h):
+    """Predict woofers__woofers-java by running the faithful copied port.
+
+    Production logs match this port exactly one ply.  Woofers/WALTER is a
+    deterministic food/attack/tail BFS bot, so an exact next-head square is
+    much safer than generic straight/farthest-food guesses in long games.
+    """
+    try:
+        from tools import woofers_java_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = woofers_java_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _jump_flooding_predicted_move(enemy, snakes, w, h):
     """Predict coreyja jump-flooding's greedy Manhattan-Voronoi move.
 
@@ -1102,6 +1128,7 @@ def move(game_state):
         has_tr8r_enemy = False
         has_jerrykott_enemy = False
         has_untimely_enemy = False
+        has_woofers_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1124,6 +1151,7 @@ def move(game_state):
             is_tr8r = "tr-8r" in ename.lower() or "noahspriggs" in ename.lower()
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
+            is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1137,7 +1165,12 @@ def move(game_state):
                 except Exception:
                     pass
             else:
-                if is_untimely:
+                if is_woofers:
+                    has_woofers_enemy = True
+                    pred = _woofers_java_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_untimely:
                     has_untimely_enemy = True
                     for pred in _untimely_smart_next_moves(e, game_state, w, h):
                         if my_len > elen:
@@ -1351,7 +1384,7 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
+                if "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
@@ -1366,6 +1399,8 @@ def move(game_state):
                             soft = 260
                         elif "bounty" in ename or "bountysnake2018" in ename:
                             soft = 220
+                        elif "woofers" in ename or "walter" in ename:
+                            soft = 320
                         elif "elon" in ename or "jackisherwood" in ename:
                             soft = 250
                         h2h_soft_penalty = max(h2h_soft_penalty, soft)
@@ -2193,7 +2228,7 @@ def move(game_state):
                     if my_len >= elen + 3 and area >= my_len + 8:
                         score += 1200
                     elif my_len > elen:
-                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy or has_tr8r_enemy) else 50
+                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy or has_tyrelh_2018_enemy or has_tr8r_enemy or has_woofers_enemy) else 50
                     else:
                         score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
