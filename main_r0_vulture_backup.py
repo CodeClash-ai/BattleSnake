@@ -422,12 +422,6 @@ def _decide(game_state):
         # could reach on the FOLLOWING move. If every follow-up is cramped,
         # this move is leading us into a trap even if `space` looks okay now.
         best_next_space = 0
-        # Deeper anti-coil signal: the *worst-case* follow-up space (the tightest
-        # corridor 2 steps out). The single-max 2-ply lookahead can rate a coiling
-        # move and an escaping move equally when both still reach the whole board;
-        # tracking the MIN over follow-up cells discriminates the coil (which forces
-        # us into progressively tighter space) from a true escape toward open board.
-        worst_next_space = None
         for nb in _neighbors(nxt):
             if not _in_bounds(nb, w, h):
                 continue
@@ -437,10 +431,6 @@ def _decide(game_state):
                                        limit=total_free)
             if ns > best_next_space:
                 best_next_space = ns
-            if worst_next_space is None or ns < worst_next_space:
-                worst_next_space = ns
-        if worst_next_space is None:
-            worst_next_space = 0
 
         # H2H-aware follow-up safety: count follow-up cells from nxt that are
         # neither blocked nor an equal/longer-enemy head-to-head cell. If a move
@@ -474,11 +464,6 @@ def _decide(game_state):
         score += best_next_space * 10.0
         if best_next_space < my_len:
             score -= (my_len - best_next_space) * 60.0
-        # Penalize moves whose TIGHTEST follow-up corridor is smaller than our
-        # body -- the deep self-coil signal (all historical losses vs this
-        # opponent were our own coils while long + healthy).
-        if worst_next_space < my_len:
-            score -= (my_len - worst_next_space) * 12.0
         score += score_h2h_trap
 
         # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a

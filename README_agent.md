@@ -781,3 +781,42 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   other required-field accesses (health etc.) and make them `.get(...)` with body-derived
   defaults. Also consider making the `except` fallback in `move()` pick a LEGAL in-bounds
   non-body move rather than a blind "up". main.py has all prior strategy layers intact.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `Spenca__vulture-snake`, ADDED WORST-CASE 2-PLY ANTI-COIL
+- **Opponent CHANGED to `Spenca__vulture-snake`** — a REAL bot (2017 BattleSnake port).
+  Real source saved to `opp_vulture_snake.py` (via `git show origin/human/Spenca/vulture-snake:main.py`).
+  Strategy: seek closest food, then "circle/orbit" the food in a defensive square once
+  adjacent. Has full collision avoidance (checkCollision) + desperation fallback. It PATROLS
+  (e.g. top two rows) and survives long, but STAYS SHORT (~L4) and never really grows.
+  **NON-deterministic + STATEFUL**: uses `random.choice` AND persistent module globals
+  (`state`, `sqCorners`) that carry between games — reset them (`ov.state=0; ov.sqCorners=None`)
+  before each game in benchmarks for fair/reproducible A/B (see /tmp/ab.py, /tmp/ab2.py).
+- **Round 0 result: won 248-2** (/logs/rounds/0/results.json). Both losses (sim_0, sim_29)
+  were OUR OWN SELF-COILS, not the opponent: sim_29 = OPUS L14 (vs OPP L8), full health,
+  coiled its body into the mid-board region and boxed itself in (died T75); sim_0 = OPUS L8
+  full health boxed into the top-left corner (died T79). Classic long+healthy self-coil, our
+  only historical loss vector. The coil tightens >2 plies out, so the exact death-frame is
+  already unavoidable; must be prevented a few turns earlier.
+- **Change (backup: main_r0_vulture_backup.py = git HEAD pre-change bot):** added a
+  WORST-CASE follow-up-space signal alongside the existing best-case 2-ply. In `_decide`:
+  track `worst_next_space = min over follow-up cells of _reachable_with_tails(...)`. Then
+  `if worst_next_space < my_len: score -= (my_len - worst_next_space) * 12`. The single-MAX
+  2-ply can rate a coiling move and an escaping move equally when both still reach the whole
+  board; tracking the MIN discriminates the coil (forces us into progressively tighter space)
+  from a true escape toward the open board. Directly targets the deep self-coil loss vector.
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.91 (<500 limit). A/B vs REAL opp with
+  opp-globals reset each game (fair): NEW 100-0-0 vs OLD 97-3-0 (N=100); NEW 148-1-1 vs OLD
+  145-2-3 (N=150). Consistent small net WIN, ZERO regressions. new-vs-old self-play 20-22-18
+  (even = no regression). Built `vs_vulture.py` (loads opp_vulture_snake.py; alternates start).
+- **Next teammate:** opponent = `opp_vulture_snake.py` (REAL 2017 port, stateful+random, stays
+  short & orbits food). We win ~99%. Only loss vector remains OUR self-coil when long+healthy;
+  the coil forms several turns before death and single-frame lookahead can't fully catch it.
+  Ideas if losses persist: deeper N-ply forward sim of OUR own path (simulate self-play forward
+  ~5 turns and pick the move that keeps max long-horizon space), or a Hamiltonian-ish tail
+  follow when clearly longer+safe. main.py has: time-aware flood fill, tail-reach BFS, 2-ply
+  space lookahead (best 10.0 / worst 12.0 penalties), enemy-contested space, H2H follow-up,
+  length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi
+  territory. Test: `python3 vs_vulture.py main.py 120` and A/B with opp-globals reset (see
+  /tmp/ab.py — RESET `ov.state`/`ov.sqCorners` each game or results drift). Keep sim_test 60 +
+  fuzz clean before submitting.
