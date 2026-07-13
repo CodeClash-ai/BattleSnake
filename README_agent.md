@@ -1773,3 +1773,31 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   self-survival sim, enemy-aware deep sim length-scaled, clearly_ahead food-avoid, tail-follow
   anti-coil, opponent-adaptive keep-pace growth). Tools: vs_beames.py, /tmp/ab_beames.py,
   /tmp/beames_analysis.py, /tmp/test_t17.py (rebuild from this note if /tmp cleared).
+
+## Round 2 of 5 (this task, opus-4-8) — beames, EARLY-GAME ANTI-CORNER-FOOD (low-risk)
+- Opponent STILL `kentmacdonald2__beames` (A* nearest-food grower, ZERO H2H/space awareness;
+  opp_beames.py). Results: round 0 won 188-59+3T, round 1 won 181-63+6T (~74%).
+- **Loss analysis (round 1, 63 losses, analyze_beames.py -> /tmp/ab1.py):** 61/63 OPUS SHORTER
+  at death; by turn 30 we're avg L5.8 vs opp L7.6 (already behind in 44/57). TRACED sim_165
+  (L4v5, died T18): the ONLY food was in the bottom-right corner (9,0); our L4 snake chased it
+  along the bottom edge into the corner and got trapped by the closer/longer opponent. Early-game
+  corner-food death, NOT overgrowth.
+- **Changes (backup: main_r2of5_beames_backup.py = git HEAD pre-change bot):**
+  1. Lowered `long_on_edge` threshold 8 -> 5 (short snakes also get anti-wall-hug/corner-approach).
+  2. Added EARLY-GAME ANTI-CORNER penalty: moving ONTO an edge cell within 2 of a corner, when
+     an enemy head is within 4, subtracts (3-d_corner)*12 (gated: not critical/starving).
+  3. Added `corner_food_trap` flag: when the chosen food is edge/corner-risk (>=1) AND contested
+     (enemy as close/closer) AND we're not longer -> DAMPEN food pull (truly_behind d_after*9->2,
+     behind_or_even *7->1.5, no on-food bonus). Steers us off contested corner food to open board.
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace fuzz`
+  => crashes=0 illegal=0 maxt_ms=16.16. A/B vs real opp (/tmp/ab_beames.py, offs 1/101/555, N~12)
+  = IDENTICAL to committed (noise floor; sim can't reproduce the corner-food-flood trap, as all
+  prior beames/growth teammates found). NOTE: on the exact sim_165 frames the bot STILL runs into
+  the corner (trap already committed by T14, space/flood favors it) — the change is a general
+  low-risk safety net for the EARLIER approach, validated by design + sim_test + fuzz + no-regression.
+- **Next teammate:** opponent = opp_beames.py (deterministic A* grower, ZERO H2H/space). Our loss
+  vector = being SHORTER + early corner-food death. Scalar growth tweaks are NOISE (proven many
+  rounds). The unexplored STRUCTURAL lever: PREDICT beames' exact next move (import opp_beames.py)
+  and force H2H-wins when equal/longer, or grab contested food FIRST when strictly closer. main.py
+  has all prior layers + now early-game anti-corner-food damping. A/B ANY change multi-seed vs real
+  opp; do NOT ship regressions (we win ~74%).

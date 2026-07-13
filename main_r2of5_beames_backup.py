@@ -508,18 +508,6 @@ def _decide(game_state):
         nearest_food = abs_nearest_food
         nearest_food_dist = abs_nearest_dist
 
-    # Flag: the chosen food sits in a corner region AND is contested by an enemy that
-    # is as close or closer, AND we are NOT longer. Chasing it risks running into a
-    # corner the equal/longer enemy then seals (early-game death vector, sim_165: L4
-    # chased the only food (9,0) in the bottom-right corner and got trapped). Dampen
-    # food pull in this case so safety/space/edge penalties can steer us to open board.
-    corner_food_trap = False
-    if (not critical) and nearest_food is not None and my_len <= max_enemy_len:
-        _fr = _corner_edge_risk(nearest_food)
-        _fed = min((abs(nearest_food[0]-eh[0])+abs(nearest_food[1]-eh[1]) for eh,_ in enemy_heads), default=99)
-        if _fr >= 1 and _fed <= _manhattan(head, nearest_food):
-            corner_food_trap = True
-
     best_move = None
     best_score = None
     total_free = w * h
@@ -775,14 +763,12 @@ def _decide(game_state):
                     score += 90.0
             elif truly_behind:
                 # Strictly shorter than a large enemy: grow HARD to catch up.
-                _fw = 2.0 if corner_food_trap else 9.0
-                score -= d_after * _fw
-                if nxt == nearest_food and not corner_food_trap:
+                score -= d_after * 9.0
+                if nxt == nearest_food:
                     score += 85.0
             elif behind_or_even:
-                _fw = 1.5 if corner_food_trap else 7.0
-                score -= d_after * _fw
-                if nxt == nearest_food and not corner_food_trap:
+                score -= d_after * 7.0
+                if nxt == nearest_food:
                     score += 70.0
             elif clearly_ahead:
                 # We hold a solid length lead: growing further only increases our
@@ -834,21 +820,6 @@ def _decide(game_state):
         center_dist = abs(nxt[0] - cx) + abs(nxt[1] - cy)
         score -= center_dist * 0.15
 
-        # EARLY-GAME ANTI-CORNER: moving ONTO an edge cell that is within 2 of a
-        # corner is a common short-snake death (chasing corner food into a trap the
-        # longer, equal/closer enemy then seals). Applies even when not yet on an
-        # edge, gated to when NOT critical/starving so we can still grab food we need
-        # to live. Skips if the enemy is far (no seal risk).
-        if (not critical) and (not starving) and (nxt[0] in (0, w - 1) or nxt[1] in (0, h - 1)):
-            nx_cx = 0 if nxt[0] < cx else (w - 1)
-            nx_cy = 0 if nxt[1] < cy else (h - 1)
-            d_to_corner = abs(nxt[0] - nx_cx) + abs(nxt[1] - nx_cy)
-            if d_to_corner <= 2 and enemy_heads:
-                # nearest enemy head distance to nxt
-                ed_near = min(abs(nxt[0] - eh[0]) + abs(nxt[1] - eh[1]) for eh, _ in enemy_heads)
-                if ed_near <= 4:
-                    score -= (3 - d_to_corner) * 12.0
-
         # ANTI-WALL-HUG (nbw-ruby loss vector): when we are LONG and CURRENTLY on
         # an edge with an enemy present, actively REWARD moving to an interior
         # (non-edge) cell. Penalizing edges alone is swamped by flood-fill space
@@ -864,7 +835,7 @@ def _decide(game_state):
         # WORST loss vector (vs coiling opponents like eremetic-eric) is a pure
         # SELF-coil where we are MUCH longer (L50+) and run along an edge into a
         # corner with no enemy involved. So fire whenever we are long + on an edge.
-        long_on_edge = my_len >= 5 and currently_on_edge and not critical
+        long_on_edge = my_len >= 8 and currently_on_edge and not critical
         if long_on_edge:
             nxt_on_edge = on_v_edge or on_h_edge
             if not nxt_on_edge:
