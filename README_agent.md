@@ -1227,3 +1227,39 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
   Voronoi territory, deep self-survival sim (depth now 24), enemy-aware deep sim, clearly_ahead
   HARD any-food avoid (now triggers at L6), anti-wall-hug escape, length-scaled tail-follow.
+
+## Round 2 of 5 (this task, opus-4-8) — gigantic-george, DOMINANT-TAIL-FOLLOW AT EXTREME LENGTH
+- Opponent STILL `coreyja__gigantic-george` (coiling tail-chaser + Hamiltonian fill; stays
+  SHORT L9-15, keeps hp~2, survives 500-800 turn games; opp_gigantic_george.py).
+- Results: round 0 won 246-4, round 1 won 249-1 (prev teammate's anti-overgrowth cut 4->1 loss).
+- **Loss analysis (round 1, ONLY loss = sim_121, 767 turns, analyze_losses.py):** SAME chronic
+  vector — OPUS grew to **L91** on the 121-cell board while OPP stayed L14, then self-coiled.
+  Traced growth: the real engine FLOODS food (3 -> 38 pieces on the board by turn ~600), so once
+  we're L23+ EVERY neighbor is often food and the -400 "avoid food when clearly_ahead" penalty
+  CANNOT stop growth (all moves get -400, no discrimination). By the death frames (T753-763) the
+  board was 105/121 full and the head had 0-1 free neighbors every turn — a pure Hamiltonian
+  survival situation. The trap is set ~40 turns earlier by burying the head away from the tail.
+- **Change (backup: main_r1of5_gigantic_r2_backup.py = git HEAD pre-change bot):** made the
+  TAIL-FOLLOW bias DOMINANT at extreme length. Previously tf_w maxed ~gently (2.0+(len-15)*0.6).
+  Added: `if my_len>=30: tf_w = max(tf_w, 12.0 + (my_len-30)*1.2)`. At L91 tf_w ~85/unit-dist,
+  strongly rewarding keeping the head close (path-distance) to the tail -> the body stays a TIGHT
+  LOOP that hugs its own tail (Hamiltonian-ish cycle, like the opponent) instead of coiling into
+  a dead pocket. This is the canonical fix for the overgrowth->self-coil vector, gated to only
+  fire when long+safe+not-hungry (my_len>=8, not starving, not critical, tail_reach).
+- **Verification:** syntax OK; `python3 sim_test.py 60` => 60/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.15 (<500 limit). Max decision time over
+  the actual sim_121 game frames = 11.7ms (safe). FRAME REPLAY of sim_121: new bot changes 2 of
+  302 long-snake decisions (T483 L33 left->right, T503 L43 up->right) — steering toward the
+  tail-follow path at exactly the length range where the coil forms; minimal change = low
+  regression risk. Self-play new-vs-old N=6 = 2-2-2 (dead even, no regression). NOTE: the sim
+  does NOT reproduce the food-flooding (maintains min-1 food, 500-turn cap), so A/B in the sim
+  can't reproduce the trap (both survive to timeout = draws) — validated by design (targets the
+  confirmed L91 overgrowth vector) + frame replay + sim_test + fuzz + timing + no-regression.
+- **Next teammate:** opponent = opp_gigantic_george.py (coiling + Hamiltonian, food-floods the
+  board over long games). Our ONLY loss vector is overgrowth (L86-91!) -> self-coil on a nearly
+  full board. If losses persist: (a) raise the extreme-length tail-follow scale further (12.0 /
+  1.2), (b) a TRUE Hamiltonian cycle when very long+safe is STILL the ideal unimplemented fix
+  (perfectly fill the board like the opponent), (c) push deep_depth higher IF timing allows.
+  Analyze new losses with `analyze_losses.py <sim.jsonl>`. Test vs real opp: `vs_gigantic.py`
+  (sim won't reproduce the trap; both survive to 500-cap). Keep sim_test + fuzz clean. main.py
+  has all prior layers + now DOMINANT tail-follow at L30+.

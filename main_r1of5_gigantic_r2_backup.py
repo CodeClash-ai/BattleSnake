@@ -595,14 +595,6 @@ def _decide(game_state):
                 tf_w = 2.0
                 if my_len >= 15:
                     tf_w = 2.0 + (my_len - 15) * 0.6   # up to strong at L50+
-                # At EXTREME length on a food-flooded board (chronic loss vector
-                # vs gigantic-george: we grow to L86-91 on a 121-cell board and
-                # self-coil), the ONLY survivable strategy is to keep the body a
-                # tight loop that hugs its own tail (a Hamiltonian-ish cycle). Make
-                # the tail-follow bias DOMINANT past L30 so we never bury the head
-                # away from the tail into a dead pocket.
-                if my_len >= 30:
-                    tf_w = max(tf_w, 12.0 + (my_len - 30) * 1.2)
                 score -= td * tf_w
 
         # DEEP SELF-SURVIVAL SIM (anti-coil): 2-ply lookahead can't see traps
