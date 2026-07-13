@@ -412,7 +412,7 @@ def _decide(game_state):
     # opponent stays L6-23, then self-coil and box ourselves in. Once we hold a
     # solid length lead, extra length only makes self-coiling MORE likely, so we
     # actively AVOID food to keep the body short and manageable.
-    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 2) and (my_len >= 6)
+    clearly_ahead = (not starving) and (my_len >= max_enemy_len + 2) and (my_len >= 7)
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.
     # Loss analysis (vs ccSnake): our #1 loss vector is chasing food into an
@@ -613,7 +613,7 @@ def _decide(game_state):
         # Depth scales with our length: the longer we are, the further ahead a
         # coil develops, so a fixed depth-8 horizon can't see it (loss vector vs
         # amphibious-arthur: we die at L30-44 by coiling). Cap for speed.
-        deep_depth = min(24, max(8, my_len // 2))
+        deep_depth = min(20, max(8, my_len // 2))
         surv_turns, min_sp = _deep_self_survival(nxt, sim_body, sim_static, w, h, depth=deep_depth)
         if surv_turns < deep_depth:
             # we hit a dead-end within the horizon -> strong coil penalty

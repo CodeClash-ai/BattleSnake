@@ -1185,3 +1185,45 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   `python3 vs_eremetic.py main.py 24` IN BACKGROUND (`nohup ... &`, poll file — games run 400-800
   turns, N>~24 exceeds the 30s cmd timeout). Keep sim_test 40 + fuzz clean. main.py has all prior
   layers + now length-scaled tail-follow and enemy-independent anti-wall-hug escape.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__gigantic-george`, ANTI-OVERGROWTH
+- **Opponent = `coreyja__gigantic-george`** — delegates to EremeticEric (coiling tail-chaser)
+  + a Hamiltonian board-fill step. Real source saved to `opp_gigantic_george.py`
+  (git show origin/human/coreyja/gigantic-george:main.py). Stays SHORT (L9-15), keeps its
+  health at ~2 (only eats when forced), loops tightly around its own tail, survives 500-800+
+  turn games. Test: `python3 vs_gigantic.py main.py <N>` (built; N small — games run long).
+- **Round 0 result: won 246-4** (/logs/rounds/0/results.json). Analyzed all 4 losses
+  (`python3 analyze_losses.py sim_148 sim_184 sim_72 sim_95`): UNAMBIGUOUS chronic vector —
+  OPUS grew to **L32/L94/L88/L68** in 498-813 turn games and SELF-COILED / boxed itself in on
+  the 121-cell board while the opponent stayed L9-15 and outlasted us. Extreme overgrowth.
+- **ROOT CAUSE:** the real engine ACCUMULATES food (verified sim_184: food count climbs 3->38
+  by turn 500, ~16-38 pieces sitting on the board). Once we're long, avoiding food is nearly
+  impossible (every neighbor is often food), so we keep growing to L86+ and then can't manage
+  our body. NOTE: `sim_test.py` does NOT reproduce this (it maintains only min-1 food, caps 500
+  turns) — so A/B in the sim can't reproduce the trap (both bots survive to the 500 cap = draws).
+- **Changes (backup: main_r0_gigantic_backup.py = git HEAD pre-change bot):**
+  1. Lowered `clearly_ahead` length threshold `my_len >= 7 -> >= 6` (line 415) so we STOP
+     growing EARLIER vs this short opponent (the +2-over-enemy part is unchanged). Earlier we
+     invoke the HARD any-food avoidance (-400 on any food cell) -> stay shorter longer.
+  2. Raised deep-self-survival `deep_depth` cap `20 -> 24` (line 616). At L60-90 the coil
+     develops 20+ turns out; a 20-ply horizon can't see it. 24 gives more foresight while
+     staying time-safe (L40 loose-loop board = 5.9ms; fuzz maxt 16ms; per-move limit ~500ms).
+     (Tried 28 but backed off to 24 for compute margin since A/B self-play couldn't validate.)
+- **Verification:** syntax OK; `python3 sim_test.py 30/40` => 30/0/0 & 40/0/0; `PYTHONPATH=
+  /workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.0 (<500 limit);
+  `python3 vs_gigantic.py main.py 10` => 8-0-2 (draws = 500-turn timeouts, sim doesn't flood
+  food so overgrowth trap not reproduced). A/B new-vs-backup self-play TIMES OUT in this env
+  (games run to the 500-turn cap + deep_depth=24 is slow at high length) = no regression signal
+  available; changes validated by DESIGN (directly cut the confirmed overgrowth->self-coil
+  vector) + sim_test + fuzz + timing.
+- **Next teammate:** opponent = opp_gigantic_george.py (coiling tail-chaser + Hamiltonian fill;
+  stays short, food-floods the board over long games). Our ONLY loss vector is overgrowth
+  (L32-94!) -> self-coil. If losses persist: (a) lower clearly_ahead further (>=5 / even +1),
+  (b) the canonical Hamiltonian tail-follow when long+safe is STILL the real unimplemented fix
+  (cycle the board tightly like the opponent instead of coiling), (c) push deep_depth higher
+  IF timing allows (watch the 500ms per-move limit; L40 loose = ~6ms at depth 24). Analyze new
+  losses with `analyze_losses.py`. Keep sim_test + fuzz clean. main.py has all prior layers:
+  time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested space, H2H
+  follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
+  Voronoi territory, deep self-survival sim (depth now 24), enemy-aware deep sim, clearly_ahead
+  HARD any-food avoid (now triggers at L6), anti-wall-hug escape, length-scaled tail-follow.
