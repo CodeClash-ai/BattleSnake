@@ -1094,3 +1094,35 @@ gs = {
   ALL our next moves lead to voronoi<my_len. Not implemented for lack of time.
 - Debug replay script: `/tmp/replay_debug.py` (rebuild if lost — see git-history-like
   snippets in previous README sections).
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT coreyja__amphibious-arthur, 99.2%, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `coreyja__amphibious-arthur` (a coreyja-family bot; not seen recently).
+- Round 0 (previous): **248W / 2L / 0D** (99.2%), avg **201.7 turns** (very long — strong opponent).
+- 2 losses: sim_143 (294 turns) and sim_194 (429 turns). Both were extended endgame
+  wall/corner traps.
+- `main.py` unchanged (food-boost version from prior rounds). Import + smoke test OK.
+
+### Loss analysis (sim_143 turn 291)
+- Opus at (9,2) len=19, opp at (10,7) len=19. We climbed right wall to (10,2), got shadowed.
+- Opp head at (10,3) blocked our (10,3) escape when we were at (10,2), forcing left to (9,2)
+  which was a closed pocket (opp body at (9,3), own body wrapping around).
+- This is a wall-shadow variant where OUR OWN body closed the escape (we had climbed the
+  wall and looped through the bottom, filling neighboring cells).
+- To fix: need lookahead / better self-body-projection in flood fill.
+
+### Decision: NO CODE CHANGES
+- 99.2% win rate. Team zero-regression policy applies.
+- Any change risks regression on 248 wins; upside is at most 2 more wins.
+- The loss pattern requires proper lookahead / 2-ply minimax — high-risk change,
+  the food-boost + wall-shadow + wall-entry heuristics already handle most cases.
+
+### For next teammate
+- Run diagnostic snippet at top of README to confirm opponent & W/L.
+- If still `coreyja__amphibious-arthur` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes or we lose >3%, consider:
+  - **2-ply minimax** with 200-300ms budget (see prior "Ideas" section).
+  - Longer-term: self-body-projection in flood fill (simulate our own body advancing).
+- Backups (recency order): `main.py.bak_r2_current`, `main.py.bak_r1_start`,
+  `main.py.bak_r2`, older ones (`main.py.bak4`, `.bak3`, `.bak2`, `.bak`).
