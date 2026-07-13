@@ -649,6 +649,34 @@ def _tantilla_predicted_move(enemy, game_state, w, h):
     return None
 
 
+
+def _cornelius_predicted_move(enemy, game_state, w, h):
+    """Predict ChaelCodes Cornelius by running the copied faithful port.
+
+    Cornelius is a deterministic scorer: it strongly likes non-zero-edge cells,
+    food, and enough flood-fill space, with an equal/longer adjacent-head
+    penalty.  Production losses are long games, so exact one-ply prediction is
+    useful for head/tactical scoring while separate self-lookahead avoids our
+    own boxes.
+    """
+    try:
+        from tools import cornelius_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = cornelius_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -731,6 +759,7 @@ def move(game_state):
         has_flipez_crystal_enemy = False
         has_battlesnake_elon_enemy = False
         has_tantilla_enemy = False
+        has_cornelius_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -740,7 +769,13 @@ def move(game_state):
             is_ccsnake = "ccsnake" in ename.lower() or "ccsnake2018" in ename.lower()
             is_flipez = "flipez" in ename.lower() or "flipez-crystal" in ename.lower()
             is_tantilla = "tantilla" in ename.lower() or "morganconrad" in ename.lower()
-            if is_tantilla:
+            is_cornelius = "cornelius" in ename.lower() or "chaelcodes" in ename.lower()
+            if is_cornelius:
+                has_cornelius_enemy = True
+                pred = _cornelius_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_tantilla:
                 has_tantilla_enemy = True
                 pred = _tantilla_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -917,12 +952,35 @@ def move(game_state):
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
             choke_risk = _articulation_risk(nxt, w, h, future_blocked)
             tail_dist = _tail_path_distance(nxt, my_tail, w, h, future_blocked)
+            # One-ply self-lookahead using our actual shifted body.  Static
+            # flood-fill can overvalue cells inside a nearly closed loop because
+            # it treats moving tails optimistically; in Cornelius logs several
+            # losses were simply moving into a square with no legal next move.
+            my_next_body = [nxt] + my_body
+            if nxt not in food_cells and my_next_body:
+                my_next_body = my_next_body[:-1]
+            next_self_blocked = set()
+            for sn0 in snakes:
+                if sn0.get("id") == my_id:
+                    continue
+                b0 = [_pt(p) for p in sn0.get("body", [])]
+                if b0:
+                    next_self_blocked.update(b0[:-1])
+            next_self_blocked.update(my_next_body[:-1])
+            self_next_exits = sum(
+                1 for nn in _neighbors(nxt)
+                if _in_bounds(nn, w, h) and nn not in next_self_blocked
+            )
 
             score = 0
             score += area * 80                  # never trap ourselves
             score += safe_area * (140 if enemies else 0)  # account for enemy cuts
             if enemies and safe_area < min(18, my_len + 2):
                 score -= (min(18, my_len + 2) - safe_area) * 1800
+            if self_next_exits == 0:
+                score -= 90000000
+            elif self_next_exits == 1 and enemies and safe_area < max(24, my_len + 4):
+                score -= 18000
             score += territory * (18 if enemies else 0)  # prefer space we reach first
             # If a much larger opponent survives into the endgame, avoid
             # voluntarily entering tiny one/two-cell pockets it controls.
@@ -944,6 +1002,22 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
+                # Cornelius often stays smaller while we overgrow; production
+                # losses were self-boxes along edges/top loops, not starvation.
+                # When safely ahead, de-emphasize optional food and keep a route
+                # to our tail/interior.
+                score += edge_dist * 520
+                if edge_dist == 0:
+                    score -= 9000
+                elif edge_dist == 1:
+                    score -= 2200
+                if tail_dist >= 99:
+                    score -= 60000
+                else:
+                    score += max(0, 28 - tail_dist) * 900
+                if choke_risk:
+                    score -= choke_risk * 4200
             if has_flipez_crystal_enemy and enemy_max_len >= my_len:
                 # Flipez-crystal is a competent nearest-food/center chaser.
                 # Logged losses usually had us shorter and crowded near a wall,
@@ -1192,6 +1266,8 @@ def move(game_state):
                         food_weight = max(food_weight, 140)
                     else:
                         food_weight = min(food_weight, 25)
+            if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
+                food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
             if health < 15:
                 # In production Pinky losses we sometimes orbited safe space until
@@ -1210,6 +1286,8 @@ def move(game_state):
                     score -= 80000 if (my_len >= 35 and my_len >= enemy_max_len + 20) else 12000
                 elif has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 12000
+                elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
+                    score -= 7000
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
