@@ -1837,3 +1837,35 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   intercept: when we're longer, actively CUT OFF its food path (body-block) using the prediction +
   Voronoi. main.py has all prior layers + now the deterministic-opponent H2H intercept. A/B multi-seed
   via /tmp/ab_hungry.py; do NOT ship regressions (we win ~82%).
+
+## Round 2 of 5 (this task, opus-4-8) — hungry, CONTEST ABSOLUTE-NEAREST FOOD WHEN BEHIND_OR_EVEN
+- Opponent STILL `TheApX__hungry` (DETERMINISTIC food-greedy BFS grower, ZERO H2H/space;
+  opp_hungry.py). Results: round 0 won 204-43+3T, round 1 won 188-62 (losses WENT UP 43->62).
+- **Loss analysis (round 1, ALL 62 losses, inline script):** 61/62 OPUS SHORTER at death
+  (1 equal, 0 longer); median death turn 143; 25/62 on edge. TRACED sim_103: even up to turn
+  120 (L14 vs L15), then turn 120-180 the opponent EXPLODED L15->L24 while we STALLED L14-16
+  (our hp dropped to 47 = we weren't eating). The board mostly has 1 food and hungry's
+  multi-source-BFS BEATS US to the single food -> we fall behind & get out-lasted/cut off.
+  Pure GROWTH-RACE vector (same as cornelius/elon/famished/beames), NOT self-coil.
+- **Change (backup: main_r1of5_hungry_r2_backup.py = git HEAD pre-change bot):** when
+  `behind_or_even` (not just `truly_behind`), TARGET THE ABSOLUTE NEAREST FOOD (bypass the
+  safety-ranked food selection that adds cost to contested food). This makes us CONTEST the
+  single food harder instead of ceding it to the closer opponent and falling behind. Line ~532:
+  `if (not critical) and (truly_behind or behind_or_even) and abs_nearest_food is not None:`.
+  Safety/space/H2H penalties still dominate scoring (space*10, H2H -1000) so no suicidal dives.
+- **A/B vs real opp (/tmp/ab_h.py NEW=v1 vs OLD=committed, identical seeds, 4 batches N=12):**
+  off1: NEW 8-3-1 vs OLD 7-4-1 (+1); off101: 12-0 = 12-0; off555: 7-3-2 = 7-3-2; off999:
+  9-2-1 = 9-2-1. Net +1, ZERO regressions across all batches. (Tested v2=pace-margin+food-weight
+  bumps and v3=softer corner_food_trap: v2 noise, v3 regressed 1 game on off101 -> NOT shipped.)
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.43.
+- **Next teammate:** opponent = opp_hungry.py (DETERMINISTIC food-greedy grower). Our loss vector
+  = being SHORTER (out-grown in the single-food race). Scalar growth tweaks are NOISE (proven
+  many rounds AND this round: v2/v3). The BEST UNEXPLORED lever is STRUCTURAL: hungry is
+  DETERMINISTIC — `predicted_enemy_cell` already predicts its exact next cell. Ideas: (a) predict
+  WHICH FOOD hungry targets (its nearest) and, when we can't win that race, go for a DIFFERENT
+  food or pre-position for the next spawn instead of wasting moves; (b) when EQUAL/near-equal,
+  race to the contested food FIRST if we're strictly closer; (c) the H2H intercept (already in,
+  fires only when LONGER). A/B ANY change multi-seed via `/tmp/ab_h.py <new> <old> <N> <off>`
+  (rebuild: loads new vs committed vs opp_hungry, identical seeds, alternates start). Do NOT ship
+  regressions. main.py has all prior layers + now behind_or_even absolute-nearest-food contest.

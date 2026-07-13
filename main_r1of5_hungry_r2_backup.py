@@ -529,7 +529,7 @@ def _decide(game_state):
     # is being SHORTER at death): win the growth race by targeting the ABSOLUTE
     # nearest food rather than the safety-ranked one, so we don't cede uncontested
     # growth. Safety/space/H2H penalties still dominate in scoring (no suicidal dive).
-    if (not critical) and (truly_behind or behind_or_even) and abs_nearest_food is not None:
+    if (not critical) and truly_behind and abs_nearest_food is not None:
         nearest_food = abs_nearest_food
         nearest_food_dist = abs_nearest_dist
 
