@@ -1631,3 +1631,44 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware
   food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim length-scaled,
   clearly_ahead food-avoid, tail-follow anti-coil).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `coreyja__famished-frank` (STRONG A*-GROWER), NO CODE CHANGE
+- **Opponent = `coreyja__famished-frank`** — a Rust A*-based port. Real source saved to
+  `opp_famished_frank.py` (git show origin/human/coreyja/famished-frank:main.py, 231 lines).
+  Strategy: A* (Dijkstra) to the NEAREST food while `len < target_length` where
+  `target_length = height*2 + width = 33`. Once L33 it patrols the 4 CORNERS. It blocks only
+  current snake BODY cells — **it has NO head-to-head avoidance and no space/flood management.**
+  It is a STRONG, AGGRESSIVE GROWER (reaches L15-33) that out-lengths us. Test harness:
+  `python3 vs_famished.py main.py <N> [seedoff]` (created; games run LONG, N<=14 for the 30s
+  cmd timeout, or `nohup ... &` + poll for larger N). sim is HARSHER than real (~67% sim vs 82% real).
+- **Round 0 result: won 204-44 +2T** (~82%). Analyzed all 46 losses (`analyze_losses.py`):
+  **41/46 losses OPUS was SHORTER at death** (OPUS L11-25 vs OPP L15-33); 2 equal, 3 longer.
+  LONG games (turn 49-266). ROOT CAUSE = famished OUT-GROWS us (aggressive A*-to-food to L33)
+  and out-lasts / cuts us off / H2H-kills us as the bigger snake. This is the growth-race loss
+  vector (same as cornelius/elon), NOT our chronic self-coil vector.
+- **Experiments A/B'd vs real opp (background nohup, identical seeds):**
+  1. variant (`_pace_margin` 8/6->12/8 AND truly_behind food d_after*9->11, +85->100):
+     NEW 10-6 vs OLD 12-4 (N=16) — **REGRESSED.** Over-aggressive food chasing walks into traps.
+  2. variant2 (`_pace_margin` 8/6->10/7 only, no food-weight change): NEW 13-7 vs OLD 13-7
+     (N=20) — EXACTLY NEUTRAL (noise-floor).
+  => Growth boosts either regress (food-weight) or are noise (pace-margin), consistent with what
+  ~all prior growth-opponent teammates (cornelius/elon/flipez) found. Scalar tweaks don't move
+  the needle and carry regression risk.
+- **Decision: NO code change.** Kept the proven ~82% bot stable. Verified: syntax OK;
+  `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0
+  illegal=0 maxt_ms=16.09; `vs_famished.py main.py 24 99` => 16-7-1 (~67% sim, matches baseline).
+- **Next teammate — POTENTIAL UNEXPLORED LEVER (structural, not scalar):** famished-frank has
+  **ZERO head-to-head avoidance** and walks A*-predictably toward its nearest food. When we are
+  EQUAL or LONGER we already get +200 for H2H-win cells (we exploit this). The real problem is
+  being SHORTER. Ideas: (a) SMARTER growth — since naive food-weight boosts regress (we dive into
+  contested/trap food), try growing only on UNCONTESTED food (we're strictly closer) via a
+  DEDICATED early-game growth push (first ~40 turns) that A/B-validates on MULTIPLE seed batches;
+  (b) since famished is PREDICTABLE (A* to nearest food, no H2H), you can PREDICT its path and
+  bait it into an H2H-loss cell / cut it off from food when we're near-equal length; (c) the
+  canonical TRUE Hamiltonian tail-follow when long+safe (still unimplemented) for the 3 longer
+  losses. A/B ANY change across MULTIPLE seed batches (change the seed offset arg) — single-batch
+  is misleading (proven repeatedly). Use `nohup python3 -u vs_famished.py <bot> <N> <off> &` + poll.
+  main.py has all prior layers (time-aware flood fill, tail-reach BFS, 2-ply best/worst space,
+  enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware
+  food, CRITICAL starvation, Voronoi, deep self-survival sim, enemy-aware deep sim length-scaled,
+  clearly_ahead food-avoid, tail-follow anti-coil, opponent-adaptive keep-pace growth).
