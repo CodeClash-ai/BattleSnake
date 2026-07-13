@@ -1018,6 +1018,7 @@ def move(game_state):
         has_tyrelh_python_enemy = False
         has_zakwht_2018_enemy = False
         has_bountysnake2018_enemy = False
+        has_jerrykott_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1036,111 +1037,125 @@ def move(game_state):
             is_tyrelh = "tyrelh" in ename.lower()
             is_zakwht = "zakwht" in ename.lower() or "zakwht-2018" in ename.lower()
             is_bounty = "bountysnake2018" in ename.lower() or "bounty" in ename.lower()
-            if is_bounty:
-                has_bountysnake2018_enemy = True
-                pred = _bountysnake2018_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_zakwht:
-                has_zakwht_2018_enemy = True
-                pred = _zakwht_2018_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_tyrelh:
-                has_tyrelh_python_enemy = True
-                pred = _tyrelh_python_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_nagini:
-                has_nagini_enemy = True
-                pred = _nagini_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_hungry:
-                has_hungry_enemy = True
-                pred = _hungry_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_beames:
-                has_beames_enemy = True
-                pred = _beames_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_famished:
-                has_famished_frank_enemy = True
-                pred = _famished_frank_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_battlejake:
-                has_battlejake_enemy = True
-                pred = _battlejake2019_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_cornelius:
-                has_cornelius_enemy = True
-                pred = _cornelius_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_tantilla:
-                has_tantilla_enemy = True
-                pred = _tantilla_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_flipez:
-                has_flipez_crystal_enemy = True
-                pred = _flipez_crystal_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_xe:
-                pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "jump-flooding" in ename.lower():
-                has_jump_flooding_enemy = True
-                pred = _jump_flooding_predicted_move(e, snakes, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif is_ccsnake:
-                pred = _ccsnake2018_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "amphibious-arthur" in ename.lower() or "amphibious" in ename.lower():
-                pred = _amphibious_arthur_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "nbw-ruby" in ename.lower():
-                has_nbw_ruby_enemy = True
-                pred = _nbw_ruby_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "rdbrck" in ename.lower() or "btas" in ename.lower():
-                pred = _btas_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "vulture" in ename.lower() or "spenca" in ename.lower():
-                pred = _vulture_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "gigantic-george" in ename.lower() or "gigantic" in ename.lower() or "george" in ename.lower():
-                has_gigantic_george_enemy = True
-                pred = _eremetic_eric_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "eremetic-eric" in ename.lower() or "eremetic" in ename.lower():
-                has_eremetic_enemy = True
-                pred = _eremetic_eric_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
-            elif "beames" in ename.lower() or "kentmacdonald2" in ename.lower():
-                # Exact predictor already added above; keep generic adjacent-head rule.
-                pass
-            elif "battlesnake-elon" in ename.lower() or "jackisherwood" in ename.lower() or "elon" in ename.lower():
-                has_battlesnake_elon_enemy = True
-                pred = _battlesnake_elon_predicted_move(e, game_state, w, h)
-                if pred is not None:
-                    preds.add(pred)
+            is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
+            if is_jerrykott:
+                has_jerrykott_enemy = True
+                try:
+                    from tools import jerrykott_2017_opponent
+                    pseudo = {"game": game_state.get("game", {}), "turn": game_state.get("turn", 0), "board": game_state.get("board", {}), "you": e}
+                    mv = jerrykott_2017_opponent.move(pseudo).get("move")
+                    if mv in MOVES:
+                        pred = _add(eh, MOVES[mv])
+                        if _in_bounds(pred, w, h):
+                            preds.add(pred)
+                except Exception:
+                    pass
             else:
-                preds.add(_simple_opponent_target_move(eh, food, w, h))
+                if is_bounty:
+                    has_bountysnake2018_enemy = True
+                    pred = _bountysnake2018_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_zakwht:
+                    has_zakwht_2018_enemy = True
+                    pred = _zakwht_2018_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_tyrelh:
+                    has_tyrelh_python_enemy = True
+                    pred = _tyrelh_python_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_nagini:
+                    has_nagini_enemy = True
+                    pred = _nagini_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_hungry:
+                    has_hungry_enemy = True
+                    pred = _hungry_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_beames:
+                    has_beames_enemy = True
+                    pred = _beames_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_famished:
+                    has_famished_frank_enemy = True
+                    pred = _famished_frank_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_battlejake:
+                    has_battlejake_enemy = True
+                    pred = _battlejake2019_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_cornelius:
+                    has_cornelius_enemy = True
+                    pred = _cornelius_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_tantilla:
+                    has_tantilla_enemy = True
+                    pred = _tantilla_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_flipez:
+                    has_flipez_crystal_enemy = True
+                    pred = _flipez_crystal_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_xe:
+                    pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "jump-flooding" in ename.lower():
+                    has_jump_flooding_enemy = True
+                    pred = _jump_flooding_predicted_move(e, snakes, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_ccsnake:
+                    pred = _ccsnake2018_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "amphibious-arthur" in ename.lower() or "amphibious" in ename.lower():
+                    pred = _amphibious_arthur_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "nbw-ruby" in ename.lower():
+                    has_nbw_ruby_enemy = True
+                    pred = _nbw_ruby_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "rdbrck" in ename.lower() or "btas" in ename.lower():
+                    pred = _btas_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "vulture" in ename.lower() or "spenca" in ename.lower():
+                    pred = _vulture_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "gigantic-george" in ename.lower() or "gigantic" in ename.lower() or "george" in ename.lower():
+                    has_gigantic_george_enemy = True
+                    pred = _eremetic_eric_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "eremetic-eric" in ename.lower() or "eremetic" in ename.lower():
+                    has_eremetic_enemy = True
+                    pred = _eremetic_eric_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif "beames" in ename.lower() or "kentmacdonald2" in ename.lower():
+                    # Exact predictor already added above; keep generic adjacent-head rule.
+                    pass
+                elif "battlesnake-elon" in ename.lower() or "jackisherwood" in ename.lower() or "elon" in ename.lower():
+                    has_battlesnake_elon_enemy = True
+                    pred = _battlesnake_elon_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                else:
+                    preds.add(_simple_opponent_target_move(eh, food, w, h))
                 straight = _continuation_or_default_move(e, w, h)
                 if straight is not None and _in_bounds(straight, w, h):
                     preds.add(straight)
