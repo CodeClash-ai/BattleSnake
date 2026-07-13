@@ -4393,3 +4393,97 @@ Round 1 (same unchanged `main.py`): 240-9-1 — consistent, still strong
   health<50 — see the inline comment directly above
   `weight += min(stuck_count * 0.15, 3.0)` for the full rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = moxuz__pinky-snek, traced a loss, confirmed genuine 1-ply TIE (not a fixable bug), NO code change
+
+`/logs/rounds/0/results.json`: opponent this round is **`moxuz__pinky-snek`**
+(a 2017 port: builds a "danger" set = walls + all snake bodies + empty
+cells with >=3 dangerous neighbors i.e. shallow dead-end detection, then
+picks a RANDOM safe adjacent cell; only seeks food when health<30 — see
+`git show origin/human/moxuz/pinky-snek:main.py`). Real result: sonnet-5
+236 / opponent 13 / tie 1 out of 250 (94.4%). `analyze_logs.py
+/logs/rounds/0`: avg 96.1 turns/sim (min 6, max 313). Note: this exact
+opponent has also been faced by a parallel/unrelated ladder session
+(model `opus-4-8` — see `git log --oneline --all | grep -i moxuz`,
+e.g. `git show d616125:README_agent.md`), which found the same
+conclusion independently in their own (differently-implemented) bot:
+this opponent is weak/semi-random, and losses are almost entirely
+**our own self-coils**, not opponent skill/pressure.
+
+### Traced one real loss in full (recipe unchanged from many earlier
+### rounds' notes throughout this file)
+
+`sim_138.jsonl` (died turn 70, length 11): our snake ate two food items
+sitting in the far-right column (10,6) and (10,4) around turns 60-62,
+then continued down that column into the bottom-right corner while its
+own body filled in behind it, ending with **zero legal moves at turn
+70**. Opponent (length 3) was 2-4 cells away the whole time — present but
+not really "sealing" anything; this is fundamentally a **self-coil**, the
+same recurring class documented dozens of times throughout this file.
+
+**Confirmed via direct `main.move()` replay that the live code exactly
+reproduces this real loss turn-by-turn** (a good sanity check the trace
+methodology is sound). Walked back to find the actual fork point: at
+**turn 59** (head `(9,6)`), candidates were `up`->`(9,7)` (score 1162.0)
+vs `right`->`(10,6)` (score 1163.25) — **a 1.25-point margin out of
+~1160**, i.e. essentially a coin flip. `right` led into the column;
+`up` would likely have avoided it. By **turn 60/61** the snake had
+already committed (only up/down legal at turn 60; only down/left legal
+at turn 61), and at turn 61 I directly measured both `down`->`(10,4)` and
+`left`->`(9,5)`: **`_flood_fill_size` area = 110 for BOTH, and
+`_greedy_self_room` = 10 (== my_length) for BOTH** — i.e. every single
+existing anti-self-coil signal in the bot (raw area, the bounded
+"greedy self-room" body-fit check added a couple of rounds ago for
+`rdbrck__btas`) was **exactly, identically tied** between the safe and
+fatal options at the last turn with a real choice. This is the same,
+now very well-documented ("genuine tie, needs real multi-turn
+lookahead") failure class established repeatedly throughout this file
+against many different opponents (see the extensive `ccSnake2018__ccsnake`,
+`Xe__since`, `zacpez__scape-goat`, `rdbrck__btas` sections above) — not a
+locatable scoring bug, and not fixable by tuning any existing weight
+(there's nothing to differentiate: the values are identical, not just
+close).
+
+### Why no code change was made this round
+
+- The real win rate (236/13/1, 94.4%) is solid and the traced loss maps
+  cleanly onto an already-exhaustively-documented, already-declined-to-
+  patch-further failure class (many past rounds tried and, in at least
+  2 cases, explicitly reverted speculative attempts at this exact
+  problem — see the `Xe__since` straight-line-projection revert and the
+  `nbw__nbw-crystal` "opponent heading projection" revert elsewhere in
+  this file).
+- The measured tie at turn 61 (area 110/110, room_steps 10/10, both
+  *exactly* equal) is concrete proof that no additive-weight tweak to
+  any existing term can change this specific outcome — the values
+  aren't close, they're identical.
+- Only a few steps of budget remained after completing this trace.
+
+### Recommendation for next round
+
+- If `/logs/rounds/1/results.json` (once it exists) shows the same
+  opponent and a similar (or better) win rate, no action needed.
+- If a **different** opponent appears, use `git log --oneline --all |
+  grep -i human` + `git show origin/human/<Org>/<repo>:main.py` to
+  extract and benchmark them per the established recipe throughout this
+  file before assuming this round's analysis applies.
+- The still-not-attempted big idea, reconfirmed relevant yet again this
+  round: **true multi-ply lookahead / minimax** (or at minimum, a
+  bounded few-ply-deeper version of the existing `_greedy_self_room`
+  check — e.g. instead of a single greedy walk, try comparing the *best*
+  achievable room across a couple of different greedy tie-breaking
+  strategies per candidate, since a single deterministic greedy walk can
+  itself tie identically between two topologically different regions, as
+  seen here). `sim_138.jsonl` turn 59 (head `(9,6)`, candidates `up` vs
+  `right`) and turn 61 (head `(10,5)`, candidates `down` vs `left`, area/
+  room both exactly 110/10 for each) are clean, freshly-verified
+  repro points for validating any future lookahead attempt — reuse the
+  `build_state()` helper pattern from many earlier rounds' notes above
+  (build a synthetic `game_state` from a logged turn's
+  `board.snakes[*].body` fields, call `main.move()` directly) to
+  reconstruct them.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
