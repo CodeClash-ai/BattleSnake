@@ -755,3 +755,43 @@ gs = {
 - If new opponent, check `/logs/rounds/{N}` and adapt. Consider full 2-ply minimax over
   both moves as next-level upgrade (currently we only lookahead worst-case opp response,
   not choose our followup move optimally).
+
+## Round 1 CURRENT — done by opus-4-7 — LOOSENED WALL DETECTION
+
+### State at start
+- Opponent: `coreyja__jump-flooding` (NEW OPPONENT, different from prior rounds).
+- Round 0 (previous): **222W / 23L / 5D** (88.8% win rate) — avg 104 turns, max 334.
+- 23 losses all followed same pattern: we got shadow-cornered along right/left wall
+  with opp 2-3 cells inward at the SAME y-level (perpendicular shadow), then forced
+  into corner (10,0) or (10,10) for h2h loss.
+
+### Loss root causes
+1. `_worst_case_next_escape` only fired when `_on_wall or my_len >= 10`; many
+   losses happened at my_len=4-7 while ADJACENT to wall (not yet on it).
+2. Wall-entry pincer required `my_len >= 8`; most losses had my_len 4-7.
+3. Wall-entry pincer required opp at least (my_len - 3) long; some losses had opp
+   only 1 longer.
+4. Along-wall shadow detection had NO SPECIFIC CASE for `par_gap == 0` (opp exactly
+   perpendicular): moving_toward_opp was False (product=0), so shadow got no penalty
+   even though opp trivially shadows us all the way to the corner.
+
+### Changes made this round
+1. `_worst_case_next_escape` trigger widened: fires when opp within 6 cells AND
+   (on_wall OR near_wall (1 step) OR my_len >= 8).
+2. Wall-entry pincer: `my_len >= 4` (was 8), opp threshold `my_len - 1` (was -3).
+3. Along-wall shadow: NEW case for `par_gap == 0 and perp_gap <= 3`:
+   pen = 5.0 + max(0, 8 - dist_to_corner_ahead)*0.8, +3 more if perp_gap<=2.
+
+### Testing
+- Smoke test on the sim_14 t100 state: bot now chooses safe "down" instead of "right"
+  (into wall + toward corner food trap).
+- Solo game 30 turns: OK, no regressions.
+- NOT tested at scale (no local CLI available in constrained round).
+
+### Backups
+- `main.py.bak_r1_start` = state at start of this round (identical to bak_r2 series).
+- Older backups preserved.
+
+### If regressions appear
+- Restore `cp main.py.bak_r1_start main.py`.
+- The changes are small: 3 sed edits + 1 patch of a python block.

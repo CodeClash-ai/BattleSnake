@@ -405,8 +405,7 @@ def _decide(game_state):
             _oh = (_opp["head"]["x"], _opp["head"]["y"])
             _od = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
             # Only compute for close opponents in dangerous zones to save time.
-            _near_wall = (_px <= 1 or _px >= w - 2 or _py <= 1 or _py >= h - 2)
-            if _od <= 6 and (_on_wall or _near_wall or my_len >= 8):
+            if _od <= 5 and (_on_wall or my_len >= 10):
                 wn = _worst_case_next_escape(np, _my_body_pts, _opp, snakes,
                                              my_id, w, h, my_len, _my_growing2)
                 if worst_next is None or wn < worst_next:
@@ -597,15 +596,6 @@ def _decide(game_state):
                 # Being trapped: opp behind + short runway = death.
                 corner_factor = max(0, 6 - dist_to_corner_ahead)
                 base_pen = 4.0
-                if par_gap == 0 and perp_gap <= 3:
-                    # Opp is perfectly perpendicular to our new pos: they can
-                    # shadow us all the way to the corner ahead. Penalize based
-                    # on how much runway we have (less runway = worse).
-                    pen = 5.0 + max(0, 8 - dist_to_corner_ahead) * 0.8
-                    if perp_gap <= 2:
-                        pen += 3.0
-                    s -= pen
-                    break
                 if moving_toward_opp:
                     # Bad: opp is ahead of us along the wall, we head into them
                     # Especially bad if par_gap is small (about to meet).
@@ -646,11 +636,11 @@ def _decide(game_state):
             if my_head[1] != pyN:  # we changed y-coord to land on top/bot wall
                 entering_wall = True
                 wall_axis = 'y'
-        if entering_wall and my_len >= 4:
+        if entering_wall and my_len >= 8:
             for _opp in opponents:
                 # Allow up to 3-shorter opps: they can still corner us if we
                 # run out of runway on the wall. Fixes wall-corner death cases.
-                if _opp["length"] < my_len - 1:
+                if _opp["length"] < my_len - 3:
                     continue
                 _oh = (_opp["head"]["x"], _opp["head"]["y"])
                 # For side walls: check opp is roughly inward (between us and center)
