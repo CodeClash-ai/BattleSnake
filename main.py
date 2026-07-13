@@ -271,6 +271,27 @@ def move(game_state):
         my_tail = None if _just_ate else (my_body[-1]["x"], my_body[-1]["y"])
 
         snakes = board["snakes"]
+
+        # Length-deficit awareness: if the biggest opponent is
+        # significantly longer than us, that power gap is a leading
+        # indicator of exactly the "forced head-to-head loss" pattern
+        # traced repeatedly across many rounds' loss analyses in
+        # README_agent.md (most recently vs tim-hub__awesome-snake,
+        # sim_0.jsonl turn 108: our snake, stuck at length 5-6, got
+        # legitimately boxed into a corner where BOTH remaining legal
+        # moves were risky_cells against an opponent that had grown to
+        # length 11 mostly unopposed). We can't retroactively fix a
+        # specific forced 50/50 collision, but we CAN reduce how often we
+        # end up far behind in length in the first place by mildly
+        # increasing our own food urgency when a real length gap exists,
+        # even while health is otherwise fine -- catching up in length
+        # shrinks the opponent's structural advantage in any future
+        # head-to-head and gives us more mass to contest territory with.
+        # Small and capped so it can't override genuine safety terms.
+        _opp_lengths = [s["length"] for s in snakes if s["id"] != my_id]
+        _max_opp_length = max(_opp_lengths) if _opp_lengths else 0
+        length_deficit = max(0, _max_opp_length - my_length)
+
         food = board.get("food", [])
         food_set = {(f["x"], f["y"]) for f in food}
         hazards = board.get("hazards", [])
@@ -496,6 +517,12 @@ def move(game_state):
                     weight = 4
                 else:
                     weight = 1.5
+                # Small, capped boost when we're behind in length (see
+                # length_deficit comment above) -- at most +1.5 extra
+                # weight (deficit>=5), so it can nudge food-seeking a bit
+                # harder without ever overriding the health-based curve
+                # or safety terms.
+                weight += min(length_deficit * 0.3, 1.5)
                 score -= dist * weight
                 if dist == 0:
                     score += 20  # immediate food bonus

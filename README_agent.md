@@ -3646,3 +3646,124 @@ later).
   rationale, and this section for the concrete example that motivated
   it).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = tim-hub__awesome-snake, traced a real loss (legitimate forced collision after falling behind in length), added small length-deficit food-urgency nudge
+
+`/logs/rounds/0/results.json`: opponent this round is **`tim-hub__awesome-snake`**
+(a trivial ported bot: looks only at its 4 immediate neighbor cells, scores
+off-board=-100, food=+1, body=-1, empty=0, picks the max with a random
+tiebreak -- see `git show origin/human/tim-hub/awesome-snake:main.py`). Real
+result: sonnet-5 223 / opponent 27 out of 250 (89.2%, NOT a clean sweep).
+`analyze_logs.py /logs/rounds/0`: avg 111.7 turns/sim (min 15, max 252) --
+long games are common (the opponent has no real danger-avoidance beyond
+1-ply, but also doesn't die instantly, so games run long and our own
+snake's length/positioning over time matters a lot).
+
+### Traced multiple real losses in detail (recipe unchanged from many
+### earlier rounds -- build a synthetic `game_state` per logged turn from
+### `board.snakes[*].body`, call `main.move()` directly)
+
+`sim_0.jsonl` (died turn 109): at the literal fatal decision (turn 108,
+head `(2,8)`, length 6, health 100 just-ate), there were only 2 legal
+candidates -- `up`->`(2,9)` and `right`->`(3,8)` -- and **both** were
+already in `risky_cells` (the opponent, at length 11 and head `(3,9)`, one
+move away from either). `main.move()` correctly picked `up` (area 104 vs
+`right`'s area 1, a real dead-end) since the flat -1000 risky penalty
+canceled out identically for both -- **this decision was NOT a bug**: it
+was a genuinely forced 50/50-ish head-to-head (opponent could reach either
+cell) that the bot had no way to avoid at that specific turn. The opponent
+happened to move into exactly the cell we needed.
+
+Sampled 2 more losses (`sim_131.jsonl`, `sim_202.jsonl`) via body-position
+dumps near their death turns: **same general shape each time** -- our
+snake stays short (length 4-7) while the opponent, despite having zero
+real strategy, keeps eating unopposed and grows to length 10-13, and
+eventually a length mismatch this large makes an eventual forced/close
+head-to-head loss likely once paths cross, even though our per-turn
+decisions were individually sound (avoiding the *worse* of the available
+options every time, per the trace above).
+
+### Change made this round: small, capped length-deficit food-urgency nudge
+
+Since the losses trace back to "we fell far behind in length, which makes
+any eventual forced encounter likely to go the opponent's way" rather
+than a locatable per-turn scoring bug (the existing risky_cells/area/
+voronoi logic is all firing correctly, same conclusion many earlier
+rounds' notes reached against *other* opponents -- see the extensive
+history above), I added a cheap, low-risk mitigation rather than trying to
+patch an individual forced-collision decision (which is fundamentally not
+fixable at the turn it becomes visible -- see the sim_0 trace above,
+where both options were already forced/tied):
+
+- Compute `length_deficit = max(0, max_opponent_length - my_length)` once
+  per `move()` call (cheap, just a max over already-available
+  `snakes[*]["length"]`).
+- Add `min(length_deficit * 0.3, 1.5)` to the food-distance weight
+  (on top of the existing health-based curve: 10/6/4/1.5 depending on
+  health). Capped at +1.5 extra weight (reached once deficit >= 5), so it
+  can only mildly accelerate food-seeking when behind, never override
+  health-based urgency or any safety term (risky_cells, area/voronoi
+  trap penalties, etc. are all computed independently and this doesn't
+  touch them).
+
+Intent: catch up in length a bit faster when trailing, reducing how often
+we end up as the much-shorter snake in an eventual contested encounter,
+without changing behavior at all when lengths are roughly even (the
+common/already-well-tested case -- `length_deficit` is 0 whenever we're
+not behind).
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state (opponent longer,
+  to exercise the new deficit path), `{}` (fully malformed), and an
+  empty-snakes state -- all return valid moves, no exceptions.
+- Re-ran the traced `sim_0.jsonl` turns (95, 100, 104, 108) through
+  `main.move()` post-change -- decisions are **unchanged** at all of
+  them (expected/desired: at turn 108 both options were already risky-
+  cell-forced regardless of the food weight; the earlier turns' choices
+  also didn't flip, since the deficit bonus is small and capped).
+- Timing: 300 `move()` calls on the turn-108 board state in ~0.095s
+  (~0.3ms/call) -- no meaningful performance change.
+- **Did NOT get a fresh local-benchmark tournament against extracted
+  `tim-hub/awesome-snake` code this round** (ran out of step budget after
+  the trace investigation) -- this is the most important next step for
+  whoever picks this up next. Given the change is small/capped and only
+  activates when behind in length, regression risk is low, but a real
+  win-rate comparison (recipe: `git show
+  origin/human/tim-hub/awesome-snake:main.py > /tmp/opp/main.py; cp
+  server.py /tmp/opp/server.py`, then the usual `setsid nohup env PORT=...
+  python3 main.py & disown` for both bots + `battlesnake play ... -o
+  /tmp/game_N.json & disown` + `sleep` + `tail` pattern used throughout
+  this file) would be good confirmation.
+
+### Recommended next steps
+
+1. Run the local benchmark described above (8-15 games) to confirm no
+   regression and ideally an improvement over the real 223/27 baseline.
+2. If new losses appear, use the same trace-replay technique (this file
+   has dozens of worked examples above) -- specifically check whether
+   the loss is another "genuinely forced 50/50 collision after falling
+   behind in length" (in which case this round's mitigation is the right
+   category of fix, maybe just needs its cap/coefficient tuned) or a
+   different, more locally-fixable mechanism (self-coil, corridor-race,
+   edge-hugging -- see the many prior sections above for those patterns
+   and their fixes).
+3. The much-recurring "real multi-ply lookahead" idea (see the extensive
+   `ccSnake2018__ccsnake`/`Xe__since` design sketches earlier in this
+   file) remains the highest-ceiling not-yet-attempted fix for the
+   genuinely-forced-collision class of loss, since by definition those
+   losses have no good move at the moment they become visible -- only
+   earlier lookahead (or, as attempted this round, reducing the
+   underlying length gap that makes such collisions likely to go badly)
+   can help.
+4. As always: re-check `/logs/rounds/1/results.json` once it exists -- if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's analysis applies.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added `length_deficit` computation and
+  a small capped food-urgency weight boost when behind in length -- see
+  inline comments at both spots for the full traced rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
