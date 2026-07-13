@@ -242,55 +242,6 @@ def _voronoi(my_start, opp_starts, blocked, w, h):
 
 
 
-
-def _worst_case_next_escape(my_new_head, my_prev_body, opp, snakes, my_id, w, h, my_len, my_growing):
-    """
-    Look one ply ahead: after I move to my_new_head, for each possible opp
-    move, compute my flood-fill space. Return the minimum (worst case).
-    my_prev_body: my body BEFORE the move (list of (x,y) tuples).
-    """
-    # Simulate my new body after move: prepend new head, drop tail unless growing.
-    new_my_body = [my_new_head] + list(my_prev_body)
-    if not my_growing:
-        new_my_body = new_my_body[:-1]
-    my_body_set = set(new_my_body)
-    # Opponent body: after their move, drop tail unless they just ate.
-    opp_body_pts = [(seg["x"], seg["y"]) for seg in opp["body"]]
-    opp_growing = len(opp_body_pts) >= 2 and opp_body_pts[-1] == opp_body_pts[-2]
-    opp_head = (opp["head"]["x"], opp["head"]["y"])
-    worst = None
-    tried = 0
-    for dx, dy in DIRS.values():
-        onh = (opp_head[0] + dx, opp_head[1] + dy)
-        if not _in_bounds(onh, w, h):
-            continue
-        # Skip moves that would kill opp instantly (into own body except tail).
-        # Approximation: don't skip; even suicidal moves are worth considering
-        # as "opp doesn't take that" (but they cost us nothing if opp died).
-        # Simpler: if onh is on opp's own body (not their tail), skip.
-        if onh in opp_body_pts[:-1] or (opp_growing and onh == opp_body_pts[-1]):
-            continue
-        # Also skip if onh is on our new body (opp would die from us).
-        if onh in my_body_set:
-            continue
-        new_opp_body = [onh] + opp_body_pts
-        if not opp_growing:
-            new_opp_body = new_opp_body[:-1]
-        # Build blocked set
-        blocked = set(my_body_set)
-        blocked.update(new_opp_body)
-        blocked.discard(my_new_head)  # start cell for flood fill
-        # Flood fill from my_new_head
-        space = _flood_fill(my_new_head, blocked, w, h, limit=my_len * 3 + 10)
-        tried += 1
-        if worst is None or space < worst:
-            worst = space
-    if worst is None:
-        return my_len * 3  # no opp move possible; assume fine
-    return worst
-
-
-
 def move(game_state):
     try:
         return _decide(game_state)
@@ -392,25 +343,6 @@ def _decide(game_state):
             opp_next_starts.append(_oh)
         vor = _voronoi(np, opp_next_starts, hard_blocked, w, h) if opp_next_starts else space
 
-        # 2-ply worst-case escape space: for wall-adjacent moves or when a
-        # threatening opponent is close, simulate opp's possible responses and
-        # check the min flood-fill space we'd have next turn. This catches
-        # shadowing/cornering that single-ply flood-fill misses.
-        worst_next = None
-        _px, _py = np
-        _on_wall = (_px == 0 or _px == w - 1 or _py == 0 or _py == h - 1)
-        _my_body_pts = [(seg["x"], seg["y"]) for seg in you["body"]]
-        _my_growing2 = len(_my_body_pts) >= 2 and _my_body_pts[-1] == _my_body_pts[-2]
-        for _opp in opponents:
-            _oh = (_opp["head"]["x"], _opp["head"]["y"])
-            _od = abs(_oh[0] - my_head[0]) + abs(_oh[1] - my_head[1])
-            # Only compute for close opponents in dangerous zones to save time.
-            if _od <= 5 and (_on_wall or my_len >= 10):
-                wn = _worst_case_next_escape(np, _my_body_pts, _opp, snakes,
-                                             my_id, w, h, my_len, _my_growing2)
-                if worst_next is None or wn < worst_next:
-                    worst_next = wn
-
         candidates.append({
             "move": name,
             "pos": np,
@@ -420,7 +352,6 @@ def _decide(game_state):
             "esc": esc,
             "food_dist": food_dist,
             "vor": vor,
-            "worst_next": worst_next,
         })
 
     if not candidates:
@@ -638,9 +569,7 @@ def _decide(game_state):
                 wall_axis = 'y'
         if entering_wall and my_len >= 8:
             for _opp in opponents:
-                # Allow up to 3-shorter opps: they can still corner us if we
-                # run out of runway on the wall. Fixes wall-corner death cases.
-                if _opp["length"] < my_len - 3:
+                if _opp["length"] < my_len:
                     continue
                 _oh = (_opp["head"]["x"], _opp["head"]["y"])
                 # For side walls: check opp is roughly inward (between us and center)
@@ -672,18 +601,6 @@ def _decide(game_state):
             if my_len >= 10 and cur_d <= 3:
                 if new_d < cur_d:
                     s -= 5.0  # discourage approaching opp when they can match us
-        # Worst-case 2-ply escape: heavy penalty if opp can force us into
-        # a tiny pocket next turn. Catches shadow/pincer cornering that
-        # single-ply flood-fill misses.
-        wn = c.get("worst_next")
-        if wn is not None:
-            if wn < my_len:
-                # Definitely trappable next turn
-                s -= (my_len - wn) * 4.0
-            if wn < my_len // 2:
-                s -= 20.0  # very dangerous
-            if wn <= 3:
-                s -= 40.0  # basically dead
         # Wall / edge distance shrinkage penalty when we're close to walls AND long
         return s
 

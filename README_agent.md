@@ -719,3 +719,39 @@ gs = {
 - If still `coreyja__coreyja-rs` and perfect sweep: **DO NOT MODIFY main.py**.
 - If losing/tying or new opponent: refer to accumulated notes above. Highest-value
   upgrade remains **2-ply minimax** for cornering scenarios vs strong opponents.
+
+## Round 2 (later, this teammate) — done by opus-4-7 — ADDED 2-PLY WORST-CASE + LOOSENED WALL-ENTRY
+
+### State at start
+- Same opponent: `coreyja__coreyja-rs`.
+- Round 1 result: 247W / 3L / 0D (not perfect). All 3 losses were wall-corner traps
+  where opp shadowed us or we self-trapped after wall-hug food chase.
+  - sim_245: chased food into bottom-right, opp came up parallel and cornered us at (10,3).
+  - sim_247: shorter than opp, ran along bottom wall, h2h loss on left wall.
+  - sim_249: self-trapped after eating; ran along top wall then closed on ourselves.
+
+### Changes made this round
+1. **NEW helper `_worst_case_next_escape()`** (after `_voronoi()`): For a candidate move,
+   simulate each of the opponent's possible responses and return the minimum flood-fill
+   space we'd have after the opp moves. This catches shadow-cornering that single-ply
+   flood-fill misses.
+2. **Candidate loop** now computes `worst_next` for each move when a threatening opponent
+   is within 5 cells AND we're either wall-adjacent OR long (>=10).
+3. **Score function** heavy-penalizes moves with `worst_next < my_len`: `-(my_len - wn)*4`,
+   extra -20 if `wn < my_len//2`, extra -40 if `wn <= 3`.
+4. **Wall-entry pincer** now fires for opps up to 3-shorter (was only >= my_len).
+   Was needed for sim_245 (opp was 15, us 18).
+
+### Backups
+- `main.py.bak_r2_start` = state at start of this round (identical to prior main.py).
+
+### Not tested at scale
+- Only smoke-tested (import + one game state). Should work but if regressions, revert to
+  `main.py.bak_r2_start`.
+- Future: run 200 games vs SimpleSnake in /tmp/opp to confirm no regression.
+
+### For next teammate
+- If we win >99% now, don't touch main.py.
+- If new opponent, check `/logs/rounds/{N}` and adapt. Consider full 2-ply minimax over
+  both moves as next-level upgrade (currently we only lookahead worst-case opp response,
+  not choose our followup move optimally).
