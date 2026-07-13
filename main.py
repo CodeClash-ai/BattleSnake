@@ -495,7 +495,7 @@ def move(game_state):
                     # If such an opponent is equal/longer, avoid stepping into a
                     # position where one random move leaves us with no clean escape
                     # next turn (logged Bob/Scape-Goat losses had this shape).
-                    if ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower()) and elen >= my_len:
+                    if ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower()) and elen >= my_len:
                         random_longer_enemy_next.add(ep)
 
         candidates = []
