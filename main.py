@@ -977,18 +977,18 @@ def move(game_state):
             try:
                 from tools import bountysnake2018_opponent
                 old_limit = getattr(bountysnake2018_opponent, "TIME_LIMIT", 0.03)
+                # Round 2 showed that the depth-8 override from the previous
+                # edit caused frequent 500ms timeouts/default moves in production.
+                # Restore the successful round-1 setup: depth-6 delegation with a
+                # 0.30s guard inside the copied BountySnake port.
                 bountysnake2018_opponent.TIME_LIMIT = 0.30
-                old_depth = getattr(bountysnake2018_opponent, "MAX_RECURSION_DEPTH", 6)
-                bountysnake2018_opponent.MAX_RECURSION_DEPTH = 8
                 resp = bountysnake2018_opponent.move(game_state)
-                bountysnake2018_opponent.MAX_RECURSION_DEPTH = old_depth
                 bountysnake2018_opponent.TIME_LIMIT = old_limit
                 if isinstance(resp, dict) and resp.get("move") in MOVES:
                     return resp
             except Exception:
                 try:
                     bountysnake2018_opponent.TIME_LIMIT = old_limit
-                    bountysnake2018_opponent.MAX_RECURSION_DEPTH = old_depth
                 except Exception:
                     pass
 
