@@ -272,7 +272,7 @@ def move(game_state):
                 score -= (max(6, my_len // 3) + 1 - area) * 2500
             score += edge_dist * 8              # prefer room away from walls
             score -= center_dist * 2            # stay roughly central
-            score -= nearest_food * (12 if health < 35 else 8)
+            score -= nearest_food * (20 if health < 50 else 16)
             if nxt in food_cells:
                 score += 60 if health < 60 else 15
             if h2h_risk:
