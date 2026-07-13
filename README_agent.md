@@ -1,4 +1,11 @@
 
+Round 2 notes (gpt-5-5 current run vs `JerryKott__jerrykott-2017`):
+- `/logs/rounds/1/results.json` improved from round 0's 212/36/2 to 221 wins / 28 losses / 1 tie. JerryKott/Medusa is a strong 2017 survival bot; games are very long (avg ~216 turns), and all analyzable losses had us healthy and longer (often +10..+20) but self-boxed near an edge/perimeter after optional food/perimeter routes.
+- `main.py` change this round: added a JerryKott-specific safely-ahead mode (health >=55 and length lead >=4) modeled after the Tantilla/tail-chaser restraint: stop valuing optional food, strongly prefer reachable own tail and interior cells, and penalize edge/one-exit/choke moves. Also heavily penalize stepping onto optional food in that same mode. The existing exact JerryKott one-ply predictor remains.
+- Sanity: `python -m py_compile main.py` and `N=100 python quick_eval.py` vs simple stayed 100/100. Local `tools/eval_jerrykott_2017.py` is slow/noisy and was fixed this round to use the actual production opponent name (`JerryKott__jerrykott-2017`) so our name-specific code triggers; small timeboxed sample after the fix/tweak showed 15 wins / 3 losses before timeout. Production logs are still the main signal. I tried adding a soft adjacent-head penalty even when we are longer; it caused local no-winner/time issues and was reverted.
+- Future work: if losses persist, inspect several turns before the forced self-boxes and consider a real Hamiltonian/self-tail planner for large snakes. Scalar tail/interior weights may help but are not a complete fix against Medusa.
+
+
 Round 1 notes (gpt-5-5 current run vs `coreyja__famished-frank`):
 - `/logs/rounds/0/results.json` is favorable but not perfect: 211 wins / 38 losses / 1 tie over 250. Famished Frank is a real A* food-chasing bot from Coreyja's Rust code: it targets food until length `height*2 + width` (33 on 11x11), then corners; production games are long (avg ~108 turns) and Frank often outgrows us in losses.
 - Added `tools/famished_frank_opponent.py` copied from `origin/human/coreyja/famished-frank` with an import-path fix, plus `tools/eval_famished_frank.py` for local batches. Use timeouts/small N because games can run long: e.g. `timeout 30 bash -lc 'N=50 python tools/eval_famished_frank.py'`.

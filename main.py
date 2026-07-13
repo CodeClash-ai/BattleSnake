@@ -1865,6 +1865,34 @@ def move(game_state):
                     score -= (need_area - area) * 5000
                 if choke_risk:
                     score -= choke_risk * 5000
+            if has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
+                # JerryKott/Medusa is excellent at surviving while shorter; our
+                # recorded losses against it are almost all healthy, longer-snake
+                # self-boxes after we keep following/taking perimeter food.  Once
+                # we have a real lead, switch from growth to tail-reachable,
+                # interior survival.  Keep the threshold lower than Tantilla's
+                # because Jerry remains dangerous even when only a few cells behind.
+                food_weight = min(food_weight, 0)
+                if tail_dist >= 99:
+                    score -= 120000
+                else:
+                    score += max(0, 35 - tail_dist) * 1600
+                    if tail_dist <= 7:
+                        score += 14000
+                score += edge_dist * 2200
+                if edge_dist == 0:
+                    score -= 36000
+                elif edge_dist == 1:
+                    score -= 9000
+                need_area = max(18, my_len // 2)
+                if area < need_area:
+                    score -= (need_area - area) * 6500
+                if safe_area < max(22, my_len // 2):
+                    score -= (max(22, my_len // 2) - safe_area) * 1200
+                if self_next_exits <= 1 and edge_dist <= 1:
+                    score -= 30000
+                if choke_risk:
+                    score -= choke_risk * 6500
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 if has_famished_frank_enemy and health >= 30:
@@ -1928,6 +1956,8 @@ def move(game_state):
                     score -= 12000
                 elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                     score -= 7000
+                elif has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
+                    score -= 90000
                 if has_famished_frank_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len - 1:
                     # Healthy edge food next to Frank frequently grows us into a
                     # self-corridor while Frank keeps pathing around the outside.
