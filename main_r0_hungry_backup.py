@@ -353,31 +353,6 @@ def _decide(game_state):
                 continue
             enemy_next[nb] = max(enemy_next.get(nb, 0), elen)
 
-    # PREDICT the opponent's exact next head cell. TheApX__hungry is a
-    # DETERMINISTIC food-greedy bot with ZERO head-to-head avoidance: it always
-    # moves toward the nearest reachable food and never dodges our head. So we
-    # can predict its single next cell and, when we are STRICTLY LONGER, steer
-    # toward that cell to force a guaranteed head-to-head win (it won't yield).
-    predicted_enemy_cell = None
-    try:
-        import opp_hungry as _oh
-        if len(snakes) == 2:
-            for sn in snakes:
-                if sn["id"] == you["id"]:
-                    continue
-                # Build a game_state from the opponent's perspective.
-                opp_gs = {"board": board, "you": sn}
-                mv = _oh.move(opp_gs).get("move")
-                if mv in DIRS:
-                    dxo, dyo = DIRS[mv]
-                    ehx, ehy = sn["body"][0]["x"], sn["body"][0]["y"]
-                    pc = (ehx + dxo, ehy + dyo)
-                    if _in_bounds(pc, w, h):
-                        predicted_enemy_cell = pc
-                break
-    except Exception:
-        predicted_enemy_cell = None
-
     candidates = []
     for mv, (dx, dy) in DIRS.items():
         nxt = (head[0] + dx, head[1] + dy)
@@ -781,22 +756,6 @@ def _decide(game_state):
             score += 200.0
         if h2h_loss:
             score -= 1000.0
-
-        # AGGRESSIVE H2H against the deterministic no-avoidance opponent: if we
-        # are STRICTLY LONGER and this candidate cell IS the opponent's predicted
-        # next cell (a guaranteed mutual-collision we win), or is adjacent to it
-        # so we can intercept, reward moving to intercept. The opponent will not
-        # dodge, so contesting its predicted cell forces an H2H kill.
-        if (predicted_enemy_cell is not None and max_enemy_len > 0
-                and my_len > max_enemy_len and not critical and not starving):
-            if nxt == predicted_enemy_cell:
-                # We land exactly where it will be -> guaranteed H2H win.
-                score += 260.0
-            else:
-                # Move that positions us adjacent to its predicted cell so we can
-                # take it next turn (cut off its food path / corner it).
-                if _manhattan(nxt, predicted_enemy_cell) == 1:
-                    score += 40.0
 
         # Food incentive. We weight food more heavily than before because the
         # main loss vector vs a smart opponent is falling behind in LENGTH and

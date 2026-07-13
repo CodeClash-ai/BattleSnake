@@ -1801,3 +1801,39 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   and force H2H-wins when equal/longer, or grab contested food FIRST when strictly closer. main.py
   has all prior layers + now early-game anti-corner-food damping. A/B ANY change multi-seed vs real
   opp; do NOT ship regressions (we win ~74%).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `TheApX__hungry`, ADDED DETERMINISTIC-H2H INTERCEPT EXPLOIT
+- **Opponent = `TheApX__hungry`** ("The Very Hungry Caterpillar", C++ port). Source saved to
+  `opp_hungry.py`. Strategy: multi-source BFS from all food -> distance-to-nearest-food for every
+  cell; picks the head-neighbor with the smallest food-distance (order L,R,U,D). Blocks body cells
+  (tails enterable). **DETERMINISTIC. ZERO head-to-head avoidance. ZERO space/flood management.**
+  Food-greedy GROWER (reaches L16-33). Test: `python3 vs_hungry.py main.py <N> [off]` (sim harsher,
+  ~58% vs 82% real). A/B: `python3 /tmp/ab_hungry.py <N> <off>` (NEW=/tmp/new_main vs OLD=/tmp/old_main).
+- **Round 0 result: won 204-43 +3T** (~82%). Loss analysis (/tmp/wins.py): **45/46 losses OPUS was
+  SHORTER at death** (OPUS L8-19 vs OPP L12-33). Same growth-race vector as cornelius/elon/famished/
+  beames — the food-greedy opponent out-grows us and out-lasts / cuts us off / H2H-kills us.
+- **Change made (backup: main_r0_hungry_backup.py = git HEAD pre-change bot):** exploited the
+  opponent's DETERMINISM + ZERO H2H avoidance. Added `predicted_enemy_cell`: import opp_hungry and
+  call its `move()` from the opponent's perspective to get its EXACT next head cell. In scoring,
+  when we're STRICTLY LONGER (my_len > max_enemy_len, not critical/starving): +260 if our candidate
+  cell IS the predicted enemy cell (guaranteed H2H win — it won't dodge), +40 if adjacent (intercept
+  setup). This forces H2H kills when ahead, since it never yields. Fully gated: does NOTHING when
+  we're shorter/equal (h2h_loss -1000 guard still protects us — verified we go UP not into the H2H
+  loss when L3 vs L5).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace python3
+  fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.28. UNIT TESTS (/tmp/test_pred*.py): when L5 vs L3
+  with food between, opponent moves left to food cell and WE correctly move RIGHT to intercept for a
+  guaranteed H2H win; when L3 vs L5 we correctly AVOID the H2H-loss cell (go up). A/B vs real opp on
+  3 seed batches (off 1/101/555, N=12): NEW == OLD exactly (7-4-1, 12-0-0, 7-3-2) — NO regression;
+  the sim rarely reproduces the intercept scenario (games resolve fast / sim doesn't food-flood),
+  so the exploit is validated by DESIGN + unit tests + no-regression (as all prior growth-opponent
+  teammates found the sim can't validate these changes).
+- **Next teammate:** opponent = opp_hungry.py (DETERMINISTIC food-greedy grower, ZERO H2H/space).
+  Our loss vector = being SHORTER (out-grown). This round adds the deterministic H2H intercept
+  exploit (fires only when longer). If losses persist and we're STILL shorter, the remaining lever
+  is SAFE early growth (the sim can't validate scalar growth tweaks — proven noise-floor for
+  cornelius/elon/famished/beames — but this opponent is deterministic so you can also PREDICT +
+  grab contested food FIRST when strictly closer using predicted_enemy_cell). Consider extending the
+  intercept: when we're longer, actively CUT OFF its food path (body-block) using the prediction +
+  Voronoi. main.py has all prior layers + now the deterministic-opponent H2H intercept. A/B multi-seed
+  via /tmp/ab_hungry.py; do NOT ship regressions (we win ~82%).
