@@ -1069,6 +1069,33 @@ def move(game_state):
                     score -= (max(22, my_len // 2) - safe_area) * 1200
                 if choke_risk:
                     score -= choke_risk * 7000
+            if has_battlejake_enemy and health >= 65 and my_len >= enemy_max_len + 4:
+                # Round-1 BattleJake losses were all long edge/corner self-boxes,
+                # often with only a +4..+6 length lead so the stricter optional-
+                # food suppression above did not engage.  Keep this intentionally
+                # light: a little more interior/tail preference and rejection of
+                # zero-exit edge pockets, without overpowering the normal space
+                # and food terms that local BattleJake samples rely on.
+                score += edge_dist * 180
+                if edge_dist == 0:
+                    score -= 3500
+                elif edge_dist == 1:
+                    score -= 900
+                if tail_dist < 99:
+                    score += max(0, 18 - tail_dist) * 220
+                clean_exits = 0
+                for nn in _neighbors(nxt):
+                    if not _in_bounds(nn, w, h) or nn in future_blocked:
+                        continue
+                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                        continue
+                    clean_exits += 1
+                if clean_exits == 0:
+                    score -= 25000
+                elif clean_exits == 1 and edge_dist == 0 and safe_area < 22:
+                    score -= 6000
+                if choke_risk and edge_dist <= 1 and safe_area < 30:
+                    score -= choke_risk * 1800
             if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
                 # Cornelius often stays smaller while we overgrow; production
                 # losses were self-boxes along edges/top loops, not starvation.
