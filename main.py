@@ -379,9 +379,50 @@ def move(game_state):
             len_scale = 1.0 + max(0, my_length - 4) * 0.15
             score += edge_dist * 1.2
             if on_v_edge or on_h_edge:
-                score -= 6.0 * len_scale
+                score -= 9.0 * len_scale
                 if on_v_edge and on_h_edge:
-                    score -= 25.0 * len_scale  # actual corner cell
+                    score -= 35.0 * len_scale  # actual corner cell
+
+            # Self-corridor ("edge run") penalty: continuing to travel along
+            # the same board edge for many consecutive turns is a
+            # recurring, confirmed failure mode (see README_agent.md --
+            # traced losses vs ccSnake2018__ccsnake this round: our snake
+            # followed the top edge / bottom edge toward a food item
+            # sitting in the far corner for 5-10 consecutive turns while a
+            # comparable-or-longer opponent converged along a parallel
+            # interior lane, sealing the only escape route and leaving
+            # zero legal moves once we reached the corner). The existing
+            # flat per-cell edge/corner penalty doesn't grow with
+            # commitment, so a persistent food-distance benefit can offset
+            # it turn after turn even as the trap deepens. Count how many
+            # of our own current body segments (starting at the head)
+            # already lie on the same edge as the candidate cell, and
+            # penalize super-linearly (worse when a same-or-longer
+            # opponent is nearby, since that's when a corridor race is
+            # actually live) -- a short one-or-two-cell touch of an edge
+            # stays cheap, but continuing to hug it for many turns becomes
+            # increasingly expensive, biasing the bot to break back toward
+            # open interior space earlier, while there is still room to.
+            edge_run = 1 if (on_v_edge or on_h_edge) else 0
+            if on_v_edge and not on_h_edge:
+                for seg in my_body:
+                    if seg["x"] == x:
+                        edge_run += 1
+                    else:
+                        break
+            elif on_h_edge and not on_v_edge:
+                for seg in my_body:
+                    if seg["y"] == y:
+                        edge_run += 1
+                    else:
+                        break
+            if edge_run > 0:
+                nearest_opp_dist = min(
+                    (abs(x - ox) + abs(y - oy) for ox, oy in opp_heads),
+                    default=99,
+                )
+                proximity_mult = 2.0 if nearest_opp_dist <= 8 else 1.0
+                score -= edge_run * edge_run * 1.0 * len_scale * proximity_mult
 
             # Avoid hazard cells (extra health drain per turn in maps/rulesets
             # that have them, e.g. Royale). No-op on rulesets with no hazards

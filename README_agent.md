@@ -2204,3 +2204,143 @@ now" — concretely, one of:
   which scoring term is deciding the move — this remains the fastest way
   to distinguish "real bug in scoring" from "correct local decision that
   loses to longer-range opponent strategy" (this round found the latter).
+
+## Round (this session) — opponent = ccSnake2018__ccsnake, added length/proximity-scaled edge-run penalty targeting a confirmed "corner trap" loss pattern
+
+`/logs/rounds/0/results.json`: opponent this round is **`ccSnake2018__ccsnake`**
+(a 2018-era Python port: builds a danger grid from all snake bodies + a
+recursive up-to-5-round "security level" forecast, moves toward nearest food
+by squared-Euclidean distance -- see `git show
+origin/human/ccSnake2018/ccsnake:main.py` for the full docstring). Real
+scored result: **sonnet-5 225 / opponent 25** out of 250 sims (90% win rate,
+NOT a clean sweep). `analyze_logs.py /logs/rounds/0`: avg 72.9 turns/sim
+(min 17, max 190) -- games commonly run long against this opponent, unlike
+several past very-weak opponents in this file's history.
+
+### Local benchmark + loss trace (before any change)
+
+Extracted opponent fresh (`git show
+origin/human/ccSnake2018/ccsnake:main.py > /tmp/opp/main.py; cp server.py
+/tmp/opp/server.py`) and ran 8 real local games via the `battlesnake` CLI
+against the pre-this-round `main.py` (standard recipe -- see many earlier
+rounds' notes in this file: `setsid nohup env PORT=... python3 main.py >
+log 2>&1 </dev/null & disown` for both bots, loop `battlesnake play ... -o
+/tmp/game_N.json & disown`, sleep, check `tail`). **Result: 6 wins / 2
+losses.**
+
+Traced **both** losses in full via literal-board-state replay (recipe:
+build a synthetic `game_state` per logged turn from `sim`/game JSON
+`board.snakes[*].body`, call `main.move()` directly -- see many earlier
+rounds' notes in this file for the exact dict shape). **Both losses showed
+the exact same concrete mechanism**: our snake travels along a board edge
+(top edge in `/tmp/game_4.json`, bottom edge in `/tmp/game_3.json`) toward
+a food item sitting near/at the far corner, over 8-10 consecutive turns,
+while the opponent (comparable-or-greater length) independently travels
+along a parallel interior lane and reaches the corner-sealing cell one turn
+before we do -- trapping us in the self-filled edge strip with **zero
+legal moves**. This is the same "corridor race" / "edge-hugging self-coil"
+family flagged by MANY earlier rounds' notes throughout this file (see
+"self-coil", "corridor-race", "edge-hugging" mentions above against
+several different past opponents) -- ccSnake2018's closest-food-by-distance
+strategy combined with food frequently spawning near corners on an 11x11
+board appears to trigger it more often than most past opponents (90% real
+win rate is noticeably lower than the many recent clean-sweep/near-clean-
+sweep rounds against other opponents in this file's history).
+
+Confirmed via BFS distance math that in both traced cases, the moment the
+bot first stepped onto the edge, the interior alternative had an **equal**
+shortest-path distance to the target food (a Manhattan-distance tie, since
+there were no obstacles between) -- so the existing food-distance term
+contributed *zero* signal to prefer the safer interior route over the
+edge, and the previous flat per-cell edge penalty (`-6.0 * len_scale`,
+`-25.0` for corners) was evidently not quite strong enough to break that
+tie in favor of the interior option in these specific traced instances.
+
+### Fix made this round
+
+1. **Strengthened the flat edge/corner penalty**: `-6.0 * len_scale` ->
+   `-9.0 * len_scale` for any edge cell, `-25.0 * len_scale` -> `-35.0 *
+   len_scale` for corner cells (additive on top of the edge penalty).
+2. **New: length/proximity-scaled "edge run" penalty.** Counts how many of
+   our own current body segments (starting at the head, before this move)
+   already lie on the *same* edge as the candidate cell (`edge_run`,
+   starting at 1 for the very first step onto an edge, growing with
+   sustained commitment), and subtracts `edge_run**2 * 1.0 * len_scale *
+   proximity_mult` from the score, where `proximity_mult` is 2.0 if any
+   opponent head is within Manhattan distance 8, else 1.0. This is a
+   super-linear, commitment-growing penalty specifically targeting
+   "sustained edge-hugging" (as opposed to a harmless one-cell edge touch
+   while passing through), doubled in strength when an opponent is
+   actually nearby (i.e. when a corridor race could actually be live).
+
+**Verified this changes the exact traced danger points** (not just a
+generic hope -- direct replay on the literal logged board states from both
+losses):
+- `game_4.json` turn 13 (the turn where the real game first committed
+  "up" onto the top edge, leading to the eventual trap at turn 24-25):
+  patched `main.move()` on that exact state now returns `right` (into the
+  interior) instead of `up`.
+- `game_3.json` turn 73 (the final step before the real game's fatal move
+  into the bottom-left corner cell `(0,0)` at turn 74): patched
+  `main.move()` on that exact state now returns `right` instead of `left`
+  (the move that led to the corner death in the real game).
+
+Both are real, direct behavior changes at the precise decision points that
+caused the two traced losses -- a much stronger signal than a generic
+"should help" argument.
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state, `{}` (fully
+  malformed), an empty-snakes state, and a synthetic fully-boxed-in-corner
+  state (only one legal move) -- all return valid moves, no exceptions.
+- Direct literal-state replay confirms the fix changes both traced losing
+  decisions in the intended direction (see above).
+- **Did NOT get a fresh full local-benchmark win/loss tally against the
+  patched code this round** -- ran low on step budget mid-session
+  (attempted to restart the local test server on port 8000 to pick up the
+  new code, but the port was still held by the pre-patch server process
+  from earlier in the session and a restart attempt didn't clearly
+  succeed before running out of steps to verify). **This is the single
+  most important next step for whoever picks this up next** -- the fix is
+  verified via direct traced-state replay (strong signal, not
+  speculative) but not yet via a fresh end-to-end game tally.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Run a fresh local benchmark** (8-12+ games) against a freshly
+   extracted `origin/human/ccSnake2018/ccsnake:main.py` with the current
+   (patched) `main.py`, from cleanly (re)started servers (kill any stale
+   `python3 main.py` processes by exact PID first -- `ps aux | grep
+   main.py`, never `pkill -f` with a pattern that might match your own
+   invoking shell, see many earlier rounds' notes in this file about that
+   gotcha -- then start fresh `setsid nohup env PORT=... python3 main.py
+   > log 2>&1 </dev/null & disown` servers) to get a real win/loss tally
+   for this round's change, ideally beating the pre-change local 6/2.
+2. If a **new** loss shows up, use the same literal-state replay technique
+   demonstrated this round (and documented many times earlier in this
+   file) to find the exact turn/mechanism -- it remains the most reliable
+   way to distinguish "a real bug/gap" from "correct local play losing to
+   legitimate opponent pressure" (see the "opponent = Xe__since" section
+   above this one for an example of the latter case, where no further
+   local-heuristic tuning was likely to help).
+3. If the `edge_run` penalty turns out to be too aggressive (e.g. makes
+   the bot overly reluctant to travel along genuinely safe long straight
+   edges when no opponent is anywhere nearby -- note `proximity_mult`
+   should already mostly guard against this, but worth double-checking
+   with a benchmark), consider tuning the coefficients down slightly
+   rather than reverting entirely, since the mechanism it targets is a
+   real, twice-confirmed (both losses this round) failure mode.
+4. As always: re-check `/logs/rounds/1/results.json` once it exists -- if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's fix matters against
+   them too.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: strengthened flat edge/corner
+  penalties, added the new length/proximity-scaled `edge_run` penalty term
+  -- see the large inline comment directly above that code block for the
+  full traced rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
