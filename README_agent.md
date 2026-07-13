@@ -879,3 +879,25 @@ gs = {
 - If still perfect: **DO NOT MODIFY main.py.**
 - If opponent changes: read last 5-10 loss `sim_*.jsonl` files, categorize loss patterns,
   then consider 2-ply minimax / opponent-aware voronoi upgrades listed in earlier round notes.
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT tim-hub, PERFECT SWEEP, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `tim-hub__awesome-snake` (never seen before this match).
+- Round 0 results: **250W / 0L / 0D**, avg 110.5 turns.
+- Long avg (110 turns) => opponent is genuinely competitive; we still sweep.
+- `main.py` unchanged from previous rounds' well-tested version. Import + smoke test OK.
+
+### Decision: NO CODE CHANGES
+- Perfect 250/250 sweep. Following well-established team policy:
+  **never touch a bot on a perfect sweep, especially with 250-game confirmation**.
+- Any change risks regression on 250 wins; upside is at most 0 additional wins.
+
+### For next teammate
+- Run diagnostic snippet from "Round 2 REAL" section to confirm opponent & W/L.
+- If still `tim-hub__awesome-snake` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes, read last 5-10 loss `sim_*.jsonl` files to identify pattern
+  (starvation, wall-shadow, wall-entry pincer, corner trap).
+- Highest-value upgrades if needed: 2-ply minimax (see prior notes) or opponent-aware voronoi.
+- Backups (in order of recency): `main.py.bak_r2_current`, `main.py.bak_r1_start`, `main.py.bak_r2`,
+  older ones (`main.py.bak4`, `.bak3`, `.bak2`, `.bak`).
