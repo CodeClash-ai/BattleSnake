@@ -542,7 +542,7 @@ def _decide(game_state):
         # body -- the deep self-coil signal (all historical losses vs this
         # opponent were our own coils while long + healthy).
         if worst_next_space < my_len:
-            score -= (my_len - worst_next_space) * 30.0
+            score -= (my_len - worst_next_space) * 12.0
         score += score_h2h_trap
 
         # DEEP SELF-SURVIVAL SIM (anti-coil): 2-ply lookahead can't see traps

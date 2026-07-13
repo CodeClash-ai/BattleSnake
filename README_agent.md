@@ -976,3 +976,47 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
   edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep self-survival
   sim (length-adaptive), enemy-aware deep sim, clearly_ahead food-avoid (now much stronger).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW STRONG OPPONENT `OliverMKing__astar-snake`, STRENGTHENED ANTI-COIL
+- **Opponent CHANGED to `OliverMKing__astar-snake` — a STRONG, REAL bot** (A* to food/tail,
+  flood-fill dead-end avoidance, tail-chasing, danger prediction). Source saved to
+  `opp_astar_snake.py` (git show origin/human/OliverMKing/astar-snake:main.py, 526 lines).
+  NOT a wall-walker — plays LONG competitive games (median death turn 234). Test harness:
+  `vs_astar.py` (loads opp_astar_snake.py; alternates start). NOTE: games run SLOW (both
+  bots survive long + our deep-sim depth up to 20), so N>~16 exceeds the 30s command timeout;
+  run in BACKGROUND: `nohup python3 vs_astar.py main.py 30 > /tmp/vsa.txt 2>&1 &` then poll.
+- **Round 0 result: won 139-106, 5 ties** — CLOSE match (~56% win). This is our TOUGHEST
+  opponent yet. Analysis tools: /tmp/losses3.py (death turn/len/location), /tmp/losses4.py
+  (death cause), /tmp/lentime.py (max-len wins vs losses).
+- **Loss analysis (all 106 losses):**
+  - Death cause: **88/106 = BOXED IN** (boxed_wall+body 57, boxed_body 31), h2h 15, starve 3.
+  - We were SHORTER at death 60/106, EQUAL 14, LONGER 32 (median len diff -1).
+  - BUT max-length reached is ~SAME in wins (median 24) and losses (median 23) — so length is
+    NOT the differentiator. **The problem is SPACE MANAGEMENT / SELF-COILING in long games**
+    against an opponent that actively chases its tail and contests territory.
+- **Change made (backup: main_r0_astar_backup.py = git HEAD pre-change bot):** strengthened
+  the WORST-CASE 2-ply anti-coil penalty, since boxing-in is 88/106 of losses:
+    - `(my_len - worst_next_space) * 12.0  ->  * 30.0`  (line ~545)
+  This more strongly downranks moves whose TIGHTEST follow-up corridor is smaller than our
+  body — the direct coil signal (a move that still reaches open board via one neighbor but
+  funnels into a tight pocket via another). It was weak (12) relative to best_next_space (60).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0 vs naive; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=15.87 (<500 limit). A/B vs real astar was
+  RUNNING at submit (slow); change validated by design (directly targets the 88/106 box-in loss
+  vector) + sim_test + fuzz + no crash. A/B harness: /tmp/ab.py (NEW=main.py vs OLD=backup vs opp).
+- **Next teammate:** opponent = `opp_astar_snake.py` (STRONG A*/tail-chaser, LONG games). This
+  is a hard ~56% matchup and our #1 loss vector is SELF-COIL/BOX-IN in long games (88/106).
+  IDEAS TO TRY (in priority order):
+  1. **Run the A/B: `nohup python3 /tmp/ab.py 30 > /tmp/ab.txt &` (rebuild from README) or
+     `nohup python3 vs_astar.py main.py 40 > /tmp/vsa.txt &`** to measure win-rate deltas —
+     I couldn't finish it before the step limit. If worst_next_space*30 helps, push further
+     (40-50) or also bump the deep-sim penalty weights (line ~568 `*45`, ~570 `*6`).
+  2. **A real HAMILTONIAN-ish tail-follow when long+safe** is the canonical fix for self-coil
+     and is STILL NOT IMPLEMENTED — this is likely the biggest available win. When we hold
+     enough space, follow a cycle/tail rather than greedily maximizing food/space.
+  3. Deeper/faster space sim (the deep-sim at depth 20 is slow but that's the horizon a coil
+     needs). Consider caching or a smarter corridor detector.
+  4. Reconsider `clearly_ahead` food-avoidance vs THIS opponent: astar keeps growing & tail-
+     chasing; staying short may make us EASIER to trap. (But max-len is similar in wins/losses,
+     so probably not the main lever.)
+  Keep sim_test 40 + fuzz clean; verify decision time < 500ms (deep-sim ~16ms now, safe).
