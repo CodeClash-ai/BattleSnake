@@ -1007,26 +1007,6 @@ def _tyrelh_2018_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
-def _project_z_predicted_move(enemy, game_state, w, h):
-    """Faithful one-ply predictor for Petah project-z using copied origin port."""
-    try:
-        from tools import project_z_opponent
-        pseudo = {
-            "game": game_state.get("game", {}),
-            "turn": game_state.get("turn", 0),
-            "board": game_state.get("board", {}),
-            "you": enemy,
-        }
-        mv = project_z_opponent.move(pseudo).get("move")
-        if mv in MOVES:
-            eh = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
-            pred = _add(eh, MOVES[mv])
-            if _in_bounds(pred, w, h):
-                return pred
-    except Exception:
-        return None
-    return None
-
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -1149,7 +1129,6 @@ def move(game_state):
         has_jerrykott_enemy = False
         has_untimely_enemy = False
         has_woofers_enemy = False
-        has_project_z_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1173,7 +1152,6 @@ def move(game_state):
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
-            is_project_z = "project-z" in ename.lower() or "petah" in ename.lower()
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1269,11 +1247,6 @@ def move(game_state):
                 elif is_flipez:
                     has_flipez_crystal_enemy = True
                     pred = _flipez_crystal_predicted_move(e, game_state, w, h)
-                    if pred is not None:
-                        preds.add(pred)
-                elif is_project_z:
-                    has_project_z_enemy = True
-                    pred = _project_z_predicted_move(e, game_state, w, h)
                     if pred is not None:
                         preds.add(pred)
                 elif is_xe:
@@ -1751,34 +1724,6 @@ def move(game_state):
                     if edge_dist == 0 and safe_area < 35:
                         score -= 4500
 
-            if has_project_z_enemy and enemy_max_len >= my_len:
-                # Project-Z is a competent weighted A*/food bot.  Round-0 losses
-                # mostly happened after it outgrew us and squeezed/forced head
-                # pressure near edges.  Use exact one-ply prediction for direct
-                # collisions and add a narrow escape/interior bias while not ahead.
-                near_pz = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
-                if near_pz <= 7 or edge_dist <= 1:
-                    clean_exits = 0
-                    for nn in _neighbors(nxt):
-                        if not _in_bounds(nn, w, h) or nn in future_blocked:
-                            continue
-                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
-                            continue
-                        clean_exits += 1
-                    much_longer = enemy_max_len >= my_len + 2
-                    score += edge_dist * (420 if much_longer else 240)
-                    if edge_dist == 0:
-                        score -= 11000 if much_longer else 6000
-                    elif edge_dist == 1:
-                        score -= 3000 if much_longer else 1400
-                    if clean_exits == 0:
-                        score -= 75000
-                    elif clean_exits == 1 and (edge_dist <= 1 or near_pz <= 3):
-                        score -= 22000 if much_longer else 12000
-                    if safe_area < 30:
-                        score -= (30 - safe_area) * (700 if much_longer else 450)
-                    if choke_risk and safe_area < 42:
-                        score -= choke_risk * 4500
             if has_nagini_enemy and enemy_max_len >= my_len:
                 # Nagini is food-seeking but weakly models head-to-heads.  Our
                 # round-0 losses usually came after Nagini grew longer by several
@@ -2220,11 +2165,6 @@ def move(game_state):
                     food_dist = path_food
                 if has_untimely_enemy:
                     food_weight += min(380, 130 + (enemy_max_len - my_len) * 45)
-                    food_dist = path_food
-                if has_project_z_enemy:
-                    # Race Project-Z to reachable food when behind/equal; otherwise
-                    # its A* food preference snowballs into a length/territory lead.
-                    food_weight += min(420, 150 + (enemy_max_len - my_len) * 50)
                     food_dist = path_food
                 if has_nagini_enemy:
                     # Race Nagini for reachable food when behind; it otherwise
