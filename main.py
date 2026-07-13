@@ -576,6 +576,33 @@ def _eremetic_eric_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _flipez_crystal_predicted_move(enemy, game_state, w, h):
+    """Predict Flipez Crystal by running the copied original port as enemy.
+
+    Flipez is a nearest-food/center bot that also avoids predicted longer/equal
+    enemy head squares.  It grows well in long games, so exact one-ply
+    prediction is useful for tactical head pressure without changing the
+    survival-first core.
+    """
+    try:
+        from tools import flipez_crystal_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = flipez_crystal_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -655,6 +682,7 @@ def move(game_state):
         has_nbw_ruby_enemy = False
         has_eremetic_enemy = False
         has_gigantic_george_enemy = False
+        has_flipez_crystal_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -662,7 +690,13 @@ def move(game_state):
             is_xe = "Xe" in ename or "since" in ename.lower()
             preds = set()
             is_ccsnake = "ccsnake" in ename.lower() or "ccsnake2018" in ename.lower()
-            if is_xe:
+            is_flipez = "flipez" in ename.lower() or "flipez-crystal" in ename.lower()
+            if is_flipez:
+                has_flipez_crystal_enemy = True
+                pred = _flipez_crystal_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_xe:
                 pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
                 if pred is not None:
                     preds.add(pred)
@@ -847,6 +881,21 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_flipez_crystal_enemy and enemy_max_len >= my_len:
+                # Flipez-crystal is a competent nearest-food/center chaser.
+                # Logged losses usually had us shorter and crowded near a wall,
+                # so add a matchup-specific interior/safe-area bias when behind.
+                near_flipez = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_flipez <= 6 or edge_dist <= 1:
+                    score += edge_dist * 260
+                    if edge_dist == 0:
+                        score -= 6500
+                    elif edge_dist == 1:
+                        score -= 1800
+                    if safe_area < 30:
+                        score -= (30 - safe_area) * 520
+                    if choke_risk:
+                        score -= choke_risk * 4500
             if has_nbw_ruby_enemy and enemy_max_len >= my_len:
                 # nbw-ruby's weighted-paint bot is especially good at turning the
                 # board edge plus its body into a zipper trap.  Round-1 losses were
@@ -987,11 +1036,21 @@ def move(game_state):
                         score -= (max(24, my_len // 2) - safe_area) * 900
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
+                if has_flipez_crystal_enemy:
+                    # Flipez wins its rare games by outgrowing us with steady
+                    # nearest-food chasing.  When behind, make reachable food a
+                    # first-class objective instead of letting static space terms
+                    # keep us orbiting safely but shorter.
+                    food_weight += min(260, 90 + (enemy_max_len - my_len) * 25)
+                    food_dist = path_food
                 # Do not let catch-up pressure drag us toward food a longer
                 # opponent can reach first; use uncontested food unless starving.
                 if health >= 30:
                     if safe_food < 99:
                         food_dist = safe_food
+                    elif has_flipez_crystal_enemy:
+                        food_dist = path_food
+                        food_weight = max(food_weight, 140)
                     else:
                         food_weight = min(food_weight, 25)
             score -= food_dist * food_weight
@@ -1013,7 +1072,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (900 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
