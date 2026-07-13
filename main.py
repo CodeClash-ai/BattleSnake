@@ -357,10 +357,31 @@ def move(game_state):
                     free_degree += 1
             score += free_degree * 15
 
-            # Slight preference to stay away from edges/corners (more escape routes)
+            # Preference to stay away from edges/corners (more escape routes).
+            # Strengthened + length-scaled after a traced real-match loss
+            # (local benchmark vs Xe__since this round): our snake walked
+            # up the left board edge (x=0/1) for ~15 consecutive turns,
+            # coiling itself into the top-left corner with no opponent
+            # forcing it -- a pure self-inflicted wall-hugging trap that
+            # the old flat +0.5/cell edge bonus was far too weak to
+            # discourage (voronoi/area/food scoring along that corridor
+            # kept looking fine turn over turn until it was already fatal).
+            # Scale by length: hugging edges is fine/harmless for a short
+            # snake grabbing nearby food, but increasingly dangerous once
+            # long, since a self-coil against a wall has nowhere to
+            # unwind. See README_agent.md for the traced example + the
+            # earlier ladder-history precedent (a parallel session facing
+            # this same opponent found and fixed the identical pattern).
             x, y = nxt
             edge_dist = min(x, width - 1 - x, y, height - 1 - y)
-            score += edge_dist * 0.5
+            on_v_edge = x == 0 or x == width - 1
+            on_h_edge = y == 0 or y == height - 1
+            len_scale = 1.0 + max(0, my_length - 4) * 0.15
+            score += edge_dist * 1.2
+            if on_v_edge or on_h_edge:
+                score -= 6.0 * len_scale
+                if on_v_edge and on_h_edge:
+                    score -= 25.0 * len_scale  # actual corner cell
 
             # Avoid hazard cells (extra health drain per turn in maps/rulesets
             # that have them, e.g. Royale). No-op on rulesets with no hazards

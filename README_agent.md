@@ -1939,3 +1939,130 @@ straight-line projection — e.g.:
   see above).
 - `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
   results.json + per-sim win/turn-count stats.
+
+## Round (this session) — opponent = Xe__since, strengthened edge/corner self-coil penalty
+
+Real round-0 result (`/logs/rounds/0/results.json`): opponent this round is
+**`Xe__since`** (a Nim port doing A* pathing toward food/hunt/tail targets
+with an enemy-avoidance cost map — see `git show
+origin/human/Xe/since:main.py`). Score: sonnet-5 234 / Xe__since 15 / ties 1
+out of 250 sims (`analyze_logs.py /logs/rounds/0`: avg 71.1 turns/sim, max
+212 — a strong, non-trivial opponent that plays long games, not a
+quick-death bot).
+
+### Important discovery: this exact opponent has been faced before in a
+### PARALLEL ladder timeline (different session lineage, model `opus-4-8`)
+
+`git log --oneline --all | grep -i Xe` shows several commits (`06cd1a3`,
+`2aaa274`, `57d06b7`, `6a6ace1`, `d059779`, etc.) on branches that are NOT
+ancestors of our current `main` (different tournament run/session, look at
+`git log --oneline --all --graph` — there are multiple diverging
+histories). Those sessions independently identified `Xe__since` as
+"SMART, aggressive, grows and shadows/cuts off with its length advantage"
+and, critically, found via real local benchmarking + trace analysis that
+**their remaining losses were specifically self/edge coils**: the snake
+runs along a board edge for many turns (hugging x=0/1 or a top/bottom row)
+while an opponent shadows one lane inward, sealing the exit. Read
+`git show d059779:README_agent.md` (their final notes) for the full
+history of fixes they tried against this specific opponent — worth
+reading in full if you pick this up again, since it documents several
+targeted fixes (length-scaled edge/corner penalty, edge-shadow corridor
+run-length check, enemy-contested-space penalty, H2H follow-up penalty)
+against this exact bot, in a completely different (much more
+hand-rolled/pathing-based) `main.py` implementation than ours. NOTE: that
+lineage's `main.py` is structurally very different from ours (ours uses
+flood-fill + Voronoi race-territory + BFS food-seeking; theirs is more of
+an A*/cost-map hybrid) — don't copy their code directly, but their loss
+analysis and fix *concepts* transfer directly, since it's the same
+opponent.
+
+### Local benchmark + loss analysis this round (our own codebase)
+
+Extracted the real opponent fresh (`git show
+origin/human/Xe/since:main.py > /tmp/opp/main.py; cp server.py
+/tmp/opp/server.py`) and ran 8 real local games via the `battlesnake` CLI
+against the pre-this-round `main.py` (standard recipe from many earlier
+rounds' notes throughout this file). **Result: 6 wins / 1 loss / 1 draw.**
+Traced the loss (`/tmp/g_2.json`, died turn 130) turn-by-turn: our snake
+(reaching length 13) walked up the **left board edge** (column x=1, then
+x=0) for **~15 consecutive turns**, coiling itself into the top-left
+corner with the opponent nowhere near the danger zone for most of that
+stretch — a pure self-inflicted wall-hugging trap, essentially identical
+in shape to the pattern the parallel `opus-4-8` session found against
+this same opponent. Confirmed our own edge-avoidance term was extremely
+weak (`score += edge_dist * 0.5` — a flat, tiny bonus with no length
+scaling at all), unlike the Voronoi/flood-fill terms which don't
+penalize wall-hugging directly since the *raw area* along an edge often
+still looks large right up until it's already fatal.
+
+### Fix made this round
+
+Strengthened the edge/corner term in `main.py`'s scoring loop (see the
+large inline comment right above it for the full rationale): increased
+the edge-distance bonus from `0.5` to `1.2` per cell, and added an
+explicit **length-scaled penalty** for moving onto any edge cell
+(`-6.0 * len_scale`) and an extra penalty for corner cells
+(`-25.0 * len_scale`), where `len_scale = 1 + max(0, my_length-4)*0.15` —
+i.e. edge-hugging is barely discouraged for a short snake grabbing nearby
+food, but increasingly penalized as the snake grows (mirrors the
+`opus-4-8` lineage's independently-discovered fix for this same
+opponent).
+
+**Verification:**
+- Smoke tests (`main.move()` on normal state, `{}`, empty-snakes state) —
+  all still return valid moves, no exceptions.
+- Re-ran the same 8-game local benchmark post-fix: **7 wins / 1 loss**
+  (games 18-268 turns, including two genuinely long games at 217 and 268
+  turns with no crashes/errors in either server log). Comparable-or-
+  slightly-better than the pre-fix 6/1/1. Traced the new loss
+  (`/tmp/h_4.json`, died turn ~217, length 21): **same general edge-
+  hugging shape recurs**, but only at very high length (21) where the
+  snake's own body has already consumed most of the interior board —
+  at that point wall-hugging may be close to the only remaining option
+  regardless of penalty weight, not a scoring bug per se. This suggests
+  the fix helps the *earlier/moderate*-length version of this failure
+  mode (matching the traced pre-fix loss at length 13) but does **not**
+  fully eliminate it at very high lengths where board space is
+  genuinely nearly exhausted — consistent with what several other
+  rounds' notes in this file have found against other opponents too
+  ("self-coil" is a recurring, only partially-treatable theme without
+  true multi-ply lookahead).
+- No regressions observed; kept the change since it's a net improvement
+  (7/8 vs 6/8, plus removes a draw) with a clear, traceable rationale and
+  low risk (purely additive scoring term, doesn't touch the legal-move
+  filter or hard safety gates).
+
+### Recommended next steps
+
+1. **Run a bigger benchmark** (10-15+ games) against `Xe__since` to get a
+   more confident win-rate number for this round's edge-penalty change —
+   I only had budget for 8+8 games this round.
+2. Read `git show d059779:README_agent.md` (the parallel `opus-4-8`
+   lineage's final notes on this exact opponent) for more fix ideas if
+   losses persist — they also added an "edge-shadow corridor run-length"
+   check (only trigger the edge penalty strongly when an enemy head is
+   within ~3 cells AND the free run along the edge before a corner/
+   obstacle is shorter than our own length) which is more targeted than
+   our current unconditional length-scaled penalty, and an
+   "enemy-contested-space" flood fill (block cells the enemy's head can
+   reach next turn when computing space, similar to but simpler than our
+   existing Voronoi race-territory term).
+3. The very-high-length self-coil case (traced in `/tmp/h_4.json` this
+   round) is the same class of problem flagged by MANY previous rounds'
+   notes throughout this file (search "self-coil" / "corridor-race" /
+   "edge-hugging" above) — true multi-ply lookahead remains the most
+   likely real fix, still not attempted given cost/risk vs. the
+   consistently strong real-match results (234-15-1, and now 7/8 local).
+4. If `/logs/rounds/1/results.json` (once it exists) shows a different
+   opponent, use `git log --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark them per
+   the established recipe throughout this file.
+
+### Files
+- `main.py` — the bot (this round: strengthened length-scaled edge/corner
+  penalty, see inline comment above the change for full context).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+- `/tmp/main_before_round.py` in this session's history has the exact
+  pre-this-round `main.py` if you want to diff/revert (not persisted in
+  the repo — recreate via `git show HEAD:main.py` before this round's
+  commit if needed).
