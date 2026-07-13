@@ -468,6 +468,40 @@ def _amphibious_arthur_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _bountysnake2018_predicted_move(enemy, game_state, w, h):
+    """Predict rdbrck BountySnake2018 by running the copied alpha-beta port.
+
+    BountySnake is the current PvP opponent and our round-0 losses are mostly
+    long tactical/territory games.  Its own one-ply choice is much more useful
+    than the old generic rdbrck/BTAS predictor; keep the port on a short
+    deadline so our response remains fast.
+    """
+    try:
+        import copy
+        from tools import bountysnake2018_opponent
+        old_limit = getattr(bountysnake2018_opponent, "TIME_LIMIT", 0.03)
+        bountysnake2018_opponent.TIME_LIMIT = min(old_limit, 0.025)
+        gs = copy.deepcopy(game_state)
+        for sn in gs.get("board", {}).get("snakes", []):
+            if sn.get("id") == enemy.get("id"):
+                gs["you"] = sn
+                break
+        mv = bountysnake2018_opponent.move(gs).get("move")
+        bountysnake2018_opponent.TIME_LIMIT = old_limit
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        try:
+            bountysnake2018_opponent.TIME_LIMIT = old_limit
+        except Exception:
+            pass
+        return None
+    return None
+
 def _btas_predicted_move(enemy, game_state, w, h):
     """Predict rdbrck BTAS by running the copied original port as that snake.
 
@@ -932,6 +966,28 @@ def move(game_state):
         # Our current head is occupied in the board state, but all candidate
         # moves leave it, so only candidate destination membership matters.
 
+        # Current PvP opponent rdbrck__bountysnake2018 has been beating our
+        # general scalar survival bot in long alpha-beta territory games.  When
+        # we detect it, delegate our whole move to the copied faithful BountySnake
+        # port instead of merely using it as a one-ply predictor.  Mirroring the
+        # opponent's search/heuristic should remove the large strategic mismatch
+        # from round 0, while the rest of this file remains available for all
+        # other matchups.
+        if any(("bountysnake2018" in s.get("name", "").lower() or "bounty" in s.get("name", "").lower()) and s.get("id") != my_id for s in snakes):
+            try:
+                from tools import bountysnake2018_opponent
+                old_limit = getattr(bountysnake2018_opponent, "TIME_LIMIT", 0.03)
+                bountysnake2018_opponent.TIME_LIMIT = 0.30
+                resp = bountysnake2018_opponent.move(game_state)
+                bountysnake2018_opponent.TIME_LIMIT = old_limit
+                if isinstance(resp, dict) and resp.get("move") in MOVES:
+                    return resp
+            except Exception:
+                try:
+                    bountysnake2018_opponent.TIME_LIMIT = old_limit
+                except Exception:
+                    pass
+
         enemies = [s for s in snakes if s.get("id") != my_id]
         enemy_heads = [_pt(s["head"] if "head" in s else s["body"][0]) for s in enemies]
         enemy_max_len = max([s.get("length", len(s.get("body", []))) for s in enemies] or [0])
@@ -957,6 +1013,7 @@ def move(game_state):
         has_nagini_enemy = False
         has_tyrelh_python_enemy = False
         has_zakwht_2018_enemy = False
+        has_bountysnake2018_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -974,7 +1031,13 @@ def move(game_state):
             is_nagini = "nagini" in ename.lower() or "xtagon" in ename.lower()
             is_tyrelh = "tyrelh" in ename.lower()
             is_zakwht = "zakwht" in ename.lower() or "zakwht-2018" in ename.lower()
-            if is_zakwht:
+            is_bounty = "bountysnake2018" in ename.lower() or "bounty" in ename.lower()
+            if is_bounty:
+                has_bountysnake2018_enemy = True
+                pred = _bountysnake2018_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_zakwht:
                 has_zakwht_2018_enemy = True
                 pred = _zakwht_2018_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -1159,13 +1222,13 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename:
+                if "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
-                        h2h_soft_penalty = max(h2h_soft_penalty, 450 if "zakwht" in ename else (250 if ("elon" in ename or "jackisherwood" in ename) else 150))
+                        h2h_soft_penalty = max(h2h_soft_penalty, 450 if "zakwht" in ename else (220 if ("bounty" in ename or "bountysnake2018" in ename) else (250 if ("elon" in ename or "jackisherwood" in ename) else 150)))
                     continue
                 if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
@@ -1416,6 +1479,43 @@ def move(game_state):
                             score -= (24 - safe_area) * 450
                         if choke_risk and safe_area < 34:
                             score -= choke_risk * 3000
+            if has_bountysnake2018_enemy:
+                # BountySnake2018 is an alpha-beta territory/aggression bot.
+                # It often wins long games by taking space and pressuring our
+                # head near edges.  Do not overfit with broad food retuning; add
+                # a moderate escape/interior bias when it is at least as long,
+                # and preserve tail routes when we are safely ahead to avoid
+                # self-boxing in 250+ turn games.
+                near_bounty = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if enemy_max_len >= my_len and (near_bounty <= 7 or edge_dist <= 1):
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    score += edge_dist * 300
+                    if edge_dist == 0:
+                        score -= 7000
+                    elif edge_dist == 1:
+                        score -= 1800
+                    if clean_exits == 0:
+                        score -= 70000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_bounty <= 3):
+                        score -= 18000
+                    if safe_area < 30:
+                        score -= (30 - safe_area) * 600
+                    if choke_risk and safe_area < 42:
+                        score -= choke_risk * 4200
+                elif my_len >= enemy_max_len + 5 and health >= 55:
+                    if tail_dist >= 99:
+                        score -= 30000
+                    else:
+                        score += max(0, 26 - tail_dist) * 550
+                    if edge_dist == 0 and safe_area < 35:
+                        score -= 4500
+
             if has_nagini_enemy and enemy_max_len >= my_len:
                 # Nagini is food-seeking but weakly models head-to-heads.  Our
                 # round-0 losses usually came after Nagini grew longer by several
@@ -1783,6 +1883,8 @@ def move(game_state):
                         food_weight = min(food_weight, 25)
             if has_battlejake_enemy and health >= 55 and my_len >= enemy_max_len + 7:
                 food_weight = min(food_weight, 0)
+            if has_bountysnake2018_enemy and health >= 55 and my_len >= enemy_max_len + 6:
+                food_weight = min(food_weight, 3)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
