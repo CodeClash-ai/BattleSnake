@@ -1172,6 +1172,44 @@ def move(game_state):
                         score -= (26 - safe_area) * 450
                     if choke_risk and safe_area < 34:
                         score -= choke_risk * 3500
+            if has_famished_frank_enemy and health >= 45 and enemy_max_len >= my_len - 1:
+                # Famished Frank greedily paths to food and often becomes longer,
+                # then uses its body plus board edges to squeeze us.  Production
+                # losses are commonly optional edge-food/corridor entries while
+                # we are healthy but not longer.  Add a targeted interior/escape
+                # bias only for this matchup/length regime; exact predicted head
+                # collisions are still handled separately below.
+                near_frank = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_frank <= 7 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    score += edge_dist * 260
+                    if edge_dist == 0:
+                        score -= 6500
+                    elif edge_dist == 1:
+                        score -= 1600
+                    if clean_exits == 0:
+                        score -= 55000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_frank <= 4):
+                        score -= 14000
+                    if safe_area < 28:
+                        score -= (28 - safe_area) * 550
+                    if choke_risk and safe_area < 40:
+                        score -= choke_risk * 4200
+                    # Frank's longer food-path body often turns medium-size edge
+                    # regions into one-way boxes.  Prefer candidates that preserve
+                    # a route to our moving tail, even when raw area is similar.
+                    if tail_dist >= 99:
+                        score -= 12000
+                        if self_next_exits <= 1:
+                            score -= 22000
+                    else:
+                        score += max(0, 20 - tail_dist) * 450
             if has_flipez_crystal_enemy and enemy_max_len >= my_len:
                 # Flipez-crystal is a competent nearest-food/center chaser.
                 # Logged losses usually had us shorter and crowded near a wall,
@@ -1403,6 +1441,12 @@ def move(game_state):
                     score -= choke_risk * 5000
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
+                if has_famished_frank_enemy and health >= 30:
+                    # Frank is almost entirely food-driven until length 33.  If we
+                    # fall behind, raise catch-up pressure but still prefer
+                    # reachable/uncontested food so we do not chase through its wall.
+                    food_weight += min(260, 100 + (enemy_max_len - my_len) * 35)
+                    food_dist = path_food if path_food < 99 else food_dist
                 if has_flipez_crystal_enemy:
                     # Flipez wins its rare games by outgrowing us with steady
                     # nearest-food chasing.  When behind, make reachable food a
@@ -1446,6 +1490,11 @@ def move(game_state):
                     score -= 12000
                 elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                     score -= 7000
+                if has_famished_frank_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len - 1:
+                    # Healthy edge food next to Frank frequently grows us into a
+                    # self-corridor while Frank keeps pathing around the outside.
+                    # Still allow it when low health via the health guard above.
+                    score -= 4500
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
