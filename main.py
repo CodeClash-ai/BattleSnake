@@ -1007,6 +1007,32 @@ def _tyrelh_2018_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _sneaky_snake_predicted_move(enemy, game_state, w, h):
+    """Exact one-ply predictor for hirethissnake__sneaky-snake.
+
+    The opponent is the old Team Sneaky Snake weighted-grid/Dijkstra bot.  A
+    local copy in tools/sneaky_snake_opponent.py matches production logs exactly
+    for one-ply next heads, so use it only for tactical head collision scoring.
+    """
+    try:
+        from tools import sneaky_snake_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = sneaky_snake_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -1129,6 +1155,7 @@ def move(game_state):
         has_jerrykott_enemy = False
         has_untimely_enemy = False
         has_woofers_enemy = False
+        has_sneaky_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1152,6 +1179,7 @@ def move(game_state):
             is_jerrykott = "jerrykott" in ename.lower() or "jerrykott-2017" in ename.lower()
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
+            is_sneaky = "sneaky-snake" in ename.lower() or "hirethissnake" in ename.lower()
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1165,7 +1193,12 @@ def move(game_state):
                 except Exception:
                     pass
             else:
-                if is_woofers:
+                if is_sneaky:
+                    has_sneaky_enemy = True
+                    pred = _sneaky_snake_predicted_move(e, game_state, w, h)
+                    if pred is not None:
+                        preds.add(pred)
+                elif is_woofers:
                     has_woofers_enemy = True
                     pred = _woofers_java_predicted_move(e, game_state, w, h)
                     if pred is not None:
@@ -1384,14 +1417,16 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
+                if "sneaky-snake" in ename or "hirethissnake" in ename or "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
                         soft = 150
-                        if "tyrelh-2018" in ename:
+                        if "sneaky-snake" in ename or "hirethissnake" in ename:
+                            soft = 420
+                        elif "tyrelh-2018" in ename:
                             soft = 500
                         elif "zakwht" in ename:
                             soft = 450
