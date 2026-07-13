@@ -812,6 +812,32 @@ def _battlejake2019_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _tyrelh_python_predicted_move(enemy, game_state, w, h):
+    """Predict tyrelh-python (Zero_Cool) by running the copied faithful port.
+
+    Tyrelh is a strong deterministic food-then-tail A* bot.  Production log
+    checks against round 0 matched its next head essentially exactly, so using
+    its one-ply move is much safer than broad adjacent-head guessing.
+    """
+    try:
+        from tools import tyrelh_python_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = tyrelh_python_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -900,6 +926,7 @@ def move(game_state):
         has_beames_enemy = False
         has_hungry_enemy = False
         has_nagini_enemy = False
+        has_tyrelh_python_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -915,7 +942,13 @@ def move(game_state):
             is_beames = "beames" in ename.lower() or "kentmacdonald2" in ename.lower()
             is_hungry = "theapx" in ename.lower() or ename.lower().endswith("__hungry") or "hungry" == ename.lower()
             is_nagini = "nagini" in ename.lower() or "xtagon" in ename.lower()
-            if is_nagini:
+            is_tyrelh = "tyrelh" in ename.lower()
+            if is_tyrelh:
+                has_tyrelh_python_enemy = True
+                pred = _tyrelh_python_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_nagini:
                 has_nagini_enemy = True
                 pred = _nagini_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -1741,7 +1774,7 @@ def move(game_state):
                     if my_len >= elen + 3 and area >= my_len + 8:
                         score += 1200
                     elif my_len > elen:
-                        score += 5000 if has_hungry_enemy else 50
+                        score += 5000 if (has_hungry_enemy or has_tyrelh_python_enemy) else 50
                     else:
                         score -= 50000000
             candidates.append((score, name, nxt, area, h2h_risk))
