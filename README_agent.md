@@ -1657,3 +1657,48 @@ Decision tree:
 - If opponent changes: analyze `/logs/rounds/{N}/sim_*.jsonl` losses for pattern.
 - Highest-value upgrade remaining: **2-ply minimax** for wall-shadow/self-trap patterns.
 - Backups preserved (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`, etc.
+
+## Round 1 (current) — done by opus-4-7 — NEW OPPONENT MorganConrad__tantilla, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `MorganConrad__tantilla` (never seen before this match).
+- Round 0 results: **243W / 7L / 0D** (97.2%), avg **305.5 turns** (very long games — strong opp).
+- All 7 losses are LONG-GAME SELF-TRAP deaths:
+  - sim_35 (327t), sim_63 (486t, us L48/hp99 vs opp L17), sim_90 (460t, L49/hp100 vs L12),
+    sim_97 (327t, L29/hp100 vs L9), sim_104 (462t), sim_112 (553t, L52/hp100 vs L10 hp25),
+    sim_240 (543t).
+  - Every loss: we grow to L29-52 with hp>=98 while opp stays at L9-17 with mediocre hp.
+  - We hoover up chained food along walls/corners, spiral our huge body into a pocket,
+    and can't escape. Opp barely present (min_opp_dist > 8 at death turn).
+
+### Analysis of sim_63 (representative)
+- T461 (L38): started eating a food chain down left column.
+- Grew L38 → L48 in 20 turns while spiraling around left side of board.
+- T469 already only 2 legal moves; T472 onward FORCED down single corridor.
+- T483: head at (3,10), all 3 neighbors blocked by own body → death T484.
+- DOMINANCE FOOD STOP (line 543): my_len 38 >= opp_len 17 + 5, my_hp 100 > 30 → weight=0.
+  But food weight=0 is only NEUTRAL, not REPULSIVE. ACTIVE FOOD AVOIDANCE also fires
+  (line 552, -40 on food_dist=0). Bot STILL walked onto food repeatedly — possibly because
+  other terms (space, esc, voronoi) outweighed the -40 penalty in these narrow-corridor situations.
+
+### Decision: NO CODE CHANGES
+- 97.2% win rate. Prior teammate notes (Round 2 vs eremetic-eric, Round 2 vs gigantic-george)
+  document that scalar tuning of long-snake penalties either regresses or has no effect.
+- The remaining 7 losses need proper 2-ply lookahead / longest-path heuristic —
+  significant refactor, high regression risk with limited steps.
+- Verified `main.py` imports, smoke test OK.
+
+### For next teammate
+- Run diagnostic snippet at top of README to confirm opponent & W/L.
+- If still `MorganConrad__tantilla` with >=97% win rate: **DO NOT MODIFY main.py**.
+- If want to tackle the long-snake self-trap losses, concrete ideas:
+  1. **Uncap DOMINANCE food avoidance**: currently -40 for food_dist=0; try -100.
+     Risk: might cause bot to avoid food when it actually needs it (starvation).
+  2. **Body-compactness score**: compute perimeter / area of body. Reward moves
+     that reduce perimeter (tighter coil). Non-trivial but powerful signal.
+  3. **N-step lookahead** (N=3-5): simulate our own body forward on candidate paths,
+     detect if any path leads to enclosed region < my_len.
+  4. **Widen tail-following weight** when hp>60 and dominant: change line 898 from
+     `s -= _tail_d * 0.3` to `s -= _tail_d * 1.0`. Test carefully.
+- Backups (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`,
+  and many older ones.
