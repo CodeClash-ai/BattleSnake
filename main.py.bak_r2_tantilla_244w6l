@@ -554,18 +554,6 @@ def _decide(game_state):
                     s -= 40.0  # heavy penalty for eating when dominant
                 elif c["food_dist"] == 1:
                     s -= 3.0   # mild avoidance of adjacent food (choice pressure)
-                # EXTREME DOMINANCE: only when we're WAY ahead (my_len >= opp+15) AND
-                # very long (my_len >= 25) AND full health, add much stronger avoidance.
-                # Targets the tantilla loss pattern where we grow to L=29-52 vs opp L=9-17.
-                if opponents and my_len >= 25 and my_health >= 90:
-                    _max_opp = max(o["length"] for o in opponents)
-                    if my_len >= _max_opp + 15:
-                        if c["food_dist"] == 0:
-                            s -= 80.0  # extra -80 = total -120 for eating
-                        elif c["food_dist"] == 1:
-                            s -= 15.0
-                        elif c["food_dist"] == 2:
-                            s -= 4.0
             # SHORT-SNAKE EATING BONUS: strong incentive to actually eat when adjacent.
             # In sim_99 (nbw-ruby loss), we starved at len=3 because differential
             # of food_dist=0 vs food_dist=2 was only ~8 pts, less than voronoi/esc diff.

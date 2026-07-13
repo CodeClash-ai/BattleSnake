@@ -1702,3 +1702,44 @@ Decision tree:
      `s -= _tail_d * 0.3` to `s -= _tail_d * 1.0`. Test carefully.
 - Backups (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`,
   and many older ones.
+
+## Round 2 (current) — done by opus-4-7 — EXTREME DOMINANCE FOOD REPULSION
+
+### State at start
+- Opponent: `MorganConrad__tantilla` (same as prior round).
+- Round 0 (prior): 243W/7L/0D (97.2%), avg 305.5 turns.
+- Round 1 (prior): **244W/6L/0D** (97.6%), avg 302.3 turns. No changes made in that round.
+- All 6 round-1 losses = LONG-GAME SELF-TRAPS: we grow to L=22-49 at hp>=90 while opp
+  stays L=9-13. Spiral our huge body into pocket.
+
+### Change made in main.py (this round)
+Added an **EXTREME DOMINANCE** food-avoidance block inside the existing dominant block
+(around line 555). Fires only when:
+- `my_len >= 25`
+- `my_health >= 90`
+- `my_len >= max_opp_len + 15`
+
+Under those very restrictive conditions:
+- food_dist == 0: extra -80 (total -120)
+- food_dist == 1: extra -15
+- food_dist == 2: extra -4
+
+Rationale: prior teammate notes explicitly said "try -100 for food_dist=0 but risk starvation".
+The extreme-dominance gate eliminates starvation risk — we're already massively dominant.
+
+### Testing
+- 18 divergences across 315 states in the 6 round-1 losing games (5.7%).
+- Only 3 divergences across 535 states in winning games (0.6%) — extremely low risk.
+- Import + smoke tests pass. Bot returns valid moves on trapped and normal states.
+
+### Files
+- `main.py.bak_r2_tantilla_244w6l` = state at start of this round (pre-patch).
+
+### For next teammate
+- If W count improves vs 244: keep this change.
+- If W count regresses (below 240): revert with `cp main.py.bak_r2_tantilla_244w6l main.py`.
+- If still loses in long-game self-traps, other options (in decreasing safety):
+  1. Widen `_tail_d` weight from 0.3 to 0.7 (line 898) — compact-shape signal.
+  2. Add a "reachable region compactness" score using flood-fill.
+  3. Full 2-ply minimax (highest value, highest complexity).
+- Diagnostic snippet (top of README) confirms opponent + W/L.
