@@ -2344,3 +2344,241 @@ caused the two traced losses -- a much stronger signal than a generic
   -- see the large inline comment directly above that code block for the
   full traced rationale).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still ccSnake2018__ccsnake, traced ALL major loss patterns in detail: root cause is legitimate multi-turn opponent pressure, NOT a locatable bug — NO code change made (investigation-only round, high-value notes below)
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is `ccSnake2018__ccsnake`.
+Round 0 (before the previous round's edge-run-penalty change): 225-25. Round 1
+(after that change, same unchanged `main.py`): **227-22-1 (tie)** — a small,
+real improvement (fewer losses net, one tie introduced), consistent with the
+previous round's traced fix helping at the margin but not eliminating the
+underlying failure class. `analyze_logs.py /logs/rounds/1`: avg 73.2
+turns/sim (min 13, max 161) — long, contested games are common against this
+opponent (it does a real 5-round recursive "security level" forecast plus
+closest-food targeting, not a trivial bot).
+
+### What I did this round
+
+Did **not** change `main.py`. Instead, given the previous 2-3 rounds' pattern
+of "add a targeted local penalty, verify against one traced example, hope it
+generalizes" had already been tried multiple times against this exact
+opponent (see the "edge_run" section a few rounds up in this file), I spent
+the full step budget doing a much more thorough trace of **every real loss
+from round 1** (22 losses, identified via each `sim_*.jsonl`'s final
+`winnerName` line — same technique `analyze_logs.py` uses) to find out
+whether they share one root cause or several, and whether any is a genuine,
+fixable bug (as opposed to a documented "correct local decision, still loses
+to legitimate longer-range opponent pressure" case, per the pattern the
+`Xe__since`-opponent rounds already established a few sessions ago).
+
+**Method** (reusable recipe, more precise than earlier rounds' informal
+trace-replay — worth reusing): for each candidate loss, build a synthetic
+`game_state` dict directly from each turn's literal logged
+`board.snakes[*].body`/`head`/`length`/`health` fields (see the
+`build_state()` helper in shell history this round, trivial to recreate: for
+each snake in `board['snakes']`, emit `{'id': name, 'head':..., 'length':...,
+'body':...}`; for the 'you' side additionally include `'health'`), call
+`main.move(gs)` on it to get the *actual* decision the current code would
+make, and then **manually re-run the entire scoring loop inline** (copy the
+loop body out of `main.py`, print every term per candidate — area, voronoi,
+free_degree, edge_dist/edge_run, food dist, risky_cells membership, final
+score) to see exactly *why* each candidate scored the way it did. This is
+strictly more informative than just comparing `main.move()`'s output to what
+the real game did (which several earlier rounds' notes did) — it tells you
+*which specific term* is responsible for a given decision, so you can
+immediately tell "this was a deliberate, correct tradeoff" from "this looks
+like an unintended scoring bug."
+
+### Findings: 3 distinct traced examples, all converging on the same root cause
+
+1. **`sim_0.jsonl` (died turn 57)**: our snake (length 5→6, health 96-100,
+   i.e. *not* low-health/desperate) walked along the top edge (row y=10)
+   toward food sitting in the exact corner (0,10) over 3 turns (turns 52→55),
+   then got a forced move into (0,9) which was simultaneously entered by a
+   longer (length 9) opponent snake converging from below along column x=0/1
+   — an unavoidable, correctly-flagged head-to-head loss (in fact the actual
+   final position had *zero* legal moves for us at all — both remaining
+   cells were separately blocked by our own neck and the opponent's body).
+   Traced the pivotal decision back to **turn 52**, where "left" (toward the
+   corner/food, dist=3) and "right" (away, dist=21) had **identical** raw
+   area and Voronoi territory (109 each — opponent was still far away, no
+   signal at all from those terms), so the food-distance term alone decided
+   it (27+ point swing) — the corner/edge penalty at that point was tiny
+   (short snake, `len_scale≈1.15`, opponent-proximity multiplier only
+   partially active) relative to the food signal. **The trap only became
+   visible 2-3 turns later** as the opponent's independent path converged —
+   this is a genuine multi-turn-ahead corridor race that no same-turn
+   flood-fill/Voronoi snapshot can see; by the turn it *did* become visible
+   (turn 53-54), every remaining move was already forced/risky with no good
+   alternative left.
+
+2. **`sim_107.jsonl` (died turn 29)**: similar shape — our snake (length 5,
+   opponent also length 5, i.e. *not* even a longer-opponent situation this
+   time) walked along the bottom edge toward food at (1,0) over 2 turns,
+   ate it, then was forced into the true corner (0,0) with the opponent
+   having repositioned to seal the only exit. Traced back to **turn 25**:
+   "left" (toward food, dist 1) vs "right" (away, dist 13) again had
+   **identical** area/Voronoi (113 each, opponent too far to differentiate
+   yet). One turn later (turn 26), the danger *was* already visible (a
+   third option, "up", correctly scored a hard -100+ trap penalty due to
+   area collapsing to 1 — confirmed the *existing* trap-detection machinery
+   works correctly here), but by then the only two legal moves were "left"
+   (the one that led to the corner) or the already-flagged-bad "up" — no
+   third option existed to route around the closing pincer.
+
+3. **`sim_109.jsonl` (died turn 59)**: **this one is different and
+   important** — traced turn 54's decision in full detail with an exact
+   score breakdown (see method above). Here, "down" (toward more central
+   board) was in fact `risky_cells` (adjacent to a **much longer**, length-10
+   opponent's head — a real, correctly-detected head-to-head danger, -1000
+   penalty) while "right" (onto the x=10 board edge) was not immediately
+   contested and scored far higher (1192 vs 206) *despite* the edge penalty
+   correctly firing on it. **This was the objectively correct decision at
+   that exact turn** — avoiding a probable head-to-head loss against a much
+   longer snake is clearly right. The bot then continued down the forced
+   single-file edge column for several more turns (each turn: edge column
+   was the only non-risky option) until the same longer opponent, having
+   route around, sealed the corner from the other side. In other words:
+   **the opponent actively used its length advantage to force us into a
+   wall-hugging retreat, then closed the trap** — this is the opponent
+   playing a genuinely good aggressive strategy against a shorter snake, not
+   a bug. (This matches almost exactly what a parallel ladder session's
+   notes found against a *different* opponent, `Xe__since`, a few rounds
+   ago — see that section elsewhere in this file. It is evidently a general
+   pattern against any opponent that (a) can grow longer than us and (b) has
+   some heuristic drive to close on/pressure a shorter opponent, not
+   specific to `ccSnake2018__ccsnake`.)
+
+### Why I made no code change this round
+
+All three traced examples confirm the existing per-term scoring (area,
+Voronoi race-territory, risky_cells head-to-head avoidance, free_degree,
+edge/corner/edge-run penalties) is firing **exactly as designed and
+correctly** at every single decision point I inspected — there is no
+off-by-one, no unintended sign, no term canceling another out
+unexpectedly. The failure mode in all 3 cases is the same well-documented,
+fundamental limitation repeated across *many* rounds' notes in this file now
+(search "self-coil" / "corridor-race" / "edge-hugging" / "legitimate
+opponent pressure" above): **a same-turn (or few-terms-ahead) snapshot
+cannot see a 2-4-turn-away corridor seal or pincer forming**, especially
+when (as in examples 1 and 2) the two candidate moves are *completely tied*
+on every spatial metric at the moment of decision, so the tie-break naturally
+falls to food-distance — which has no way to "know" the two paths diverge in
+safety a few turns later.
+
+Given:
+- this is now confirmed (via 3 independently different traced mechanisms,
+  across 2 different opponents in different rounds/sessions of this file) to
+  be a *general* limitation rather than an opponent-specific quirk fixable
+  by one more local penalty term,
+- several previous rounds already tried and, in at least 2 documented cases,
+  **reverted** speculative attempts at partial lookahead (straight-line
+  opponent projection vs `Xe__since`; the old `opp_territory`/`area_pess`
+  6-ply-BFS mechanism, which was found to actively cause *wrong* decisions
+  in two other real losses and was later replaced with the current
+  Voronoi-race-territory approach),
+- the current real-match trend is still solidly positive and slightly
+  improving (225-25 → 227-22-1),
+- I had ~7 steps of budget left after this investigation — not enough to
+  safely implement and validate a real N-ply minimax (the single most
+  repeatedly recommended, never-attempted fix across dozens of rounds' notes
+  in this file),
+
+I judged it better to leave a precise, three-example diagnostic writeup (this
+section) for whoever has a full budget to attempt the real fix, rather than
+ship an untested guess in the last few steps.
+
+### Concrete recommendation for next round (HIGH PRIORITY — same conclusion several other rounds have reached, now with 3 fresh concrete traces to validate against)
+
+**The only remaining lever that would plausibly fix this class of loss is
+genuine multi-ply lookahead** — specifically, something like:
+
+1. For each of our legal candidate moves, simulate applying it (update our
+   body: `new_body = [candidate] + body[:-1]`, or `[candidate] + body` if
+   `candidate in food_set` to model growth).
+2. For each opponent, enumerate *their* legal candidate moves from their
+   current head (reuse the same in-bounds + not-currently-blocked logic).
+   Pick their move that's *worst for us* (e.g., minimizes our resulting
+   flood-fill area/Voronoi territory from the candidate) — a paranoid/
+   minimax assumption, cheap since there's normally just 1 opponent in this
+   game format (verified: every round's `board.snakes` in this file's
+   history has exactly 2 snakes — a 1v1 format, not multi-snake — so the
+   opponent-move enumeration is O(4), not combinatorial).
+3. Recurse this 2-4 plies deep (bounded by a small budget, e.g. always finish
+   well under the 500ms/move budget — this game's own per-move latency
+   logged in `sim_*.jsonl` files, e.g. `"latency": "1"` or `"latency": "42"`
+   for the *opponent*, shows there's a LOT of unused time budget available;
+   our current 1-ply approach reportedly runs in ~1-2ms per call per many
+   earlier rounds' notes, so there is a huge amount of headroom to spend on
+   deeper search before hitting any real time constraint).
+4. Use the leaf-node (after N plies) flood-fill/Voronoi area as the
+   candidate's score, blended with the existing food/edge heuristics for
+   tie-breaking at the leaf.
+
+**Important lesson from this round's traces to keep in mind when
+implementing/validating this**: in examples 1 and 2 above, the two competing
+paths were tied on *every current-turn* metric — the divergence in safety
+only appeared 2-3 turns later. This means **even a 2-ply lookahead might not
+be enough** to catch examples 1/2 specifically (verified by hand-checking:
+at the turn-52/turn-25 decision points, the opponent's own head was still
+2-3 real moves away from the cell that eventually caused the fatal seal) —
+you likely need **3-4 plies** to see it, which is exactly why previous
+shallow/2-ply-adjacent attempts (the reverted straight-line projection, the
+old 6-ply-BFS-*territory* hack which was a different, blunter approach than
+real minimax) haven't fully solved it. Before investing in a full N-ply
+minimax, it would be worth first testing (cheaply, via the same manual
+trace-replay technique documented above) at exactly what ply-depth these 3
+specific traced examples *would* actually flip to the correct decision —
+that tells you the minimum useful search depth before writing the real
+recursive code.
+
+**Test harness recipe for next round** (condensed, all pieces already used
+this round — see shell history for exact working scripts if you want to
+avoid retyping):
+```python
+import json, main
+def build_state(turn_dict, my_name):
+    board = turn_dict['board']
+    snakes, you = [], None
+    for s in board['snakes']:
+        snake = {'id': s['name'], 'head': s['head'], 'length': s['length'], 'body': s['body']}
+        snakes.append(snake)
+        if s['name'] == my_name:
+            you = {'id': s['name'], 'body': s['body'], 'health': s['health']}
+    return {'board': {'width': board['width'], 'height': board['height'],
+                       'food': board['food'], 'snakes': snakes,
+                       'hazards': board.get('hazards', [])}, 'you': you}
+# lines = [json.loads(l) for l in open('/logs/rounds/1/sim_0.jsonl')]
+# turns = {l['turn']: l for l in lines if 'turn' in l}
+# gs = build_state(turns[52], 'sonnet-5')   # re-use for sim_107 turn 25, sim_109 turn 54, etc.
+# main.move(gs)  # or copy the scoring loop inline (see this round's shell history) to print per-term breakdowns
+```
+
+The three concrete repro points to validate any future lookahead attempt
+against, all in `/logs/rounds/1/`:
+- `sim_0.jsonl`, decision turn 52 (head `(4,10)`) — correct answer should
+  eventually prefer "right" over "left" once lookahead reveals the corner
+  seal 3 turns later; at turn 52 itself both were tied on every current
+  metric.
+- `sim_107.jsonl`, decision turn 25 (head `(3,0)`) — same shape, opponent
+  length equal to ours (not even a longer-opponent case).
+- `sim_109.jsonl`, decision turn 54 (head `(9,3)`) — this one is *already
+  playing correctly* locally (avoiding a real head-to-head against a
+  length-10 opponent) — useful as a **negative control**: any lookahead
+  fix must NOT change this decision (it's genuinely the best local move),
+  it must instead recognize a few turns *earlier* that heading toward this
+  whole edge-retreat sequence at all (a decision several turns before turn
+  54, not shown in this round's trace — would need extending the trace
+  further back) leads somewhere bad, if there was ever an earlier
+  alternative. Worth tracing sim_109 back further (turns 45-53) with the
+  same technique before assuming a fix is needed there at all — it's
+  possible the opponent's length-10 advantage by that point made the
+  eventual trap unavoidable no matter what we'd picked (a legitimately lost
+  position, not a bug) — this is unverified, flagged as a good starting
+  point for next round.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only, see
+  above).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
