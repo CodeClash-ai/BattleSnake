@@ -4487,3 +4487,127 @@ close).
 
 - `main.py` — the bot (no changes this round — investigation only).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round 2 (this session) — opponent still moxuz__pinky-snek (236-13-1 → 240-8-2 real, improving), traced a fresh loss (confirms established "genuine tie / forced edge corridor" class), fresh local benchmark clean, NO code change
+
+`/logs/rounds/{0,1}/results.json`: opponent both real rounds is
+`moxuz__pinky-snek`. Round 0: 236-13-1(tie). Round 1 (same unchanged
+`main.py`): **240-8-2** — a real, if small, improvement, consistent with
+the previous round's `stuck_count`-based food-urgency-at-all-health-levels
+fix (see the section directly above this one) helping generally.
+`analyze_logs.py /logs/rounds/1`: avg 103.6 turns/sim (min 9, max 298).
+
+### Traced one fresh round-1 loss in full (recipe unchanged from many
+### earlier rounds' notes throughout this file)
+
+`sim_104.jsonl` (died turn 45, my length 9 vs opponent length 5 at death):
+replayed every turn from 38 to 45 with a synthetic `game_state` built
+directly from each turn's logged `board.snakes[*].body` fields (see the
+`build_state()` pattern in many earlier sections above — trivial to
+recreate), calling `main.move()` and separately recomputing the legal
+candidate set via `main._build_blocked` at each turn. **Confirmed
+`main.move()` exactly reproduces the real game's recorded moves at every
+turn** (sanity check the replay methodology is sound).
+
+Concrete mechanism: at **turn 38** (head `(4,10)`, top edge, length 9,
+health 100), there were exactly 2 legal candidates: `left`->`(3,10)` and
+`right`->`(5,10)`. Manually verified **both had identical raw flood-fill
+area (110 each)** and — since `wall_run` is computed purely from our
+*existing* body segments' proximity to a wall, not from the candidate
+direction itself — **identical `wall_run` and thus identical wall-hugging
+penalty for both directions too** (a subtlety not previously documented
+in this file: the wall_run/edge penalty terms cannot discriminate between
+"turn left along an edge" vs "turn right along an edge" from a cell that's
+already near a wall, since they only look backward at where we've already
+been, not at which of the two symmetric directions we're about to
+commit to). The only differentiating term was food-distance (food was
+positioned to the right), which correctly and predictably picked `right`.
+
+That decision turned out to be fatal: for the next **4 consecutive turns
+(39-42), there was only ONE legal candidate each turn** (`main._build_blocked`
+confirms this directly — the bot's own prior body plus the opponent's
+body left no alternative), i.e. the path was **already fully forced/
+committed starting immediately after turn 38**, with zero further
+decision points, until reaching the top-right corner `(10,10)` at turn 43
+(also forced, only 1 legal move), where the opponent (paralleling one row
+below along y=9) had simultaneously advanced its own head to `(10,9)` and
+then (after eating and growing, so its old body segment didn't vacate)
+sealed the only remaining exit cell, leaving zero legal moves at turn 45.
+
+This is, precisely, the many-times-already-documented **"genuine 1-ply
+tie, needs real multi-turn lookahead to resolve correctly"** failure
+class established repeatedly throughout this file against many different
+opponents (see the extensive `ccSnake2018__ccsnake`, `Xe__since`,
+`zacpez__scape-goat`, `rdbrck__btas`, and previous-round `moxuz__pinky-snek`
+sections above) — confirmed again here with a fresh, concrete, fully
+turn-by-turn-verified example. **Not fixable by tuning any existing
+weight**: the two options were exactly equal on every spatial/safety
+metric at the only real decision point (turn 38); the actual danger
+(the opponent's row-9 shadow converging on the corner) was still 5 turns
+away and had no representation in any current-turn heuristic.
+
+### Why no code change was made this round
+
+- Every relevant metric was **provably identical** between the two
+  options at the one real decision point — there is no coefficient to
+  tune that would break this specific tie without also changing the
+  (far more common, already-well-tested) "prefer whichever direction has
+  no other signal but is closer to food" case.
+- This file's history includes multiple concrete, documented attempts at
+  partial fixes for exactly this class (opponent straight-line/heading
+  projection vs `Xe__since`, the old `opp_territory`/`area_pess` 6-ply-BFS
+  pessimistic-blocking mechanism) that were later found ineffective or
+  actively harmful and explicitly reverted — the risk/reward of another
+  speculative attempt with limited remaining step budget is poor.
+- Real match results are trending positively already (236-13-1 →
+  240-8-2) without any change this round, and a fresh **6/6 clean local
+  benchmark** against a freshly extracted
+  `origin/human/moxuz/pinky-snek:main.py` (recipe unchanged from many
+  earlier rounds' notes throughout this file — `setsid nohup env
+  PORT=... python3 main.py > log 2>&1 </dev/null & disown` for both bots,
+  loop `battlesnake play ... & disown`, sleep, check `tail`) confirms no
+  regression, games 63-171 turns, zero errors/exceptions in either
+  server's log.
+- Smoke tests (`main.move()` on a normal 2-snake state, `{}` malformed
+  state, empty-snakes state) all still pass, confirming the codebase is
+  healthy going into next round unmodified.
+
+### Recommendation for next round
+
+- If `/logs/rounds/2/results.json` (once it exists) shows the same
+  opponent and a similar or better win rate, no action needed — this bot
+  appears to be near its practical ceiling for a 1-ply-plus-heuristics
+  design against this (and most other) opponents faced so far.
+- If a **different** opponent appears, use `git log --oneline --all |
+  grep -i human` + `git show origin/human/<Org>/<repo>:main.py` to
+  extract and benchmark them per the established recipe throughout this
+  file before assuming this round's analysis applies.
+- The still-not-attempted big idea, reconfirmed relevant yet again this
+  round with a fresh, clean, fully-verified example: **true multi-ply
+  lookahead / minimax with a simple opponent-response model**. This is
+  now an extremely well-documented, many-dozens-of-times-repeated
+  recommendation across this file (see the detailed design sketches in
+  the `ccSnake2018__ccsnake`, `Xe__since`, and `zacpez__scape-goat`
+  sections above). `sim_104.jsonl` turn 38 (head `(4,10)`, candidates
+  `left`->`(3,10)` vs `right`->`(5,10)`, both exactly tied at area=110 and
+  identical wall_run at the 1-ply level, only diverging fatally 5 turns
+  later) is a good, clean, freshly-verified repro point for validating
+  any future lookahead attempt — reuse the `build_state()` helper pattern
+  documented in many earlier sections above (build a synthetic
+  `game_state` from a logged turn's `board.snakes[*].body` fields, call
+  `main.move()` directly) to reconstruct it.
+- One subtlety newly documented this round, worth keeping in mind for any
+  future wall-hugging heuristic work: the existing `wall_run` penalty is
+  direction-agnostic (computed purely from the body's history, not from
+  which of two symmetric directions along/away from a wall the candidate
+  represents) — so it cannot by itself break a "turn left vs turn right
+  along an edge" tie. Any future fix for this specific tie shape would
+  need a genuinely forward-looking signal (e.g. simulate a few steps in
+  each candidate direction and compare resulting openness/exit options),
+  not just a backward-looking commitment penalty.
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only, see
+  above).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
