@@ -5022,3 +5022,135 @@ starving).
   all real losses in a round by legal-move-count at the last logged
   frame (boxed-in vs other) — recreate from the recipe described above if
   needed.
+
+## Round 3 (this session) — opponent still OliverMKing__astar-snake, RE-TESTED the tail-chase idea with a proper larger sample — CONFIRMED it's a real regression, reverted (NO net code change)
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is `OliverMKing__astar-snake`
+(the same, still-only-losing opponent in this file's history — see the two
+long sections directly above this one for full background: it's a real A*-
+to-food/tail bot with flood-fill dead-end avoidance, and it specifically
+favors chasing its own tail whenever `health >= 55` AND no opponent snake
+is currently `>= its own length` — a cheap, effective Hamiltonian-cycle-ish
+anti-self-coil strategy). Round 0: 108-129-13. Round 1: 109-128-13 —
+essentially unchanged (the previous round was investigation-only: it
+implemented a tail-follow bonus, smoke-tested it clean, but reverted it
+after a 4-game local benchmark showed a *negative* signal it didn't have
+budget to disambiguate from noise).
+
+### What I did this round
+
+Picked up exactly where the previous round left off, per its own top
+recommendation: **re-implemented the tail-chase idea, this time mirroring
+the opponent's exact trigger condition** (`health >= 55` AND no opponent
+snake length `>= my_length`, checked via `can_chase_tail` — see the exact
+condition in the opponent's own source, `git show
+origin/human/OliverMKing/astar-snake:main.py`, `decide_move()`), rather
+than the previous round's simpler "always add a small tail-follow nudge
+when health>=50" version. When active: added a `-tail_dist * 5.0` bias per
+candidate (BFS distance to our own tail) and reduced the general
+food-seeking weight to 30% of normal (`food_weight_scale = 0.3`) — a much
+stronger, more faithful mirror of the opponent's own "prioritize tail
+over food when safe" behavior than the previous round's flat, weak
+`-0.6/cell` nudge.
+
+**Ran a properly-sized local benchmark this time** (the previous round's
+biggest acknowledged gap was only testing N=4 games): extracted the
+opponent fresh (`git show origin/human/OliverMKing/astar-snake:main.py >
+/tmp/opp/main.py; cp server.py /tmp/opp/server.py`), ran both bots as
+local Flask servers (`setsid nohup env PORT=... python3 main.py > log
+2>&1 </dev/null &`, backgrounded/disowned to survive across tool calls —
+see many earlier rounds' notes throughout this file for why this is
+necessary in this harness), then ran **10 real local games** via the
+`battlesnake` CLI (`-o /tmp/game_N.json` for each, so any could be traced
+afterward).
+
+**Result: 2 wins / 8 losses (20%) with the tail-chase change** — clearly,
+unambiguously worse than the baseline. To confirm this wasn't just an
+unlucky batch (the opponent's games have real turn-order/randomness
+variance), I **reverted** the change (confirmed via `diff` that `main.py`
+is byte-identical to the pre-round version) and immediately re-ran **8
+more real local games** with the *unmodified* baseline bot, same
+opponent, freshly restarted servers: **4 wins / 4 losses (50%)** — matching
+the real match history's ~44-46% win rate reasonably well (small sample,
+but a large, clear gap from the tail-chase variant's 20%).
+
+### Conclusion (fairly confident now — two independent sessions, two different implementations of the idea, both found a negative or at-best-neutral result)
+
+**Do NOT pursue a tail-chasing/tail-following bias against this opponent
+without a much more careful design** — it has now been tried twice
+(a weak flat nudge last round, a strong condition-mirrored version this
+round) and both times showed a negative signal in local benchmarking, this
+round with a large-enough sample (10 vs 8 games, a 20% vs 50% split) to be
+fairly confident it's real, not just noise. I did not have step budget
+left this round to trace *why* it backfires so clearly, but here is a
+reasoned hypothesis for next round to check first, before trying yet
+another tail-chase variant:
+
+- The opponent's own tail-chasing works well FOR IT partly because it's
+  the *only* thing determining its movement in that mode (a real A* to its
+  own tail, cascading through progressively looser safety sets) — it
+  reliably produces a long, deliberate, always-connected path.
+- Our version is just an additive scoring bias mixed in with ~10 other
+  scoring terms (voronoi, edge/wall_run, free_degree, risky_cells, area
+  thresholds, etc.) that were all tuned/validated *without* this term
+  present. It's plausible the tail-distance bias fights against (rather
+  than complements) some of those other terms in a way that produces
+  worse net trajectories than either "pure existing heuristic" or "pure
+  real A*-to-tail" would individually — e.g. it might pull the bot away
+  from genuinely good Voronoi-territory-grabbing opportunities, or cause
+  it to hover near its own body (low free_degree, wall_run-like
+  situations) more often precisely because "near my own tail" and "near
+  my own body" are correlated.
+- Separately: de-prioritizing food to 30% weight whenever `can_chase_tail`
+  is true might mean we grow more slowly than we otherwise would in a
+  safe/healthy state, which could ironically make us fall behind in
+  length MORE often (losing the exact `can_chase_tail` privilege sooner,
+  since it requires us to stay `>=` every opponent's length) — a
+  potential self-undermining feedback loop worth checking directly via
+  trace (compare length-over-time curves with/without the change on a
+  few games) before attempting a third variant.
+
+### Recommended next steps
+
+1. **Do not re-attempt a simple additive tail-distance bias again without
+   first tracing a concrete example** (e.g. dump `-o /tmp/game_N.json`
+   from one of this round's 8 tail-chase losses — files still on disk in
+   `/tmp` if not cleared — and do a turn-by-turn body/health/length trace,
+   same technique used dozens of times throughout this file, to see
+   concretely how the trajectory differs from a baseline game and where
+   it goes wrong). This round did not have budget left to do this after
+   completing the two benchmarks; it's the highest-value next step given
+   we now have a strong, clean, reproducible negative signal to explain.
+2. If you want to keep pursuing a "prevent self-coil like the opponent
+   does" angle, consider a fundamentally different mechanism instead of a
+   scoring bias: e.g. only *gate* (not bias) — i.e., among candidates that
+   are already tied/near-tied on the existing score, prefer the one
+   closer to the tail, rather than adding a large independent weight that
+   can change which candidate wins outright. This would be a much softer,
+   tie-break-only version, less likely to fight the existing (already
+   well-tuned, many-rounds-validated) scoring terms.
+3. The still-not-attempted big idea (many-rounds-recurring in this file):
+   **true multi-ply lookahead / minimax** remains the most likely real fix
+   for the self-coil-dominant loss pattern against this specific opponent
+   (see the extensive design sketches in the `ccSnake2018__ccsnake` and
+   `Xe__since` sections earlier in this file) — this is now the single
+   opponent in this file's entire history we are actually losing to, so it
+   may finally be worth the risk/investment of a real lookahead
+   implementation if a future round has a full budget for it, rather than
+   another local-heuristic patch attempt (2 of which, across 2 rounds now,
+   have specifically targeted this opponent's dominant failure mode
+   without success).
+4. As always: re-check `/logs/rounds/2/results.json` (this round's real
+   result, once it exists) — if the opponent identity ever changes, use
+   `git log --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark them fresh
+   before assuming this section's analysis applies.
+
+### Files (NO net change this round)
+
+- `main.py` — unchanged (byte-identical to the version at the start of
+  this round — confirmed via `diff` against a saved copy). A tail-chase
+  variant was implemented, smoke-tested clean, and benchmarked (2/10 local
+  wins) but reverted after confirming a clear regression vs. the
+  unmodified baseline (4/8 local wins in the same session, same opponent).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
