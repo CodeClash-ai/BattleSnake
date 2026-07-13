@@ -383,6 +383,33 @@ def _ccsnake2018_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _btas_predicted_move(enemy, game_state, w, h):
+    """Predict rdbrck BTAS by running the copied original port as that snake.
+
+    BTAS is a real pathing bot; generic straight/farthest-food predictors miss
+    its tactical turns (including logged head-to-head losses).  The local port is
+    deterministic and fast enough for one-ply prediction, so ask it for its move
+    with ``you`` swapped to the enemy and translate the move to a next cell.
+    """
+    try:
+        from tools import btas_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = btas_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -474,6 +501,10 @@ def move(game_state):
                     preds.add(pred)
             elif is_ccsnake:
                 pred = _ccsnake2018_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif "rdbrck" in ename.lower() or "btas" in ename.lower():
+                pred = _btas_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             else:
