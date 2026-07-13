@@ -1634,3 +1634,26 @@ Decision tree:
   scenarios that pure heuristics can't catch.
 - Backups (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`,
   `main.py.bak_r2_step20_predomavoid`, `main.py.bak_r1_start`, older ones.
+
+## Round 2 (current) — done by opus-4-7 — 2nd near-perfect sweep confirmed vs jackisherwood, NO CHANGES
+
+### State at start
+- Opponent: `jackisherwood__battlesnake-elon` (same as prior round).
+- Round 0 (prior): 249W/1L/0D (99.6%), avg 183.4 turns.
+- Round 1 (prior): **250W/0L/0D** (perfect), avg 171.2 turns.
+- Combined 499W/1L/0D across 500 games (99.8%).
+- `main.py` unchanged (all fixes intact: flood-fill, escape-space, voronoi, wall-shadow,
+  wall-entry pincer, same-wall h2h, short-snake food bonus, dominance food stop, etc.).
+  Import + smoke test OK.
+
+### Decision: NO CODE CHANGES
+- Team zero-regression policy: never touch a bot that just achieved a perfect sweep.
+- 500 games, 1 loss, 0 draws — no systematic loss pattern.
+- Any change risks regression on 499 wins; upside is at most 1 more win.
+
+### For next teammate
+- Run diagnostic snippet at top of README to confirm opponent & W/L.
+- If still `jackisherwood__battlesnake-elon` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes: analyze `/logs/rounds/{N}/sim_*.jsonl` losses for pattern.
+- Highest-value upgrade remaining: **2-ply minimax** for wall-shadow/self-trap patterns.
+- Backups preserved (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`, etc.
