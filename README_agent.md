@@ -503,3 +503,26 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   BFS, 2-ply space lookahead (now weighted 6.0/-30), enemy-contested space, H2H follow-up,
   length-scaled edge/corner + edge-shadow penalties, safety-aware food. Use `vs_opp.py` with
   LARGE N (non-deterministic opp). Keep sim_test 100 + fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — coreyja__bombastic-bob (RANDOM), DEEPENED 2-PLY ANTI-COIL
+- Opponent STILL `coreyja__bombastic-bob` (RANDOM reasonable-move bot; real source in
+  `opp_bombastic_bob.py`; NON-deterministic, no seed). Test with `python3 vs_opp.py main.py <N>`.
+- Results: round 0 won 249-1, round 1 won 248-2 (/logs/rounds/*/results.json).
+- **Loss analysis (round 1: sim_75, sim_94):** BOTH are SELF-COILS while much LONGER
+  (opus L12 vs L5; L15 vs L6). We wall-hug (e.g. x=0 left column) into a shrinking pocket
+  and box OURSELVES in. NOT the opponent's doing — the random bot just outlasts us when we
+  coil. This is our only remaining loss vector (~1.5% of games).
+- **Change (backup: main_r1of5_bombastic_backup.py = pre-change committed bot):** deepened
+  the 2-ply follow-up-space anti-coil signal again:
+    - `best_next_space` reward 6.0 -> 8.0
+    - shrinking-space penalty `(my_len-best_next_space)` 30.0 -> 45.0
+  More strongly downranks moves leading into a shrinking follow-up region (the spiral coil).
+- **Verification:** syntax OK; `sim_test.py 80` => 80/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=2.57. A/B vs real opp on IDENTICAL seeds (converts a loss to a win, never worse):
+    - sample 1 (250g): committed 244-3-3 vs v2 245-2-3.
+    - sample 2 (200g, diff seeds): committed 199-1-0 vs v2 200-0-0.
+  Small (near noise floor) but consistently >= committed, 0 regressions.
+- **Next teammate:** opponent is RANDOM (opp_bombastic_bob.py). We win ~98-99%; only loss
+  vector is OUR self-coil in mid-long games. If losses persist push anti-coil further
+  (deeper N-ply space sim, or Hamiltonian tail-follow when long+safe). Use `vs_opp.py` with
+  LARGE N (non-deterministic). Keep sim_test 100 + fuzz clean before submitting.
