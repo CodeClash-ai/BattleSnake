@@ -41,6 +41,23 @@ DIRS = {
     "right": (1, 0),
 }
 
+# Per-game "stuck" tracker (module-level, persists across move() calls within
+# the same long-lived server process -- see README_agent.md "Round (this
+# session) -- opponent = coreyja__jump-flooding" for the full traced
+# motivation). Keyed by game id; value = (last_turn, last_health, stuck_count).
+# `stuck_count` counts consecutive turns where health did NOT increase (i.e.
+# we did not eat) -- used to relax the flat head-to-head "risky_cells"
+# avoidance penalty once we've gone a long time without eating while already
+# low on health, so we don't starve to death in a stable mutual-avoidance
+# stalemate with an opponent that happens to shadow our position (a real,
+# confirmed match-losing mechanism: see the long trace in README_agent.md --
+# our snake and a territory-maximizing opponent fell into a ~22-turn
+# repeating mirrored cycle near a food-poor corner of the board, and our
+# blanket -1000 "never risk a possible head-to-head" penalty made every
+# route back toward food score worse than continuing the cycle, all the way
+# down to starvation).
+_stuck_state = {}
+
 
 def info():
     return {
@@ -261,6 +278,26 @@ def move(game_state):
 
         blocked = _build_blocked(snakes)
 
+        # Update the stuck-tracker for this game (see module-level comment
+        # above _stuck_state for the full rationale). We consider ourselves
+        # "stuck" (not making food progress) for a turn if health did not
+        # increase relative to the immediately preceding turn we recorded
+        # (a simple, cheap proxy for "we did not eat this turn" that works
+        # even across the rare double-decrement-from-hazard cases, since we
+        # only care about "not increasing", not the exact decrement size).
+        gid = game_state.get("game", {}).get("id", "default")
+        turn_num = game_state.get("turn", 0)
+        prev = _stuck_state.get(gid)
+        if prev is None or turn_num <= prev[0]:
+            stuck_count = 0
+        else:
+            last_turn, last_health, sc = prev
+            if turn_num == last_turn + 1 and my_health <= last_health:
+                stuck_count = sc + 1
+            else:
+                stuck_count = 0
+        _stuck_state[gid] = (turn_num, my_health, stuck_count)
+
         # Cells an equal-or-longer opponent could move into this turn.
         # Cells only a strictly-shorter opponent could reach (a winnable
         # head-to-head for us) are tracked separately for a small
@@ -399,7 +436,22 @@ def move(game_state):
             score += area_for_score * 5
 
             if nxt in risky_cells:
-                score -= 1000
+                # Relax the flat -1000 "never risk a possible head-to-head"
+                # penalty once we're low on health AND have gone a long
+                # stretch without eating (see the stuck-tracker comment
+                # above _stuck_state, and README_agent.md for the full
+                # traced starvation-via-mutual-avoidance-cycle example
+                # against coreyja__jump-flooding). Only kicks in when
+                # health < 50 (matching the existing food-urgency gating
+                # elsewhere in this loop) -- at healthy health levels the
+                # full -1000 is unchanged, so this cannot make the bot more
+                # reckless in the common case, only when actually starving
+                # and stuck.
+                if my_health < 50:
+                    risky_penalty = max(40, 1000 - stuck_count * 25)
+                else:
+                    risky_penalty = 1000
+                score -= risky_penalty
 
             dist = _bfs_nearest_food_dist(nxt, blocked, width, height, food_set)
             if dist is not None:

@@ -3100,3 +3100,125 @@ log.
   turns and starts one cell earlier — see the large inline comment right
   above that code block for the full traced rationale).
 - `analyze_logs.py` — unchanged.
+
+## Round (this session) — opponent = coreyja__jump-flooding, found a real starvation-via-mutual-avoidance-cycle loss, added (partial) stuck-tracker fix — NEEDS FOLLOW-UP TUNING
+
+`/logs/rounds/0/results.json`: opponent this round is
+**`coreyja__jump-flooding`** (a Rust port: 1-ply greedy over a pure
+Manhattan-distance Voronoi territory score, no food-seeking at all, no
+opponent-head targeting -- see `git show
+origin/human/coreyja/jump-flooding:main.py`). Real result: sonnet-5 188 /
+opponent 26 / ties 36 out of 250 (`analyze_logs.py /logs/rounds/0`: avg
+42.2 turns/sim, max 161) -- NOT a clean sweep, and notably a lot of ties
+(36), unusual compared to most past opponents in this file's long history.
+
+### Root cause traced (sim_100.jsonl, died turn 100 by pure starvation)
+
+Full turn-by-turn trace (see recipe elsewhere in this file — build a
+synthetic `game_state` per logged turn, call `main.move()` directly) shows
+our snake and the opponent fell into a **stable, repeating mirrored cycle**
+(period ~22 turns) confined to a small region on one side of the board,
+for 30+ turns, health steadily decreasing 1/turn with ZERO food eaten,
+until starvation. This is NOT a self-coil or corridor-race (the previously
+documented failure classes elsewhere in this file) — it's a **mutual
+avoidance stalemate**: every time our bot considers a move back toward
+open board / food, that cell is flagged `risky_cells` (adjacent to the
+opponent's — often longer — head), incurring the flat `-1000` penalty,
+which reliably wins out over the food-distance benefit by a *small* margin
+(~19 points in the traced example at turn 65, health 35) every single
+turn, forever, because the opponent (itself just maximizing territory, not
+literally chasing us) happens to stay adjacent turn after turn due to the
+symmetric Voronoi dynamics. Confirmed via direct score breakdown (see
+shell history this round) that this is NOT a bug in any individual scoring
+term (risky_cells correctly identifies a real, current head-to-head
+possibility every time) — it's an *emergent deadlock* between two
+deterministic heuristics with no randomness/tie-breaking to escape it.
+
+### Fix attempted this round (module-level "stuck" tracker + relaxed risky penalty at low health) — PARTIAL, NOT FULLY VERIFIED TO FIX THE TRACED EXAMPLE
+
+Added `_stuck_state` (module-level dict, keyed by `game_state["game"]["id"]`,
+persists across `move()` calls within the same long-lived Flask process —
+confirmed via `server.py` that this is a single persistent process per
+match) tracking `stuck_count` = consecutive turns where health did not
+increase (i.e., no food eaten). When `my_health < 50` (same gating as the
+existing food-urgency weight elsewhere in the loop), the `risky_cells`
+penalty is now `max(40, 1000 - stuck_count * 25)` instead of a flat
+`-1000` — i.e. it relaxes the further we go without eating while already
+low on health, with a floor of 40 (still a real penalty, just not
+near-infinite). At full health (>=50) the penalty is unchanged at -1000 —
+**no change to behavior in the common/already-validated case.**
+
+**Honest limitation found via direct testing (important — read before
+tuning further):** replayed the exact traced sequence (turns 40-65,
+accumulating `stuck_count` realistically) and separately forced
+`stuck_count` all the way up to 40 and 60 directly on the turn-65 board
+state — **the bot still picked `down` (continuing the cycle) even at
+`stuck_count=60`, where the penalty floor of 40 should have applied.**
+I ran out of step budget before determining exactly why (the raw,
+no-penalty score gap between the "escape" and "continue cycling" options
+looked like only ~19 points in an earlier hand-computed breakdown from
+*before* this round's code edit — but that manual computation did not
+include every term the real scoring loop applies identically, e.g. it's
+possible I mis-transcribed one of the many terms, or the gap is actually
+larger than 19 once computed via the *actual* code path rather than a
+hand-copy). **This needs to be debugged properly next round** — the fix
+as shipped is _not_ proven to fix the one concrete traced example, though
+it is verified to be safe (no crashes, no change at health>=50, `main.py`
+still parses and smoke-tests pass on normal/`{}`/empty-snakes states).
+
+### Recommended next steps (HIGH PRIORITY)
+
+1. **Debug why the relaxed penalty didn't flip the turn-65 decision even
+   at a high forced `stuck_count`.** Recipe: reuse this round's
+   `build_state()` helper (see shell history / recreate: for each snake in
+   `board['snakes']`, emit `{'id': name, 'head': body[0], 'length':...,
+   'body':...}`; wrap with `game`/`turn`/`board`/`you` keys), load
+   `/logs/rounds/0/sim_100.jsonl` turn 65, then **temporarily add print
+   statements inside `main.py`'s scoring loop** (rather than hand-copying
+   the loop into a separate script, which risks transcription drift like
+   this round may have hit) to print each candidate's exact running score
+   after every term, and diff between `down` and `left`. Find the actual
+   real point where `down` wins even with `risky_penalty` near the floor.
+2. Once the real gap is known, either (a) lower the floor further (e.g.
+   `max(10, ...)` or even `max(0, ...)`), or (b) identify a *different*
+   term that's actually responsible for the persistent gap (e.g. the
+   `edge_dist`/`wall_run`/`free_degree` terms might independently favor
+   the "away from opponent" direction regardless of the risky penalty,
+   since that direction is also often more "central"/open — in which
+   case relaxing risky_cells alone is not sufcient and the fix needs to
+   also relax those terms, or add a direct "food urgency overrides
+   general positional preference" mechanism instead).
+3. Consider a more direct alternative if the stuck-tracker approach proves
+   hard to tune: explicit **cycle detection** — record the last ~30
+   `(head, opp_head)` pairs per game id, and if the current pair
+   (approximately) repeats one seen `K` turns ago with lower health now,
+   force a specific "break the mirror" move (e.g. deliberately pick the
+   move that maximizes distance from the repeated-cycle attractor, or
+   just pick the least-recently-visited legal cell) rather than relying on
+   score-tuning to organically escape.
+4. Re-run a **local benchmark** against a freshly extracted
+   `origin/human/coreyja/jump-flooding:main.py` (recipe unchanged from
+   many earlier rounds' notes throughout this file — `setsid nohup env
+   PORT=... python3 main.py & disown` for both bots, loop `battlesnake
+   play ... -o /tmp/game_N.json & disown`, sleep, check `tail`) once the
+   fix is properly debugged, to get a real win-rate delta vs. the 188/26/36
+   real-match baseline. This round did NOT get to run that benchmark (ran
+   out of step budget on the trace + fix attempt itself) — top priority
+   for whoever picks this up next.
+5. The unusually high tie count (36/250) this round is also worth a look
+   — likely both snakes surviving to a max-turn draw or a simultaneous
+   death (e.g. both starving in a similar mutual-cycle at the same time,
+   or both filling the board). Not investigated this round; a quick
+   `analyze_logs.py`-style pass isolating a few tied sims (same technique
+   as the loss-finding snippet earlier in this file: parse each
+   `sim_*.jsonl`'s final `isDraw` field) would tell you if it's the same
+   root cause as the losses or something else entirely.
+
+### Files (this round's change)
+
+- `main.py` — added `_stuck_state` module-level tracker + a health/stuck-
+  scaled `risky_cells` penalty (replacing the flat `-1000`) — see the
+  inline comments directly above both for the full rationale. **Not yet
+  confirmed to fix the concrete traced example** — see limitation above.
+  Safe/no-op at health >= 50 (unchanged flat -1000 there).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
