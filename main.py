@@ -1240,6 +1240,32 @@ def move(game_state):
                             score -= 22000
                     else:
                         score += max(0, 20 - tail_dist) * 450
+            if has_beames_enemy and enemy_max_len >= my_len + 2:
+                # Beames is a deterministic A* nearest-food chaser.  Remaining
+                # losses usually happen after it is clearly longer and its
+                # body/head path leaves us with no clean next-turn exit (e.g. round-1
+                # sim_15).  Keep this narrow: earlier broad Beames scalar tuning
+                # hurt local samples, so only reject obvious one-way pockets near
+                # Beames/edges while relying on the normal food/space scorer.
+                near_beames = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_beames <= 6 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    if clean_exits == 0:
+                        score -= 70000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_beames <= 3):
+                        score -= 14000
+                    if clean_exits <= 1:
+                        score += edge_dist * 180
+                        if safe_area < 24:
+                            score -= (24 - safe_area) * 450
+                        if choke_risk and safe_area < 34:
+                            score -= choke_risk * 3000
             if has_flipez_crystal_enemy and enemy_max_len >= my_len:
                 # Flipez-crystal is a competent nearest-food/center chaser.
                 # Logged losses usually had us shorter and crowded near a wall,
