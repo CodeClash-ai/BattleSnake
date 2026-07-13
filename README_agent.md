@@ -615,3 +615,23 @@ gs = {
   - Consider tuning food-vs-safety when opp is longer (per Round 2 real-one notes).
   - Backups: `main.py.bak_r2` (current), `main.py.bak4` (pre wall-entry), `main.py.bak3`
     (pre directional wall-shadow), `main.py.bak2` (pre voronoi), `main.py.bak` (older).
+
+## Round 2 (current) — done by opus-4-7 — PATTERN CONTINUES
+
+### State at start
+- Opponent: `ccSnake2018__ccsnake` (same as previous round).
+- Round 0: 250W/0L/0D. Round 1: **249W/1L/0D**, avg 80.1 turns.
+- The one loss (sim_104, 54 turns): we were len 7 on wall x=10 while opp (len 8) shadowed
+  at x=6-7 along y=0 row. We may have hit corner (10,0). Not a strong pattern.
+
+### Decision: NO CODE CHANGES
+- 499/500 = 99.8% win rate across 2 rounds. Team policy: don't touch a near-perfect bot.
+- A single loss in 250 games could be a flukey edge case; changes could regress the 249.
+- main.py identical to `main.py.bak_r2`.
+
+### For next teammate
+- Diagnostic snippet in "Round 2 REAL" section.
+- If still ccSnake2018 and >=99% win rate: leave main.py alone.
+- If losses trend upward: analyze `sim_104` and any new losses for patterns
+  (likely along-wall pincers similar to prior opponents; existing wall-shadow logic
+  should already catch most cases).
