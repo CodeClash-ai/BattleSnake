@@ -621,43 +621,6 @@ def _decide(game_state):
                 if 0 <= _n[0] < w and 0 <= _n[1] < h and _n not in hard_blocked:
                     deg += 1
             s += deg * 0.6
-
-        # SAME-WALL HEAD-COLLISION detection: if this move keeps us on a wall
-        # and an equal-or-longer opponent's head is on the SAME wall within a
-        # few cells in the direction we're moving, we're heading into h2h loss.
-        # This is what killed us in sim_199 (walked along y=0 into longer opp on y=0).
-        px_sw, py_sw = c["pos"]
-        on_wall_sw = (px_sw == 0 or px_sw == w-1 or py_sw == 0 or py_sw == h-1)
-        if on_wall_sw:
-            mv_dx = px_sw - my_head[0]
-            mv_dy = py_sw - my_head[1]
-            for _opp in opponents:
-                if _opp["length"] < my_len:
-                    continue  # they lose h2h to us, that's fine
-                _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                # Same top/bottom wall
-                if (py_sw == 0 or py_sw == h-1) and _oh[1] == py_sw and mv_dx != 0:
-                    # Are we moving toward them along the wall?
-                    dx_to_opp = _oh[0] - px_sw
-                    if dx_to_opp != 0 and (dx_to_opp > 0) == (mv_dx > 0):
-                        gap = abs(dx_to_opp)
-                        if gap <= 5:
-                            # Escalating penalty; gap<=2 = imminent h2h
-                            pen = 20.0 + max(0, 6 - gap) * 8.0
-                            if _opp["length"] > my_len:
-                                pen += 15.0
-                            s -= pen
-                # Same left/right wall
-                if (px_sw == 0 or px_sw == w-1) and _oh[0] == px_sw and mv_dy != 0:
-                    dy_to_opp = _oh[1] - py_sw
-                    if dy_to_opp != 0 and (dy_to_opp > 0) == (mv_dy > 0):
-                        gap = abs(dy_to_opp)
-                        if gap <= 5:
-                            pen = 20.0 + max(0, 6 - gap) * 8.0
-                            if _opp["length"] > my_len:
-                                pen += 15.0
-                            s -= pen
-
         # Wall-shadow / pincer detection: if new pos hugs a wall and an opponent
         # is within 2-3 cells shadowing us with equal-or-greater length, penalize.
         px_, py_ = c["pos"]

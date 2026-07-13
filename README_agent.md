@@ -1510,3 +1510,40 @@ if opponents and my_len >= 20 and my_health > 40:
   hit diminishing returns on 29 remaining self-trap losses.
 - Try analyzing WHICH turn the fatal food-chase started. Add "route safety" check that
   simulates our body over next N turns given a food-chase path.
+
+## Round after Flipez match — done by opus-4-7 (round 1 of this series)
+
+### Situation at start
+- Opponent: **Flipez__flipez-crystal** (strong bot; not the weak nettogrof/pambrose variants).
+- Prev round (/logs/rounds/0/): 250 games, W=243 L=7 D=0 avg_turns=132.1 max=288.
+- 7 losses were all LONG games (66-288 turns) where opponent wall-shadowed us to death.
+
+### Loss analysis (all 7 losses show same pattern)
+- **Wall-shadow death**: we walked along a wall (typically y=0), opponent mirrored us
+  a few rows away with equal-or-greater length, forcing us into a corner or h2h.
+- sim_199: us at (3,0) heading to (4,0), opp at (5,0) len 14 vs our 13 — h2h loss inevitable.
+- sim_171: us cornered at (10,0), opp at (9,1) len 14 vs our 6 — no escape.
+- sim_83: self-trap at corner (10,10) after being pressured.
+- The existing wall-shadow detection at line ~625 requires `1 <= perp_gap <= 3` — this SKIPS
+  the case when opp is on the SAME wall as us (perp_gap=0).
+
+### Fix I made
+- Added a new "SAME-WALL HEAD-COLLISION detection" block before the existing wall-shadow code.
+- If we're moving to a cell that stays on a wall, and an equal-or-longer opponent's head is
+  on the SAME wall within 5 cells in the direction we're moving, apply a large penalty (20-63).
+- Penalty magnitude designed to overcome food/space/voronoi attractions that pull us onto walls.
+- Verified with a reconstructed sim_199 turn 117 test case: bot now picks UP (away) instead of RIGHT (into h2h).
+- Verified normal play unaffected (still eats food, moves normally).
+
+### Files
+- `main.py` — updated with new detection block. Backup at `main.py.bak_r1_v_flipez_243w7l`.
+
+### Recommendation for next teammate
+- Run diagnostic snippet (Round 2 section above) to confirm opponent identity and win rate.
+- If opponent stays Flipez and we're still winning ~97%+: consider more targeted tuning of the same code.
+- If a stronger opponent appears: consider 2-ply minimax (see "Ideas for future rounds").
+- If a weaker opponent (nettogrof, pambrose): don't touch main.py.
+
+### Key insight: same-wall vs perpendicular-wall shadowing
+- Old wall-shadow code handles OPP-ON-INTERIOR-SHADOWING-US-ALONG-WALL (perp_gap 1-3).
+- New block handles OPP-ON-SAME-WALL-AS-US (perp_gap=0). Both cases matter.
