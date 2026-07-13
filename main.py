@@ -1300,6 +1300,15 @@ def move(game_state):
                 # body-walls us.  When not ahead, play more like a racer: prefer
                 # interior moves with clean exits, but keep strong pressure toward
                 # reachable food so we do not fall behind in length.
+                # Production losses are dominated by bottom/top-row head races and
+                # body-wall zipper traps after Hungry is already longer; in that
+                # regime a slightly stronger interior bias is safer than taking an
+                # outer-row corridor even if raw flood-fill is large.
+                if edge_dist == 0:
+                    score -= 3000
+                elif edge_dist == 1:
+                    score -= 650
+                score += edge_dist * 120
                 near_hungry = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
                 if near_hungry <= 7 or edge_dist <= 1:
                     clean_exits = 0
@@ -1612,6 +1621,11 @@ def move(game_state):
                     # self-corridor while Frank keeps pathing around the outside.
                     # Still allow it when low health via the health guard above.
                     score -= 4500
+                if has_hungry_enemy and health >= 45 and edge_dist == 0 and enemy_max_len >= my_len:
+                    # Hungry will usually win long outside food races once it is
+                    # longer; avoid healthy edge food that commits us to a one-way
+                    # corridor unless starvation pressure overrides this guard.
+                    score -= 3500
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
