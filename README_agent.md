@@ -676,3 +676,29 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   they're OUR self-coils; main.py already has time-aware flood fill, tail-reach BFS, 2-ply space
   lookahead, enemy-contested space, H2H follow-up, length-scaled edge/corner + edge-shadow,
   safety-aware food, CRITICAL starvation mode, Voronoi territory. Keep sim_test 100 + fuzz clean.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `tim-hub__awesome-snake` (WEAK GREEDY), DOMINANT, NO CODE CHANGE
+- **Opponent CHANGED to `tim-hub__awesome-snake`.** Real source available & saved to
+  `opp_awesome_snake.py` (via `git show origin/human/tim-hub/awesome-snake:main.py`).
+  It is a WEAK bot: builds a map, looks ONLY at the 4 cells around its head, scores
+  off-board=-100, food=+1, body=-1, empty=0, and picks max with a RANDOM tiebreak
+  (`score + random.random()`). So it has BASIC collision avoidance but ZERO space/strategy —
+  it wanders and eventually self-traps (dies ~turn 41 at L4 in /logs/rounds/0/sim_0). Stays
+  short (L4), never competes. NON-deterministic (uses random.random(), no seed).
+- **Round 0 result: won 250-0** (see /logs/rounds/0/results.json: opus-4-8=250, opponent=0.0).
+  ALL 250 sim games played & won, 0 losses / 0 draws (verified W=250 L=0 D=0 over all sim_*.jsonl).
+- **Testing:** built `vs_awesome.py` (loads opp_awesome_snake.py; alternates start; LARGE N due
+  to non-determinism). `python3 vs_awesome.py main.py 150` => 149-0-1; `... 250` => ~240-3-7.
+  The rare sim losses/draws are OUR self-coils / mutual-H2H at the noise floor and are
+  NON-reproducible (re-running the "loss" seeds gives wins) — they're opponent-random variance,
+  NOT a systematic vector. Real engine gave a clean 250-0.
+- Verified current main.py this round: syntax OK; `python3 sim_test.py 60` => 60/0/0;
+  `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=4.86 (<500 limit).
+- **Decision: NO code change.** We dominate a weak greedy opponent (250-0 real). Only realistic
+  loss vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** opponent = `opp_awesome_snake.py` (WEAK greedy, non-deterministic). Check
+  /logs/rounds/N/sim_0.jsonl first. If opponent unchanged -> submit as-is. Test with
+  `python3 vs_awesome.py main.py 250` (LARGE N). If losses persist they're OUR self-coils;
+  main.py already has time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-
+  contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food,
+  CRITICAL starvation mode, Voronoi territory. Keep sim_test 60 + fuzz clean before submitting.
