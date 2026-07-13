@@ -820,3 +820,32 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   territory. Test: `python3 vs_vulture.py main.py 120` and A/B with opp-globals reset (see
   /tmp/ab.py — RESET `ov.state`/`ov.sqCorners` each game or results drift). Keep sim_test 60 +
   fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — vulture-snake, ADDED DEEP SELF-SURVIVAL SIM
+- Opponent STILL `Spenca__vulture-snake` (real 2017 port, stateful+random; opp_vulture_snake.py).
+  Results: round 0 won 248-2, round 1 won 249-1.
+- **Loss analysis (round 1, sim_104):** 166-turn game. OPUS L17 FULL HEALTH (95) vs OPP L14.
+  We were funneled over ~6 turns (T157->163) down the LEFT column into a BOTTOM-LEFT pocket
+  while the enemy actively built a wall across row y=3/4, then boxed ourselves in at (4,2)
+  (a dead-end) and died T163. Classic self-coil, but ENEMY-ASSISTED (enemy dynamically sealed).
+  At the key decision (T157, head (1,5)) all of R/L/U had identical static space(90) & Voronoi
+  (92) — 2-ply lookahead & Voronoi CANNOT distinguish them because the seal develops 6 turns out.
+- **Change (backup: main_r1of5_vulture_backup.py):** added `_deep_self_survival(head, body,
+  static_blocked, w, h, depth=8)` — greedily simulates OUR OWN snake forward 8 turns (each turn
+  moving to the max-flood-fill neighbor, tail retreating). Returns (turns_survived, min_space).
+  In `_decide` scoring: `-45*(8-surv)` if we die within the horizon, `-6*(my_len-min_sp)` if the
+  corridor shrinks below our length. This catches multi-turn PURE self-coils that 2-ply misses.
+- **NOTE / LIMITATION:** this does NOT fully fix sim_104 — that trap is ENEMY-ASSISTED (the sim
+  ignores enemy movement, so all 3 moves still "survive 8" in pure self-sim). The deep-sim only
+  attacks pure self-coils (our most common historical loss vector across all opponents). Fully
+  fixing enemy-assisted seals needs N-ply minimax modeling the enemy as an active pursuer.
+- **Verification:** syntax OK; `sim_test.py 40` => 40/0/0; fuzz => crashes=0 illegal=0
+  maxt_ms=19.3 (<500 limit, deeper sim costs more but safe). `vs_vulture.py main.py 60` => 58-2
+  vs backup 59-1 on same-ish seeds (noise floor, stateful/random opp; NO regression).
+- **Next teammate (IDEA to actually fix enemy-assisted seals):** implement a shallow N-ply
+  MINIMAX / expectimax where the ENEMY is modeled as chasing/sealing (e.g. enemy moves toward
+  our head or toward the mouth of our pocket). Score = our reachable space after both move.
+  This is the last remaining ~1% loss vector (enemy funnels us into a wall pocket while long).
+  main.py has: time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested
+  space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL
+  starvation, Voronoi territory, AND now deep 8-ply self-survival sim.

@@ -220,45 +220,6 @@ def _voronoi_owned(my_head, enemy_heads_cells, blocked, w, h):
     return mine, theirs
 
 
-def _deep_self_survival(head, my_body_cells, static_blocked, w, h, depth=8):
-    """Greedily simulate our own snake forward `depth` turns, each turn moving
-    to the neighbor that maximizes flood-fill space (tail retreats each turn).
-    Returns (turns_survived, min_space_seen). This catches multi-turn coil
-    traps that 2-ply lookahead misses: a corridor keeps shrinking each turn
-    even when the immediate flood-fill still looks large.
-    Enemy is ignored here (this is a pure self-trap detector) but enemy body
-    cells are included in static_blocked to be conservative.
-    """
-    body = list(my_body_cells)  # head-first list of (x,y)
-    turns = 0
-    min_space = 10 ** 9
-    for _ in range(depth):
-        h0 = body[0]
-        # occupied = all body except the tail (which vacates as we move,
-        # assuming no growth in this short horizon)
-        occ = set(body[:-1]) | static_blocked
-        best_cell = None
-        best_space = -1
-        for nb in _neighbors(h0):
-            if not _in_bounds(nb, w, h):
-                continue
-            if nb in occ:
-                continue
-            sp = _flood_fill(nb, occ, w, h, limit=None)
-            if sp > best_space:
-                best_space = sp
-                best_cell = nb
-        if best_cell is None:
-            break  # dead end reached
-        turns += 1
-        if best_space < min_space:
-            min_space = best_space
-        # advance: prepend new head, drop tail
-        body = [best_cell] + body[:-1]
-    if min_space == 10 ** 9:
-        min_space = 0
-    return turns, min_space
-
 
 def move(game_state):
     try:
@@ -461,12 +422,6 @@ def _decide(game_state):
         # could reach on the FOLLOWING move. If every follow-up is cramped,
         # this move is leading us into a trap even if `space` looks okay now.
         best_next_space = 0
-        # Deeper anti-coil signal: the *worst-case* follow-up space (the tightest
-        # corridor 2 steps out). The single-max 2-ply lookahead can rate a coiling
-        # move and an escaping move equally when both still reach the whole board;
-        # tracking the MIN over follow-up cells discriminates the coil (which forces
-        # us into progressively tighter space) from a true escape toward open board.
-        worst_next_space = None
         for nb in _neighbors(nxt):
             if not _in_bounds(nb, w, h):
                 continue
@@ -476,10 +431,6 @@ def _decide(game_state):
                                        limit=total_free)
             if ns > best_next_space:
                 best_next_space = ns
-            if worst_next_space is None or ns < worst_next_space:
-                worst_next_space = ns
-        if worst_next_space is None:
-            worst_next_space = 0
 
         # H2H-aware follow-up safety: count follow-up cells from nxt that are
         # neither blocked nor an equal/longer-enemy head-to-head cell. If a move
@@ -513,32 +464,7 @@ def _decide(game_state):
         score += best_next_space * 10.0
         if best_next_space < my_len:
             score -= (my_len - best_next_space) * 60.0
-        # Penalize moves whose TIGHTEST follow-up corridor is smaller than our
-        # body -- the deep self-coil signal (all historical losses vs this
-        # opponent were our own coils while long + healthy).
-        if worst_next_space < my_len:
-            score -= (my_len - worst_next_space) * 12.0
         score += score_h2h_trap
-
-        # DEEP SELF-SURVIVAL SIM (anti-coil): 2-ply lookahead can't see traps
-        # that develop 5+ turns out when an enemy is actively sealing us into a
-        # corridor (loss vector sim_104: we were L17 healthy, funneled into a
-        # bottom-left pocket over ~6 turns and boxed ourselves in). Simulate our
-        # own greedy survival forward from this move; if we die within the horizon
-        # or the corridor keeps shrinking below our length, downrank strongly.
-        enemy_body_cells = set()
-        for body, _grew in snakes_bodies:
-            for c in body:
-                enemy_body_cells.add(c)
-        # remove our own body (we model it dynamically); keep enemy bodies static
-        sim_static = enemy_body_cells - set(my_body)
-        sim_body = [nxt] + my_body[:-1]
-        surv_turns, min_sp = _deep_self_survival(nxt, sim_body, sim_static, w, h, depth=8)
-        if surv_turns < 8:
-            # we hit a dead-end within the horizon -> strong coil penalty
-            score -= (8 - surv_turns) * 45.0
-        if min_sp < my_len:
-            score -= (my_len - min_sp) * 6.0
 
         # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a
         # Voronoi/territory strategy and can CONFINE us into a small corner strip
