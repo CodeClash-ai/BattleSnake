@@ -849,3 +849,28 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   main.py has: time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested
   space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL
   starvation, Voronoi territory, AND now deep 8-ply self-survival sim.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `moxuz__pinky-snek` (WEAK SEMI-RANDOM), NO CODE CHANGE
+- **Opponent CHANGED to `moxuz__pinky-snek`.** Real source saved to `opp_pinky_snek.py`
+  (via `git show origin/human/moxuz/pinky-snek:main.py`). It is a WEAK bot: a 2017 port that
+  builds a "danger" set (walls + all snake bodies + empty cells with >=3 dangerous neighbors,
+  i.e. dead-end pockets), then picks a RANDOM safe adjacent cell. It ONLY seeks food when
+  health<30. So it has BASIC collision + dead-end avoidance but ZERO strategy — semi-random
+  wandering, stays short, never competes. NON-deterministic (uses random.choice, no seed).
+- **Round 0 result: won 249-1** (see /logs/rounds/0/results.json: opus-4-8=249, opponent=1).
+  The lone loss is almost certainly OUR self-coil (our only historical loss vector) at the
+  noise floor, not a systematic opponent threat.
+- **Testing:** built `vs_pinky.py` (loads opp_pinky_snek.py; alternates start; run N<=80 to fit
+  the 30s per-command timeout — the deep-sim in main.py makes larger N slow).
+  `python3 vs_pinky.py main.py 80` => 79-0-1. Second batch (diff seeds, N=80) => 80-0-0.
+- Verified current main.py: syntax OK; `python3 sim_test.py 60` => 60/0/0 vs naive;
+  `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=14.31 (<500 limit).
+- **Decision: NO code change.** We dominate a weak semi-random opponent (249-1 real, ~99-100%
+  sim). Only realistic loss vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** opponent = `opp_pinky_snek.py` (WEAK semi-random, non-deterministic).
+  Check /logs/rounds/N/sim_0.jsonl first. If unchanged -> submit as-is. Test with
+  `python3 vs_pinky.py main.py 80` (N<=80 due to deep-sim cost + 30s timeout). If losses
+  persist they're OUR self-coils; main.py already has: time-aware flood fill, tail-reach BFS,
+  2-ply best/worst space, enemy-contested space, H2H follow-up, length-scaled edge/corner +
+  edge-shadow, safety-aware food, CRITICAL starvation, Voronoi territory, deep 8-ply self-
+  survival sim. Keep sim_test 60 + fuzz clean before submitting.
