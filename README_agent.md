@@ -3499,3 +3499,150 @@ specifically because there's no opponent branching factor to handle.
 - `main.py` — the bot (no changes this round — investigation only, see
   above for a concrete, scoped design sketch for the recommended fix).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent still zacpez__scape-goat (249-1 real), fixed a real "eat-food-locks-own-tail" bug via trace-replay of the exact remaining loss
+
+`/logs/rounds/{0,1}/results.json`: opponent both rounds is `zacpez__scape-goat`.
+Round 0: 248-2. Round 1: 249-1 — already extremely strong (99.6%). Previous
+round's notes (see the long section directly above this one, "opponent =
+zacpez__scape-goat, investigated both real losses") had already traced
+both round-0 losses (`sim_80.jsonl` turn 77, `sim_109.jsonl` turn 159) in
+detail and found: at the actual decision points, literally every relevant
+metric (raw flood-fill area, Voronoi territory, tail-reachability) was
+**exactly tied** across live candidates for several consecutive turns —
+concluded a full multi-ply lookahead was the only real fix, and made no
+change (reasonably, given the risk vs. the already-excellent win rate).
+
+### This round: re-traced `sim_80.jsonl` more precisely and found a concrete, fixable bug hiding inside that "tie"
+
+Re-examined turn 72 of `sim_80.jsonl` in detail (recipe: build a synthetic
+`game_state` from the logged turn's `board.snakes[*].body`, call
+`main.move()`/`main._flood_fill_reach()` directly — same technique used
+throughout this file's history). At turn 72 (head `(9,9)`, length 12,
+health 91), the three legal candidates (`up`->`(9,10)`, `down`->`(9,8)`,
+`right`->`(10,9)`) all showed **identical raw flood-fill area (106) and
+identical `tail_reachable=True`** — the "tie" the previous round's notes
+described. But `up` was special: `(9,10)` is a food cell, and eating it
+would grow our snake (length 12->13). **Found the bug**: `_flood_fill_reach`
+was called with the *general* `blocked` set (built by `_build_blocked`,
+which assumes every snake's tail vacates this turn — correct for
+non-eating moves) even for a candidate that eats food. But eating means
+**our own tail does NOT vacate this turn** (growth keeps that segment
+occupied one extra turn) — so the flood fill from the food-eating
+candidate was incorrectly treating our own current tail cell as free
+space it could walk back through, when in reality that cell stays part of
+our body. This made `up`'s `tail_reachable` show `True` (identical to the
+other two, hence the "tie") when it should have shown `False` — i.e. the
+observed tie in the previous round's notes was itself partly an artifact
+of this bug, not a genuine tie.
+
+**Verified precisely**: recomputing `_flood_fill_reach` for the `up`
+candidate at turn 72 with the candidate's own (soon-to-be-eaten) tail
+correctly added to the blocked set flips `tail_reachable` from `True` to
+`False` (area drops 106->105, immaterial, but `tail_reachable` is the
+signal that matters here), while `down`/`right` (which don't eat) are
+completely unaffected. This one flip is enough: the existing
+`-my_length * 8` anti-self-coil penalty (already in the code, added
+several rounds ago — see the large comment block above it in `main.py`)
+now correctly fires only on `up`, easily overriding the `+20`
+immediate-food bonus and the (tied) edge penalty that had been letting
+`up` win before.
+
+### Fix made this round
+
+In the move-scoring loop, before calling `_flood_fill_reach` for a
+candidate: if the candidate cell `nxt` is a food cell (`nxt in
+food_set`) and we have a tail to check (`my_tail is not None`), add
+`my_tail` to the blocked set used for *that specific candidate's* area/
+tail-reachability computation (`eat_blocked = blocked | {my_tail}`) —
+does not affect the general `blocked` set used everywhere else (legal-
+move filter, other candidates' evaluations, risky_cells, etc.), so this
+is a narrowly-scoped, low-risk, purely-more-accurate correction. This
+generalizes cleanly: it correctly does nothing when `nxt` isn't food
+(the overwhelmingly common case), and correctly does nothing when we
+just ate last turn ourselves (`my_tail is None` in that case already,
+per the existing just-ate detection).
+
+**Verified this directly flips the exact traced turn-72 decision**:
+`main.move()` on the literal turn-72 board state from `sim_80.jsonl` now
+returns `{"move": "right"}` (previously `{"move": "up"}`, the actual
+move taken in the real game, which led to the trap and death 5 turns
+later).
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state, `{}` (fully
+  malformed), an empty-snakes state, and a synthetic state where a
+  food-eating candidate is right next to our own tail on a short snake
+  (a case explicitly designed to sanity-check the new code path doesn't
+  do anything crazy for a harmless case) — all return valid moves, no
+  exceptions.
+- Timing: 200 `move()` calls on a synthetic 11x11 2-snake state (10 vs 8
+  length) in ~0.17s total (~0.87ms/call) — no meaningful performance
+  regression from the extra set-union (only computed per-candidate, and
+  only actually allocates a new set when that specific candidate is a
+  food cell).
+- Re-ran the turn-72-onward replay of `sim_80.jsonl` with the fix (feeding
+  each turn's *actual recorded* board state, i.e. NOT a live reactive
+  re-simulation against the real opponent — a caveat, see below): the
+  patched bot no longer walks into the corner at turn 72, picks `right`
+  instead. This doesn't by itself prove the *whole* game would have been
+  won (the recorded turns after 72 assume the old trajectory, which the
+  opponent wouldn't have reacted to identically if we'd actually diverged
+  live) — a real local-benchmark rerun would be needed for full end-to-
+  end confirmation, which this round did not have step budget left to do.
+- Also traced `sim_109.jsonl` (the other round-0 loss) turns 140-158 with
+  the fix applied: the bot has legal moves and doesn't hit a forced
+  dead-end within that recorded window (longer than it previously did per
+  the prior round's notes) — again, an *encouraging* but not fully
+  conclusive signal for the same reactive-opponent-caveat reason above.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Run a real local benchmark** (recipe unchanged from many earlier
+   rounds' notes throughout this file — `git show
+   origin/human/zacpez/scape-goat:main.py > /tmp/opp/main.py; cp
+   server.py /tmp/opp/server.py`, then `setsid nohup env PORT=...
+   python3 main.py > log 2>&1 </dev/null & disown` for both bots, loop
+   `battlesnake play ... -o /tmp/game_N.json & disown`, sleep, check
+   `tail`) — aim for 15-20+ games (games run long against this opponent,
+   9-238 turns per earlier rounds' notes) to get a real, *live* (not
+   literal-replay) win-rate confirmation of this round's fix. This is
+   the single most important gap — the fix is verified via direct
+   traced-state replay (a strong, concrete signal) but not yet via a
+   fresh live game where the opponent can react to our new decisions.
+2. This same "eating food doesn't vacate our tail" inaccuracy could in
+   principle have contributed to *other* rounds' traced self-coil losses
+   throughout this file's long history (search "self-coil" above) —
+   many of those didn't specifically check whether the fatal candidate
+   was a food cell. Worth a quick look back at a couple of the more
+   detailed past traces (e.g. the `ccSnake2018__ccsnake` "edge_run"
+   section, or the `coreyja__coreyja-rs` starvation-loop section) to see
+   if this same mechanism was silently part of the picture there too —
+   not done this round (ran out of step budget), but this fix is general
+   (not opponent-specific) so it should help regardless.
+3. If a **different** opponent shows up in the next round's real match,
+   use `git log --oneline --all | grep -i human` + `git show
+   origin/human/<Org>/<repo>:main.py` to extract and benchmark them per
+   the established recipe throughout this file.
+4. The still-not-attempted big idea (many-rounds-recurring in this file):
+   true multi-ply lookahead/minimax. This round's fix closes one
+   concrete, real gap that was *disguised* as a "genuine tie" in the
+   previous round's investigation — but genuine ties (where every
+   current-turn metric, including the now-fixed tail-reachability check,
+   really is identical) can still occur and would still need real
+   lookahead to resolve correctly. Worth re-checking with the fixed code
+   whether any of this file's previously-documented "identical metrics"
+   traces are still tied after this fix, or whether some of them
+   resolve now too.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added an `eat_blocked` set that
+  additionally blocks our own current tail cell when evaluating a
+  food-eating candidate's flood-fill area/tail-reachability, since
+  eating means that tail cell does not vacate this turn — see the large
+  inline comment directly above `eat_blocked` for the full traced
+  rationale, and this section for the concrete example that motivated
+  it).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.

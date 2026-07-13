@@ -374,7 +374,28 @@ def move(game_state):
             # small dead-end pocket the bot then walked into and died in.
             # See sim_246.jsonl turn 124 and sim_248.jsonl turn 269 in
             # /logs/rounds/0 for the exact reproduced traces.
-            area, tail_reachable = _flood_fill_reach(nxt, blocked, width, height, cap, target=my_tail)
+            # Correctness fix (found this round via trace-replay against a
+            # real match loss, zacpez__scape-goat sim_80.jsonl turn 72 in
+            # /logs/rounds/0): if this candidate cell itself is food, we
+            # will EAT this turn, which means our own tail segment does
+            # NOT vacate this turn (growth keeps it occupied one extra
+            # turn) -- unlike the general `blocked` set built by
+            # _build_blocked, which assumes (correctly, for the *other*
+            # snakes, and for us on a non-eating move) that every tail
+            # vacates. Without this fix, a food cell that seals off our
+            # own tail-reachability looked identical (area/tail_reachable
+            # both fine) to a genuinely safe food pickup, because the
+            # flood fill treated our own tail cell as free space it could
+            # walk back through even though eating there means that cell
+            # stays occupied by our own body next turn. Confirmed via
+            # direct replay: at the traced turn, this fix flips
+            # tail_reachable from True to (correctly) False for the
+            # fatal "grab the corner food" candidate, while leaving the
+            # safer alternatives (which don't eat) unaffected.
+            eat_blocked = blocked
+            if my_tail is not None and nxt in food_set:
+                eat_blocked = blocked | {my_tail}
+            area, tail_reachable = _flood_fill_reach(nxt, eat_blocked, width, height, cap, target=my_tail)
             area_for_score = area
 
             # Anti-self-coil: if our own tail is NOT reachable from this
