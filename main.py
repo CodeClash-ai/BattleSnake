@@ -560,7 +560,7 @@ def move(game_state):
             # Any legal enemy move may immediately partition space even if we
             # win head-to-heads against shorter snakes.  Use these cells as a
             # conservative one-ply space estimate below.
-            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower() or "vulture" in ename.lower() or "spenca" in ename.lower())
+            is_randomish = ("bombastic-bob" in ename.lower() or "scape-goat" in ename.lower() or "awesome-snake" in ename.lower() or "tim-hub" in ename.lower() or "vulture" in ename.lower() or "spenca" in ename.lower() or "pinky-snek" in ename.lower() or "moxuz" in ename.lower())
             awesome_like = ("awesome-snake" in ename.lower() or "tim-hub" in ename.lower())
             vulture_like = ("vulture" in ename.lower() or "spenca" in ename.lower())
             awesome_scores = {}
@@ -637,7 +637,7 @@ def move(game_state):
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         h2h_soft_penalty = max(h2h_soft_penalty, 150)
                     continue
-                if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename:
+                if "ccsnake" in ename or "ccsnake2018" in ename or "jump-flooding" in ename or "awesome-snake" in ename or "tim-hub" in ename or "pinky-snek" in ename or "moxuz" in ename:
                     continue
                 if _manhattan(nxt, eh) == 1 and elen >= my_len:
                     h2h_risk = True
@@ -769,7 +769,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (100 if health < 60 else 20))) + (800 if enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
