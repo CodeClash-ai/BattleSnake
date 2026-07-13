@@ -726,6 +726,33 @@ def _hungry_predicted_move(enemy, game_state, w, h):
         return None
     return None
 
+
+def _nagini_predicted_move(enemy, game_state, w, h):
+    """Predict xtagon Nagini by running the copied one-ply Elixir port.
+
+    Nagini primarily sorts moves by collision avoidance, treating adjacent
+    head-to-head squares probabilistically, then by nearest-food score.  Round-0
+    losses against it are often exact head collisions after it grows longer, so
+    feeding the exact chosen next square into the collision scorer is valuable.
+    """
+    try:
+        from tools import nagini_opponent
+        pseudo = {
+            "game": game_state.get("game", {}),
+            "turn": game_state.get("turn", 0),
+            "board": game_state.get("board", {}),
+            "you": enemy,
+        }
+        mv = nagini_opponent.move(pseudo).get("move")
+        if mv in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            nxt = _add(head, MOVES[mv])
+            if _in_bounds(nxt, w, h):
+                return nxt
+    except Exception:
+        return None
+    return None
+
 def _beames_predicted_move(enemy, game_state, w, h):
     """Predict kentmacdonald2 Beames by running the copied A*/food port."""
     try:
@@ -868,6 +895,7 @@ def move(game_state):
         has_famished_frank_enemy = False
         has_beames_enemy = False
         has_hungry_enemy = False
+        has_nagini_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -882,7 +910,13 @@ def move(game_state):
             is_famished = "famished-frank" in ename.lower() or "famished" in ename.lower()
             is_beames = "beames" in ename.lower() or "kentmacdonald2" in ename.lower()
             is_hungry = "theapx" in ename.lower() or ename.lower().endswith("__hungry") or "hungry" == ename.lower()
-            if is_hungry:
+            is_nagini = "nagini" in ename.lower() or "xtagon" in ename.lower()
+            if is_nagini:
+                has_nagini_enemy = True
+                pred = _nagini_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_hungry:
                 has_hungry_enemy = True
                 pred = _hungry_predicted_move(e, game_state, w, h)
                 if pred is not None:
@@ -1294,6 +1328,35 @@ def move(game_state):
                             score -= (24 - safe_area) * 450
                         if choke_risk and safe_area < 34:
                             score -= choke_risk * 3000
+            if has_nagini_enemy and enemy_max_len >= my_len:
+                # Nagini is food-seeking but weakly models head-to-heads.  Our
+                # round-0 losses usually came after Nagini grew longer by several
+                # cells, then either took an exact winning head collision or used
+                # its body to squeeze us on/near an edge.  When we are not longer,
+                # add a targeted escape/interior bias while keeping food pressure
+                # below so we do not simply concede growth.
+                near_nagini = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                if near_nagini <= 7 or edge_dist <= 1:
+                    clean_exits = 0
+                    for nn in _neighbors(nxt):
+                        if not _in_bounds(nn, w, h) or nn in future_blocked:
+                            continue
+                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                            continue
+                        clean_exits += 1
+                    score += edge_dist * 240
+                    if edge_dist == 0:
+                        score -= 6200
+                    elif edge_dist == 1:
+                        score -= 1500
+                    if clean_exits == 0:
+                        score -= 65000
+                    elif clean_exits == 1 and (edge_dist <= 1 or near_nagini <= 3):
+                        score -= 17000
+                    if safe_area < 28:
+                        score -= (28 - safe_area) * 560
+                    if choke_risk and safe_area < 40:
+                        score -= choke_risk * 4200
             if has_hungry_enemy and enemy_max_len >= my_len:
                 # TheApX Hungry is a deterministic nearest-food BFS bot.  If we let
                 # it take uncontested meals it becomes much longer and eventually
@@ -1573,6 +1636,11 @@ def move(game_state):
                     # food whenever we are not longer, otherwise it snowballs length.
                     food_weight += min(460, 170 + (enemy_max_len - my_len) * 55)
                     food_dist = path_food
+                if has_nagini_enemy:
+                    # Race Nagini for reachable food when behind; it otherwise
+                    # snowballs length and wins head-to-heads.
+                    food_weight += min(360, 140 + (enemy_max_len - my_len) * 45)
+                    food_dist = path_food
                 if has_flipez_crystal_enemy:
                     # Flipez wins its rare games by outgrowing us with steady
                     # nearest-food chasing.  When behind, make reachable food a
@@ -1629,7 +1697,7 @@ def move(game_state):
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
                 else:
-                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0)
+                    score += (2500 if health < 15 else (1200 if health < 30 else (260 if health < 60 else 120))) + (1400 if enemies and my_len <= enemy_max_len else 0) + (1800 if has_flipez_crystal_enemy and enemies and my_len <= enemy_max_len else 0) + (1400 if has_hungry_enemy and enemies and my_len <= enemy_max_len else 0) + (1100 if has_nagini_enemy and enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000000
             if h2h_soft_penalty:
