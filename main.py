@@ -291,6 +291,30 @@ def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
     return prefs[0]
 
 
+
+def _ccsnake2018_predicted_move(enemy, game_state, w, h):
+    """Predict ccSnake2018 by running the local faithful port with `you` swapped.
+
+    ccSnake usually avoids generic adjacent head-to-heads, so we do not want to
+    blanket-block every square next to it.  But production round-1 losses were
+    often exact head-to-heads on the move ccSnake's security/nearest-food logic
+    chose.  The copied reference port is deterministic and fast enough for one
+    opponent, and falling back to None preserves the older conservative scoring.
+    """
+    try:
+        from tools import ccsnake_opponent
+        gs = dict(game_state)
+        gs["you"] = enemy
+        move_name = ccsnake_opponent.move(gs).get("move")
+        if move_name in MOVES:
+            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
+            pred = _add(head, MOVES[move_name])
+            if _in_bounds(pred, w, h):
+                return pred
+    except Exception:
+        return None
+    return None
+
 def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
     """One-step predictor for Xe__since: A* toward nearest food when behind/hungry,
     otherwise hunt our head when it is at least tied for biggest.  The original
@@ -365,8 +389,13 @@ def move(game_state):
             ename = e.get("name", "")
             is_xe = "Xe" in ename or "since" in ename.lower()
             preds = set()
+            is_ccsnake = "ccsnake" in ename.lower() or "ccsnake2018" in ename.lower()
             if is_xe:
                 pred = _xe_since_predicted_move(e, my_head, snakes, food, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif is_ccsnake:
+                pred = _ccsnake2018_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             else:
