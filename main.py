@@ -403,7 +403,26 @@ def move(game_state):
 
             dist = _bfs_nearest_food_dist(nxt, blocked, width, height, food_set)
             if dist is not None:
-                weight = 4 if my_health < 50 else 1.5
+                # Steeper urgency curve as health drops -- fixes the same
+                # traced starvation loop as the free_degree deficit fix
+                # above (see the long comment there): at critically low
+                # health, food-seeking must dominate other heuristic terms
+                # (edge/degree/voronoi tie-breaks) much more strongly than
+                # the old flat "4 if <50 else 1.5" weight did, or the bot
+                # can get stuck cycling near food it never commits to
+                # eating. Confirmed via direct trace-replay: with the old
+                # weight=4, the bot cycled in a 6-cell loop near a food
+                # item at health 8 down to health 1 and starved; replaying
+                # the exact same board states with this steeper curve
+                # picks the food-adjacent move instead.
+                if my_health < 15:
+                    weight = 10
+                elif my_health < 30:
+                    weight = 6
+                elif my_health < 50:
+                    weight = 4
+                else:
+                    weight = 1.5
                 score -= dist * weight
                 if dist == 0:
                     score += 20  # immediate food bonus
@@ -425,12 +444,37 @@ def move(game_state):
             # additive nudge meant to win exactly this kind of tie-break
             # *before* committing to a move that only looks safe because the
             # flood-fill snapshot doesn't yet reflect our own future body.
+            # Deficit-based (relative to the max POSSIBLE neighbors for this
+            # board position, not an absolute count) -- fixes a real,
+            # confirmed bug found this round via trace-replay against
+            # coreyja__coreyja-rs (a local benchmark loss, sim/game
+            # /tmp/game_3.json turns 90-99): the old code rewarded raw
+            # free_degree, which is *intrinsically* lower for edge/corner
+            # cells (an edge cell has at most 3 in-bounds neighbors, a
+            # corner at most 2) purely due to board geometry, regardless of
+            # any actual danger. Combined with the edge-penalty term below,
+            # this made the bot systematically avoid food sitting near an
+            # edge/corner even while critically low on health, and it got
+            # caught in a stable back-and-forth cycle a few cells away from
+            # a food item at (6,0) for 8+ turns until it starved to death
+            # (confirmed via direct main.move() replay on the literal
+            # logged board state -- see README_agent.md for the full
+            # trace). Using the deficit (max_possible - actual) instead
+            # gives identical scoring to before for interior-cell ties
+            # (where max_possible is 4 for both candidates, so the relative
+            # difference is unchanged) but removes the spurious edge/corner
+            # bias, since a corner cell with both its 2 possible neighbors
+            # free now scores the same (deficit 0) as an open interior cell
+            # with all 4 free.
+            max_free_degree = 0
             free_degree = 0
             for ddx, ddy in DIRS.values():
                 nb = (nxt[0] + ddx, nxt[1] + ddy)
-                if _in_bounds(nb, width, height) and nb not in blocked:
-                    free_degree += 1
-            score += free_degree * 22
+                if _in_bounds(nb, width, height):
+                    max_free_degree += 1
+                    if nb not in blocked:
+                        free_degree += 1
+            score -= (max_free_degree - free_degree) * 22
 
             # Preference to stay away from edges/corners (more escape routes).
             # Strengthened + length-scaled after a traced real-match loss

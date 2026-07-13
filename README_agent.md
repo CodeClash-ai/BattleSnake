@@ -2818,3 +2818,174 @@ opponent (or a similarly weak/random one) recurs.
   inline comment above that line, and this section for the exact traced
   bug it fixes).
 - `analyze_logs.py` — unchanged.
+
+## Round (this session) — opponent = coreyja__coreyja-rs, found + fixed a real starvation-loop bug (free_degree edge bias + weak low-health food urgency)
+
+`/logs/rounds/0/results.json`: opponent this round is **`coreyja__coreyja-rs`**
+("Hovering Hobbs" -- a Rust-ported paranoid alpha-beta minimax with a
+flood-fill area-control leaf eval, iterative deepening, ~0.3s/move budget
+in the real harness -- see `git show origin/human/coreyja/coreyja-rs:main.py`
+for the full docstring). Real result: clean sweep, sonnet-5 33 / opponent
+0. `analyze_logs.py /logs/rounds/0`: 33/33 sims won, avg 5.7 turns (min 2,
+max 10) -- opponent dies/times-out almost immediately in the real harness
+(consistent with the long-established pattern in this file: many past
+"strong-on-paper" ported opponents lose fast in the real scoring harness
+but are much tougher in a local benchmark with a generous time budget).
+
+### Local benchmark (before any change) — confirmed the "local much harder
+### than real score" pattern again, and found a genuine bug (not opponent
+### pressure)
+
+Extracted the opponent fresh (`git show
+origin/human/coreyja/coreyja-rs:main.py > /tmp/opp/main.py; cp server.py
+/tmp/opp/server.py`) and ran 6 real local games via the `battlesnake` CLI
+against the pre-this-round `main.py` (standard recipe -- `setsid nohup env
+PORT=... python3 main.py > log 2>&1 </dev/null & disown` for both bots,
+loop `battlesnake play ... -o /tmp/game_N.json & disown`, sleep, check
+`tail` -- see many earlier rounds' notes elsewhere in this file for the
+full recipe). Confirmed the opponent locally does NOT time out (unlike the
+real harness) and plays real, contested games 60-220+ turns. **Result: 1
+win / 3 losses observed / 2 still running when step budget ran low.**
+
+Traced the shortest loss (`/tmp/game_3.json`, died turn 100) via literal-
+board-state replay (recipe: build a synthetic `game_state` per logged turn
+from `board.snakes[*].body`/`head`/`length`/`health`, call `main.move()`
+directly -- see many earlier rounds' notes in this file for the exact
+dict shape). **Found a genuine, concrete, reproducible bug -- not
+opponent pressure**: at health 8 (critically low), with food sitting only
+2 cells away at (6,0), our snake got stuck in a **stable 6-cell back-and-
+forth cycle** ((5,1)->(4,1)->(4,2)->(5,2)->(6,2)->(6,1)->(5,1)->...)
+for 8 consecutive turns and starved to death at turn 100, **never
+committing to the 2-move path to the nearby food**, despite nothing else
+threatening it (opponent was 5+ cells away the whole time).
+
+### Root cause (two compounding issues, both fixed)
+
+1. **`free_degree` local-mobility term had a systematic edge/corner
+   bias.** It rewarded the *raw count* of a candidate cell's free
+   neighbors (0-4), but a cell on a board edge has at most 3 in-bounds
+   neighbors and a corner at most 2 -- **purely from board geometry, not
+   any actual danger**. Combined with the separate edge-penalty term,
+   this made the bot systematically undervalue any move near
+   an edge/corner (like the cell adjacent to the food at (6,0), on the
+   bottom row) relative to interior moves, even when both were equally
+   "safe" in the sense of having all their possible neighbors free.
+   Verified by hand-computing both terms for the exact traced state: the
+   food-adjacent edge move scored `free_degree=2` (both possible
+   neighbors free) vs an interior alternative's `free_degree=3` (also
+   all possible neighbors free) -- a spurious 22-point penalty for having
+   one fewer *possible* neighbor, not one fewer *free* one.
+2. **Low-health food-urgency weight (`4` if health<50, else `1.5`) was
+   too weak to overcome the above bias plus the flat edge penalty** even
+   at health=8 -- a 2-cell food-distance advantage only bought an 8-point
+   score edge (`2 cells * weight 4`), nowhere near enough to offset the
+   ~22-point `free_degree` bias plus the ~9-point edge penalty on the
+   food-adjacent move.
+
+### Fix made this round
+
+1. **`free_degree` is now deficit-based**: compute `max_free_degree`
+   (in-bounds neighbor count for the position, ignoring blocked-ness) and
+   penalize `(max_free_degree - free_degree) * 22` instead of rewarding
+   raw `free_degree * 22`. This gives **identical** scoring to before for
+   any comparison between interior cells (where `max_free_degree` is 4
+   for both, so the relative difference is unchanged -- preserves the
+   original m-schier/kreuzotter degree-1-vs-degree-3 dead-end tie-break
+   fix from several rounds ago), but removes the spurious edge/corner
+   penalty (a corner cell with both its 2 possible neighbors free now
+   scores the same, deficit 0, as an open interior cell with all 4 free).
+2. **Steeper low-health food-urgency curve**: `weight = 10` if
+   `health<15`, `6` if `<30`, `4` if `<50`, else `1.5` (previously just a
+   flat `4`/`1.5` split). Makes food-seeking dominate much more strongly
+   exactly when starvation is imminent.
+
+**Verified directly**: replayed the exact turn-92 board state from the
+traced loss -- `main.move()` now returns `down` (toward the food) instead
+of the previous `left` (which continued the fatal cycle). Also ran a full
+turn-by-turn simulation starting from the health-8 traced state (our
+snake alone against a static distant opponent, recipe in shell history
+this round) -- the patched bot reaches and eats the food in 2 moves, then
+continues eating several more food items over the next ~20 simulated
+turns with health never dropping dangerously low again. The old code,
+replayed on the same sequence of states, would have continued the 6-cell
+starvation cycle (confirmed by the original trace itself, which is the
+literal real-game log).
+
+### Verification done
+
+- Smoke tests (`main.move()` on a normal 2-snake state, `{}` malformed
+  state, empty-snakes state) -- all still return valid moves, no
+  exceptions, after both changes.
+- Direct trace-replay + forward simulation described above.
+- **Did NOT get a full fresh local-benchmark tally against the patched
+  code** -- ran out of step budget mid-session; a `kill -9` aimed at
+  restarting the local test server (by PID, not `pkill -f` -- correctly
+  avoided the well-documented `pkill -f` self-match gotcha from many
+  earlier rounds' notes in this file) accidentally killed BOTH bots'
+  servers (the PID grep for `"python3 main.py"` matched both the
+  `/workspace` and `/tmp/opp` processes -- a new gotcha for the list
+  below), had to restart both and only got one fresh game underway (still
+  running, turn 66+, no errors/crashes in either log) before running out
+  of steps entirely.
+
+### NEW gotcha for the list (adds to existing pkill -f warnings elsewhere
+### in this file)
+
+`ps aux | grep "python3 main.py" | grep -v grep` matches **every** running
+`main.py` process regardless of working directory -- if you're running
+both your own bot (`/workspace/main.py`) and an extracted opponent copy
+(`/tmp/opp/main.py`) as background test servers, killing "by PID from ps
+aux" (the previously-recommended safer alternative to `pkill -f`) can
+still accidentally kill BOTH if you grab the wrong PIDs or don't check
+each process's full command line / cwd first (e.g. `ps aux | grep
+main.py` alone, or `readlink /proc/<pid>/cwd`) before issuing `kill`.
+Double-check you have the right PID for the right bot before killing, or
+kill+restart both together to avoid an inconsistent state.
+
+### HIGH PRIORITY next steps for whoever picks this up next
+
+1. **Run a full fresh local benchmark** (8-12+ games) against a freshly
+   extracted `origin/human/coreyja/coreyja-rs:main.py` with this round's
+   fix (recipe: `git show origin/human/coreyja/coreyja-rs:main.py >
+   /tmp/opp/main.py; cp server.py /tmp/opp/server.py`, then the usual
+   `setsid nohup env PORT=... python3 main.py & disown` for both bots +
+   `battlesnake play ... -o /tmp/game_N.json & disown` + `sleep` + `tail`
+   pattern used throughout this file -- games against this opponent ran
+   60-220+ turns locally, budget accordingly across multiple tool calls).
+   This round only got 1 clean win / 3 losses pre-fix and didn't get a
+   clean post-fix tally -- that's the most important gap to close.
+2. If new losses show up, use the exact trace-replay + forward-simulation
+   technique demonstrated this round (build a synthetic `game_state` from
+   the logged turn, call `main.move()`, and/or forward-simulate several
+   turns with a static/simplified opponent to see if the bot's *sequence*
+   of decisions converges on food/safety or gets stuck in a cycle again)
+   -- this found a very concrete, fixable bug this round (a starvation
+   loop), a different flavor from the more common "self-coil"/"corridor-
+   race" mechanisms this file's history has documented many times before.
+   Worth checking whether any *other* traced losses in this file's long
+   history (many "self-coil" sections above) might have partly been this
+   same free_degree edge-bias bug rather than (or in addition to) genuine
+   lookahead gaps -- this fix is now in place for all of them going
+   forward, so it's worth a fresh look at whether recently-recurring
+   "edge-hugging" symptoms improve as a side effect.
+3. Still-not-done, many-rounds-recurring big idea: true multi-ply
+   lookahead/minimax (current bot is fundamentally still 1-ply flood-fill
+   + local heuristics). See the extensive "ccSnake2018__ccsnake" and
+   "Xe__since" sections earlier in this file for detailed design sketches
+   and concrete repro points if a future round wants to attempt it.
+4. As always: re-check `/logs/rounds/1/results.json` once it exists -- if
+   the opponent identity changes, use `git log --oneline --all | grep -i
+   human` + `git show origin/human/<Org>/<repo>:main.py` to extract and
+   benchmark them fresh before assuming this round's fix matters against
+   them too (though the free_degree/food-urgency fix is a general
+   correctness improvement, not opponent-specific, so it should help
+   regardless of who the next opponent is).
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: `free_degree` is now deficit-based
+  relative to max-possible-neighbors for the position, fixing an
+  edge/corner bias; steeper low-health food-urgency weight curve -- see
+  the inline comments directly above both changes for the full traced
+  rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
