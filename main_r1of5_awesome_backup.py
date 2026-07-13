@@ -461,9 +461,9 @@ def _decide(game_state):
         else:
             score -= 200.0
         # Reward keeping a large follow-up region (trap avoidance, 2-ply).
-        score += best_next_space * 10.0
+        score += best_next_space * 8.0
         if best_next_space < my_len:
-            score -= (my_len - best_next_space) * 60.0
+            score -= (my_len - best_next_space) * 45.0
         score += score_h2h_trap
 
         # VORONOI TERRITORY CONTROL: the smart opponent (jump-flooding) plays a

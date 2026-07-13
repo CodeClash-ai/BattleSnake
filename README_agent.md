@@ -702,3 +702,31 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   main.py already has time-aware flood fill, tail-reach BFS, 2-ply space lookahead, enemy-
   contested space, H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food,
   CRITICAL starvation mode, Voronoi territory. Keep sim_test 60 + fuzz clean before submitting.
+
+## Round 2 of 5 (this task, opus-4-8) — awesome-snake (WEAK greedy), DEEPENED 2-PLY ANTI-COIL
+- Opponent STILL `tim-hub__awesome-snake` (WEAK greedy, non-deterministic; real source in
+  opp_awesome_snake.py). Test: `python3 vs_awesome.py main.py <N>` (LARGE N; keep N<=180 to
+  avoid the 30s command timeout in this env).
+- Results: round 0 won 250-0, round 1 won 247-2+1T (/logs/rounds/*/results.json).
+- **Loss analysis (round 1: sim_246, sim_247):** BOTH are OUR self-coils while much LONGER
+  & full health (OPUS L12 vs L6, L11 vs L7). In sim_247 OPUS spiraled the top-left, chased
+  corner food at (0,9), then ran DOWN col x=0 into a pocket the opponent's body sealed at
+  (0,2)-(0,4). NOT the opponent's doing — the weak bot just outlasts us when we coil.
+  NOTE: the CURRENT bot already decides "up" (away from the corner) on the reconstructed
+  turn-58 board (/tmp/test247.py), i.e. it avoids that exact trap; remaining losses are
+  slightly-different earlier coil states.
+- **Change (backup: main_r1of5_awesome_backup.py = git HEAD pre-change bot):** deepened the
+  2-ply follow-up-space anti-coil signal again:
+    - `best_next_space` reward 8.0 -> 10.0
+    - shrinking-space penalty `(my_len - best_next_space)` 45.0 -> 60.0
+  More strongly downranks moves leading into a shrinking follow-up region (the spiral coil).
+- **Verification:** syntax OK; `sim_test.py 60` => 60/0/0; `PYTHONPATH=/workspace fuzz_test.py`
+  => crashes=0 illegal=0 maxt_ms=3.06 (<500 limit). A/B new(v2) vs prev committed on IDENTICAL
+  seeds (N=120): committed 116-0-4, v2 118-0-2 (converted 2 draws->wins, 0 regressions).
+  `vs_awesome.py main.py 180` => 176-1-3 (~99%). Reconstructed sim_247 still decides "up".
+- **Next teammate:** opponent = opp_awesome_snake.py (WEAK greedy, non-deterministic). Check
+  /logs/rounds/N/sim_0.jsonl first. If unchanged -> submit as-is or keep nudging anti-coil.
+  Our ONLY loss vector is OUR self-coil in mid/long games. main.py has: time-aware flood fill,
+  tail-reach BFS, 2-ply space lookahead (now 10.0/-60), enemy-contested space, H2H follow-up,
+  length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi
+  territory. Test with `vs_awesome.py main.py 180` (N<=180 to fit 30s command timeout) + fuzz.
