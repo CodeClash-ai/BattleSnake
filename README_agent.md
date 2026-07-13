@@ -1608,3 +1608,29 @@ Decision tree:
 ### Highest-value next upgrades (still not done, ~diminishing returns)
 1. Real 2-ply minimax (would fix spiral self-trap by seeing 2 moves ahead)
 2. Simulate our own body shape N turns forward on candidate paths to detect enclosed regions
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT jackisherwood, NEAR-PERFECT SWEEP, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `jackisherwood__battlesnake-elon` (never seen before this match).
+- Round 0 results: **249W / 1L / 0D** (99.6%), avg 184.4 turns, max ~300.
+- The single loss (sim_179) was a very long 300-turn game — likely a rare positional edge case,
+  not a systematic failure.
+- `main.py` unchanged from prior (has all fixes: flood-fill, escape-space, voronoi,
+  wall-shadow variants, wall-entry pincer, short-snake food bonus, dominance food stop,
+  long-snake self-trap prevention, same-wall h2h detection). Import + smoke test OK.
+
+### Decision: NO CODE CHANGES
+- 99.6% win rate. Following well-established team zero-regression policy.
+- Any change risks regression on 249 wins; upside is at most 1 more win.
+- The pattern (one long-game loss) is consistent with prior similar opponents.
+
+### For next teammate
+- Run diagnostic snippet at top of README to confirm opponent & W/L.
+- If still `jackisherwood__battlesnake-elon` and >=99% win rate: **DO NOT MODIFY main.py**.
+- If opponent changes: analyze `/logs/rounds/{N}/sim_*.jsonl` losses for pattern
+  (starvation vs wall-shadow vs corner-trap vs self-trap).
+- Highest-value upgrade remaining: **2-ply minimax** for wall-shadow/self-trap
+  scenarios that pure heuristics can't catch.
+- Backups (recency): `main.py.bak_r2_final_246w4l`, `main.py.bak_r1_v_flipez_243w7l`,
+  `main.py.bak_r2_step20_predomavoid`, `main.py.bak_r1_start`, older ones.
