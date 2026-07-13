@@ -2139,3 +2139,59 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   via `python3 ab_zak.py <new> <old> <N> <off>` (offs 1/101/555; N<=8 for 30s cmd timeout — games
   run LONG). Do NOT ship regressions (we win ~66%). main.py has all prior layers. Tools: vs_zakwht.py,
   ab_zak.py (now in /workspace, not /tmp).
+
+## Round 1 of 5 (this task, opus-4-8) — NEW HARD OPPONENT `rdbrck__bountysnake2018` (STRONG ALPHA-BETA), NO CODE CHANGE (growth tweak REGRESSED in A/B)
+- **Opponent = `rdbrck__bountysnake2018`** — a FAITHFUL port of rdbrck's 2018 bounty entry
+  ("Son of Robosnake"), a REAL competition-grade **ALPHA-BETA search bot** (MAX_RECURSION_DEPTH=6,
+  0.30s wall-clock guard). Source saved to `opp_bountysnake.py` (git show
+  origin/human/rdbrck/bountysnake2018:main.py, 501 lines). Heuristic: flood-fill space control
+  for BOTH snakes, trap detection (`accessible<=len` => huge negative), food weighting
+  (food_weight=200-2*health when food<=8, else 100-health when hungry/short), **AGGRESSION** (it
+  "hangs out" near OUR head to threaten/force H2H, doubled weight along our last direction),
+  **HARD EDGE AVOIDANCE (-25000)**, and percent-accessible scaling. It MODELS US moving too
+  (alpha-beta), so it genuinely out-plays our heuristic bot.
+- **Round 0 result: LOST 225-25 (~10% win) — OUR WORST MATCHUP EVER.** Loss analysis (inline
+  script, /logs/rounds/0): 225 losses = **161 SHORTER / 18 equal / 46 longer; 177 on EDGE**;
+  death turns median 152 (min16 max414). MECHANISM (traced sim_1): opponent grows via food AND
+  aggressively hunts our head, funneling us to an edge/corner where — being SHORTER (L6 vs L7)
+  — it wins the forced H2H. It's a search bot beating a heuristic bot: it out-grows us, out-
+  positions us, and forces H2H when longer.
+- **CRITICAL TESTING NOTE:** the sim (sim_test/vs_bounty.py) is NOT representative — it shows
+  ~50-58% (near even), NOT the real 90% loss. The opponent's alpha-beta + 0.30s TIME_LIMIT
+  behaves differently under the sim harness, and it's SLOW (N=12 A/B ~80s, exceeds 30s cmd
+  timeout — use `nohup python3 -u vs_bounty.py <bot> <N> <off> > /tmp/x.txt & ` + poll).
+- **Experiment tried & REVERTED:** growth keep-pace boost (`_pace_margin` mid-enemy 6@>=12 -> 6@>=10,
+  small-enemy 1 -> 2; `truly_behind` gate max_enemy_len>=12 -> >=8) to fight the 161/225
+  shorter-at-death vector. A/B vs real opp on IDENTICAL seeds (N=12, off1): NEW 6-6-0 vs OLD
+  (committed) 7-3-2 — **NEW REGRESSED.** Consistent with ~30 prior rounds: scalar growth tweaks
+  are noise/regressive AND the sim can't validate them. **Reverted; main.py byte-identical to
+  committed** (backup: main_r0_bounty_backup.py).
+- Verified committed main.py: syntax OK; `python3 sim_test.py 40` => 40/0/0; imports clean;
+  fuzz clean (prior rounds maxt ~16-30ms < 500 limit).
+- **Decision: NO code change.** The one tweak I could test A/B-regressed; shipping an unvalidated
+  scalar change vs a bot we're already losing 90% to only adds regression risk for the OTHER
+  opponents this team faces across rounds. Kept the proven multi-layer bot stable.
+- **Next teammate — this is a STRONG ALPHA-BETA search bot; heuristic tweaks won't close a 90%
+  gap. The only realistic wins are STRUCTURAL:**
+  1. **EXPLOIT its HARD EDGE AVOIDANCE (-25000):** the opponent almost never moves to an edge/
+     corner. When we are EQUAL or LONGER we could DRIVE it toward edges/corners (it will refuse
+     edge cells, shrinking its options) and cut it off using `_voronoi_owned`. This is its single
+     biggest exploitable weakness and is UNTRIED.
+  2. **EXPLOIT its DETERMINISTIC-ish aggression:** it always hangs near our head and predicts our
+     last direction (doubles weight along it). We could FEINT (change direction) to make its
+     alpha-beta mis-predict, or bait its aggressive head-chase into a cell where WE win the H2H
+     (when longer). Its `direction(enemy_body[1], enemy_body[0])` = our last move — it over-weights
+     that lane, so a perpendicular feint could dodge its trap.
+  3. **A shallow MINIMAX of OUR OWN** (2-3 ply, modeling the enemy as the aggressor moving toward
+     our head + toward its food) would let us match its search depth on the critical H2H/trap
+     decisions. Our bot is pure 1-ply heuristic + flood-fill; against a 6-ply searcher that's the
+     structural gap. This is the highest-value (and hardest) fix.
+  4. Growth: we're SHORTER 161/225. But scalar food boosts REGRESS in A/B (proven this round).
+     If you try growth, make it SURGICAL (uncontested food only, ed>d) and A/B multi-seed in
+     BACKGROUND (nohup, offs 1/101/555) — do NOT ship anything that A/B-regresses vs committed.
+  Tools: `opp_bountysnake.py` (real opponent source — READ its heuristic, esp. the edge-avoid
+  and aggression terms), `vs_bounty.py <bot> <N> <off>` (SLOW, nohup+poll). main.py has all prior
+  layers (time-aware flood fill, tail-reach BFS, 2-ply best/worst space, enemy-contested space,
+  H2H follow-up, length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation,
+  Voronoi, deep self-survival sim, enemy-aware deep sim, clearly_ahead food-avoid, tail-follow
+  anti-coil, keep-pace growth, deterministic-opponent H2H intercept).
