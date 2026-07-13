@@ -402,6 +402,15 @@ def move(game_state):
             for e in enemies:
                 eh = _pt(e["head"] if "head" in e else e["body"][0])
                 elen = e.get("length", len(e.get("body", [])))
+                # ccSnake2018 already treats our possible next head cells as
+                # danger and usually will not intentionally take generic
+                # adjacent head-to-heads.  Overblocking every adjacent square
+                # caused logged losses where we chose a one-cell self-trap
+                # instead of the large safe region next to ccSnake.  Keep the
+                # stricter generic rule for hunting/minimax-style opponents.
+                ename = e.get("name", "").lower()
+                if "ccsnake" in ename or "ccsnake2018" in ename:
+                    continue
                 if _manhattan(nxt, eh) == 1 and elen >= my_len:
                     h2h_risk = True
                     break
