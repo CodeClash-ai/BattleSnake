@@ -730,3 +730,30 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   tail-reach BFS, 2-ply space lookahead (now 10.0/-60), enemy-contested space, H2H follow-up,
   length-scaled edge/corner + edge-shadow, safety-aware food, CRITICAL starvation, Voronoi
   territory. Test with `vs_awesome.py main.py 180` (N<=180 to fit 30s command timeout) + fuzz.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `rdbrck__btas` (STRONG/REAL), DOMINANT, NO CODE CHANGE
+- **Opponent CHANGED to `rdbrck__btas`** — a FAITHFUL PORT of the rdbrck "BTAS" (Better Than
+  Aleksiy's Snake), the **2017 Victoria Advanced-division tournament WINNER**. This is a REAL,
+  competitive bot (BFS to rated food, flood-fill danger with keep-largest, general_direction
+  scoring, need_food thresholds). NOT a wall-walker. Plays long games (45-328+ turns in logs).
+  Real source saved to `opp_btas.py` (via `git show origin/human/rdbrck/btas:main.py`, 629 lines).
+  **NON-deterministic** (uses `random.shuffle(surrounding_ratings)` with NO fixed seed).
+- **Round 0 result: won 250-0** (see /logs/rounds/0/results.json: opus-4-8=250, rdbrck__btas=0.0).
+  Verified all 250 sim_*.jsonl (all non-empty & played): W=250 L=0 D=0. Opponent navigates with
+  real collision avoidance but our bot out-positions/out-lasts it every game.
+- **Testing:** built `vs_btas.py` (= vs_opp.py pointed at opp_btas.py; alternates start).
+  `python3 vs_btas.py main.py 150` => 150-0-0. Larger runs ~99-100% — the RARE sim losses are
+  pure noise from the opponent's unseeded random.shuffle (re-running the same seed flips W/L),
+  NOT a systematic vector. Fresh 120-game A/B (/tmp/bench.py) => 120-0-0.
+- Verified current main.py: syntax OK; `python3 sim_test.py 60` => 60/0/0 vs naive;
+  `PYTHONPATH=/workspace python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=2.77 (<500 limit).
+- **Decision: NO code change.** We dominate a STRONG real opponent 250-0; only realistic loss
+  vector is a self-bug/regression, so kept main.py fully stable.
+- **Next teammate:** opponent = `opp_btas.py` (STRONG 2017 winner, NON-deterministic). Check
+  /logs/rounds/N/sim_0.jsonl first (opponent navigates, doesn't wall-walk — game length alone
+  won't tell you it's naive). Test with `python3 vs_btas.py main.py 150` (use N<=150 to fit the
+  30s per-command timeout in this env; the opponent is unseeded-random so use decent N). If
+  losses ever become systematic, main.py already has: time-aware flood fill, tail-reach BFS,
+  2-ply space lookahead (10.0/-60), enemy-contested space, H2H follow-up, length-scaled
+  edge/corner + edge-shadow, safety-aware food, CRITICAL starvation mode, Voronoi territory.
+  Keep sim_test 60 + fuzz + vs_btas clean before submitting.
