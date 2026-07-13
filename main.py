@@ -118,6 +118,46 @@ def _simple_opponent_target_move(head, food, w, h):
     return (hx, hy + 1)
 
 
+
+def _nettogrof_serpentine_move(enemy, food, w, h, blocked=frozenset()):
+    """Predict observed Nettogrof Java bot: vertical lawnmower sweep.
+
+    Round logs show it usually travels straight up/down a column, shifts left
+    at the top/bottom edge, then reverses vertical direction.  This prediction
+    is only used as a tactical hint; generic safety checks still dominate.
+    """
+    body = [_pt(p) for p in enemy.get("body", [])]
+    if not body:
+        return None
+    head = body[0]
+    neck = body[1] if len(body) > 1 else head
+
+    def ok(p):
+        return _in_bounds(p, w, h) and p not in blocked
+
+    hx, hy = head
+    # While moving vertically, continue until the wall, then shift left/right.
+    if len(body) > 1 and neck[0] == hx:
+        if neck[1] < hy:  # moving up
+            prefs = [(hx, hy + 1), (hx - 1, hy), (hx + 1, hy), (hx, hy - 1)]
+        elif neck[1] > hy:  # moving down
+            prefs = [(hx, hy - 1), (hx - 1, hy), (hx + 1, hy), (hx, hy + 1)]
+        else:
+            prefs = [(hx, hy + 1), (hx - 1, hy), (hx + 1, hy), (hx, hy - 1)]
+    else:
+        # Immediately after a horizontal shift on an edge it reverses direction.
+        if hy >= h - 1:
+            prefs = [(hx, hy - 1), (hx - 1, hy), (hx + 1, hy), (hx, hy + 1)]
+        elif hy <= 0:
+            prefs = [(hx, hy + 1), (hx - 1, hy), (hx + 1, hy), (hx, hy - 1)]
+        else:
+            prefs = [(hx, hy + 1), (hx, hy - 1), (hx - 1, hy), (hx + 1, hy)]
+
+    for p in prefs:
+        if ok(p):
+            return p
+    return prefs[0]
+
 def move(game_state):
     try:
         board = game_state["board"]
@@ -141,7 +181,13 @@ def move(game_state):
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
-            enemy_next_pred.append((_simple_opponent_target_move(eh, food, w, h), elen))
+            preds = {_simple_opponent_target_move(eh, food, w, h)}
+            if "Nettogrof" in e.get("name", ""):
+                pred = _nettogrof_serpentine_move(e, food, w, h, occupied)
+                if pred is not None:
+                    preds.add(pred)
+            for pred in preds:
+                enemy_next_pred.append((pred, elen))
 
         candidates = []
         for name, delta in MOVES.items():
@@ -179,12 +225,21 @@ def move(game_state):
                 score += 60 if health < 60 else 15
             if h2h_risk:
                 score -= 10000
+            for eh, e in zip(enemy_heads, enemies):
+                elen = e.get("length", len(e.get("body", [])))
+                if my_len >= elen + 3 and _manhattan(nxt, eh) == 1 and area >= my_len + 8:
+                    score += 120  # pressure much shorter snakes without overriding space safety
             # Known opponent often deterministically moves into one square.
             # Avoid equal/longer head-to-heads, but if we are longer this is a
             # controlled attack and should be preferred.
             for pred, elen in enemy_next_pred:
                 if nxt == pred:
-                    score += 2500 if my_len > elen else -5000
+                    if my_len >= elen + 3 and area >= my_len + 8:
+                        score += 1200
+                    elif my_len > elen:
+                        score += 50
+                    else:
+                        score -= 5000
             candidates.append((score, name, nxt, area, h2h_risk))
 
         if candidates:
