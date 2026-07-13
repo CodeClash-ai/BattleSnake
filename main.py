@@ -201,6 +201,28 @@ def _food_contested_from(pos, food_cells, enemy_heads, my_len, enemy_max_len):
     return ed <= 1 and enemy_max_len >= my_len
 
 
+def _shortest_food_distance(pos, food_cells, w, h, blocked):
+    """True BFS distance to food through currently open cells (99 if unreachable)."""
+    if not food_cells:
+        return 99
+    b = set(blocked)
+    b.discard(pos)
+    seen = {pos}
+    q = [(pos, 0)]
+    qi = 0
+    while qi < len(q):
+        cur, d = q[qi]
+        qi += 1
+        if cur in food_cells:
+            return d
+        nd = d + 1
+        for n in _neighbors(cur):
+            if _in_bounds(n, w, h) and n not in b and n not in seen:
+                seen.add(n)
+                q.append((n, nd))
+    return 99
+
+
 def _enemy_reachable_count(start, enemy_heads, w, h, blocked, limit=200):
     """Reachable cells for larger enemies, allowing them to start at their heads."""
     if not enemy_heads:
@@ -658,6 +680,7 @@ def move(game_state):
             safe_area = _flood_count(nxt, w, h, contested_blocked, limit=w * h)
             territory = _territory_count(nxt, enemy_heads, w, h, future_blocked, my_len, enemy_max_len)
             nearest_food = _nearest_food_distance(nxt, food)
+            path_food = _shortest_food_distance(nxt, food_cells, w, h, future_blocked)
             safe_food = _nearest_uncontested_food_distance(nxt, food, enemy_heads, my_len, enemy_max_len)
             center_dist = _manhattan(nxt, ((w - 1) // 2, (h - 1) // 2))
             edge_dist = min(nxt[0], nxt[1], w - 1 - nxt[0], h - 1 - nxt[1])
@@ -742,10 +765,12 @@ def move(game_state):
             # remaining failure mode is starving while our large space terms keep
             # us orbiting a safe-looking region.  Make low-health food pressure
             # nonlinear, but leave healthy early-game behaviour mostly unchanged.
-            if health < 15:
-                food_weight = 900
+            if health < 8:
+                food_weight = 4000
+            elif health < 15:
+                food_weight = 1800
             elif health < 30:
-                food_weight = 220
+                food_weight = 260
             elif health < 50:
                 food_weight = 35
             else:
@@ -754,7 +779,7 @@ def move(game_state):
             # length makes every future head-to-head and territory split worse.
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
-            food_dist = nearest_food
+            food_dist = path_food if health < 30 else nearest_food
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 # Do not let catch-up pressure drag us toward food a longer
@@ -765,6 +790,16 @@ def move(game_state):
                     else:
                         food_weight = min(food_weight, 25)
             score -= food_dist * food_weight
+            if health < 15:
+                # In production Pinky losses we sometimes orbited safe space until
+                # health 1 even with reachable food nearby; at critical health,
+                # a real path to food must dominate roomy-but-starving moves.
+                if path_food >= 99:
+                    score -= 250000
+                elif path_food >= health:
+                    score -= (path_food - health + 1) * 35000
+                else:
+                    score += (health - path_food) * 8000
             if nxt in food_cells:
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
