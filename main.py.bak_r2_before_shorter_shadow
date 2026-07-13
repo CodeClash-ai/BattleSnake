@@ -572,15 +572,9 @@ def _decide(game_state):
             moving_along_wall = True
         if moving_along_wall:
             for _opp in opponents:
+                if _opp["length"] < my_len:
+                    continue  # only worry about equal-or-longer
                 _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                len_diff_m = my_len - _opp["length"]
-                # For shorter opps, only care if they're diagonally very close
-                # AND we have limited runway before corner (space starvation trap).
-                if len_diff_m >= 2:
-                    _perp_pre = abs(_oh[0]-px_) if (on_left or on_right) else abs(_oh[1]-py_)
-                    _par_pre = abs(_oh[1]-py_) if (on_left or on_right) else abs(_oh[0]-px_)
-                    if _perp_pre > 2 or _par_pre > 3:
-                        continue
                 # Perpendicular shadow: opp is 1-3 cells inward and roughly aligned
                 if on_left or on_right:
                     perp_gap = abs(_oh[0] - px_)
@@ -632,9 +626,6 @@ def _decide(game_state):
                     # If perp_gap==1, opp is exactly one row inward: pure shadow.
                     if perp_gap == 1:
                         pen += 3.0
-                    # Shorter opp with tight shadow: boost pen to overcome voronoi
-                    if len_diff_m >= 2 and perp_gap <= 2 and par_gap <= 3:
-                        pen += 12.0
                 else:
                     # We're moving away from opp along wall. Bad if we're
                     # heading into a corner with no runway - we'll be forced
@@ -670,6 +661,10 @@ def _decide(game_state):
                 wall_axis = 'y'
         if entering_wall and my_len >= 4:
             for _opp in opponents:
+                # Allow up to 3-shorter opps: they can still corner us if we
+                # run out of runway on the wall. Fixes wall-corner death cases.
+                if _opp["length"] < my_len - 1:
+                    continue
                 _oh = (_opp["head"]["x"], _opp["head"]["y"])
                 # For side walls: check opp is roughly inward (between us and center)
                 if wall_axis == 'x':
@@ -680,30 +675,15 @@ def _decide(game_state):
                     par_gap = abs(_oh[0] - pxN)
                 if perp_gap == 0:
                     continue  # opp on same wall as us; different scenario
-                # Shorter opps can still corner us via space starvation, but only
-                # if they're diagonally near AND runway to corner is small.
-                len_diff = my_len - _opp["length"]
-                if len_diff >= 2:
-                    if perp_gap > 2 or par_gap > 2:
-                        continue
-                    # Runway = distance along wall to nearer corner from new position.
-                    if wall_axis == 'x':
-                        runway = min(pyN, h - 1 - pyN)
-                    else:
-                        runway = min(pxN, w - 1 - pxN)
-                    # If lots of runway, opp cannot corner us fast enough.
-                    if runway > _opp["length"] + 2:
-                        continue
                 if perp_gap <= 3 and par_gap <= 4:
                     # Opp is aligned to shadow. Penalize entering.
+                    # STRONGER for near-equal or longer opps (they can h2h-kill us).
                     pen = 3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0
-                    # Equal/longer opp diagonally aligned = classic shadow-into-corner.
+                    # If opp equal-or-longer and diagonally aligned (perp_gap<=2,
+                    # par_gap<=2), this is the classic shadow-into-corner pattern.
+                    # Double the penalty; these are the losses we've seen.
                     if _opp["length"] >= my_len and perp_gap <= 2 and par_gap <= 2:
                         pen *= 2.5
-                    elif len_diff >= 2 and perp_gap <= 2 and par_gap <= 2:
-                        # Shorter opp but tight shadow + limited runway = trap risk.
-                        # Boost heavily - voronoi space differential dominates otherwise.
-                        pen = pen * 1.8 + 15.0
                     s -= pen
                     break
 
@@ -727,34 +707,25 @@ def _decide(game_state):
                     moved_toward = (abs(pyN - wall_side) < abs(my_head[1] - wall_side))
                 if moved_toward:
                     for _opp in opponents:
+                        if _opp["length"] < my_len - 1:
+                            continue
                         _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                        len_diff = my_len - _opp["length"]
                         if near_wall_axis == 'x':
                             perp_gap = abs(_oh[0] - pxN)
                             par_gap = abs(_oh[1] - pyN)
                             # opp must be on the "inward" side (away from wall)
                             if wall_side == 0 and _oh[0] < pxN: continue
                             if wall_side == w-1 and _oh[0] > pxN: continue
-                            runway = min(pyN, h - 1 - pyN)
                         else:
                             perp_gap = abs(_oh[1] - pyN)
                             par_gap = abs(_oh[0] - pxN)
                             if wall_side == 0 and _oh[1] < pyN: continue
                             if wall_side == h-1 and _oh[1] > pyN: continue
-                            runway = min(pxN, w - 1 - pxN)
-                        # Shorter opps only worry us with tight shadow + short runway.
-                        if len_diff >= 2:
-                            if perp_gap > 2 or par_gap > 2:
-                                continue
-                            if runway > _opp["length"] + 2:
-                                continue
                         # Diagonal shadow: opp 1-2 cells inward, 1-3 cells parallel
                         if 1 <= perp_gap <= 2 and par_gap <= 3:
                             pen = 4.0 + max(0, 3 - par_gap) * 1.5
                             if _opp["length"] >= my_len:
                                 pen += 3.0
-                            elif len_diff >= 2 and perp_gap <= 2 and par_gap <= 2:
-                                pen += 10.0  # shorter but trap risk - boost to overcome voronoi
                             s -= pen
                             break
 

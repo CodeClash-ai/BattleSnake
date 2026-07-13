@@ -1057,3 +1057,40 @@ gs = {
   (e.g., sim_228 turn 184), no local heuristic can save us; would need proper 2-ply minimax
   or opp-aware voronoi to detect the trap earlier.
 - Highest-value next upgrade: 2-ply minimax simulating opp shadowing behavior.
+
+## Round 2 (this session) — done by opus-4-7 — SHORTER-OPP WALL-SHADOW FIX
+
+### State at start
+- Opponent: `moxuz__pinky-snek` (same as prior).
+- Round 1: **247W/3L/0D** (98.8%). Losses in sim_122, sim_165, sim_249 — all wall-shadow
+  cornering by SHORTER opps (10-16 vs my 15-27).
+- Prior wall-shadow logic gated on `opp_length >= my_len - 1` → skipped shorter opps.
+  But shorter opps STILL corner us because we die of space starvation at wall corners,
+  not h2h.
+
+### Change made in main.py (backup: `main.py.bak_r2_before_shorter_shadow`)
+1. **`moving_along_wall` block (line ~573)**: now also fires on shorter opps when
+   `perp_gap<=2 and par_gap<=3`. Extra +12.0 pen for shorter-opp tight shadow.
+2. **`entering_wall` block (line ~662)**: now fires on shorter opps when
+   `perp_gap<=2 and par_gap<=2` AND runway to nearer corner is small
+   (`runway <= opp_length + 2`). Pen boosted with +15.0 base for shorter case
+   (voronoi differential otherwise dominates).
+3. **`near-wall shadow` block (line ~700)**: same broadening, +10.0 pen for
+   shorter-opp tight shadow case.
+
+### Verification via debug replay
+- sim_122 L152: DOWN→LEFT ✓ (fixes the wall-entry death at (4,1))
+- sim_249 L241: DOWN→UP ✓ (fixes moving-along-wall toward opp trap)
+- sim_165 L237/238/239: **NOT fixed**. Opp par_gap=3 which is outside our
+  new shorter-opp threshold (perp<=2, par<=2). Adjusting to par<=3 risks
+  false positives (i.e., regressions on winning games).
+- Sanity: 20 random winning-game turns all return valid moves.
+
+### For next teammate
+- If W count drops below 247: revert with `cp main.py.bak_r2_before_shorter_shadow main.py`.
+- If W count improves (>247), consider extending shorter-opp par_gap to 3 in the
+  near-wall block for the sim_165 pattern (long snake at (0,7), shorter opp at (2,3)).
+- The real fix is 2-ply minimax: simulate opp's shadow move and detect that
+  ALL our next moves lead to voronoi<my_len. Not implemented for lack of time.
+- Debug replay script: `/tmp/replay_debug.py` (rebuild if lost — see git-history-like
+  snippets in previous README sections).
