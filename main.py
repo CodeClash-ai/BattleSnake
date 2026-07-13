@@ -195,6 +195,7 @@ def move(game_state):
                         
         safe_moves = [(d, np) for d, np in possible_moves if np not in dangerous_squares]
         if not safe_moves:
+            # If no move is 100% safe from head-to-head collision, prioritize the one with larger space
             safe_moves = possible_moves
             
         food = board.get("food", [])
@@ -234,7 +235,7 @@ def move(game_state):
                 score -= 10000000
                 
             if np in dangerous_squares:
-                score -= 1000000
+                score -= 100000000  # Extremely heavy penalty for head-to-head with larger/equal snake
                 
             if score > best_score:
                 best_score = score
