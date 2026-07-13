@@ -725,6 +725,31 @@ def move(game_state):
                 )
                 if opp_worst_area is not None:
                     score += min(opp_worst_area, area_for_score) * 4
+                    # Give this real teeth for the specific "genuine 1-ply
+                    # tie" failure class this whole mechanism targets: if
+                    # the opponent's single best (for them) response would
+                    # leave us with LESS reachable area than our own body
+                    # length -- i.e. a predicted future trap, not just a
+                    # smaller-but-still-safe region -- add a meaningful
+                    # extra penalty. Weighted below the same-turn guaranteed
+                    # hard-trap penalty (100x, used when area_for_score
+                    # itself is already < my_length, a certainty) since this
+                    # is a 1-ply *prediction* of the opponent's move (they
+                    # might not actually play their worst-case-for-us move),
+                    # but still large enough to decisively break ties among
+                    # candidates that look identical on every current-turn
+                    # metric (raw area, Voronoi territory) -- exactly the
+                    # repeated failure pattern documented at length in
+                    # README_agent.md across many opponents, most
+                    # persistently OliverMKing__astar-snake. The previous
+                    # `* 4` linear term alone was too weak to reliably flip
+                    # such ties (e.g. area 100 vs 100, opp_worst 100 vs 5
+                    # only nets a 380-point gap once combined with the
+                    # existing area*5 term -- helpful, but this adds a
+                    # sharper, more targeted signal specifically for the
+                    # "collapses below body length" case).
+                    if opp_worst_area < my_length:
+                        score -= (my_length - opp_worst_area) * 30
             # Heavily penalize getting trapped in a space smaller than our body
             # (would starve/box us in for certain).
             if area_for_score < my_length:

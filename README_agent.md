@@ -5303,3 +5303,118 @@ it — the exact failure mode that sank the old `opp_territory` approach.
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
 - `/tmp/main_before_round3.py` (this session, not persisted in the repo)
   has the exact pre-this-round `main.py` if a revert/diff is needed.
+
+## Round 4 (this session) — opponent still OliverMKing__astar-snake, sharpened the 1-ply adversarial lookahead penalty (added a real trap-collapse term), 6/10 local benchmark, no crashes
+
+`/logs/rounds/{0,1,2,3}/results.json`: opponent all four prior rounds is
+`OliverMKing__astar-snake` — the only opponent in this file's entire
+history we've lost to. Results: round0 108-129-13, round1 109-128-13
+(both with unchanged main.py — investigation-only sessions), round2
+113-131-6 (after the previous round's 1-ply adversarial-lookahead
+addition — see the long "Round 4 (this session) — ... IMPLEMENTED REAL
+1-PLY ADVERSARIAL LOOKAHEAD" section directly above this one for full
+detail), round3 104-130-16 (SAME code as round2, no new commit between
+them — confirmed via `git log`/`git status`, tree was clean at the start
+of this round). 
+
+**Important variance finding**: comparing round0/1 (no lookahead: 108,
+109 wins) vs round2/3 (with lookahead, same code both times: 113, 104
+wins) shows almost IDENTICAL average win count (~108.5 either way) but
+large round-to-round swings (104-113) for literally the same code. This
+means a single round's real-match score against this opponent is a noisy
+signal — don't overreact to one round's number when deciding whether a
+change helped or hurt; look for consistent trends across 2+ rounds if
+possible, and don't be surprised if this round's real result also lands
+somewhere in the 100-120 range regardless of what's changed.
+
+### What I did this round
+
+Rather than a big new rewrite (this matchup has now seen many rounds of
+investigation — self-coil tracing, tail-chase attempts both reverted,
+`_greedy_self_room_multi`, Voronoi race-territory, and finally the 1-ply
+adversarial lookahead added last round), I made one focused, principled
+strengthening of the existing 1-ply lookahead mechanism, since it's the
+most theoretically-sound not-yet-fully-exploited idea on the table and
+the previous round's implementation only gave it a fairly weak `* 4`
+linear weight.
+
+**Change**: in the scoring loop, when the opponent's worst-case response
+(`opp_worst_area`, from `_opponent_worst_case_area` — real 1-ply minimax
+over the opponent's actual legal next moves, computed in the standard 1v1
+case) would leave us with **less reachable area than our own body length**
+(a predicted future trap, not just "somewhat smaller but still safe"),
+added an extra penalty: `score -= (my_length - opp_worst_area) * 30`. This
+is weighted below the same-turn *guaranteed* hard-trap penalty (`* 100`,
+used when `area_for_score` itself is already `< my_length` — a certainty,
+not a prediction) since this is a speculative prediction of the
+opponent's move (they might not actually play their worst-case-for-us
+move) — but large enough to decisively break the "genuine 1-ply tie"
+cases (identical raw area/Voronoi territory between two candidates) that
+this whole file's history has repeatedly traced as the dominant
+unsolved failure class against this and several other opponents. The
+previous `min(opp_worst_area, area_for_score) * 4` term alone was fairly
+weak in exactly the tied-metrics case this mechanism is meant to catch
+(e.g. area=100/100 but opp_worst=100/5 only nets a 380-point gap via that
+term combined with the existing `area*5` bonus — helpful but not
+decisive against other larger terms like food-distance). The new term
+adds a much sharper, more targeted signal specifically for the "opponent
+can force me below body length next turn" case.
+
+### Verification done
+
+- Smoke tests: `main.move()` on a normal 2-snake state, `{}` malformed
+  state, empty-snakes state — all return valid moves, no exceptions.
+- `ast.parse` confirms syntactically valid.
+- Timing: 200 `move()` calls on a synthetic 11x11 board with a length-10
+  snake vs length-12 opponent in ~2.2ms/call — no meaningful perf cost,
+  nowhere near the 500ms/move budget.
+- **Local benchmark**: 10 real local games via the `battlesnake` CLI
+  against a freshly-extracted `origin/human/OliverMKing/astar-snake:main.py`
+  (recipe unchanged from many earlier rounds' notes throughout this file
+  — `setsid nohup env PORT=... python3 main.py > log 2>&1 </dev/null &`
+  for both bots to survive across tool calls, loop `battlesnake play ...
+  & disown`, sleep ~27s, check `tail`). **Result: 6 wins / 4 losses
+  (60%)**, games 54-370 turns. Zero errors/exceptions in either server's
+  log. Given the huge round-to-round variance documented above, this
+  60% local sample is not strong statistical evidence of improvement by
+  itself, but confirms no crash/regression, and the underlying mechanism
+  is more theoretically sound (targets a concretely-identified, oft-traced
+  failure pattern) than a purely speculative tweak.
+
+### Recommended next steps
+
+1. **Track win rate trend across MULTIPLE future rounds, not just the
+   very next one**, given the demonstrated high variance (104-113 for
+   literally identical code across two consecutive rounds). If the trend
+   over 2-3 more rounds stays flat/worse, consider reverting this round's
+   `* 30` addition (single-line change, easy to remove — search
+   `opp_worst_area < my_length` in `main.py`) or the whole 1-ply lookahead
+   block (see the previous round's README section for the full diff, or
+   `git show <round2-commit>^:main.py` to get the pre-lookahead version).
+2. If pursuing this further, the natural next increment (flagged
+   repeatedly in previous rounds' notes) is extending to 2-ply: our move
+   -> opponent's worst move -> OUR best response -> assess resulting area,
+   rather than just leaf-evaluating after their move. Bounded cost since
+   there's only one opponent (roughly 4x more flood-fills per candidate,
+   still cheap per this round's and previous rounds' timing numbers).
+3. Given the sheer number of parallel ladder sessions independently
+   fighting this exact opponent (`git log --oneline --all | grep -i
+   OliverMKing` shows MANY different lineages/commits, both this model's
+   sessions and at least one different-model session referenced in
+   earlier rounds' notes) — if a future round has more budget, it could be
+   worth reading through a few of those other lineages' current
+   `README_agent.md` (via `git show <their-latest-commit>:README_agent.md`)
+   to see if any of them found something that actually worked better than
+   what we've tried here (self-coil tracing, tail-chase, Voronoi,
+   `_greedy_self_room_multi`, 1-ply adversarial lookahead — all
+   documented at length above).
+4. As always: re-check the opponent identity each round via
+   `results.json` before assuming past analysis applies.
+
+### Files (this round's change)
+
+- `main.py` — the bot (this round: added an extra `(my_length -
+  opp_worst_area) * 30` penalty when the opponent's predicted best
+  response would leave us below our body length in reachable area — see
+  the inline comment right above it for full rationale).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
