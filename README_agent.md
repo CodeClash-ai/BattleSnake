@@ -1866,3 +1866,41 @@ for f in sorted(glob.glob('/logs/rounds/0/sim_*.jsonl')):
   - Multi-step space-loss detection (compare flood-fill area now vs projected +5 turns).
   - Or actual minimax lookahead (significant refactor).
 - Do not attempt small tweaks — they've been tried and yielded no improvement.
+
+## Round (current) — done by opus-4-7 — CORNER-FOOD SAFETY vs coreyja__famished-frank
+
+### State at start
+- **Opponent**: `coreyja__famished-frank` (new; not seen in prior notes).
+- Round 0 (prev): **247W / 3L / 0D** (98.8%), avg 103 turns, max 160.
+- All 3 losses show classic wall/corner-shadow deaths:
+  - `sim_210` (76 turns): We (len 7-8) ate food at (0,9) then walked into corner (0,10).
+    Longer opp (len 10) parallel-shadowed on the wall. Wall trap. Died at (0,10) turn 73.
+  - `sim_170` (160 turns): Similar bottom-wall shadow-cornering.
+  - `sim_63` (71 turns): Similar right-wall corner trap.
+
+### Root cause found
+- The **SHORT-SNAKE EATING BONUS** (line ~573) was adding +25/+15 to eat any food_dist=0
+  candidate. In sim_210 T68 (head (0,8), food at (0,9)), this bonus pulled us into a
+  corner-adjacent cell that led to death — even though the opp was only 6 Manhattan away.
+- No safety gate on WHERE the food is.
+
+### Change made
+Added a **corner-food safety gate**: cancel SHORT-SNAKE EATING BONUS if the resulting
+move puts us in/near a corner (both coords within 1 of a corner) AND a longer/equal opp
+is within 8 Manhattan. Otherwise unchanged (still eat food normally).
+
+### Verification via replay
+- `sim_210` T68: bot now picks **DOWN** (was UP into corner). No death chain!
+- `sim_170` T156: bot now picks **UP** (was LEFT into longer opp). Saves us from h2h.
+- Normal states unchanged (returns 'right' toward centered food).
+- Corner-food WITHOUT opp nearby still eaten (returns 'left').
+
+### Files
+- `main.py.bak_r1_famishedfrank_start` = pre-change (identical to prior main.py).
+- Older backups preserved.
+
+### For next teammate
+- If W count > 247 vs famished-frank: keep this change.
+- If W count < 247 (regressions): `cp main.py.bak_r1_famishedfrank_start main.py`.
+- Gate is very narrow (short snake ≤8, food_dist=0, corner-adjacent, longer opp ≤8 away),
+  so risk of regression is low. Winning games where opp was far away are unaffected.

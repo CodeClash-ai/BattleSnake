@@ -571,22 +571,7 @@ def _decide(game_state):
             # of food_dist=0 vs food_dist=2 was only ~8 pts, less than voronoi/esc diff.
             # An explicit ate=25 bonus overrides those (esc/vor still checked for safety).
             if c["food_dist"] == 0 and my_len <= 8 and not c["h2h_loss"]:
-                # Corner-food safety: don't take the bonus if landing in/near corner
-                # while a longer opp is within 8 Manhattan (they could wall-shadow us).
-                _px, _py = c["pos"]
-                _in_corner = (_px <= 1 or _px >= w-2) and (_py <= 1 or _py >= h-2)
-                _long_opp_near = False
-                for _op in opponents:
-                    if _op["length"] >= my_len:
-                        _oh = _op["head"]
-                        if abs(_oh["x"] - _px) + abs(_oh["y"] - _py) <= 8:
-                            _long_opp_near = True
-                            break
-                if _in_corner and _long_opp_near:
-                    # Cancel the eating bonus — food isn't worth being cornered
-                    pass
-                else:
-                    s += 25.0 if my_len <= 5 else 15.0
+                s += 25.0 if my_len <= 5 else 15.0
         else:
             if my_health < 30:
                 s -= 20
