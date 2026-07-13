@@ -926,21 +926,6 @@ def _decide(game_state):
                 if 1 <= _px <= w-2 and 1 <= _py <= h-2:
                     s += 2.0
         # Wall / edge distance shrinkage penalty when we're close to walls AND long
-        # BODY-CROWDING PENALTY (self-spiral prevention). For long snakes only,
-        # and only when space is already tight (avoids affecting normal long-snake play).
-        # Rationale: at self-trap turning points, ALL candidates have identical space/esc/vor
-        # but the one going INTO the coil has more own-body cells nearby (m4). Adds a
-        # tie-breaker signal. Very narrow gate: 0% divergence on 148 sampled winning-game states.
-        if my_len >= 20 and c["space"] < my_len * 2:
-            _body_pts = set((b["x"],b["y"]) for b in you["body"])
-            _px, _py = c["pos"]
-            _m4 = 0
-            for _dx in range(-4,5):
-                for _dy in range(-4,5):
-                    _a = abs(_dx) + abs(_dy)
-                    if 0 < _a <= 4:
-                        if (_px+_dx, _py+_dy) in _body_pts: _m4 += 1
-            s -= _m4 * 1.5
         return s
 
     pool.sort(key=score, reverse=True)

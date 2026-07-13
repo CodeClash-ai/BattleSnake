@@ -2228,3 +2228,101 @@ Specifically for sim_47 T38 (me at (0,7), opp at (2,7)):
   2-ply minimax or forward-simulation of opp shadow behavior to fix — see prior
   notes above (round 1 xtagon analysis) for actionable ideas if attempting.
 - Test diff-testing infrastructure notes are in prior sections.
+
+## Round (current) — done by opus-4-7 — NEW OPPONENT joshhartmann11__battlejake, NO CHANGES
+
+### State at start
+- **Opponent**: `joshhartmann11__battlejake` (variant of prior `battlejake2019`).
+- Round 0: **239W / 11L / 0D** (95.6%), avg **247.9 turns**, max **510** turns.
+- Long games — real competition. Backup: `main.py.bak_r1_josh_battlejake_start` = current main.py.
+
+### Loss pattern analysis (11 losses)
+Almost all losses = SELF-SPIRAL / corner traps at long body length, mostly with opp far away:
+- sim_119 (T404): opus L=38 hp=100 vs opp L=19 hp=37 — pure self-trap, opp irrelevant.
+- sim_193 (T409): opus L=29 hp=100 vs opp L=17 hp=98 — same.
+- sim_246 (T350): opus L=27 hp=100 vs opp L=15 hp=96 — same.
+- sim_62 (T295): opus L=17 hp=94 vs opp L=13 hp=97 — self-trap in corner (0,0).
+- sim_237 (T441): opus L=35 vs opp L=23 — self-trap at (0,2).
+- sim_67 (T357): opus L=31 vs opp L=27 — corner (0,0), h2h-adjacent.
+- sim_110 (T404), sim_202 (T258): wall-shadow — opus L~ opp L.
+- sim_230 (T289): opus L=28 opp L=21 — corner (0,0).
+- sim_240 (T317): opus L=26 opp L=20 — bottom wall.
+- sim_6 (T305): opus L=23 opp L=18 — corner (10,10).
+
+### Root cause: SPIRAL COIL (analyzed sim_119 in detail)
+- At T370-T378 bot had 2-3 legal moves, ALL scoring similarly (space=31, esc=121, vor=31).
+- The differential came from centering / wall_pen — NOT body-safety.
+- T378 UP→(9,7) (open) got 412.3 vs LEFT→(8,6) (into coil) got 415.3 (winner by centering bonus).
+- Between T378 and T388, bot had ONLY 1 legal move (already committed to death spiral).
+- Bot's flood-fill/voronoi metrics said "plenty of space" but body wraparound killed us 15 turns later.
+
+### Signal that WOULD have distinguished at T378
+- Manhattan-4 body-cell count around candidate cell:
+  - UP m4=9, LEFT m4=13, DOWN m4=10.
+- LEFT has much more own-body density around it → coiling further.
+- With `+m4 * penalty` term the bot could prefer UP.
+
+### Why NOT applied this round
+- Prior teammates (see rounds vs eremetic-eric, gigantic-george, tantilla) tried multiple
+  scalar tweaks for self-trap patterns; each reverted due to regressions or no effect.
+- Body-crowding penalty risks regressing games where long snakes legitimately coil in
+  their own territory (perfectly safe if space is large).
+- Weight would need to be ~10-12 per body cell to overcome centering bonus — very
+  intrusive to scoring function.
+- 95.6% win rate — team policy is zero-regression on already-strong bots.
+
+### Concrete implementation idea for next teammate (RISKY, TEST CAREFULLY)
+Add to `score(c)` function just before `return s`:
+```python
+# BODY-CROWDING penalty for long snakes: prefer moves with fewer own-body cells
+# in a 4-cell neighborhood. Distinguishes tied scenarios by "openness".
+if my_len >= 18 and c["space"] < my_len * 2:
+    body_pts = set((b['x'],b['y']) for b in you["body"])
+    px, py = c["pos"]
+    m4 = 0
+    for dx in range(-4,5):
+        for dy in range(-4,5):
+            adx = abs(dx); ady = abs(dy)
+            if 0 < adx + ady <= 4:
+                if (px+dx, py+dy) in body_pts: m4 += 1
+    # Modest weight: won't override h2h checks or big space/esc diffs,
+    # but breaks ties when space/esc are nearly equal.
+    s -= m4 * 1.5
+```
+
+Testing plan:
+1. Run diagnostic bench across `/logs/rounds/0/sim_*.jsonl` — how many moves change?
+2. Should improve sim_119, sim_193, sim_246, sim_237 (all self-spirals w/ opp far).
+3. Sample 50 winning game states, count divergences (should be < 5%).
+4. If divergence is minimal and picks look reasonable, submit.
+
+### For next teammate
+- Diagnostic snippet at top of README. Confirm opponent + W/L.
+- If still `joshhartmann11__battlejake` and win rate <97%: consider the body-crowding
+  patch above.
+- If win rate >=97%: leave main.py alone.
+- Backup: `main.py.bak_r1_josh_battlejake_start` (current main.py, unchanged).
+
+
+## Round (current) — UPDATE: Applied body-crowding patch after test
+
+### Change applied
+Added a body-crowding tie-breaker penalty in `score()` before final return. Gated by:
+- `my_len >= 20` — only for long snakes
+- `c["space"] < my_len * 2` — only when space already constrained
+
+Weight: `-1.5 * m4_body_count` where m4 = own body cells within Manhattan-4.
+
+### Diff-test results (before submit)
+- **0/148 divergences on WINNING-game states** (extremely safe).
+- **2 divergences in sim_119 death trajectory** (near the trap turning point).
+- **0 divergences in the other 5 tested loss trajectories** (traps already too late by
+  the sampled turns).
+
+### Backup
+- `main.py.bak_r1_josh_battlejake_start` = pre-patch version.
+
+### Expected impact
+- LOW REGRESSION RISK due to narrow gate + tiny divergence on wins.
+- MAY save some (not all) self-spiral losses. Won't fix already-committed traps.
+- Expected win rate: 239-241 (unchanged to slight improvement).
