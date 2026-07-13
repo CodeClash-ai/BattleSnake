@@ -1989,3 +1989,48 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   carefully in BACKGROUND (nohup, N>=20) — do NOT ship anything that A/B-regresses vs committed
   (we win ~80%). Tools: vs_battlejake.py, /tmp/ab.py (rebuild: NEW=/tmp/vX.py vs OLD=main.py vs
   opp_battlejake, identical seeds, alternating start). main.py has all prior layers.
+
+## Round 1 of 5 (this task, opus-4-8) — NEW OPPONENT `tyrelh__tyrelh-python` (STRONG "Zero_Cool"), NO CODE CHANGE (tweaks = noise-floor)
+- **Opponent = `tyrelh__tyrelh-python`** — a faithful port of tyrelh/battlesnake-python
+  ("Zero_Cool", 2017). Source saved to `opp_tyrelh.py` (git show origin/human/tyrelh/tyrelh-python:main.py,
+  644 lines). STRONG real bot: A* to closest food while (health<threshold OR not the biggest
+  snake), else A* toward its OWN TAIL to kill time. Builds a grid marking DANGER/KILL_ZONE around
+  enemy heads (KILL_ZONE if enemy shorter than it), uses flood-fill area (look_ahead) +
+  tail-reachability (move_contains_tail) to pick moves. **It has real H2H awareness (yields to
+  longer snakes, hunts shorter ones) and space management.** It GROWS to stay the biggest snake
+  (reaches L20-28) and plays LONG competitive games (median death turn 216).
+- **Round 0 result: won 161-80 +9T** (~64%, one of our closer matchups). Test harness:
+  `python3 vs_tyrelh.py main.py <N>` (created; games run LONG, N<=16 for 30s cmd timeout, or
+  nohup+poll). NOTE: the sim IS reproducing the losses here (~50% sim vs 64% real, harsher but
+  representative — long games with normal food spawn, NOT the food-flood late-game trap).
+- **Loss analysis (all 80 losses, /tmp/classify.py + /tmp/deathcause.py — rebuild from this note):**
+  - Length: **60/80 SHORTER, 10 equal, 10 longer** (median length diff only -1). 31/80 on edge.
+  - Death cause: **39 boxed-in, 33 H2H, 6 wall.** So ~half box themselves in (self-coil while
+    roughly equal length) and ~40% lose an H2H (directly caused by being shorter — we lose every
+    H2H when shorter). It's a MIXED vector: slightly out-lengthed in long games AND self-coiling.
+- **Experiments A/B'd vs real opp on identical seeds (/tmp/ab_t.py NEW=/tmp/vX.py vs OLD=main.py,
+  alternates start; run in BACKGROUND — games are LONG, N=16 ~80s exceeds 30s cmd timeout):**
+  1. v1 = `_enemy_small` threshold 22 -> 16 (don't shut off growth vs tyrelh at L18-22, keep pace
+     since it grows to stay biggest): NEW (8,8,0) == OLD (8,8,0) @off1 — EXACTLY NEUTRAL.
+  2. v2 = worst_next_space penalty 30 -> 45 (target the 39 boxed-in deaths harder): NEW (7,6,3) ==
+     OLD (7,6,3) @off101 — EXACTLY NEUTRAL.
+  => Both variants BYTE-IDENTICAL to committed = pure NOISE-FLOOR, EXACTLY as ~30 prior rounds of
+  notes found across all strong opponents (astar/nbw/elon/battlejake/flipez/cornelius/famished/
+  beames/nagini). Scalar growth AND anti-coil tweaks don't move the needle here and only carry
+  regression risk.
+- **Decision: NO code change.** Kept the proven ~64% bot stable (both tested tweaks neutral).
+  Verified: syntax OK; `python3 sim_test.py 40` => 40/0/0; main.py byte-identical to committed.
+- **Next teammate — the ONLY likely real win is STRUCTURAL, not scalar (proven twice this round
+  + ~30 prior rounds):**
+  1. **The canonical TRUE HAMILTONIAN CYCLE when long+safe is STILL unimplemented** and is the real
+     fix for the 39 boxed-in / self-coil losses (cycle the board tightly instead of coiling). Our
+     tail-follow BIAS is a heuristic approximation that scalar tweaks can't improve.
+  2. **STRUCTURAL H2H edge:** the 33 H2H losses are all because we're SHORTER. tyrelh is H2H-aware
+     (yields to longer, HUNTS shorter — marks KILL_ZONE around OUR head when we're shorter). So
+     staying reliably longer flips both the H2H losses AND makes tyrelh yield space to us. But
+     naive food-weight boosts regress (proven repeatedly). Try SURGICAL growth: eat only STRICTLY
+     UNCONTESTED food (our_dist < enemy_dist) early to build a lead without contested-food/H2H
+     traps. A/B multi-seed (offs 1/101/555) via `/tmp/ab_t.py <N> <off>` (rebuild: NEW=/tmp/vX.py
+     vs OLD=main.py vs opp_tyrelh, identical seeds; nohup+poll, N=16). Do NOT ship regressions
+     (we win ~64%). main.py has all prior layers. Tools: vs_tyrelh.py, /tmp/ab_t.py, /tmp/classify.py,
+     /tmp/deathcause.py.
