@@ -238,7 +238,8 @@ def move(game_state):
                     score -= dist_to_food * 200 # Heavy weight to go to food
 
             if space < my_length:
-                score -= 10000000
+                # Instead of huge constant penalty, scale it proportionally to space we actually have
+                score -= 10000000 * (my_length - space)
                 
             if np in dangerous_squares:
                 score -= 100000000  # Extremely heavy penalty for head-to-head with larger/equal snake
