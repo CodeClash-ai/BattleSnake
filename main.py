@@ -654,6 +654,7 @@ def move(game_state):
         has_vulture_enemy = False
         has_nbw_ruby_enemy = False
         has_eremetic_enemy = False
+        has_gigantic_george_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -689,6 +690,11 @@ def move(game_state):
                     preds.add(pred)
             elif "vulture" in ename.lower() or "spenca" in ename.lower():
                 pred = _vulture_predicted_move(e, game_state, w, h)
+                if pred is not None:
+                    preds.add(pred)
+            elif "gigantic-george" in ename.lower() or "gigantic" in ename.lower() or "george" in ename.lower():
+                has_gigantic_george_enemy = True
+                pred = _eremetic_eric_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
             elif "eremetic-eric" in ename.lower() or "eremetic" in ename.lower():
@@ -929,7 +935,7 @@ def move(game_state):
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
             food_dist = path_food if health < 30 else nearest_food
-            if has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+            if (has_eremetic_enemy or has_gigantic_george_enemy) and health >= 45 and my_len >= enemy_max_len + 5:
                 # Eremetic Eric deliberately coils and stays short.  In round-0
                 # losses we were usually far longer, healthy, and eventually
                 # self-boxed after eating too much optional food.  When safely
@@ -945,6 +951,21 @@ def move(game_state):
                     score += max(0, 30 - tail_dist) * 350
                     if area < my_len // 3:
                         score -= (my_len // 3 - area) * 500
+                # Gigantic George is essentially Eremetic Eric and usually stays
+                # short.  Production losses were our giant snake self-boxing by
+                # tracing the outer wall until the final turn had no exit.  When
+                # safely far ahead, make interior tail-chasing dominate edge food
+                # and raw flood-fill.
+                if has_gigantic_george_enemy:
+                    score += edge_dist * 2800
+                    if edge_dist == 0:
+                        score -= 22000
+                    elif edge_dist == 1:
+                        score -= 6000
+                    if choke_risk:
+                        score -= choke_risk * 6000
+                    if safe_area < max(24, my_len // 2):
+                        score -= (max(24, my_len // 2) - safe_area) * 900
             if enemies and my_len <= enemy_max_len:
                 food_weight += min(160, 45 + (enemy_max_len - my_len) * 20)
                 # Do not let catch-up pressure drag us toward food a longer
@@ -966,7 +987,7 @@ def move(game_state):
                 else:
                     score += (health - path_food) * 8000
             if nxt in food_cells:
-                if has_eremetic_enemy and health >= 45 and my_len >= enemy_max_len + 5:
+                if (has_eremetic_enemy or has_gigantic_george_enemy) and health >= 45 and my_len >= enemy_max_len + 5:
                     score -= 12000
                 if health >= 30 and _food_contested_from(nxt, food_cells, enemy_heads, my_len, enemy_max_len):
                     score -= 1800
