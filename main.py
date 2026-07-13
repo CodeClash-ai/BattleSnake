@@ -1079,32 +1079,6 @@ def _xe_since_predicted_move(enemy, target, snakes, food, w, h):
             best = p
     return best
 
-def _snek_two_predicted_move(enemy, game_state, w, h):
-    """One-ply predictor for aleksiy325__snek-two by running the copied minimax port."""
-    try:
-        from tools import snek_two_opponent
-        old_ms = getattr(snek_two_opponent, "MAX_TIME_MS", 150)
-        snek_two_opponent.MAX_TIME_MS = 120
-        pseudo = {
-            "game": game_state.get("game", {}),
-            "turn": game_state.get("turn", 0),
-            "board": game_state.get("board", {}),
-            "you": enemy,
-        }
-        mv = snek_two_opponent.move(pseudo).get("move")
-        snek_two_opponent.MAX_TIME_MS = old_ms
-        if mv in MOVES:
-            head = _pt(enemy["head"] if "head" in enemy else enemy["body"][0])
-            nxt = _add(head, MOVES[mv])
-            if _in_bounds(nxt, w, h):
-                return nxt
-    except Exception:
-        try:
-            snek_two_opponent.MAX_TIME_MS = old_ms
-        except Exception:
-            pass
-    return None
-
 def move(game_state):
     try:
         board = game_state["board"]
@@ -1208,6 +1182,8 @@ def move(game_state):
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
             is_sneaky = "sneaky-snake" in ename.lower() or "hirethissnake" in ename.lower()
             is_snek_two = "snek-two" in ename.lower() or "aleksiy325" in ename.lower()
+            if is_snek_two:
+                has_snek_two_enemy = True
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1221,12 +1197,7 @@ def move(game_state):
                 except Exception:
                     pass
             else:
-                if is_snek_two:
-                    has_snek_two_enemy = True
-                    pred = _snek_two_predicted_move(e, game_state, w, h)
-                    if pred is not None:
-                        preds.add(pred)
-                elif is_sneaky:
+                if is_sneaky:
                     has_sneaky_enemy = True
                     pred = _sneaky_snake_predicted_move(e, game_state, w, h)
                     if pred is not None:
@@ -1450,16 +1421,14 @@ def move(game_state):
                 # has a predictor, but the copied port can miss occasional moves;
                 # use a soft adjacent-head penalty for BTAS instead of a blanket ban.
                 ename = e.get("name", "").lower()
-                if "snek-two" in ename or "aleksiy325" in ename or "sneaky-snake" in ename or "hirethissnake" in ename or "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
+                if "sneaky-snake" in ename or "hirethissnake" in ename or "woofers" in ename or "walter" in ename or "tr-8r" in ename or "noahspriggs" in ename or "bountysnake2018" in ename or "bounty" in ename or "rdbrck" in ename or "btas" in ename or "battlesnake-elon" in ename or "jackisherwood" in ename or "elon" in ename or "zakwht" in ename or "tyrelh-2018" in ename:
                     if _manhattan(nxt, eh) == 1 and elen >= my_len:
                         # For deterministic predicted bots, an exact predicted
                         # collision is penalized below; adjacent non-predicted
                         # squares are risky but often the only escape from edge
                         # pockets, so do not blanket-ban them.
                         soft = 150
-                        if "snek-two" in ename or "aleksiy325" in ename:
-                            soft = 300
-                        elif "sneaky-snake" in ename or "hirethissnake" in ename:
+                        if "sneaky-snake" in ename or "hirethissnake" in ename:
                             soft = 420
                         elif "tyrelh-2018" in ename:
                             soft = 500
@@ -1651,6 +1620,41 @@ def move(game_state):
                     score -= (need_area - safe_area) * 1100
                 if choke_risk and safe_area < 40:
                     score -= choke_risk * 4200
+            if has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                # Snek-two is a strong minimax/Voronoi bot.  Round-0 (baseline)
+                # losses were mostly very long games where we were much longer
+                # (often +10 or more), healthy, and eventually self-boxed on the
+                # perimeter while the smaller minimax bot simply outlived us.
+                # Round-1 broad predictor/not-ahead tuning regressed badly, so keep
+                # this narrow: only when safely ahead, stop growth and favor
+                # tail-reachable interior moves with multiple clean exits.
+                score += edge_dist * 760
+                if edge_dist == 0:
+                    score -= 14000
+                elif edge_dist == 1:
+                    score -= 3600
+                if tail_dist >= 99:
+                    score -= 85000
+                else:
+                    score += max(0, 34 - tail_dist) * 1100
+                    if tail_dist <= 7:
+                        score += 9000
+                clean_exits = 0
+                for nn in _neighbors(nxt):
+                    if not _in_bounds(nn, w, h) or nn in future_blocked:
+                        continue
+                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
+                        continue
+                    clean_exits += 1
+                if clean_exits == 0:
+                    score -= 80000
+                elif clean_exits == 1 and edge_dist <= 1:
+                    score -= 24000
+                need_area = max(20, my_len // 2)
+                if safe_area < need_area:
+                    score -= (need_area - safe_area) * 1200
+                if choke_risk and safe_area < 45:
+                    score -= choke_risk * 5200
             if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
                 # Cornelius often stays smaller while we overgrow; production
                 # losses were self-boxes along edges/top loops, not starvation.
@@ -2045,35 +2049,6 @@ def move(game_state):
                         score -= int((32 - safe_area) * 650 * nbw_edge_mul)
                     if area < 28 or choke_risk:
                         score -= int(((28 - min(area, 28)) * 500 + choke_risk * 4500) * nbw_edge_mul)
-            if has_snek_two_enemy:
-                # Snek-two's minimax/Voronoi control steadily outgrows and boxes
-                # the scalar bot.  Round-0 losses averaged very long and many
-                # ended on edges/corners while Snek-two was healthier/longer.
-                # Keep this broad but matchup-specific: race for reachable food
-                # when not ahead, and strongly prefer interior/clean-exit moves
-                # near the perimeter against its space search.
-                near_snek = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
-                if enemy_max_len >= my_len or edge_dist <= 1 or near_snek <= 6:
-                    clean_exits = 0
-                    for nn in _neighbors(nxt):
-                        if not _in_bounds(nn, w, h) or nn in future_blocked:
-                            continue
-                        if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
-                            continue
-                        clean_exits += 1
-                    score += edge_dist * 520
-                    if edge_dist == 0:
-                        score -= 16000
-                    elif edge_dist == 1:
-                        score -= 4500
-                    if clean_exits == 0:
-                        score -= 80000
-                    elif clean_exits == 1 and (edge_dist <= 1 or near_snek <= 3):
-                        score -= 26000
-                    if safe_area < 36:
-                        score -= (36 - safe_area) * 900
-                    if choke_risk and safe_area < 45:
-                        score -= choke_risk * 6000
             if has_randomish_enemy and randomish_equal_threat:
                 # Random legal-move opponents do not deliberately give us safe
                 # inward exits; when lengths are close, board edges/corners make
@@ -2270,9 +2245,6 @@ def move(game_state):
                     # snowballs length and wins head-to-heads.
                     food_weight += min(360, 140 + (enemy_max_len - my_len) * 45)
                     food_dist = path_food
-                if has_snek_two_enemy:
-                    food_weight += min(520, 190 + (enemy_max_len - my_len) * 55)
-                    food_dist = path_food
                 if has_sneaky_enemy:
                     # Sneaky-Snake's weighted grid values all food highly and then
                     # hunts smaller snakes.  Our remaining losses are usually high-
@@ -2297,9 +2269,6 @@ def move(game_state):
                     elif has_flipez_crystal_enemy:
                         food_dist = path_food
                         food_weight = max(food_weight, 140)
-                    elif has_snek_two_enemy and path_food < 99:
-                        food_dist = path_food
-                        food_weight = max(food_weight, 160)
                     elif has_sneaky_enemy and path_food < 99:
                         # If all food is technically contested by Manhattan time,
                         # still move toward reachable food against Sneaky instead
@@ -2315,6 +2284,8 @@ def move(game_state):
                 food_weight = min(food_weight, 3)
             if has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
                 food_weight = min(food_weight, 2)
+            if has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                food_weight = min(food_weight, 0)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
@@ -2339,6 +2310,8 @@ def move(game_state):
                     score -= 12000
                 elif has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
                     score -= 9000
+                elif has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
+                    score -= 18000
                 elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                     score -= 7000
                 elif has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
