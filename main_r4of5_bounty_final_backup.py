@@ -435,12 +435,7 @@ def _decide(game_state):
     # opponent (elon L30-43) we widen this band so we keep pace and don't get
     # out-lasted once past the +2 lead (our #1 elon loss vector = being SHORTER
     # in long games). Vs short opponents the +1 band is unchanged.
-    # ROUND-5 BOUNTY FIX: log analysis (round 4) showed at T30/T60 opus is AHEAD
-    # (median 6v5, 7v6) but STALLS mid-game and gets out-grown by the alpha-beta
-    # bounty bot, then loses the forced H2H shorter (175/221 losses shorter at
-    # death). Widen the keep-pace band across ALL enemy lengths so we don't stop
-    # growing at a mere +2 lead and let the opponent pass us.
-    _pace_margin = 8 if max_enemy_len >= 20 else (6 if max_enemy_len >= 8 else 4)
+    _pace_margin = 8 if max_enemy_len >= 20 else (6 if max_enemy_len >= 12 else 1)
     behind_or_even = my_len <= max_enemy_len + _pace_margin
     # TRULY behind: enemy is strictly longer than us. Vs a large food-greedy
     # opponent (cornelius reaches L28-41) our #1 loss vector is being SHORTER at
@@ -458,16 +453,10 @@ def _decide(game_state):
     # +2 lead the opponent quickly out-grows us and out-lasts us in long games
     # (33/45 elon losses = we were SHORTER at death). So only shut off growth
     # when the enemy is genuinely short (<=16) OR we hold a big absolute lead.
-    # ROUND-5: only shut off growth vs a GENUINELY short opponent AND at a large
-    # lead. Bounty stays L4-22 most of the game but keeps eating, so a +2/+5 cutoff
-    # let it out-grow us. Require a +6 lead over a truly-short (<=14) enemy, or a
-    # +8 absolute lead. This keeps us growing to stay ahead vs bounty while still
-    # protecting against overgrowth vs the genuinely-passive short opponents
-    # (eremetic/gigantic/arthur reach only L6-16, so +6 over them still shuts off).
-    _enemy_small = max_enemy_len <= 14
-    clearly_ahead = (not starving) and (my_len >= 8) and (
-        (my_len >= max_enemy_len + 6 and _enemy_small) or
-        (my_len >= max_enemy_len + 8)
+    _enemy_small = max_enemy_len <= 22
+    clearly_ahead = (not starving) and (my_len >= 6) and (
+        (my_len >= max_enemy_len + 2 and _enemy_small) or
+        (my_len >= max_enemy_len + 5)
     )
     want_food = starving or behind_or_even
     # Choose target food with a SAFETY-aware ranking rather than raw nearest.

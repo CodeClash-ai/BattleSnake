@@ -2299,3 +2299,37 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   (proven 30+ rounds). If my anti-herding penalty helped (check win count), extend it to fire
   1-2 lanes earlier via a 2-3 ply enemy-shadow simulation. Analyze CORRECTLY: opus = snake whose
   id/name != bounty (the `you` field alternates per frame!). Tools: /tmp/analyze3.py, /tmp/trace3.py.
+
+## Round 5 of 5 (FINAL, this task, opus-4-8) — bountysnake2018, FIXED MID-GAME GROWTH STALL (data-driven)
+- Opponent STILL `rdbrck__bountysnake2018` (6-ply alpha-beta, our worst matchup). Results:
+  rounds 0-4 LOST 225-25, 230-20, 222-27+1T, 224-26, 219-29+2T (~10-12% win).
+- **KEY NEW DATA-DRIVEN FINDING (round 4 logs, /tmp/an3.py, CORRECT perspective — match snake by
+  name, `you` field alternates per frame):** at **T30 opus is AHEAD median L6 vs L5** (behind in
+  only 25/212 losses) and **T60 AHEAD L7 vs L6** (behind 20/196) — BUT at DEATH opus is SHORTER
+  in **175/221 losses**. So we do NOT start behind and we do NOT lose a self-coil-while-longer
+  (only 25 longer at death). We **STALL in growth mid-game**, the alpha-beta bot keeps eating and
+  PASSES us, then wins the forced H2H (77/110 sampled losses had opp head adjacent at death, opus
+  shorter). Bounty reaches median L14 (max L43) at our death (/tmp/an4.py).
+- **ROOT CAUSE:** `clearly_ahead` triggered at just +2 lead when `_enemy_small` (max_enemy_len<=22,
+  which bounty usually is), so we STOPPED eating at a +2 lead. Bounty kept eating and out-grew us.
+- **Change (backup: main_r4of5_bounty_final_backup.py = git HEAD pre-change bot):**
+  1. `_pace_margin = 8 if >=20 else (6 if >=8 else 4)` (was `6 if >=12 else 1`) — keep pacing
+     food across ALL enemy lengths so we don't stop growing at +2.
+  2. `_enemy_small = max_enemy_len <= 14` (was 22); `clearly_ahead` requires `my_len>=8` AND
+     (`+6 lead over enemy<=14` OR `+8 absolute lead`) (was `+2 over<=22` OR `+5`). We only shut
+     off growth vs a genuinely-short opponent at a BIG lead, so vs bounty we keep growing to stay
+     ahead. Overgrowth guard vs truly-short opponents (eremetic/gigantic L6-16) still fires at +6.
+- **VERIFIED FIX ENGAGES (unit test /tmp/t.py):** opus L8 vs bounty L6 with food adjacent — OLD
+  bot goes LEFT (avoids food, clearly_ahead) but NEW bot goes RIGHT (EATS, keeps pace). This is
+  the exact mid-game stall the logs showed, now fixed.
+- **Verification:** syntax OK; import OK; `python3 sim_test.py 40` => 40/0/0; quick fuzz (400
+  boards) crashes=0 illegal=0 maxt_ms=49 (<500 limit). NOTE: A/B vs real bounty in the sim is
+  IMPRACTICAL (alpha-beta + 0.3s guard makes even N=6 exceed the 30s cmd timeout) AND
+  unrepresentative (~57% sim vs ~10% real, proven by all prior bounty teammates), so validated by
+  DESIGN targeting the CORRECTLY-analyzed growth-stall vector + unit test + sim_test + fuzz.
+- Did NOT re-point the predicted_enemy_cell import to opp_bountysnake: bounty's alpha-beta is
+  SLOW (0.3s), calling it inside OUR move risks a timeout — kept it on opp_zakwht (harmless).
+- **Next teammate (if bounty recurs):** the growth fix is the first change targeting the ACTUAL
+  data (we stall then get out-grown, not self-coil-while-longer as round-3 claimed). If it helps
+  (check win count), keep it. If we now overgrow and self-coil, dial `_pace_margin` back. The
+  remaining structural gap is still a shallow MINIMAX modeling the alpha-beta bot as an aggressor.
