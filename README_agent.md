@@ -3349,3 +3349,153 @@ improvement). No errors/exceptions in either bot's server log.
   8->10 — see inline comments at those lines, and this section for the
   full traced rationale + validation caveat).
 - `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
+
+## Round (this session) — opponent = zacpez__scape-goat, investigated both real losses, confirmed root cause = deep self-coil (no code change, high-value diagnostic notes)
+
+`/logs/rounds/0/results.json`: opponent this round is **`zacpez__scape-goat`**
+(a Go port of a very simple bot -- excludes edge/neck directions, then a
+crude "dumb ideas" food/avoidance heuristic, falls back to a
+nanosecond-modulo "random" choice among remaining options when ambiguous
+-- see `git show origin/human/zacpez/scape-goat:main.py` for the full
+docstring/port notes). Real result: **sonnet-5 248 / opponent 2** out of
+250 (99.2% win rate, NOT a clean sweep but very close).
+`analyze_logs.py /logs/rounds/0`: avg 91.9 turns/sim (min 9, max 238) —
+long games are common (the opponent, being mostly random among safe
+moves, rarely forces anything, so games are dominated by our own
+long-horizon play quality more than opponent pressure).
+
+### Both real losses traced in full (concrete, not speculative) — same root cause, DIFFERENT from most previously-documented failure classes in this file
+
+Identified both losses via each `sim_*.jsonl`'s final `winnerName` line
+(`sim_80.jsonl` died turn 77, `sim_109.jsonl` died turn 159). Traced both
+turn-by-turn (recipe: build a synthetic `game_state` per logged turn from
+`board.snakes[*].body`, call `main.move()` and `main._flood_fill_reach()`
+directly for each candidate — see many earlier rounds' notes throughout
+this file for the exact dict shape/pattern, reused unchanged here).
+
+**Both are pure, opponent-independent self-coils** (confirmed: the
+opponent was far away and playing no active role in either trap, unlike
+the "corridor race"/"pincer" mechanisms documented in many earlier
+rounds against *smarter* opponents) — but with a specific twist worth
+recording precisely, since it's a slightly different flavor from most
+prior self-coil writeups in this file:
+
+- **`sim_109.jsonl`**: at the actual decision turns (152, and again
+  68-72 in the other loss), **every open candidate had literally
+  IDENTICAL raw flood-fill area** (e.g. turn 152: `down`=101,
+  `right`=101; turns 68-72 in `sim_80`: consistently 106 for every open
+  candidate) **and identical `tail_reachable=True`** for all of them —
+  i.e. the existing anti-self-coil machinery (hard-trap gate, soft
+  2.2x-margin gate, tail-reachability check, Voronoi race-territory)
+  produced **zero discriminating signal whatsoever** between the
+  candidates at the only turns where a real choice still existed. The
+  region being entered was large (100+ cells) and *looked* completely
+  safe by every current metric — it only sealed into a fatal dead end
+  several turns *later*, once our own body (having continued into that
+  large-but-ultimately-still-bounded region without ever routing back
+  toward the rest of the open board) filled in enough of it. By the time
+  any metric showed danger (area collapsing below body length — e.g.
+  turn 153/154 in `sim_109`, area suddenly 6-7 with `my_length=16`), it
+  was already **completely forced** — every single remaining candidate
+  (often exactly one, sometimes zero) led to the same outcome. Verified
+  directly via `main.move()` replay at each of these turns: the code's
+  literal decisions exactly reproduce the real game's actual moves,
+  confirming this is a deterministic, reproducible trace, not noise.
+- **`sim_80.jsonl`**: same shape, but with one extra concrete detail: the
+  bot's decisions at turns 68-72 (all tied at area=106) were ultimately
+  influenced toward the top-right corner region by a **food pellet that
+  spawned right at (9,10), in/near a corner** (confirmed: health jumped
+  91→100 and length 12→13 exactly at turn 73, right as the head reached
+  that cell) — i.e. the food-distance/immediate-food-bonus terms (which
+  are the only terms with a non-tied value when everything else is tied)
+  pulled the bot toward eating a corner-adjacent pellet, and by the time
+  it had eaten and needed to leave, its own recently-grown body (now
+  occupying most of the approach corridor) had nowhere left to route
+  back through, and the opponent's independent wandering happened to seal
+  the one remaining exit cell a couple of turns later.
+
+### Why this is a genuinely different/harder case than most of this file's many previous self-coil write-ups, and why I did NOT attempt a new heuristic fix this round
+
+Every previous self-coil section in this file (see the many "self-coil",
+"corridor-race", "edge-hugging" mentions above, e.g. the `Xe__since`,
+`ccSnake2018__ccsnake`, `coreyja__bombastic-bob` sections) found at least
+*some* differentiating signal between candidates a few turns before the
+fatal one — a smaller (but not yet sub-threshold) area, a `wall_run`
+build-up, a `tail_reachable` flip, etc. — that a *stronger-weighted*
+version of an existing heuristic could plausibly have caught earlier
+(and several rounds' fixes did measurably help, e.g. the `free_degree`
+deficit fix, the `wall_run` general near-wall tracking, the steeper
+food-urgency curve). **This round's two traces are qualitatively
+different**: at the actual decision points, literally every relevant
+metric (raw area, Voronoi territory, tail-reachability) was **exactly
+tied** across all live candidates, for MULTIPLE consecutive turns in a
+row (5 turns tied at 106 in `sim_80`; several tied at 99-101 in
+`sim_109`) — there is no weight to turn up on any existing additive term
+that would break a tie where the values are identical; you would need an
+entirely new signal that can distinguish "this 100-cell region has a
+route back out" from "this 100-cell region does not", which is
+fundamentally a multi-turn reachability/topology question (something
+like: after continuing K more moves down this path, is the region behind
+me still connected to the front of me without going through my own
+body?) — not a same-turn snapping-of-a-heuristic-weight fix. This is,
+concretely, the clearest evidence yet in this file's long history for
+why the many-rounds-recurring "real multi-ply lookahead" recommendation
+is the correct next big investment, rather than another targeted local
+penalty tweak — there is no local weight left to tune for this exact
+class of tie.
+
+I did NOT attempt a new heuristic this round (e.g. "prefer moves whose
+resulting region, when flood-filled, has >=2 distinct exits back toward
+the pre-move position" or similar graph-cut-style checks) because: (a)
+it's a nontrivial, higher-risk piece of new logic to design and validate
+correctly with the step budget remaining after this investigation, and
+(b) the current real win rate (248/250, 99.2%) is already excellent and
+this specific bug only manifests in the rare very-long game where a big
+region happens to be geometrically single-entrance -- the risk of a
+rushed, undertested "graph connectivity" heuristic introducing a
+*different* regression felt higher than the ~0.8% upside available here.
+
+### Concrete, scoped recommendation for whoever wants to actually fix this (more specific than previous rounds' generic "add lookahead" suggestions, since this round's traces pin down exactly what signal is missing)
+
+The specific missing signal, stated precisely from the traces above: **at
+the moment of tie (all candidates show identical large flood-fill area),
+none of the current metrics ask "if I commit to this candidate and then
+keep flood-filling connectivity through the entire reachable region N
+moves from now (after my own body has grown/advanced into part of it),
+does the exit back toward open board remain open, or does my own
+projected body eventually seal it?"** A cheap, bounded way to approximate
+this without full minimax: for each tied candidate, simulate our own body
+advancing `my_length` more cells along the *locally most space-efficient*
+path within the flood-filled region (e.g. always step to the neighbor
+with the most remaining freedom, a simple greedy self-simulation, no
+opponent modeling needed since these losses are opponent-independent),
+and check whether the resulting position still has `tail_reachable=True`
+and `area >= my_length` — i.e. actually run the existing per-move safety
+checks a full body-length forward along a plausible self-trajectory,
+instead of only 1 ply forward. This is bounded (at most `my_length`
+extra BFS steps, still cheap on an 11x11 board per the many timing notes
+elsewhere in this file) and targets exactly the mechanism traced twice
+this round, without requiring any opponent-behavior modeling (unlike the
+`Xe__since`/`ccSnake2018__ccsnake` sections' recommended fixes, which
+*do* need opponent modeling since those losses involved real opponent
+pressure) — this should be a meaningfully easier/lower-risk version of
+"multi-ply lookahead" to implement and validate than a full minimax,
+specifically because there's no opponent branching factor to handle.
+
+### Verification done this round
+
+- Traced both real losses via literal-state `main.move()`/
+  `_flood_fill_reach()` replay (see above) — no code changes, so nothing
+  to regress-test, but confirmed `main.py`'s decisions exactly reproduce
+  the real game's recorded moves at every traced turn (a good sanity
+  check the replay methodology itself is sound for whoever continues
+  this investigation).
+- Smoke tests (`main.move()` on a normal 2-snake state, `{}` malformed
+  state, empty-snakes state) — all still return valid moves, no
+  exceptions (baseline check only, no change was made this round).
+
+### Files (unchanged this round)
+
+- `main.py` — the bot (no changes this round — investigation only, see
+  above for a concrete, scoped design sketch for the recommended fix).
+- `analyze_logs.py` — unchanged, point at `/logs/rounds/<n>`.
