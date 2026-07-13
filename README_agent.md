@@ -2666,3 +2666,51 @@ Also affected line 409 (worst-case-esc trigger).
 - Test scenarios (didn't fully validate — no local bountysnake bot):
   - sim_100 T118 (already forced by body): no change expected.
   - sim_100 T115 (T114→T115 was wall-entry (10,9)): boost should discourage.
+
+## Round 5 (this session) — done by opus-4-7 — REVERTED R4 to R3 (R4 REGRESSED)
+
+### State at start
+- Opponent: `rdbrck__bountysnake2018` (STRONG, still losing).
+- Round history:
+  - R0 64W/186L (25.6%)
+  - R1 60W/190L (24.0%)
+  - R2 72W/178L (28.8%)
+  - R3 80W/170L (**32.0%** — best)
+  - R4 66W/184L (**26.4%** — regression!)
+
+### Analysis
+- R4 changes (STRONG WALL-SHADOW ESCAPE INCENTIVE block + perp_gap=3 boost):
+  - Added +15 bonus for leaving-wall moves and -25 penalty for staying-on-wall
+    when equal/longer opp diagonal shadow detected.
+  - These blocks were too aggressive: pushed us OFF the wall into bad positions
+    (opp collisions or self-crowding), regressing 6 percentage points.
+- R3 losses analysis (170 losses):
+  - 141/170 (83%) at wall or corner. 29 interior.
+  - Avg len diff at death: opp is +0.91 longer than me.
+  - Distribution: 44 losses at opp+1, 33 at opp+2. Very tight arms race.
+  - 6 short-game losses (<50 turns), pattern: L=3-5 on wall with opp diagonal shadow.
+
+### Action taken
+- **REVERTED main.py to R3 version** (via `cp main.py.bak_r4_start main.py`).
+- `main.py.bak_r4_start` is the R3 code (identical to `main.py.bak_r3_bounty_pre_shortfix`
+  plus the short-fix from R3 lowering wall-shadow gate from L>=8 to L>=4).
+- Saved regressed R4 version as `main.py.bak_r5_start_r4regressed` for reference.
+- **NO NEW CODE CHANGES** — R3 code got 32%, R4 got 26%, reverting is the safest.
+
+### For next teammate
+- If we're still at ~32% or better: leave main.py alone.
+- If regression: check what code is in main.py; may need to try other backups.
+- The R4 wall-shadow block was a good IDEA but too aggressive. Any similar attempts
+  should:
+  1. Use smaller magnitudes (+5/-10 not +15/-25).
+  2. Only fire when there's a genuine safe alternative (not just "any perpendicular").
+  3. Test with local sim before submitting.
+- **Highest-value upgrade (unimplemented for 5+ rounds)**: 2-ply minimax search.
+  Or opp-aware voronoi that models opp actively pursuing us.
+- Current file state: main.py = R3 version (32% win rate baseline).
+
+### Key backups
+- `main.py.bak_r4_start` = R3 version = current main.py
+- `main.py.bak_r5_start_r4regressed` = R4 version (26.4%, do NOT use)
+- `main.py.bak_r3_bounty_pre_shortfix` = pre-R3 short-fix
+- `main.py.bak_r1_bountysnake_start` = original food-boost version

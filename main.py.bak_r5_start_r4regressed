@@ -829,6 +829,11 @@ def _decide(game_state):
                     # Equal/longer opp diagonally aligned = classic shadow-into-corner.
                     if _opp["length"] >= my_len and perp_gap <= 2 and par_gap <= 2:
                         pen *= 4.0
+                    elif _opp["length"] >= my_len and perp_gap == 3 and par_gap <= 1:
+                        # r4: even at perp_gap=3, same-parallel equal/longer opp = shadow.
+                        # sim_100 pattern: entering right wall with opp 3-cells inward
+                        # on the same y-row. Boost to make voronoi bonus not override.
+                        pen = pen * 2.5 + 20.0
                     elif len_diff >= 1 and perp_gap <= 2 and par_gap <= 2:
                         # Shorter opp but tight shadow + limited runway = trap risk.
                         # Boost heavily - voronoi space differential dominates otherwise.
@@ -886,6 +891,52 @@ def _decide(game_state):
                                 pen += 10.0  # shorter but trap risk - boost to overcome voronoi
                             s -= pen
                             break
+
+
+        # STRONG WALL-SHADOW ESCAPE INCENTIVE (r4): if we're currently on a wall and
+        # an equal/longer opp is diagonally adjacent (perp_gap=1, par_gap<=2), we
+        # MUST get off the wall. Add a big bonus for perpendicular-off-wall moves
+        # and a big penalty for staying-on-wall moves. This overrides voronoi.
+        # Targets the sim_100/sim_10 pattern: walking down wall with opp shadowing.
+        my_hx, my_hy = my_head
+        currently_on_wall = (my_hx == 0 or my_hx == w-1 or my_hy == 0 or my_hy == h-1)
+        if currently_on_wall and my_len >= 3:
+            new_x, new_y = c["pos"]
+            # Are we on a side wall (x=0 or x=w-1) or top/bot (y=0 or y=h-1)?
+            on_side = (my_hx == 0 or my_hx == w-1)
+            on_topbot = (my_hy == 0 or my_hy == h-1)
+            staying_on_same_wall = False
+            leaving_wall = False
+            if on_side and new_x == my_hx:
+                staying_on_same_wall = True
+            elif on_side and new_x != my_hx:
+                leaving_wall = True  # moving off side wall inward
+            if on_topbot and new_y == my_hy:
+                staying_on_same_wall = True
+            elif on_topbot and new_y != my_hy:
+                leaving_wall = True
+            # Check if any equal/longer opp is diagonally adjacent shadowing us
+            shadow_threat = False
+            for _opp in opponents:
+                if _opp["length"] < my_len:
+                    continue
+                _oh = (_opp["head"]["x"], _opp["head"]["y"])
+                if on_side:
+                    perp_gap = abs(_oh[0] - my_hx)
+                    par_gap = abs(_oh[1] - my_hy)
+                else:
+                    perp_gap = abs(_oh[1] - my_hy)
+                    par_gap = abs(_oh[0] - my_hx)
+                if 1 <= perp_gap <= 2 and par_gap <= 2:
+                    shadow_threat = True
+                    break
+            if shadow_threat:
+                if staying_on_same_wall:
+                    # Big penalty for continuing down the wall with shadow chasing.
+                    s -= 25.0
+                elif leaving_wall:
+                    # Big bonus for escaping perpendicular (if safe = passed hard_blocked)
+                    s += 15.0
 
         # Reduce food attraction strongly if going onto a wall while long and healthy.
         if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
