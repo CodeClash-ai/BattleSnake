@@ -1398,3 +1398,132 @@ bot is still fundamentally 1-ply flood-fill + heuristic trap-margin, with
 only a capped secondary nudge for opponent-territory awareness -- not a
 real simulation of future opponent moves), formal weight tuning via a
 self-play tournament sweep.
+
+## Round (this session) — opponent = m-schier__kreuzotter, found + fixed a concrete self-trap bug via local benchmark
+
+`/logs/rounds/0/results.json`: opponent this round is **`m-schier__kreuzotter`**
+(a real ported C# MaxN/AlphaBeta search bot, 2nd place Battlesnake 2019
+Intermediate Division -- see `git show origin/human/m-schier/kreuzotter:main.py`
+docstring). Real scored result: clean sweep, sonnet-5 20 vs opponent 0.
+`analyze_logs.py /logs/rounds/0` confirms 20/20 sims won, avg 5.5 turns
+(opponent dies/errors fast in the real harness, same pattern noted for
+many past opponents in this file).
+
+### Local benchmark (before any change) — found a real, reproducible loss
+
+Extracted opponent fresh (`git show origin/human/m-schier/kreuzotter:main.py
+> /tmp/opp/main.py`, `cp server.py /tmp/opp/server.py`), ran 6 real local
+games via the `battlesnake` CLI against the pre-this-round `main.py`
+(recipe: see many earlier rounds' notes in this file -- `setsid nohup env
+PORT=... python3 main.py > log 2>&1 </dev/null & disown` for both bots,
+then loop `battlesnake play ... -o /tmp/game_N.json` backgrounded +
+disowned). **Result: 3 wins / 3 losses** out of 6 (games 50-102 turns for
+the losses, 3-17 turns for the quick wins) -- another instance of the
+long-established pattern in this file where local 1v1 is much closer than
+the lopsided real scored result.
+
+### Root cause found via direct trace replay (concrete)
+
+Traced `/tmp/game_1.json` (lost at turn 49) turn-by-turn. Mechanism: our
+snake walked along the board's bottom edge (y=0) into the bottom-left
+corner while its own earlier body already occupied the entire right and
+top-right border, and the opponent independently walked along row y=1
+above us -- classic corridor-race, but the specific bug was upstream of
+that: at turn 39 (the actual decision point, `main.move()` replayed
+directly on the literal logged state confirms this), the two live
+candidates ("down" -> (8,0) and "left" -> (7,1)) had **identical raw
+flood-fill area (106 cells each)** and identical (capped) opponent-
+pessimism penalty -- so the tie was broken by the immediate-food bonus
+(there was food at (8,0), giving "down" a +20 same-cell bonus and a much
+lower BFS-food-distance penalty than "left"). The bot took "down", which
+turned out to be the mouth of a peninsula that only had **one immediate
+free neighbor cell** (degree 1 -- literally a dead-end/corridor entrance,
+already walled in on 2 sides by our own existing body), versus "left"
+which had **3 free neighbor cells** (real open space) at that exact
+moment. The flood-fill couldn't see this because BFS treats the whole
+huge open region beyond the corridor as reachable *right now* -- it has
+no way to know our own body will keep occupying the only other exit for
+the next several turns as we walk further into the corridor, at which
+point the opponent's own advance seals the far end.
+
+Verified quantitatively: `_in_bounds`/blocked-set degree check on the
+literal turn-39 state gives (8,0) degree=1 vs (7,1) degree=3. This is a
+cheap, local, immediately-known safety signal that a "look 1ply further"
+metric doesn't provide but a huge flood-fill-area number obscures.
+
+### Fix made this round
+
+Added a small **local mobility bonus** to the per-candidate scoring loop
+in `main.py`: `free_degree` = number of the candidate cell's own
+immediate neighbors that are in-bounds and not currently blocked (0-4),
+added to score as `free_degree * 15`. This is a cheap O(1)-per-candidate
+addition (no new BFS), purely additive, and specifically designed to win
+exactly the kind of tie (near-identical flood-fill area, food bonus
+otherwise deciding it) found in the traced loss -- it favors moves that
+keep more immediate local exits open over moves that step into a
+narrowing dead-end/peninsula mouth, *before* the flood-fill snapshot
+would otherwise show any danger.
+
+**Verified this directly fixes the exact traced loss**: replaying
+`main.move()` on the literal turn-39 board state now returns `{"move":
+"left"}` (previously `{"move": "down"}`, which led to the death 10 turns
+later).
+
+**Verification done:**
+- Smoke tests (`main.move()` on a normal 2-snake state, `{}` malformed
+  state, empty-snakes state) -- all still return valid moves, no
+  exceptions.
+- Re-ran a **partial** post-fix local benchmark (4 games, same opponent,
+  same recipe): 1 clean win (127 turns), 1 clean loss (141 turns), 2
+  games still in progress (turn 150+) when this session ran out of step
+  budget to observe their outcome. **This is NOT a conclusive fixed/
+  improved win-rate number** -- I ran out of steps before getting a full
+  batch to finish. The one loss observed post-fix has NOT been traced
+  yet (no time left this round) -- it may be a different failure mode,
+  or the same class of tie-break issue in a scenario the degree-1 heuristic
+  doesn't cover (e.g. a 2-cell-wide dead end, where degree would be 2 not
+  1 -- the fix is deliberately narrow/local, not a general lookahead fix).
+
+### Recommended next steps for whoever picks this up next (HIGH PRIORITY)
+
+1. **Finish the local benchmark** against `m-schier__kreuzotter` (recipe:
+   `git show origin/human/m-schier/kreuzotter:main.py > /tmp/opp/main.py`,
+   `cp server.py /tmp/opp/server.py`, then the usual `setsid nohup env
+   PORT=... python3 main.py & disown` + `battlesnake play ... -o
+   /tmp/game_N.json & disown` + `sleep` + `tail` pattern used throughout
+   this file) -- get a real win-rate number for the `free_degree` fix
+   (aim for 8-10 games, these run 50-150+ turns against this opponent so
+   budget ~50-60s of sleep per batch, split across multiple tool calls).
+2. **Trace any new loss** the same way this round did (dump `-o`, find
+   the death turn, replay `main.move()` on each preceding turn's literal
+   board state, print each candidate's raw area / area_pess / degree /
+   food-dist / final score to see exactly which term decided the losing
+   move) -- this trace-replay technique has now found and fixed several
+   real, confirmed bugs across many rounds (see many earlier sections of
+   this file) and remains far more effective than speculative tuning.
+3. If the `free_degree` bonus turns out to help only marginally, consider
+   generalizing it: instead of just the *immediate* neighbor count of
+   `nxt`, do the same degree check 1-2 cells further down the candidate's
+   most-likely path (e.g. BFS 2-3 steps and check the minimum degree
+   along the way) to catch "2-wide-for-a-bit-then-1-wide" corridors that
+   a pure 1-cell degree check would miss.
+4. The still-not-done big idea from many rounds of notes remains true
+   multi-ply lookahead/minimax (current bot is fundamentally still 1-ply
+   flood-fill + local heuristics, including this round's new degree
+   check) -- this keeps coming up as the class of bug that recurs against
+   every sufficiently-strong opponent (bookworm, graeme-hill/snakebot,
+   devious-devin, and now kreuzotter all had at least one traced
+   self-trap or corridor-race loss in local benchmarking despite clean
+   real-match sweeps). If a future round ever shows a **real** (not just
+   local-benchmark) non-clean-sweep score, that's a strong signal this
+   class of bug is now reachable by opponents in the actual scoring
+   harness too, and prioritizing real lookahead over further local
+   heuristic patches would be justified.
+
+### Files (unchanged)
+
+- `main.py` — the bot (this round added the `free_degree` local-mobility
+  scoring term; see the inline comment right above it for the full
+  rationale and the traced example).
+- `analyze_logs.py` — point at `/logs/rounds/<n>` to summarize
+  results.json + per-sim win/turn-count stats.

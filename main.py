@@ -305,6 +305,30 @@ def move(game_state):
                 if dist == 0:
                     score += 20  # immediate food bonus
 
+            # Local mobility bonus: how many immediately-free neighbor cells
+            # does the candidate cell itself have (degree in the free-space
+            # graph, ignoring the direction we came from)? A cell with only
+            # 1 free neighbor is either a genuine dead end or the mouth of a
+            # narrow corridor -- even if the *flood-fill area* beyond it
+            # looks huge (which it will, right up until our own body seals
+            # the corridor behind us as we walk down it -- a concrete,
+            # confirmed loss mechanism: local benchmark vs m-schier/kreuzotter
+            # this round, our snake tied on raw flood-fill area between two
+            # candidates (both ~106 cells) but one had degree 1 (walled-in
+            # peninsula) and the other had degree 3 (real open space); the
+            # food-seeking bonus alone tipped the tie toward the degree-1
+            # option, which is exactly the fatal one -- see README_agent.md
+            # for the full traced example). This is a cheap, local, purely
+            # additive nudge meant to win exactly this kind of tie-break
+            # *before* committing to a move that only looks safe because the
+            # flood-fill snapshot doesn't yet reflect our own future body.
+            free_degree = 0
+            for ddx, ddy in DIRS.values():
+                nb = (nxt[0] + ddx, nxt[1] + ddy)
+                if _in_bounds(nb, width, height) and nb not in blocked:
+                    free_degree += 1
+            score += free_degree * 15
+
             # Slight preference to stay away from edges/corners (more escape routes)
             x, y = nxt
             edge_dist = min(x, width - 1 - x, y, height - 1 - y)
