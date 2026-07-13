@@ -595,6 +595,7 @@ def move(game_state):
         randomish_equal_threat = False
         has_jump_flooding_enemy = False
         has_vulture_enemy = False
+        has_nbw_ruby_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -620,6 +621,7 @@ def move(game_state):
                 if pred is not None:
                     preds.add(pred)
             elif "nbw-ruby" in ename.lower():
+                has_nbw_ruby_enemy = True
                 pred = _nbw_ruby_predicted_move(e, game_state, w, h)
                 if pred is not None:
                     preds.add(pred)
@@ -775,6 +777,26 @@ def move(game_state):
                     score -= 1200
                 elif edge_dist == 1:
                     score -= 300
+            if has_nbw_ruby_enemy and enemy_max_len >= my_len:
+                # nbw-ruby's weighted-paint bot is especially good at turning the
+                # board edge plus its body into a zipper trap.  Round-1 losses were
+                # mostly us continuing along the top/left edge while shorter or
+                # equal until every exit was our body or a losing head race.  Make
+                # the interior/escape bias much stronger for this matchup, but only
+                # when ruby is not shorter so we still take safe kills/edge food
+                # while ahead.
+                near_nbw = min((_manhattan(nxt, eh) for eh in enemy_heads), default=99)
+                nbw_edge_mul = 1.0 if enemy_max_len >= my_len + 2 else 0.55
+                if near_nbw <= 8 or edge_dist <= 1:
+                    score += int(edge_dist * 520 * nbw_edge_mul)
+                    if edge_dist == 0:
+                        score -= int(14000 * nbw_edge_mul)
+                    elif edge_dist == 1:
+                        score -= int(4200 * nbw_edge_mul)
+                    if safe_area < 32:
+                        score -= int((32 - safe_area) * 650 * nbw_edge_mul)
+                    if area < 28 or choke_risk:
+                        score -= int(((28 - min(area, 28)) * 500 + choke_risk * 4500) * nbw_edge_mul)
             if has_randomish_enemy and randomish_equal_threat:
                 # Random legal-move opponents do not deliberately give us safe
                 # inward exits; when lengths are close, board edges/corners make
