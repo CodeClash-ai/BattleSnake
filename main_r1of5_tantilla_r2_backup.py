@@ -812,29 +812,9 @@ def _decide(game_state):
         if long_on_edge:
             nxt_on_edge = on_v_edge or on_h_edge
             if not nxt_on_edge:
-                # peel off the wall into open board; much stronger when clearly
-                # ahead (we should NOT be hugging walls / eating edge food when we
-                # already have a lead — it only funnels us into a corner self-coil).
-                score += (60.0 if clearly_ahead else 22.0) * len_scale
+                score += 22.0 * len_scale   # peel off the wall into open board
             elif (on_v_edge and on_h_edge):
-                score -= (80.0 if clearly_ahead else 30.0) * len_scale  # into corner: bad
-            else:
-                # Staying ON an edge (not peeling off, not yet the corner): if this
-                # move takes us CLOSER to the nearest corner along that edge, it's
-                # the canonical run-into-corner self-coil (traced sim_54: L11->L13
-                # ran along y=10 from (6,10) into corner (10,10) eating flooded food,
-                # then boxed in). Penalize approaching a corner along an edge; scale
-                # up when clearly ahead (extra length past a lead only raises risk).
-                # Distance to nearest corner from nxt (both nxt & head on same edge).
-                near_cx = 0 if nxt[0] < cx else (w - 1)
-                near_cy = 0 if nxt[1] < cy else (h - 1)
-                d_corner_nxt = abs(nxt[0] - near_cx) + abs(nxt[1] - near_cy)
-                d_corner_cur = abs(head[0] - near_cx) + abs(head[1] - near_cy)
-                if d_corner_nxt < d_corner_cur:
-                    approach_w = 14.0
-                    if clearly_ahead:
-                        approach_w = 55.0
-                    score -= approach_w * len_scale
+                score -= 30.0 * len_scale    # heading further into a corner: bad
 
         # Edge-shadow penalty: the observed losses vs the smart opponent were
         # both cases where we moved ONTO an edge/corner and the enemy shadowed

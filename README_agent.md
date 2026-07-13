@@ -1448,3 +1448,41 @@ Also self-play survival: run `run_game(me,me,seed)` in sim_test — avg ~110 tur
   carefully (but note sim can't validate the trap — use frame-replay of /logs losses instead).
   main.py has all prior layers + now `_enemy_small<=22` anti-overgrowth and stronger L15-30
   tail-follow. Analyze losses: `python3 analyze_losses.py <sim.jsonl>`.
+
+## Round 2 of 5 (this task, opus-4-8) — tantilla, ADDED CLEARLY-AHEAD ANTI-CORNER-APPROACH
+- Opponent STILL `MorganConrad__tantilla` (COMPACT tail-chaser, stays SHORT, food-floods board
+  over long games; opp_tantilla.py). Results: round 0 won 234-16, round 1 won 233-17.
+- **Loss analysis (round 1, analyze_losses.py):** SAME chronic overgrowth->self-coil vector.
+  TRACED sim_54 turn-by-turn (the key insight this round): at T262 OPUS L11 hp100 (clearly
+  ahead vs OPP L8) was on the TOP edge at (6,10) and ran RIGHT along y=10 eating flooded food
+  ((6,10)->(7,10)->(8,10)->(9,10)->(10,10)) STRAIGHT INTO the top-right CORNER, then boxed
+  itself in (L17, T273, 0 free neighbors). The existing anti-wall-hug escape bonus (+22) and
+  corner penalty were SWAMPED by flood-fill space*10 (running right keeps ~90 open cells), so
+  the bot happily ran the edge into the corner. Note: bfs-dist-to-tail actually PREFERRED right
+  here (tail circled back), so tail-follow bias did NOT help this case.
+- **Change (backup: main_r1of5_tantilla_r2_backup.py = git HEAD pre-change bot):**
+  1. Added an ANTI-CORNER-APPROACH penalty in the `long_on_edge` block: when a candidate move
+     STAYS on an edge (not peeling off, not yet the corner) AND takes us CLOSER to the nearest
+     corner along that edge, subtract approach_w*len_scale (14 normally, **55 when clearly_ahead**).
+     Directly attacks the "run along edge into corner while ahead" self-coil (sim_54).
+  2. Strengthened the peel-off/corner weights WHEN clearly_ahead: peel-off-edge bonus 22->60,
+     corner-cell penalty 30->80 (both *len_scale). We should NOT be hugging walls / eating edge
+     food when already ahead — it only funnels us into a corner.
+  All gated behind `long_on_edge` = my_len>=8 + currently_on_edge + not critical, so CRITICAL
+  (starving) mode fully suppresses it (verified: starving snake on edge still eats toward
+  edge/corner food -> goes right).
+- **Verification:** syntax OK; `python3 sim_test.py 40` => 40/0/0; `PYTHONPATH=/workspace
+  python3 fuzz_test.py` => crashes=0 illegal=0 maxt_ms=16.12. FRAME REPLAY sim_54: NEW bot now
+  peels DOWN off the top edge at T263/T264 (was running right into the corner) — fix engages.
+  sim_108 T604 (L52 @corner (10,0)) NEW picks UP (away from corner). Starving-edge-food unit
+  test: still eats (critical suppresses penalty). A/B new-vs-backup on identical seeds (N=10)
+  = 8-0-2 vs 9-0-1 (noise; the sim does NOT reproduce the food-flooding trap so both mostly
+  win/draw — validated by DESIGN + frame replay + no-regression, as all prior tantilla/eremetic/
+  gigantic teammates found the sim can't reproduce the overgrowth trap).
+- **Next teammate:** opponent = opp_tantilla.py (COMPACT tail-chaser, stays short, food-floods
+  board). Our ONLY loss vector remains overgrowth (L17-52) -> self-coil, now attacked at the
+  EDGE-APPROACH stage (peel off before the corner). Interior coils (L33-50 buried head, e.g.
+  sim_127/sim_44) are still unaddressed — the canonical TRUE HAMILTONIAN CYCLE when long+safe
+  is STILL the ideal unimplemented fix (cycle the board tightly instead of coiling). Scalar
+  food/tail-follow tweaks are noise-floor and don't reproduce in the sim. main.py has all prior
+  layers + now clearly-ahead anti-corner-approach + stronger clearly-ahead peel-off.
