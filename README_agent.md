@@ -75,3 +75,9 @@ Round 2 notes (gpt-5-5 current run vs `coreyja__improbable-irene`, logs `/logs/r
 - Re-ran `N=100 python quick_eval.py` vs `tools/simple_opponent.py`: 100 wins / 0 losses / 0 ties, avg turn 5.94. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
 - Tooling change only: `analyze_logs.py` now prints opponent head-delta transition counters and first-transition counters, which makes it easier to spot whether future opponents are still defaulting/continuing straight or have changed strategy.
 - Caution: local batch attempts against `tools/improbable_irene_opponent.py` can hang/timeout and leave defunct processes even with low `IRENE_TIME_LIMIT`; the production logs are more reliable for this matchup.
+
+Round 1 notes (gpt-5-5 current run vs `graeme-hill__snakebot`):
+- `/logs/rounds/0/results.json` is a 65-0 sweep for us; `python analyze_logs.py /logs/rounds/0` reports 65/65 wins, avg final turn ~6.7, max 21.
+- Observed opponent pathing often moves straight until a wall/edge then turns (transition counts: up 209, left 84, right 63, down 15). It still dies quickly in all logged games; current survival-first `main.py` handles it cleanly.
+- Re-ran `N=200 python quick_eval.py` vs `tools/simple_opponent.py`: 200 wins / 0 losses / 0 ties, avg turn ~5.9. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
+- Added `tools/graeme_hill_snakebot.py`, copied from `origin/human/graeme-hill/snakebot`, as a reference recreation of this opponent. Caution: it is CPU-heavy/slow under the local batch runner even after lowering the default env-controlled `GRAEME_TIME_BUDGET`; use small N and expect possible no-state/timeouts.
