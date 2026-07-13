@@ -358,19 +358,38 @@ def move(game_state):
             if bigger_heads and area <= max(6, my_len // 3):
                 score -= (max(6, my_len // 3) + 1 - area) * 2500
             score += edge_dist * 32              # prefer room away from walls
+            if enemies and enemy_max_len >= my_len + 2:
+                # A longer area bot can use board edges as a wall to box us in;
+                # bias back toward the interior before the trap becomes forced.
+                score += edge_dist * 120
+                if edge_dist == 0:
+                    score -= 1200
+                elif edge_dist == 1:
+                    score -= 300
             if enemies and area > 20:
                 score -= choke_risk * 2200
             score -= center_dist * 2            # stay roughly central
-            food_weight = 20 if health < 50 else 16
+            # Food urgency.  In long games against area/Voronoi bots, the main
+            # remaining failure mode is starving while our large space terms keep
+            # us orbiting a safe-looking region.  Make low-health food pressure
+            # nonlinear, but leave healthy early-game behaviour mostly unchanged.
+            if health < 15:
+                food_weight = 130
+            elif health < 30:
+                food_weight = 80
+            elif health < 50:
+                food_weight = 35
+            else:
+                food_weight = 16
             # Against competent area bots (not wall-crashers), falling behind in
             # length makes every future head-to-head and territory split worse.
             # Add controlled food pressure when an enemy is as long/longer; the
             # large space terms above still prevent obvious traps.
             if enemies and my_len <= enemy_max_len:
-                food_weight += min(80, 20 + (enemy_max_len - my_len) * 10)
+                food_weight += min(90, 25 + (enemy_max_len - my_len) * 12)
             score -= nearest_food * food_weight
             if nxt in food_cells:
-                score += (60 if health < 60 else 15) + (300 if enemies and my_len <= enemy_max_len else 0)
+                score += (500 if health < 30 else (100 if health < 60 else 20)) + (350 if enemies and my_len <= enemy_max_len else 0)
             if h2h_risk:
                 score -= 500000
             for eh, e in zip(enemy_heads, enemies):
