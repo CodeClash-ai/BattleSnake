@@ -1156,7 +1156,6 @@ def move(game_state):
         has_untimely_enemy = False
         has_woofers_enemy = False
         has_sneaky_enemy = False
-        has_snek_two_enemy = False
         for e in enemies:
             eh = _pt(e["head"] if "head" in e else e["body"][0])
             elen = e.get("length", len(e.get("body", [])))
@@ -1181,9 +1180,6 @@ def move(game_state):
             is_untimely = "untimely" in ename.lower() or "wearable" in ename.lower() or "altersaddle" in ename.lower()
             is_woofers = "woofers" in ename.lower() or "walter" in ename.lower()
             is_sneaky = "sneaky-snake" in ename.lower() or "hirethissnake" in ename.lower()
-            is_snek_two = "snek-two" in ename.lower() or "aleksiy325" in ename.lower()
-            if is_snek_two:
-                has_snek_two_enemy = True
             if is_jerrykott:
                 has_jerrykott_enemy = True
                 try:
@@ -1620,41 +1616,6 @@ def move(game_state):
                     score -= (need_area - safe_area) * 1100
                 if choke_risk and safe_area < 40:
                     score -= choke_risk * 4200
-            if has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
-                # Snek-two is a strong minimax/Voronoi bot.  Round-0 (baseline)
-                # losses were mostly very long games where we were much longer
-                # (often +10 or more), healthy, and eventually self-boxed on the
-                # perimeter while the smaller minimax bot simply outlived us.
-                # Round-1 broad predictor/not-ahead tuning regressed badly, so keep
-                # this narrow: only when safely ahead, stop growth and favor
-                # tail-reachable interior moves with multiple clean exits.
-                score += edge_dist * 760
-                if edge_dist == 0:
-                    score -= 14000
-                elif edge_dist == 1:
-                    score -= 3600
-                if tail_dist >= 99:
-                    score -= 85000
-                else:
-                    score += max(0, 34 - tail_dist) * 1100
-                    if tail_dist <= 7:
-                        score += 9000
-                clean_exits = 0
-                for nn in _neighbors(nxt):
-                    if not _in_bounds(nn, w, h) or nn in future_blocked:
-                        continue
-                    if any(_manhattan(nn, ep) <= 1 for ep in enemy_possible_next):
-                        continue
-                    clean_exits += 1
-                if clean_exits == 0:
-                    score -= 80000
-                elif clean_exits == 1 and edge_dist <= 1:
-                    score -= 24000
-                need_area = max(20, my_len // 2)
-                if safe_area < need_area:
-                    score -= (need_area - safe_area) * 1200
-                if choke_risk and safe_area < 45:
-                    score -= choke_risk * 5200
             if has_cornelius_enemy and my_len >= enemy_max_len + 4 and health >= 45:
                 # Cornelius often stays smaller while we overgrow; production
                 # losses were self-boxes along edges/top loops, not starvation.
@@ -2284,8 +2245,6 @@ def move(game_state):
                 food_weight = min(food_weight, 3)
             if has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
                 food_weight = min(food_weight, 2)
-            if has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
-                food_weight = min(food_weight, 0)
             if has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                 food_weight = min(food_weight, 2)
             score -= food_dist * food_weight
@@ -2310,8 +2269,6 @@ def move(game_state):
                     score -= 12000
                 elif has_woofers_enemy and health >= 60 and my_len >= enemy_max_len + 4:
                     score -= 9000
-                elif has_snek_two_enemy and health >= 55 and my_len >= enemy_max_len + 8:
-                    score -= 18000
                 elif has_cornelius_enemy and health >= 45 and my_len >= enemy_max_len + 6:
                     score -= 7000
                 elif has_jerrykott_enemy and health >= 55 and my_len >= enemy_max_len + 4:
