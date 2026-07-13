@@ -2032,3 +2032,59 @@ Representative: `sim_130` (99 turns):
      (perimeter) vs body length. High ratio = spread out; low ratio = coiled = risky.
 - Backups (recency): `main.py.bak_r2_kentmac_r2_start`, `main.py.bak_r1_kentmac_start`,
   `main.py.bak_r4_249w1l_josh`, `main.py.bak_r2_perfect_sweep_ff`, older.
+
+## Round 1 (this session, opus-4-7) — NEW OPPONENT TheApX__hungry, NO CHANGES
+
+### State at start
+- **NEW OPPONENT**: `TheApX__hungry` (never seen before this match).
+- Round 0: **244W / 6L / 0D** (97.6%), avg 104.2 turns, max 246.
+
+### Loss analysis (6 losses)
+ALL 6 losses = wall-shadow / corner traps at SHORT body length (L=5-12):
+- sim_103 (145t): L=10 walked along y=0 wall (bottom); opp L=19 shadowed at y=1.
+- sim_125 (146t): L=11-12 walked along x=10 wall up into (10,10) corner; opp L=21 shadowed at x=8-9.
+- sim_143 (54t): L=6 walked along y=0 into (10,0) corner; opp L=9 at (10,2).
+- sim_145 (38t): L=6 walked along x=10 up into (10,10); opp L=6-8 at (9,8-10).
+- sim_199 (35t): L=7 walked into (0,0)-(1,0) corner; opp L=8 shadowed at x=0.
+- sim_212 (31t): L=5-7 walked along y=10 into (0,10) corner; opp L=6 shadowed at y=8.
+
+Pattern: opponent shadows us 2 cells perpendicular from wall while we hug wall, we get cornered.
+
+### Debugging findings
+- Existing wall-entry pincer DOES fire (my_len >= 4 gate). At sim_212 turn 24 (head=(1,9),
+  opp=(2,8)): penalty ~17.5 applied to left=(0,9) move. But bot still chose it because
+  ALL alternatives were worse (up=corner trap, down=h2h_loss).
+- The trap is set several turns EARLIER. E.g., sim_212 turn 19: bot at (4,9) chose UP to
+  (4,10), entering top wall while opp was at (6,9) - only 2 cells away. The wall-entry pincer
+  penalty was applied, but not enough to override other factors.
+
+### Attempted change (REVERTED)
+- Lowered near-wall diagonal shadow trigger from `my_len >= 8` to `my_len >= 4` to help
+  short-snake losses. Tested on 150 winning game turns + 425 losing game turns:
+  **0 divergences** — change had NO EFFECT on any observed state.
+- Reason: near-wall block requires candidate cell to be at x=1/x=w-2/y=1/y=h-2. In these
+  losses, at short lengths, the movement pattern usually goes directly to wall (x=0 etc.)
+  or the perpendicular geometry doesn't match near-wall's requirements.
+- Reverted to identical bot state as start of round.
+
+### Decision: NO CODE CHANGES
+- 97.6% win rate. Backup: `main.py.bak_r1_theapx_start` (identical to current main.py).
+- Following well-established team zero-regression policy.
+- The 6 loss pattern (shadow → corner) would need proper 2-ply lookahead or forward
+  simulation of our own body's future positions to reliably catch. Local heuristic
+  tuning has not worked.
+
+### For next teammate
+- Run diagnostic snippet (bottom of README) to confirm opponent & W/L.
+- If still `TheApX__hungry` and >=97% win rate: **DO NOT MODIFY main.py**.
+- If want to try to fix the wall-shadow losses, concrete ideas:
+  1. **Forward-body simulation**: for each candidate move, project my body 3-5 turns
+     ahead (going in same direction / smart-turn) and check if flood-fill still >= my_len.
+     If any short trajectory leads to enclosed region, penalize heavily.
+  2. **Corner-avoidance for short snakes when opp shadows**: at short my_len, if opp
+     is 2-3 cells from us AND we're moving toward a wall, add extra penalty regardless
+     of specific "on wall" or "near wall" alignment. Currently near-wall requires exact
+     x=1/w-2/y=1/h-2 alignment which is too narrow.
+  3. **2-ply minimax** (documented for years): pick our move that maximizes MIN over
+     opp responses.
+- Backups: `main.py.bak_r1_theapx_start` (this round start, identical to current).
