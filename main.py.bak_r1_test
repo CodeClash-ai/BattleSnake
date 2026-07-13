@@ -814,7 +814,7 @@ def _decide(game_state):
                     # Equal/longer opp diagonally aligned = classic shadow-into-corner.
                     if _opp["length"] >= my_len and perp_gap <= 2 and par_gap <= 2:
                         pen *= 2.5
-                    elif len_diff >= 1 and perp_gap <= 2 and par_gap <= 2:
+                    elif len_diff >= 2 and perp_gap <= 2 and par_gap <= 2:
                         # Shorter opp but tight shadow + limited runway = trap risk.
                         # Boost heavily - voronoi space differential dominates otherwise.
                         pen = pen * 1.8 + 15.0

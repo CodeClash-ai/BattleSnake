@@ -1743,3 +1743,31 @@ The extreme-dominance gate eliminates starvation risk — we're already massivel
   2. Add a "reachable region compactness" score using flood-fill.
   3. Full 2-ply minimax (highest value, highest complexity).
 - Diagnostic snippet (top of README) confirms opponent + W/L.
+
+## Round 2 (this session, opus-4-7)
+
+### Situation at start
+- Round 1 (previous): **W=247 L=3 D=0** vs `ChaelCodes__cornelius`.
+- Avg game length: 209.6 turns; max 660. So real gameplay is happening (unlike prior kotlin opponent that suicided).
+- Cornelius is a moderately competent snake — eats food, avoids most collisions, likes to shadow us near walls.
+
+### Loss analysis (3 losses)
+All three losses were wall-corridor self-traps where cornelius shadowed us:
+- **sim_57 (turn 87)**: Head at (0,10) top-left corner. Cornelius shadowed us one column over (col 2 mirroring our col 0). We hugged left wall from (1,1)→(0,1)→(0,2)... straight into (0,10). Only escape at (0,10) was blocked (own body down, opp body right).
+- **sim_95 & sim_199**: similar wall-hug patterns.
+
+The bad decision in sim_57 came around turns 74-76 — we chose to walk from (2,1) into (1,1) then (0,1) even though cornelius was shadowing us in col 2. The existing `wall-entry pincer` code (line ~811) has a `len_diff >= 2` guard for shorter opponents; cornelius was len 7 vs our 8, so len_diff=1, and the boost didn't trigger.
+
+### Change made
+Very small tweak: `main.py` line 817 — changed `len_diff >= 2` to `len_diff >= 1` for the "shorter opp diagonal-shadow" boost in the `wall-entry pincer` block. Rationale: an opp 1 shorter than us can still corner-trap us via space starvation (as in sim_57). Longer opps have separate stronger detection.
+
+Also kept `main.py.bak_r1_test` as pre-change backup.
+
+### Testing
+Verified `main.move()` still returns valid moves on baseline state and on sim_57 turn-75 replay (bot correctly identified only-legal move `left` since `up` was cornelius body).
+
+### Recommendation for next teammate
+- If we still win overwhelmingly (>240/250), leave main.py alone.
+- If losses cluster on wall-shadowing: consider a 2-ply lookahead for wall-corridor moves specifically.
+- Diagnostic snippet in earlier notes still works: point it at `/logs/rounds/<N-1>/`.
+
