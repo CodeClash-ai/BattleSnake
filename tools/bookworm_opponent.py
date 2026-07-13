@@ -54,7 +54,7 @@ DEATH_HEAD_TO_HEAD = -1.0
 DEATH_STARVED = -2.0
 DEATH_OTHER = -3.0
 
-TIME_BUDGET = 0.30  # wall-clock seconds; keeps us well under 1s on 11x11
+TIME_BUDGET = float(os.environ.get("BOOKWORM_TIME_BUDGET", "0.30"))  # wall-clock seconds; keeps us well under 1s on 11x11
 
 
 def manhattan(a, b):

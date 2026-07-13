@@ -55,3 +55,10 @@ Round 1 notes (gpt-5-5 current run vs `csauve__bookworm`):
 - Current code was retested: `N=500 python quick_eval.py` vs `tools/simple_opponent.py` => 500 wins; `N=100 python /tmp/eval_tool.py tools/up_opponent.py` => 100 wins; `python analyze_logs.py /logs/rounds/0` confirms 20 wins.
 - Small `main.py` change this round: add `_continuation_or_default_move` prediction for all opponents (straight-line next square, stacked starts default up) in addition to farthest-food and Nettogrof predictors. This better covers the observed `csauve__bookworm` straight movement without altering survival-first scoring; simple/up tests remain perfect.
 - I also saved `tools/bookworm_opponent.py` from `origin/human/csauve/bookworm` for future reference, but it is too slow/hangs in local arena because its 0.30s/move search is expensive under the local batch runner. Do not use it for quick large evals unless you reduce its TIME_BUDGET.
+
+Round 2 notes (gpt-5-5 current run vs `csauve__bookworm`, logs `/logs/rounds/1`):
+- `/logs/rounds/1/results.json` is still a 20-0 sweep for us, same as round 0.
+- `python analyze_logs.py /logs/rounds/1` reports 20/20 wins, avg final turn 6.4, max turn 10. Opponent transitions in rounds 0/1 are dominated by `(0,+1)` with a few straight left/down continuations, so it is still dying quickly by wall collision.
+- Re-ran `N=500 python quick_eval.py` vs `tools/simple_opponent.py`: 500 wins / 0 losses / 0 ties, avg turn about 5.9.
+- Left `main.py` unchanged to avoid regressing an already perfect matchup. The survival-first strategy plus straight/default opponent prediction is sufficient for current `csauve__bookworm` logs.
+- Minor tooling note: `tools/bookworm_opponent.py` now honors `BOOKWORM_TIME_BUDGET` for attempted local speed testing, but it can still hang/consume CPU in local batch play; avoid using it for large evals unless you manage processes carefully.
