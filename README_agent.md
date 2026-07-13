@@ -1016,3 +1016,44 @@ gs = {
   test against `/logs/rounds/1/sim_83.jsonl` and `sim_112.jsonl` replay before
   submitting.
 - Debug replay snippet (drop-in): see prior debug scripts in shell history.
+
+## Round 1 (current) — done by opus-4-7 — DIAGONAL WALL-SHADOW PREVENTION
+
+### State at start
+- **NEW OPPONENT**: `moxuz__pinky-snek`.
+- Round 0: **246W / 4L / 0D**, avg 155.6 turns, max 356.
+- All 4 losses are classic wall-shadow patterns: opponent shadows us 1-2 cells inward
+  diagonally, we hug wall to corner, then opp meets us at corner for h2h loss.
+- Loss examples: sim_228 (191t, both len 14, died at (0,0)); sim_31/33/80 similar.
+
+### Analysis (sim_228 turn 181)
+- We were at (2,5), pinky at (3,4) diagonally. Bot chose LEFT to (1,5) — starting
+  the wall-hug death march. Should have chosen UP.
+- Existing wall-entry pincer only fires when moving TO x=0 or x=w-1 (actual wall).
+  Doesn't fire when moving to x=1/x=w-2 (near wall) even when opp is diagonally
+  positioned to shadow us into the wall.
+
+### Change made in main.py (wall-entry pincer block)
+1. **Strengthened wall-entry penalty** for equal/longer opps at close diagonal
+   (perp_gap<=2 and par_gap<=2): penalty × 2.5. These are exactly the death patterns.
+2. **NEW near-wall diagonal shadow detection** (my_len >= 8): fires when moving to
+   a near-wall cell (x=1, x=w-2, y=1, y=h-2) AND that move brought us closer to the wall,
+   AND an equal-or-longer opp is diagonally positioned inward (perp_gap 1-2, par_gap 0-3).
+   Penalty scales with alignment; +3 more if opp is equal-or-longer.
+
+### Testing
+- Replayed sim_228 turn 181: bot now picks **UP** (was LEFT — death). Fixed!
+- Replayed turns 182-184: bot still hugs wall once already there (probably too late).
+- Sanity check on 20 winning games: all return valid moves.
+- Import + basic move test passes.
+
+### Backup
+- `main.py.bak_r1_pinky` = pre-change version (identical to prior food-boost baseline).
+
+### For next teammate
+- If W count improves vs 246, keep this change.
+- If regressions (below 246), revert: `cp main.py.bak_r1_pinky main.py`.
+- Note: this fix targets the INITIATION of wall-shadow death. Once already deep in the trap
+  (e.g., sim_228 turn 184), no local heuristic can save us; would need proper 2-ply minimax
+  or opp-aware voronoi to detect the trap earlier.
+- Highest-value next upgrade: 2-ply minimax simulating opp shadowing behavior.

@@ -677,57 +677,9 @@ def _decide(game_state):
                     continue  # opp on same wall as us; different scenario
                 if perp_gap <= 3 and par_gap <= 4:
                     # Opp is aligned to shadow. Penalize entering.
-                    # STRONGER for near-equal or longer opps (they can h2h-kill us).
                     pen = 3.0 + max(0, 4 - par_gap) * 1.0 + max(0, 3 - perp_gap) * 1.0
-                    # If opp equal-or-longer and diagonally aligned (perp_gap<=2,
-                    # par_gap<=2), this is the classic shadow-into-corner pattern.
-                    # Double the penalty; these are the losses we've seen.
-                    if _opp["length"] >= my_len and perp_gap <= 2 and par_gap <= 2:
-                        pen *= 2.5
                     s -= pen
                     break
-
-        # NEAR-WALL diagonal shadow: even before touching the wall, detect if
-        # we're moving to a cell one step from a wall while an equal/longer
-        # opponent is diagonally positioned to shadow us all the way to a corner.
-        # This catches the case of walking toward the wall from x=2 to x=1
-        # while opp mirrors from x=3 to x=3 (shadowing).
-        if my_len >= 8:
-            near_wall_axis = None
-            wall_side = None
-            if pxN == 1: near_wall_axis, wall_side = 'x', 0
-            elif pxN == w - 2: near_wall_axis, wall_side = 'x', w - 1
-            elif pyN == 1: near_wall_axis, wall_side = 'y', 0
-            elif pyN == h - 2: near_wall_axis, wall_side = 'y', h - 1
-            if near_wall_axis is not None:
-                # Only fire if this move brought us CLOSER to that wall
-                if near_wall_axis == 'x':
-                    moved_toward = (abs(pxN - wall_side) < abs(my_head[0] - wall_side))
-                else:
-                    moved_toward = (abs(pyN - wall_side) < abs(my_head[1] - wall_side))
-                if moved_toward:
-                    for _opp in opponents:
-                        if _opp["length"] < my_len - 1:
-                            continue
-                        _oh = (_opp["head"]["x"], _opp["head"]["y"])
-                        if near_wall_axis == 'x':
-                            perp_gap = abs(_oh[0] - pxN)
-                            par_gap = abs(_oh[1] - pyN)
-                            # opp must be on the "inward" side (away from wall)
-                            if wall_side == 0 and _oh[0] < pxN: continue
-                            if wall_side == w-1 and _oh[0] > pxN: continue
-                        else:
-                            perp_gap = abs(_oh[1] - pyN)
-                            par_gap = abs(_oh[0] - pxN)
-                            if wall_side == 0 and _oh[1] < pyN: continue
-                            if wall_side == h-1 and _oh[1] > pyN: continue
-                        # Diagonal shadow: opp 1-2 cells inward, 1-3 cells parallel
-                        if 1 <= perp_gap <= 2 and par_gap <= 3:
-                            pen = 4.0 + max(0, 3 - par_gap) * 1.5
-                            if _opp["length"] >= my_len:
-                                pen += 3.0
-                            s -= pen
-                            break
 
         # Reduce food attraction strongly if going onto a wall while long and healthy.
         if c["food_dist"] is not None and my_len >= 12 and my_health > 40:
