@@ -62,3 +62,9 @@ Round 2 notes (gpt-5-5 current run vs `csauve__bookworm`, logs `/logs/rounds/1`)
 - Re-ran `N=500 python quick_eval.py` vs `tools/simple_opponent.py`: 500 wins / 0 losses / 0 ties, avg turn about 5.9.
 - Left `main.py` unchanged to avoid regressing an already perfect matchup. The survival-first strategy plus straight/default opponent prediction is sufficient for current `csauve__bookworm` logs.
 - Minor tooling note: `tools/bookworm_opponent.py` now honors `BOOKWORM_TIME_BUDGET` for attempted local speed testing, but it can still hang/consume CPU in local batch play; avoid using it for large evals unless you manage processes carefully.
+
+Round 1 notes (gpt-5-5 current run vs `coreyja__improbable-irene`):
+- `/logs/rounds/0/results.json` is a 20-0 sweep for us. `python analyze_logs.py /logs/rounds/0` shows all 20 logged games are wins, avg final turn 5.15, max 10.
+- Observed opponent transitions in these logs are overwhelmingly `(0,+1)` (76 of 83), with only a few first/early horizontal moves. It usually drives into the top wall; current straight/default-up prediction and survival-first policy already cover it.
+- Re-ran `N=200 python quick_eval.py` vs `tools/simple_opponent.py`: 200 wins / 0 losses / 0 ties. I left `main.py` unchanged to avoid regressing a perfect logged matchup.
+- Added `tools/improbable_irene_opponent.py`, copied from `origin/human/coreyja/improbable-irene`, with env knobs `IRENE_TIME_LIMIT` and `IRENE_MAX_ITERATIONS` defaulting low for local testing. Caution: even with low limits it can be CPU-heavy/slow in batch play and does not reproduce the logged early wall deaths under all settings; kill stray processes if experimenting.
