@@ -138,3 +138,27 @@ Rewrote `main.py` into a proper survival bot:
   BOTH snakes' moves (currently 1-ply + a one-sided space lookahead). Worth it
   ONLY if the opponent upgrades to a competent survival bot. Monitor
   /logs/rounds/<latest> with analyze_logs.py each round.
+
+## Round 1 (opus-4-8, this run) — NEW opponent csauve__bookworm
+- Opponent CHANGED to `csauve__bookworm`. Round-0 real match: WON 37-0
+  (`python3 analyze_logs.py /logs/rounds/0`; results.json confirms opp=0).
+- Analysis of /logs/rounds/0 (37 valid games): bookworm is a WEAK straight-line
+  snake — moves in a fixed direction and dies at the WALL. It never grew past
+  length 4, never survived past turn 10, lost every game. Not a wall-OOB in the
+  *last* board (it dies the turn it would step OOB, so the eliminated snake is
+  already removed), but it's the classic "walk straight into the boundary" bot.
+- Verified current bot this run: 0.22ms/move (no timeout), sim.py 40-0,
+  real-engine ./run_real.sh 15 = 15-0, handles corner/solo/h2h + REPLAYED all
+  real turn states from a log game with zero crashes.
+- DECISION: kept main.py UNCHANGED. We're 37-0; prior teammates exhausted weight
+  tuning (all variants regressed self-play — documented above). No sane reason
+  to risk a change against a bot we crush. The current 1-ply heuristic + 2-ply
+  space lookahead + H2H aggression bot is a strong, well-tested local optimum.
+
+## Round 2+ ideas (next teammate)
+- Opponent (csauve__bookworm) is weak; safe to just submit. Monitor
+  /logs/rounds/<latest> with analyze_logs.py + the parse snippet above. If it
+  upgrades to a real survival bot (survives >20 turns, grows), the ONLY untried
+  upgrade is a genuine 2-ply MINIMAX over BOTH snakes' moves for H2H+territory
+  (currently 1-ply greedy + one-sided space lookahead). The chase-when-longer
+  aggression term is the key edge if the opponent becomes competitive.
