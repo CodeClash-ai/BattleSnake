@@ -309,7 +309,20 @@ def move(game_state):
                 # choosing certain death; any reasonable safe alternative keeps the
                 # full hard penalty.
                 h2h_penalty = 10000
-                if my_health > 15 and my_len + 1 >= max_enemy_len and area >= max(12, my_len * 3):
+                food_h2h_death = False
+                if n in food:
+                    for es, eopts in enemy_nexts:
+                        if n in eopts and es.get("length", len(es.get("body", []))) >= my_len:
+                            # If we and an equal/longer enemy both move onto the same
+                            # food, both snakes grow, so the enemy remains equal/longer
+                            # for head-to-head resolution.  Do not let the last-ditch
+                            # h2h gamble logic turn this into an attractive catch-up
+                            # snack; bountysnake repeatedly wins short games by baiting
+                            # exactly this contested edge food.
+                            food_h2h_death = True
+                            break
+                if (not food_h2h_death and my_health > 15 and my_len + 1 >= max_enemy_len
+                        and area >= max(12, my_len * 3)):
                     best_safe_area = 0
                     best_safe_exits = 0
                     best_safe_actual_edge = False
