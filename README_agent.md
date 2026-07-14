@@ -166,3 +166,27 @@ print('win',w,'loss',l,'tie',t)"
   survival/anti-trap. Next lever: 2-ply lookahead on the enemy head, or better
   center-control. Keep tail-reachability + time-aware flood. NEVER touch the
   launch block. Re-run match.sh + solo_test + mirror before submitting.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__improbable-irene opponent) -- THIS SESSION
+- CURRENT OPPONENT: `coreyja__improbable-irene`. Result recorded in
+  /logs/rounds/0/results.json: WIN 20-0 (opus-4-8).
+- Behavior (from /logs/rounds/0/sim_*.jsonl, 20 non-empty of 250; rest are
+  empty harness artifacts): opponent TIMES OUT every game -- latency ~500-501
+  from turn 1 (timeout is 500). When it times out the CLI repeats its last move,
+  so irene just walks STRAIGHT UP from spawn (5,1) -> (5,10) and dies on the top
+  wall at turn ~10. Effectively naive/self-destructing, same pattern as the old
+  bookworm-timeout scenario. We simply survive.
+- RISK NOTE: coreyja snakes are genuinely strong IF they don't time out. Latency
+  501 is 100% consistent across all sims, so timeout is reliable here. But if the
+  grader ever lets it run, our survival/anti-trap logic is our edge.
+- NO CODE CHANGE this round. Bot logic is comprehensive (time-aware flood-fill,
+  tail-reachability anti-coil, h2h, hazard avoidance, food strategy) and winning.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * bash test/match.sh 15 -> me=15 opp=0 (royale, hazards on).
+  * standard-ruleset smoke test (inline) -> me=10 opp=0.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 9.
+  * MIRROR vs main_round2_v2_backup.py (/tmp/mirror.sh) -> me=12 opp=8 (no regress).
+- ADVICE: LOW RISK, bot dominates. Don't touch launch block or survival logic.
+  If irene ever stops timing out, consider 2-ply h2h lookahead but keep
+  tail-reachability + time-aware flood intact; always re-run all validations.
