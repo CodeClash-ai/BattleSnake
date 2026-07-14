@@ -2343,3 +2343,157 @@ changes):**
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth re-verified, opponent coreyja__coreyja-rs, no changes needed
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/` contained only `/logs/rounds/0/`, opponent
+**`coreyja__coreyja-rs`** (yet another new opponent name -- as always,
+don't trust old prose about opponent names/round numbers elsewhere in
+this file; always regenerate ground truth yourself). Result: **perfect
+40-0 sweep** for `sonnet-5` (40 real games out of 250 sim slots, 210
+empty as usual -- known harness artifact, not evidence of draws/losses,
+per much earlier notes in this file). Turn counts min=3 max=11 avg=8.1 --
+opponent self-destructs almost immediately every real game, consistent
+with the majority of opponents seen across this file's long history
+(though note several *other* recent opponents in this file's history --
+`nbw__nbw-crystal`, `Xe__since`, `ccSnake2018__ccsnake`,
+`coreyja__bombastic-bob` -- were much more competent/long-surviving and
+exposed several real bugs that have since been fixed; this particular
+opponent (`coreyja__coreyja-rs`) simply hasn't been tested against a
+competent opponent yet in real match data).
+
+**What I did this session:**
+- Ran `tools/analyze_logs.py` for ground truth (above).
+- Read through `main.py` (581 lines, `ast.parse` OK). Confirmed via
+  reading + the extensive history in this file that all the
+  historically-important fixes are present and intact, including (most
+  recent/impactful first):
+  - food-attraction coefficient bumped to 55.0 (from 20.0) -- fixed a
+    real "under-eating"/growth-rate disadvantage bug vs a competent
+    opponent (`coreyja__bombastic-bob`), verified via direct NEW-vs-OLD
+    self-play head-to-head (9/10 win rate for the higher-food-priority
+    version) and then confirmed in real match data (94.4% -> 99.6% win
+    rate improvement across two real rounds). **Do not casually re-tune
+    this constant** without similarly strong evidence -- it's currently
+    working very well.
+  - `_HEAD_HISTORY` anti-stalemate/cycle-breaker logic (fixes a real
+    symmetric-orbit starvation-draw bug, found via inspecting 8/250 real
+    draw sim files all sharing the identical "two snakes mutually wall
+    off an unreachable center food and starve in a stable loop" shape).
+  - reachability-aware nearest-food targeting (`_flood_fill(...,
+    return_visited=True)` + only considering food inside the reachable
+    set) -- companion fix to the above, stops the bot from perpetually
+    chasing walled-off/unreachable food.
+  - graduated head-to-head danger scoring via `_opp_candidate_cells` +
+    `_predict_opp_move` (predicts opponent's most likely next move via a
+    nearest-food-else-center heuristic, applies -900 for the predicted
+    cell vs -300 for other legal-but-less-likely opponent cells, instead
+    of a flat -500 for any h2h-adjacent cell) -- fixed real forced-50/50
+    losses where two equally "h2h-risky" cells weren't actually equally
+    likely to be occupied.
+  - no hard categorical pre-filter on head-to-head-risk moves (all
+    physically-legal candidates always compete on score together; h2h
+    risk is *only* a large score penalty, never an absolute veto) --
+    fixed a bug where a hard filter could leave a certain-death 1-cell
+    trap as literally the ONLY candidate in the pool merely because the
+    one genuinely safe 111-open-cell alternative happened to be
+    h2h-adjacent.
+  - uncapped BFS flood-fill space scoring w/ graduated penalty tiers,
+    food-eating tail-freeze fix, open_threshold-gated tail-reachability
+    bonus/penalty (only when the reachability loss is caused by eating
+    food on an open board, not for genuinely structural/spiral-trap
+    cases), adversarial 1-ply `worst_space` lookahead vs equal/longer
+    opponents.
+  - See much earlier sections of this file (search for "Fix implemented
+    in main.py" / "FOUND & FIXED") for the full original bug writeups if
+    you want deeper context on any of the above -- this file is very
+    long at this point but each fix section is self-contained and
+    describes the exact real-match evidence, root cause, and fix.
+  No bugs spotted on this session's read-through.
+- Ran a real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in reference bot), seeds 1-5:
+  **5/5 wins**, games ending in 4-6 turns -- matches the real round-0 log
+  distribution (avg 8.1 turns) closely. Zero errors/exceptions in either
+  server log.
+- Ran 2 real self-play games (`main.py` vs itself), seeds 101/202: ran
+  87 and 184 turns respectively, both completed cleanly with a decisive
+  winner (no draws), **zero exceptions/errors** in any server log --
+  confirms continued stability in longer games (exercising the
+  self-trap/starvation/stalemate-avoidance code paths where all the
+  historical bugs documented in this file were originally found), and
+  specifically confirms the anti-stalemate/draw fix from an earlier
+  session is still working in fresh self-play (0/2 draws here, matching
+  that session's own 0/3 draws finding).
+- Cleaned up all background test server processes by PID afterward
+  (verified via `ps aux` that nothing was left running).
+- **Decision: made NO functional changes to `main.py` this session.**
+  Rationale (consistent with the large majority of prior sessions
+  documented in this file): the only real round played so far this cycle
+  is a perfect sweep (40/40) against the actual current opponent, and
+  fresh local testing (naive-opponent smoke test + two long self-play
+  games) found zero bugs, crashes, exceptions, or draws. There are no
+  losing/drawing real sim files to replay/diagnose this session (the
+  single most effective bug-finding technique historically, per the many
+  detailed fix writeups earlier in this file, requires an actual
+  loss/draw in real match data to chase against THIS specific opponent).
+  Given this opponent self-destructs almost instantly in every real game
+  so far (avg 8.1 turns, same as most historically-easy opponents in this
+  file), there's no evidence pointing at any specific weakness to fix,
+  and speculative changes to a bot with an extensive, hard-won history of
+  carefully-diagnosed fixes (visible throughout this file) would be pure
+  risk for no observed upside.
+
+**Suggestions for next teammate (same core guidance as most prior
+sessions -- still the fastest path to real improvements if a loss ever
+shows up against a competent opponent):**
+- Always start with `python3 tools/analyze_logs.py` for real ground
+  truth; ignore stale round-number/opponent-name claims in old prose
+  elsewhere in this file (opponent identity changes almost every
+  session; this file now has a very long history of different opponent
+  names -- most recently `coreyja__coreyja-rs`).
+- **If a real loss or draw ever shows up**, use the proven-effective
+  methodology (found/fixed at least 7 distinct real bugs so far across
+  this file's history: food-eating self-trap, tail-anxiety starvation,
+  spiral-coil self-trap, hard-h2h-filter self-trap, forced-50/50
+  h2h-prediction gap, symmetric-orbit stalemate draws, and an
+  under-eating/growth-rate disadvantage -- all documented in exhaustive
+  detail earlier in this file with root cause + fix + validation for
+  each): find the losing/drawing `sim_*.jsonl`, build a synthetic
+  `game_state` from a specific frame (`you` = our snake's own dict from
+  `board.snakes`, rest of the board as-is), call `main.move()` (or copy
+  the scoring loop standalone with debug prints, as done in several
+  sessions) directly, and trace per-candidate diagnostics turn-by-turn
+  leading up to the failure. Generic local smoke tests against
+  `tools/opponent_ref.py` are USELESS for this class of bug (games end
+  in ~4-9 turns, never reach health/long-game/spiral/stalemate
+  scenarios) -- only useful as a fast regression/sanity check.
+- Also consider the "NEW-vs-OLD self-play head-to-head" technique (used
+  successfully to validate the food-coefficient tuning fix) whenever
+  proposing to tune a specific scalar weight: copy the pre-change
+  `main.py` to a scratch path, run both concurrently via
+  `game/battlesnake` CLI for ~10 seeds, and count wins -- much faster and
+  more direct signal than waiting for a full real round.
+- The bot remains purely greedy/1-ply heuristic (plus a 1-ply adversarial
+  worst-case lookahead against equal/longer opponents). This has been
+  sufficient against every opponent encountered so far except for a
+  handful of specific, now-fixed gaps found only when an opponent was
+  competent/long-surviving enough to expose them. If a future opponent
+  plays very well and a genuinely new failure mode appears that doesn't
+  fit any of the 7 previously-fixed bug classes, real multi-ply
+  lookahead/simulation (simulate several turns of "our best response +
+  opponent's predicted/adversarial response" and evaluate resulting
+  space/reachability several turns out, not just immediately after 1
+  move) remains the natural, not-yet-implemented next investment -- see
+  the "investigated remaining 10/250 losses" and
+  "deep-dived remaining 5/250 losses" sections earlier in this file for
+  detailed scoped plans on exactly how to implement and validate this if
+  it's ever needed.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers via
+  `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>` by PID
+  (NOT `pkill -f <pattern>`, which can match and kill your own current
+  shell command if the pattern text appears in it -- reconfirmed
+  repeatedly across many sessions in this file).
