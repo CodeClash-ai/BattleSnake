@@ -2034,3 +2034,39 @@ print('win',w,'loss',l,'tie',t)"
   when 1 short; (c) contest lose-by-3 food ONLY with escape>=2 (pin risk). Keep
   winnable-food-redirect + widened-stretch(_sm=2) + all existing anti-coil/anti-
   pin/growth. NEVER touch the launch block. Judge via greedy_opp A/B multi-batch.
+
+## ROUND 1 UPDATE (opus-4-8, xtagon__nagini -- WINNABLE-EDGE-FOOD-WHEN-HUNTED)
+- OPPONENT: `xtagon__nagini`. R0 result: WIN 194-54 (2 ties). GENUINE combat opp
+  (latency 1, runs every turn -- NOT a timeout bot). ~22% loss, a close opponent.
+- ANALYZED all 54 losses (/tmp/analyze2.py + /tmp/early.py, recreate from git):
+  CLEAR SINGLE ROOT CAUSE = 52/54 we were SHORTER at death (median gap -3, 2
+  longer, 0 equal), high health (median 91 -- NOT starvation). We START EVEN
+  (turn 5 gap -0.04) but fall BEHIND by turn 10 (31/54) and it compounds (-1.4
+  t20, -2.2 t30). nagini out-grows us in the opening then wins length h2h/pins.
+- TRACED sim_208 (decisive turn t13, /tmp/decide2.py): our head (8,1), food (8,0)
+  directly DOWN (dist 1), opp at (7,2) dist 3 = a CLEAR win race, BUT we moved
+  RIGHT and ceded it. ROOT CAUSE (found via /tmp/main_dbg.py DBG scoring): opp
+  len5>=our4 within dist5 => `being_hunted` True => the edge-food pull was ZEROED
+  (line 725 `if being_hunted and _on_edge_f: _fw=0.0`) so we walked past winnable
+  growth food -> fell behind -> pinned. `right`=1370 barely beat `down`=1360.
+- FIX (main.py food block, low-risk & tightly gated): new `_clear_win_edge` --
+  when being_hunted AND on edge food AND SHORTER (my_len<=_max_ol) AND the landing
+  is NOT a corner AND has escapes>=2 AND some food has my_fd < opp_fd-1 (we CLEARLY
+  win the race), do NOT zero the food pull; add +70 (and +120 if landing on food)
+  so it overcomes the hunted edge/center penalties. VERIFIED sim_208 t13: bot now
+  moves DOWN to eat (8,0) instead of ceding it.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0.
+  greedymatch (greedy_opp grower proxy, HIGH variance per prior notes, NOT nagini)
+  = 7-13 one batch (noisy; greedy_opp rarely reproduces the being_hunted+winnable-
+  edge-food case my change targets). The fix is DIRECTIONALLY correct (targets the
+  confirmed 52/54 length-deficit root cause) and provably SAFE (only fires when
+  SHORTER + clear-win + safe non-corner landing; longer-snake anti-coil untouched).
+- Backup: main_round0_nagini_backup.py (pre-this-change, the 194-54 code).
+- ADVICE FOR NEXT TEAMMATE: nagini OUT-GROWS us in the opening (grabs food while
+  we cede winnable food when "hunted") then pins us via length. Growth parity is
+  THE lever. If losses persist: (a) also allow clear-win edge food when TIED (not
+  just shorter); (b) extend the 2-ply pin lookahead so we survive length h2h when
+  1 short; (c) smarter opening food target. Don't over-crank (pin risk -- the fix
+  is gated to clear-win, safe, non-corner, escapes>=2). Keep _clear_win_edge + all
+  existing anti-coil/anti-pin/growth logic. NEVER touch the launch block.

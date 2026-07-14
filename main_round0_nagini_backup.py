@@ -722,29 +722,7 @@ def _choose_move(game_state):
             # sim_103 etc: we chased corner food while shorter and got sealed).
             _on_edge_f = (nc[0] == 0 or nc[0] == width - 1
                           or nc[1] == 0 or nc[1] == height - 1)
-            # vs xtagon__nagini (R0: 52/54 losses we were SHORTER; nagini out-
-            # grows us in the opening turns 5-20). Traced sim_208 t13: head (8,1),
-            # food (8,0) directly DOWN (dist 1), opp 3 away = a CLEAR win, but we
-            # were being_hunted (opp len5>=our4 within dist5) so the edge-food pull
-            # was zeroed and we ceded winnable growth food -> fell behind -> pinned.
-            # FIX: still race edge food we CLEARLY win (my dist < opp dist - 1) when
-            # BEHIND on length, provided it is NOT a corner and the landing has
-            # escapes (>=2), so we keep growing without diving into a pin.
-            _clear_win_edge = False
-            if being_hunted and _on_edge_f and my_len <= _max_ol:
-                _nc_corner = ((nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)))
-                if not _nc_corner and escapes >= 2:
-                    _mfe = _manhattan(nc, (nc[0], nc[1]))  # placeholder, per-food below
-                    for f in _food_cells:
-                        _mf2 = _manhattan(nc, f)
-                        _of2 = 999
-                        for opp in opponents:
-                            oh = (opp["body"][0]["x"], opp["body"][0]["y"])
-                            _of2 = min(_of2, _manhattan(oh, f))
-                        if _mf2 < _of2 - 1:
-                            _clear_win_edge = True
-                            break
-            if being_hunted and _on_edge_f and not _clear_win_edge:
+            if being_hunted and _on_edge_f:
                 _fw = 0.0
             # vs TheApX__hungry (R1: 37/39 losses we were SHORTER, fell behind
             # turns 5-10). Traced sim_9 t8: we were TIED (len4) with food at (5,5)
@@ -778,13 +756,6 @@ def _choose_move(game_state):
             score -= nd * _fw
             if nd == 0 and not (being_hunted and _on_edge_f):
                 score += 40.0   # landing on food = growth, extra reward when behind
-            # vs nagini: when we can CLEARLY win an edge food race while shorter and
-            # hunted (safe non-corner landing), give a strong pull that overcomes the
-            # hunted edge/center penalties so we actually take the growth food.
-            if _clear_win_edge:
-                score += 70.0
-                if nd == 0:
-                    score += 120.0
 
             # FOOD RACING (fix vs jump-flooding, sim_40): when we are NOT clearly
             # longer, we must GROW to win/avoid head-to-heads. In the losses we
