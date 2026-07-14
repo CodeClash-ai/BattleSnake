@@ -4571,3 +4571,114 @@ with "we were just generally weaker/shorter, not specifically cornered."
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
   `from server import run_server`).
+
+## Round (this session) update -- ground truth check vs nbw__nbw-ruby round 1 (238-12, up massively from 198-41-11), traced the sim_0 loss to an "opponent overrides food-seeking to attack" case, tried & reverted a graduated-h2h-penalty bump (doesn't change the pivotal decision -- space term dominates), no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (198-41-11, avg 153.4 turns) and `/logs/rounds/1/`
+(**238 wins / 12 losses**, 250 games, avg 119.7 turns), opponent
+`nbw__nbw-ruby`. Confirms the previous session's "under-eating" fix
+(food coefficient 55->90, opponent-aware `growth_damp`) was a MASSIVE
+real improvement: losses dropped 41 -> 12 (79.2% -> 95.2% win rate) with
+that change. Do NOT revert that fix.
+
+**What I did this session:**
+- Used a quick script to identify the 12 real round-1 losses (via
+  `winnerName` in the last line of each `sim_*.jsonl`), then ran
+  `tools/replay_frame.py --last` on the first 5: **11/12 already had ZERO
+  legal moves at the last logged frame** (fatal decision happened earlier,
+  not recoverable from that exact frame per the long-standing harness
+  logging-gap limitation documented extensively earlier in this file).
+- **`sim_0.jsonl` was the one exception** with 2 legal moves still
+  available at the final frame (turn 164, `up`/`right`, my_len=18 vs
+  opp_len=20). Diagnostics: `up->(3,4)` had `space=63, reached_tail=False`;
+  `right->(4,3)` had `space=22, reached_tail=True`. Bot picked `up`
+  (correctly, by every existing space-based metric). **But both cells
+  were ALSO the opponent's only 2 legal moves** (`_opp_candidate_cells`
+  returned exactly `[(4,3), (3,4)]` -- a genuine forced-swap scenario like
+  the one an earlier session's "forced-50/50" fix targeted). Our
+  `_predict_opp_move` (nearest-food-else-center heuristic) predicted the
+  opponent would go to `(4,3)` (closer to a food item at `(6,3)`) -- so
+  `right` got the heavy `-900` "predicted collision" penalty while `up`
+  only got the lighter `-300` "legal but unlikely" penalty. **The real
+  opponent actually moved to `(3,4)` instead** (the "unlikely" cell,
+  i.e. it chose to attack/intercept our head rather than pursue the
+  nearer food) -- a genuine head-to-head we lost (opponent longer).
+  This suggests `nbw__nbw-ruby` may sometimes prioritize an available
+  head-to-head kill against a shorter snake over pure food-seeking,
+  which our simple opponent model doesn't account for.
+- **Tried a fix:** bumped the "legal but unlikely" h2h penalty from
+  `300.0` to `500.0`, reasoning this might make the bot avoid `up` in
+  this exact scenario. **Directly tested via `tools/replay_frame.py
+  --diag` on the exact real frame: the decision did NOT change** --
+  `up`'s raw space advantage (63 vs 22, i.e. `(63-22)*2=82` points from
+  the space-scoring term alone) is much larger than the 200-point
+  difference this penalty bump would introduce, so `up` still wins by a
+  wide margin either way. This is a clean, direct disproof (not just
+  theory) that tuning this specific penalty constant would not have
+  fixed this specific loss -- **reverted the change** (confirmed via
+  `diff` that `main.py` is now byte-identical to the pre-session
+  version) since it had no verified benefit and was untested against the
+  other 11 (unrecoverable-from-log) losses.
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate change -- h2h "unlikely" penalty bump -- was tried,
+directly tested against the real failing case, found to make no
+difference to the actual decision, and correctly reverted rather than
+shipped speculatively).
+
+**Testing done this session (regression/sanity, post-revert):**
+- `ast.parse` syntax check: OK.
+- Confirmed via `diff` that `main.py` is byte-identical to the version at
+  the start of this session.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `nbw__nbw-ruby` (or whatever opponent is
+  current). 95.2% win rate is already excellent; further chasing this
+  specific opponent's remaining ~12/250 losses has sharply diminishing
+  returns given 11/12 aren't even diagnosable from the sim logs (fatal
+  decision happened before the last logged frame).
+- If you want to pursue the "opponent sometimes attacks instead of
+  food-seeking" angle further (only 1 concrete data point so far, from
+  `sim_0.jsonl` turn 164): a MUCH bigger lever than tuning the penalty
+  constant would be needed, since the raw open-space scoring term
+  dominates by a wide margin in the traced example. Options: (a) make
+  `_predict_opp_move` itself aware of "is one of my legal moves adjacent
+  to a shorter/equal snake's head, and if so, is attacking it a
+  plausible alternative to food-seeking" (i.e. add an attack-preference
+  branch to the prediction, not just tune the penalty magnitude applied
+  after prediction) -- untested, speculative, needs real validation via
+  self-play A/B (the proven technique from the food-coefficient-tuning
+  session, documented in detail earlier in this file) before trusting
+  it, since a wrong prediction model could cause new regressions; (b)
+  treat ALL legal h2h collision cells as equally high risk when only 2
+  legal moves exist for both sides (a genuine forced-swap scenario,
+  distinguishable from the "many legal moves, only one is likely"
+  scenario the graduated 900/300 split was designed for) -- this is a
+  more surgical, lower-risk variant worth trying first if a future
+  session wants to pursue this.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this
+  file for full details: food coefficient 90.0 + opponent-aware
+  growth_damp, `_HEAD_HISTORY` anti-stalemate, graduated h2h prediction
+  via `_opp_candidate_cells`/`_predict_opp_move`, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, `_opp_two_ply_reachable`
+  contested-exits penalty, threat-aware edge-weight boost, corner/
+  dead-end food-trap penalties, and the `_lookahead_min_space` bounded
+  multi-turn lookahead).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first, as done again successfully this
+  session.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`).
