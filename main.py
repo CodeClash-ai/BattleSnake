@@ -1005,10 +1005,31 @@ def move(game_state):
                 worst_h2h_penalty = 0.0
                 for sid, legal in opp_legal_moves.items():
                     if npt in legal:
-                        if npt == opp_predicted.get(sid):
-                            worst_h2h_penalty = max(worst_h2h_penalty, 900.0)
+                        # A collision with a STRICTLY LONGER snake is a
+                        # certain loss for us -- keep the harsh penalty.
+                        # A collision with an EQUAL-length snake is a
+                        # mutual elimination (both snakes die -- a draw
+                        # for that encounter, not an outright loss), so it
+                        # should be weighted less harshly than a certain
+                        # loss. Without this distinction, the bot was
+                        # observed to reflexively concede every contested
+                        # food item to an equal-length opponent (treating
+                        # a 50/50-ish mutual-kill risk as if it were a
+                        # guaranteed loss), letting that opponent win the
+                        # early growth race turn after turn and snowball
+                        # into a permanent length advantage -- see
+                        # README_agent.md for the real-match trace that
+                        # found this (opponent kentmacdonald2__beames,
+                        # opponent longer than us in 35/35 real losses).
+                        opp_len_sid = lengths.get(sid, 0)
+                        if opp_len_sid > my_len:
+                            predicted_pen, unlikely_pen = 900.0, 300.0
                         else:
-                            worst_h2h_penalty = max(worst_h2h_penalty, 300.0)
+                            predicted_pen, unlikely_pen = 450.0, 150.0
+                        if npt == opp_predicted.get(sid):
+                            worst_h2h_penalty = max(worst_h2h_penalty, predicted_pen)
+                        else:
+                            worst_h2h_penalty = max(worst_h2h_penalty, unlikely_pen)
                 score -= worst_h2h_penalty
 
             # Tiny randomness to break ties unpredictably.

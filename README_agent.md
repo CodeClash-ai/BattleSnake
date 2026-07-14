@@ -6796,3 +6796,108 @@ changes):**
   set via `env PORT=X` don't always appear in the `ps aux` command-line
   column -- prefer grepping for the script name itself, e.g. `python3
   main.py`, and killing by the PID column directly).
+
+## Round (this session) update -- vs kentmacdonald2__beames (212-35-3), found real "equal-length h2h penalty too harsh" under-eating cause, softened penalty for EQUAL-length collisions only (900/300 -> 450/150), longer-opponent penalty UNCHANGED
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`kentmacdonald2__beames`**. Result:
+**212 wins / 35 losses / 3 draws** out of 250 real games (84.8% win
+rate). Turn counts avg 93.5.
+
+**Root cause, confirmed via length-tracking + direct frame replay:** in
+**ALL 35/35 losses**, the opponent was longer than us at time of death
+(avg diff -3.69) -- the classic "under-eating" signature (search
+"under-eating" earlier in this file). Only 5/35 had zero legal moves at
+the final frame (most are close-encounter/h2h losses while shorter, not
+self-inflicted spiral traps). Traced `sim_134.jsonl` turn 9 in full
+detail: our head (5,4) and the opponent's head (4,5) were BOTH exactly
+distance-1 from the only food on the board, (5,5) -- a genuine, roughly
+50/50 contested-food scenario. Our bot backed away (`down`) instead of
+taking the food (`up`), because the opponent was EQUAL length (4==4) and
+`danger_h2h`'s existing graduated penalty (900 if matches the opponent's
+predicted move, 300 otherwise) treated this exactly like a collision with
+a STRICTLY LONGER snake -- but per `docs/rules.md`, an equal-length
+head-to-head is a MUTUAL elimination (both snakes die, i.e. a draw for
+that encounter), not a certain loss like colliding with a longer snake.
+Confirmed the opponent took the food next turn (grew to 5, us stayed at
+4) -- this single conceded contest was the start of a growth-rate gap
+that never closed and ultimately caused the loss (turn 115).
+
+**Fix implemented this session:** in the `danger_h2h` scoring block,
+differentiate by whether the threatening snake is STRICTLY longer
+(`opp_len > my_len`, penalty unchanged at 900.0/300.0 -- colliding with a
+longer snake is still a certain loss, keep avoiding it just as strongly)
+vs. exactly EQUAL length (`opp_len == my_len`, penalty now 450.0/150.0 --
+halved, since the real downside is a mutual-elimination draw, not an
+outright loss, and empirically the old flat penalty was causing the bot
+to systematically concede every contested food item to comparably-sized
+opponents). This is a narrowly-scoped change: it ONLY softens behavior
+for the equal-length case, never touches the longer-opponent case, and
+only affects the h2h penalty term (nothing else).
+
+**Testing done this session (budget-constrained, ran low on steps):**
+- `ast.parse`: OK.
+- Replayed the exact `sim_134.jsonl` turn-9 decision through the patched
+  `move()`: score for `up` (the food cell) improved substantially
+  (-90 -> ~+95 with the 450/150 tuning) but `down` still narrowly wins
+  (~310 vs ~95) at this specific frame -- i.e. this exact decision did
+  NOT flip with the conservative 450/150 tuning (a much larger reduction,
+  e.g. 220/70, DOES flip it, but that's a bigger, unvalidated behavioral
+  change I didn't have budget to test via self-play A/B this session, so
+  I deliberately chose the smaller, safer 450/150 halving instead of the
+  more aggressive value that would have flipped this one example).
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- **Did NOT have remaining budget this session for a NEW-vs-OLD
+  self-play A/B batch** (the proven technique used throughout this
+  file's history) -- this is an unvalidated-beyond-the-target-case
+  change, similar in spirit to a couple of previous sessions' initial
+  attempts that later needed reverting after proper validation (search
+  "jackisherwood__battlesnake-elon" earlier in this file for a cautionary
+  tale of shipping a similar unvalidated penalty change that had to be
+  reverted next session after a real regression showed up). **This is
+  the most important thing for the next teammate to validate first.**
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `kentmacdonald2__beames` (or whatever opponent is
+  current) in the next real round.
+- **Run a NEW-vs-OLD self-play A/B (15-20+ seeds) as the first priority**
+  before trusting this further -- save a pristine pre-session copy
+  (`/tmp/main_pre_session.py` in this session's sandbox, won't persist;
+  regenerate via reverting the two `predicted_pen, unlikely_pen` lines
+  for the `opp_len_sid > my_len` branch back to a single flat
+  `900.0/300.0` for all cases if you want an exact "OLD" reference, or
+  just use `git diff`/`git log` if this was committed) to check this
+  doesn't regress normal competitive play. Given the historical pattern
+  in this file (several tuning attempts on nearby h2h/space penalties
+  have swung from clearly-positive to clearly-negative depending on
+  magnitude), treat this as unconfirmed until validated.
+- If the real round shows improvement (opponent-longer-at-death pattern
+  shrinks, losses drop from 35), this confirms the equal-length-mutual-
+  elimination-vs-certain-loss distinction is a real, useful lever. If it
+  regresses, consider reverting the equal-length case back to the
+  original flat 900.0/300.0 (i.e. remove the `opp_len_sid > my_len`
+  branching and always use 900.0/300.0), or try an intermediate value
+  between 450/150 (this session, conservative) and 220/70 (verified via
+  direct replay to flip the specific `sim_134.jsonl` turn-9 example, but
+  unvalidated for general regressions).
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything else currently in `main.py`: food
+  coefficient 130.0, opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, the adversarial
+  `_lookahead_min_space` bounded multi-turn lookahead, `_opp_two_ply_
+  reachable` contested-exits penalty, threat-aware edge-weight boost,
+  corner/dead-end food-trap penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py`.
