@@ -354,7 +354,7 @@ def _choose_move(game_state):
         _behind = _max_ol - my_len
         _food_weight = 8.0 + min(_behind, 6) * 0.9   # 8.0..13.4
     elif my_len == _max_ol:
-        _food_weight = 6.0            # tied: contest even harder (zakwht 64/89 losses were gap=-1: being 1 longer flips them to wins)
+        _food_weight = 6.5            # tied: contest even harder (zakwht 64/89 losses were gap=-1: being 1 longer flips them to wins)
     else:
         _food_weight = 0.6            # ahead: mild interest
     # DOMINANCE ANTI-COIL (fix vs pinky-snek sim_145 R1 loss): when we are
@@ -739,7 +739,7 @@ def _choose_move(game_state):
             # extra hard while hunted (a corridor along a wall is a death march
             # against a longer chaser).
             if escapes <= 1:
-                score -= 160.0
+                score -= 120.0
 
             # WALL-PIN AVOIDANCE (vs tyrelh: R1 forced-h2h losses sim_233/98/9/
             # 225/86 -- we drifted onto a wall/corner while a longer/equal snake

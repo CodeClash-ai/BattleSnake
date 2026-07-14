@@ -2322,3 +2322,48 @@ print('win',w,'loss',l,'tie',t)"
   cells space>=my_len, zeroed on edges when hunted). Keep the tied-growth nudge +
   all existing anti-coil/anti-pin/growth/2-ply-pin. NEVER touch the launch block.
   Judge via greedy_opp multi-batch (variance huge); mirror A/B is all-ties (noise).
+
+## ROUND 2 UPDATE (opus-4-8, zakwht__zakwht-2018 -- PIN-SURVIVAL + FOOD REVERT)
+- Standing: R0 WIN 158-89 (3t), R1 WIN 148-100 (2t). zakwht is our CLOSEST
+  opponent (~40% loss). The R0 tied-food nudge (5.5->6.5) did NOT help -- losses
+  ROSE 89->100. Over-cranking food likely caused pins (food gated to safe cells
+  but the extra pull matters at margins).
+- ANALYZED all 100 R1 losses (/tmp/gap.py, /tmp/death.py, recreate from git):
+  * 100/100 SHORTER at death. Gap dist: **-1: 69**, -2: 12, -3: 6, -4: 4.
+  * We START EVEN (turn5 gap -0.01) but 58/100 behind by turn10; small deficit
+    (mean -0.5) but decisive at forced h2h. Median hp 86 (NOT starvation).
+    73/100 on EDGE, 5 corner, 22 interior.
+  * gap=-1 losses: 36/69 had NO safe move at last 2-snake frame (forced losing
+    h2h / boxed -- the classic PIN death), 33/69 had a safe move (fatal commit
+    1 turn later). Being 1 LONGER flips these (we win h2h). Growth helps but the
+    deficit is POSITIONAL: opp beelines the center food (5,5) from spawn and wins
+    the race; we correctly cede the mutual-death tie but then stay 1 behind
+    (traced sim_190: t10 opp eats (5,5) becoming L5, we stay L4; opp also wins the
+    (9,2) race). Hard to fully fix by growth alone.
+- CHANGES (two low-risk, well-gated edits):
+  1. Tied food_weight 6.5 -> 6.0 (line 357). Revert toward the proven 5.5-6.0
+     range since R0's 6.5 RAISED losses. Food over-crank -> pin risk.
+  2. being_hunted escapes<=1 penalty 120 -> 160 (line 742). Targets the 36/100
+     forced-h2h gap=-1 PIN-death class -- steer harder off low-escape cells when
+     a longer/equal snake hunts us, so we survive length-deficit games via our
+     maneuvering edge. Only fires when being_hunted + escapes<=1 (combat/food
+     logic untouched).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0,
+  smartmatch (pursuit/pin proxy, closest to zakwht's style) 16-4 (baseline was
+  14-6 -- IMPROVED, no regression). greedymatch 9-11 (HIGH variance, greedy_opp
+  doesn't reproduce zakwht's pin dynamic; per all prior notes it's noisy).
+- Backup: main_round1_zakwht_r2_backup.py (pre-this-change, the 148-100 code).
+- ADVICE FOR NEXT TEAMMATE: zakwht is our CLOSEST opponent. 69/100 losses are
+  EXACTLY 1 short at a forced h2h. Two levers remain and both are HARD:
+  (a) SMARTER OPENING: when the center food (5,5) is an un-winnable mutual-death
+  tie race from spawn, immediately commit to a 2nd uncontested food to get 1
+  ahead -- the winnable-food-redirect (line ~832) EXCLUDES tie-race food but
+  FALLS BACK to nearest when none is winnable, so we still approach then back
+  off, wasting turns. A better opening would head DIRECTLY to a winnable food.
+  (b) FULL 2-PLY MINIMAX on the hunter to survive gap=-1 h2h setups better (the
+  1-ply pin lookahead at line 1114 already penalizes worst_safe 0/1 -- extend to
+  2-ply or a proper minimax). Don't over-crank food (tested: 6.5 RAISED losses).
+  Keep pin-survival (escapes<=1 = -160) + all existing anti-coil/anti-pin/growth.
+  NEVER touch the launch block. Judge via smartmatch multi-batch (variance huge);
+  greedy_opp/mirror A/B are noisy per all prior notes.
