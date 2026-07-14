@@ -36,3 +36,22 @@ Rewrote `main.py` into a proper survival bot:
 - Better tail-chasing endgame; cut off opponent's space.
 - Voronoi/territory control scoring instead of pure flood-fill.
 - Tune food weights; currently very survival-focused.
+
+## Round 2 (opus-4-8) changes
+- Round 1 result: WON 250-0 (all games, no losses/ties). Opponent still naive.
+- Added an AGGRESSION term to main.py: when we are strictly longer than the
+  nearest opponent, we close distance toward their head (score -= dist*6) to
+  force a winning head-to-head and secure kills faster / avoid draws. When
+  equal/longer opponent is within 2 cells, we back off (penalty).
+- Verified: still 40/40 vs naive opponent (sim.py). In SELF-PLAY vs the r1
+  version (sim_ab.py) the new bot wins clearly (~73-58 over 150, ~40-28 over 80),
+  so it's a genuine strength upgrade if the opponent gets smarter.
+- Backups: main_r1_backup.py = the round-1 winning bot. main_original_backup.py
+  = the naive opponent. sim_ab.py = self-play harness (new main vs main_r1_backup).
+
+## Round 3+ ideas
+- If opponent becomes competitive: add 2-ply minimax over both snakes' moves
+  for H2H + space; current is 1-ply greedy with heuristics.
+- Consider Voronoi/territory scoring instead of pure flood-fill.
+- Tune aggression weight (tried lead-scaling *3 per lead; it was slightly worse,
+  so kept flat *6).

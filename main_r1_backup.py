@@ -156,24 +156,6 @@ def move(game_state):
                 score += hunger * (1.0 / (nearest + 1)) * 20
                 score -= nearest * (1.5 if my_health < 40 else 0.3)
 
-
-            # Aggression: when we are strictly longer than an opponent, close
-            # distance toward their head to force a winning head-to-head. This
-            # secures kills faster and avoids draws in the endgame. Only mild
-            # so it never overrides survival/space terms.
-            if opp_heads:
-                nearest_opp = min(opp_heads, key=lambda oh: _manhattan(head, oh[0]))
-                ohead, olen = nearest_opp
-                if my_len > olen:
-                    d = _manhattan(np, ohead)
-                    # Reward getting closer; stronger when we have big space.
-                    score -= d * 6.0
-                elif my_len <= olen:
-                    # Keep a little distance from a dangerous equal/longer snake.
-                    d = _manhattan(np, ohead)
-                    if d <= 2:
-                        score -= (3 - d) * 40.0
-
             # Slight preference for staying near center (mobility).
             cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
             score -= (abs(np[0] - cx) + abs(np[1] - cy)) * 0.5
