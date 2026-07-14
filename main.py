@@ -366,17 +366,30 @@ def move(game_state):
         food_cells = {(f["x"], f["y"]) for f in food}
 
         # Bodies of opposing snakes (for adversarial worst-case lookahead
-        # below) -- only snakes that are still alive/on the board and are
-        # at least roughly as big as us are worth defending against (a
-        # much-shorter snake can't meaningfully wall us off since we'd
-        # win any resulting head-to-head anyway, and modeling it just
-        # wastes a little compute for no benefit).
+        # below). IMPORTANT: include ALL other snakes here, regardless of
+        # their length relative to ours -- NOT just equal-or-longer ones.
+        # Real match analysis (opponent coreyja__amphibious-arthur, see
+        # README_agent.md) found real losses where a much-SHORTER opponent
+        # (e.g. length 4 vs our length 7) still physically walked its body
+        # into the last remaining exit of a corridor we were passing
+        # through, sealing us in with zero legal moves a couple of turns
+        # later -- even though we would have won any resulting head-to-head
+        # fight, that's irrelevant to space-stealing/sealing risk, which
+        # only cares about which CELLS are occupied, not who would win a
+        # collision. The old comment's "much-shorter snake can't
+        # meaningfully wall us off since we'd win any resulting
+        # head-to-head anyway" reasoning conflates head-to-head combat
+        # risk (handled separately below via danger_h2h/opp_predicted,
+        # which correctly only applies to equal-or-longer opponents) with
+        # pure cell-occupancy/space-sealing risk, which applies to a
+        # snake of ANY length. Modeling short snakes here only ever adds
+        # extra caution (never reduces existing safety checks), so this is
+        # a low-risk, strictly-more-defensive generalization.
         threat_bodies = []
         for snake in board["snakes"]:
             if snake["id"] == my_id:
                 continue
-            if lengths.get(snake["id"], 0) >= my_len - 1:
-                threat_bodies.append(snake["body"])
+            threat_bodies.append(snake["body"])
 
         # Once we're already very long relative to the board (i.e. our own
         # body occupies a large fraction of the board), dial back food-

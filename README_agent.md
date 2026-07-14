@@ -3938,3 +3938,120 @@ the existing `exits<=1` tier).
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`, which can kill your own current shell command if
   the pattern text appears in it).
+
+## Round (this session) update -- FOUND & FIXED a real "short opponent still blocks space" gap vs coreyja__amphibious-arthur (26/250 losses)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`coreyja__amphibious-arthur`**. Result:
+**223 wins / 26 losses / 1 draw** out of 250 real games (89.2% win rate --
+noticeably lower than most recent opponents in this file's history).
+Turn counts min=18 max=358 avg=152.7 -- a long-surviving opponent.
+
+**Investigation (via `tools/replay_frame.py --last` on all 26 losses):**
+every single loss showed our snake with ZERO legal moves at the last
+logged frame, and in every case our snake was LONGER (sometimes much
+longer, e.g. 32 vs 12) than the opponent -- the same well-documented
+"self-trap while longer" signature from many previous sessions. Most
+deaths were at/near a board corner or wall edge (`(0,0)`, `(10,0)`,
+`(0,10)`, `(10,10)`, etc.).
+
+**Root cause, found via dense turn-by-turn replay of `sim_208.jsonl`
+(logs every turn for our snake, so fully traceable) using a custom
+forward-simulation harness (see this session's trajectory for the
+reusable script -- it manually re-applies `main.move()`'s chosen move to
+a copied board state turn by turn, so you can force a specific first
+move and see what happens next):**
+- Our snake (length 7) was walking along the bottom wall while a much
+  SHORTER opponent (length 4, well below our length) was independently
+  approaching the same corner from a different direction.
+- At turn 55, two candidates (`up->(2,2)`, `left->(1,1)`) both reported
+  **identical** `space=112, reached_tail=True` (i.e. indistinguishable by
+  every existing metric) -- the bot picked `left`. One turn later
+  (turn 56), the region had collapsed to `space=3` for BOTH remaining
+  candidates -- already unrecoverable.
+- Confirmed via a static (opponent-frozen) forward simulation that
+  **neither** `up` nor `left` would have led to death if the opponent had
+  stayed still -- i.e. this was NOT a pure self-inflicted spiral (unlike
+  several previous sessions' findings for other opponents). The
+  opponent's own head kept advancing turn-by-turn (from `(1,2)` at turn
+  55 to `(0,2)`->`(0,3)`->`(0,4)` over the next few turns) and its body
+  ended up occupying exactly the cells needed to seal off our corridor.
+- **The key bug:** `threat_bodies` (the list of opposing snake bodies
+  used for the adversarial 1-ply `worst_space` lookahead, the 2-ply
+  `_opp_two_ply_reachable` contested-exits check, and the `threat_near`
+  edge-avoidance-weight boost) was filtered to only include snakes with
+  `length >= my_len - 1` -- i.e. **shorter opponents were completely
+  excluded from all of this defensive machinery**, based on the (correct
+  for head-to-head combat, but WRONG for this purpose) reasoning that "a
+  much-shorter snake can't meaningfully wall us off since we'd win any
+  resulting head-to-head anyway." That reasoning conflates two different
+  risks: (a) head-to-head COMBAT risk (who wins if heads collide --
+  correctly still only a concern for equal-or-longer opponents, handled
+  separately via `danger_h2h`/`opp_predicted`, UNCHANGED by this fix),
+  and (b) pure CELL-OCCUPANCY/space-sealing risk (does the opponent's
+  body physically block a cell we need) -- which applies **regardless of
+  length**. A length-4 snake's body blocks a cell exactly as effectively
+  as a length-40 snake's body would. This is a distinct, previously
+  unidentified gap from every other spiral-trap investigation documented
+  earlier in this file (all of which either had no opponent involved at
+  all, or involved an equal-or-longer shadowing opponent already covered
+  by the existing machinery).
+
+**Fix implemented this session (small, well-isolated, one filter
+removed):** removed the `lengths.get(...) >= my_len - 1` length filter on
+`threat_bodies` -- now ALL other snakes' bodies are included for the
+adversarial `worst_space`/2-ply-contested-exits/`threat_near` edge-weight
+purposes, regardless of relative length. This does NOT touch
+`danger_h2h`/`opp_predicted` (still correctly restricted to
+equal-or-longer opponents for combat-risk purposes) or any other scoring
+term. Since this only ever ADDS extra caution/defensive modeling (never
+removes any existing safety check), it's a low-risk, strictly-more-
+defensive change.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed the exact `sim_208.jsonl` turn-55 decision through the patched
+  `move()`: now correctly returns **`up`** instead of the old fatal
+  `left` (verified via `tools/replay_frame.py --turn 55`).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-8
+  turns each, zero errors/exceptions in either server log.
+- Self-play (`main.py` vs itself), seed 501: ran 125 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Did NOT have remaining budget this session to individually re-verify
+  all 26 losses share this exact mechanism (only `sim_208.jsonl` was
+  deeply traced) or to run a larger self-play/NEW-vs-OLD A/B batch.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real opponent in the next round. If
+  losses drop meaningfully from 26, this confirms the "short opponents
+  still block space" theory. If losses persist with the SAME "much
+  longer than opponent, corner/wall death" shape, re-check whether other
+  losses have a different root cause (e.g. maybe some are still pure
+  self-inflicted spirals unrelated to opponent position -- worth
+  checking with the dense-logging + forward-simulation technique used
+  this session, reusable pattern: copy the board, force a specific first
+  move via `main.move()`, then keep calling `move()` and manually
+  re-applying snake movement rules turn-by-turn to see if a candidate
+  branch actually survives).
+- If this fix helps but doesn't fully close the gap, consider also
+  applying the same "any other snake matters for space-sealing" logic to
+  the corner/dead-end food-trap penalty and the `exits`/`contested_exits`
+  computation (already covered by this fix since they consume
+  `threat_bodies`), and double check whether `_predict_opp_move`'s
+  nearest-food-else-center heuristic is a reasonable model for THIS
+  opponent's actual behavior (not verified this session).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first. The new forward-simulation harness
+  sketched this session (force a first move, then repeatedly call
+  `main.move()` + manually apply movement rules) is a good complementary
+  technique for testing "would this alternative branch have actually
+  survived" -- consider saving it as `tools/simulate_forward.py` next
+  session if reused again.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
