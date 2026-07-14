@@ -400,17 +400,28 @@ def move(game_state):
                 # cramped pockets; this helps avoid dying in our own coil while far
                 # ahead of a weaker opponent.  The gate keeps it as a defensive
                 # endgame rule rather than a general food/tail-chasing habit.
-                if area <= max(8, my_len // 2) and my_body and my_len >= max_enemy_len + 3 and my_health > 70:
+                if my_body and my_len >= max_enemy_len + 3 and my_health > 70:
                     tail_cell = next_body[-1]
                     tail_blocked = set(sim_blocked)
                     tail_blocked.discard(tail_cell)
                     tail_dist = shortest(n, [tail_cell], tail_blocked, w, h, max_depth=w * h)
-                    if tail_dist is None:
-                        score -= 220
+                    if area <= max(8, my_len // 2):
+                        if tail_dist is None:
+                            score -= 220
+                        else:
+                            score += max(0, 6 - tail_dist) * 38
+                            if n == my_body[-1]:
+                                score += 260
+                    # When far ahead and healthy, our main remaining failure mode is
+                    # building a long noose while pursuing a much shorter snake.  A
+                    # full flood fill can still be huge through a one-cell throat, so
+                    # add a very small global tail-connectivity bias in late games.
+                    # This is intentionally weaker than area/exits and only active
+                    # with a clear length lead.
+                    elif tail_dist is not None:
+                        score += max(0, 18 - tail_dist) * 4
                     else:
-                        score += max(0, 6 - tail_dist) * 38
-                        if n == my_body[-1]:
-                            score += 260
+                        score -= 40
 
             # Voronoi-style space ownership versus equal/longer opponents.
             scary_heads = [pt(s["head"]) for s in enemies if s.get("length", len(s.get("body", []))) >= my_len]
@@ -476,8 +487,15 @@ def move(game_state):
                     # Keep taking these when hungry or needing length, but do not
                     # let a healthy, longer snake chase unnecessary wall snacks.
                     edge_food = (n[0] in (0, w - 1) or n[1] in (0, h - 1))
+                    outer_food = (n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2)
                     if (my_health > 75 and my_len >= max_enemy_len + 2 and edge_food):
                         score -= 65
+                    # A rare rdbrck loss started by taking a high-health y=1 snack
+                    # while already twice the opponent's length, pinning our tail and
+                    # beginning a self-coil.  Treat outer-ring snacks as optional when
+                    # we are far ahead; this is softer than the actual-edge penalty.
+                    if (my_health > 80 and my_len >= max_enemy_len + 6 and outer_food):
+                        score -= 70
                     # Do not grab optional rail food when a longer/equal enemy is
                     # already close enough to force the next exit.  Several Xe__since
                     # losses were healthy top/bottom-edge snacks that immediately
@@ -495,7 +513,6 @@ def move(game_state):
                     # growing from 7->8 versus 11->12 does not fix head-to-head risk
                     # and can pin our tail into a wall spiral.  Prefer waiting in the
                     # interior unless health is becoming relevant.
-                    outer_food = (n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2)
                     if outer_food and my_health > 70 and my_len + 2 <= max_enemy_len:
                         score -= 100
                         if edge_food:

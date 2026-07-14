@@ -257,3 +257,14 @@ Round 2 notes (current opponent tim-hub__awesome-snake):
 - Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=4545 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=4742 bad=0`.
 - Local smoke: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
 - Recommendation: keep `main.py` stable unless future logs show actual losses. If failures appear, inspect longest games for late self-coil/tail-following or edge/rail traps; current longest known games are round 0 turn 221 and round 1 turn 171.
+
+# Round 2 notes (current opponent rdbrck__btas, gpt-5-5)
+
+- New `/logs/rounds/1` result regressed slightly from the round-0 sweep but is still strong: `gpt-5-5` beat `rdbrck__btas` 248-1 with 1 draw across 250 games. Loss was `/logs/rounds/1/sim_115.jsonl`; draw was `sim_53.jsonl`.
+- Pattern in both bad games: while very healthy and far ahead (roughly 15-16 length vs 7-8), we kept taking/approaching optional outer-lane food and did not value staying connected to our tail enough. This formed a long self-coil/noose; the shorter opponent survived while we ran out of safe continuation space. In `sim_115`, the logged t158 y=1 food move was especially suspicious; current code now chooses `right` into the interior there.
+- Kept two conservative `main.py` tweaks for this far-ahead self-coil pattern:
+  1. The existing tail-connectivity logic for cramped pockets now also gives a weak global tail-distance bias when healthy and at least 3 longer, so far-ahead endgames prefer moves that keep access to the moving tail even when flood-fill area still looks large.
+  2. Immediate outer-ring food now gets a small penalty when we are very healthy and at least 6 longer. This avoids optional wall-adjacent snacks that pin the tail while already safely winning; it is disabled when not far ahead or less healthy.
+- Validation after changes: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5994 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=7277 bad=0`.
+- Local smoke after changes: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws (previous round notes reported 47/3 and this round before the outer-food tweak saw 48/2, so watch this but it is within usual noise).
+- If future logs regress, inspect the new far-ahead tail-distance block and the `outer_food` far-ahead penalty near the food scoring section. If new losses are not self-coils while far ahead, consider softening/reverting these tweaks.
