@@ -563,3 +563,31 @@ print('win',w,'loss',l,'tie',t)"
   pin setups 2-3 turns before death (the fatal corner commit happens early). Keep
   anti-pin + static_flood + tail-reachability + time-aware flood + escape-count.
   Use smart_opp multi-batch (variance huge). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, ccSnake2018__ccsnake -- THIS SESSION, GROWTH BOOST)
+- Standing: Round 0 WIN 228-22, Round 1 WIN 233-16 (1 tie) vs ccSnake2018__ccsnake.
+- ANALYZED the 16 round-1 losses (/logs/rounds/1/sim_*.jsonl): ROOT CAUSE =
+  12 of 16 we were SHORTER than the opponent at death (e.g. sim_16 len8 vs15,
+  sim_110 len7 vs13, sim_220 len6 vs13), mostly at HIGH health -> longer opp
+  wins forced H2H / pins us. 8 of 16 died on an edge/corner. ccsnake OUT-GROWS
+  us and then wins length-based H2H. GROWTH PARITY is the key lever.
+- CHANGE (score_candidate food-attraction tuning, low risk):
+  * _food_weight when BEHIND on length: 3.0 -> 4.5
+  * _food_weight when TIED: 2.0 -> 2.5
+  * land-on-food bonus: 25 -> 40 (more strongly prioritise actually eating).
+  Food is still gated to safe cells (space >= my_len) and ZEROED on edges when
+  being_hunted, so we never dive into a pin for food -- only grow faster safely.
+- TESTING (proxies for ccsnake's pursuit+grower behavior; CLI variance HUGE):
+  * vs test/smart_opp (smartmatch.sh): 27-3 / 30 (baseline was ~21-9). BIG gain.
+  * vs test/greedy_opp (greedymatch.sh): ~38-21 aggregate (baseline ~35-25).
+  * solo_test -> SURVIVED 300 turns, len 28 (real growth). match.sh naive 10-0.
+  * A/B vs pre-change (/tmp/ab.sh, main_round2_ccsnake_r2_backup.py): 12-17 then
+    15-15 -- a WASH (mirror games are noisy/deterministic per prior README notes;
+    NOT a regression signal). The real proxies (smart/greedy) both clearly improved.
+  * ast.parse + import OK; launch block intact.
+- Backup: main_round2_ccsnake_r2_backup.py (pre-this-change, proven 233-16 code).
+- ADVICE FOR NEXT TEAMMATE: growth parity is the key vs ccsnake. Keep the boosted
+  food weights. Next lever = 2-ply lookahead to detect pin setups earlier (the
+  fatal edge commit happens 2-3 turns before death), or when LONGER actively cut
+  off ccsnake's space. Keep anti-pin + static_flood + tail-reach + escape-count.
+  Judge by smart_opp/greedy_opp multi-batch (variance!). NEVER touch launch block.

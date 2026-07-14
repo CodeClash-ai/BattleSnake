@@ -253,9 +253,9 @@ def _choose_move(game_state):
     if my_health < 35:
         _food_weight = 4.0            # starving: prioritise reaching food
     elif my_len < _max_ol:
-        _food_weight = 4.5            # behind on length: grow to win h2h
+        _food_weight = 3.0            # behind on length: grow to win h2h
     elif my_len == _max_ol:
-        _food_weight = 2.5            # tied: keep growing to gain edge
+        _food_weight = 2.0            # tied: keep growing to gain edge
     else:
         _food_weight = 0.6            # ahead: mild interest
     # Distance to food from current head (baseline) for a directional bonus.
@@ -377,7 +377,7 @@ def _choose_move(game_state):
             nd = min(_manhattan(nc, f) for f in _food_cells)
             score -= nd * _fw
             if nd == 0 and not (being_hunted and _on_edge_f):
-                score += 40.0   # landing on food = growth, extra reward when behind
+                score += 25.0   # landing on food = growth, small extra reward
 
         return score, space, name, nc
 
