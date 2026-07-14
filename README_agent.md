@@ -1845,3 +1845,46 @@ print('win',w,'loss',l,'tie',t)"
   existing anti-coil/anti-pin/dominance/growth. NEVER touch the launch block.
   Judge growth fixes by tracing early-game length vs frank in /logs (proxies are
   noisy). /tmp/analyze3.py tracks per-turn length gap.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__famished-frank -- OPENING-GROWTH FIX)
+- Standing: R0 WIN 198-51 (1t), R1 WIN 185-60 (5t). Losses ROSE 51->60. frank is
+  our CLOSEST opponent (~24% loss rate).
+- ANALYZED all 60 R1 losses (/tmp/analyze2.py + /tmp/early.py + /tmp/opening.py,
+  recreate from git): 58/60 we were SHORTER at death (median gap -5), high health
+  (avg 85 -- NOT starvation). We FELL BEHIND at TURN 2 in 100% of losses.
+- ROOT CAUSE (traced sim_10/sim_103): both snakes spawn len3 near opposite sides,
+  each with a close spawn-side food ~2 cells away (on the EDGE) plus a center food
+  at (5,5). frank eats its ADJACENT spawn food on turn 1-2 (len3->4) while OUR bot
+  walked toward the CENTER food (5,5), reaching it slower, so frank led by 1 from
+  turn 2 and we never caught up -> lost length-based h2h/pins.
+  WHY: (a) `_suppress_edge_food` gated on `my_len >= _max_ol` -- TRUE when TIED at
+  the opening -> it SKIPPED racing the close edge food. (b) the NEUTRAL-ZONE wall
+  avoidance (fires my_len>=_max_ol) applied a center-pull that dragged us toward
+  center food and away from the spawn-side edge food.
+- FIX (two targeted, low-risk edits):
+  1. `_suppress_edge_food`: `my_len >= _max_ol` -> `my_len > _max_ol` (only
+     suppress edge food when STRICTLY LONGER; when TIED, esp. the opening, grab
+     close edge food). Keeps the battlejake longer-snake wall-coil protection.
+  2. NEUTRAL-ZONE block: when `_early_tied` (my_len == _max_ol and my_len <= 8)
+     SOFTEN center-pull (2.5->0.5) + edge penalty (25->6, corner 50->15). A short
+     tied snake has ~zero self-coil risk, so growth wins. Longer snakes keep the
+     full anti-wall-coil steering (unchanged).
+- VERIFIED (/tmp/cmp.py A/B old vs new on the exact sim_10 opening): OLD chose
+  'right' (toward center food, ignoring close edge food (0,6)); NEW chose 'up'
+  (toward the close edge food). Fix works.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0.
+  * greedy_opp (aggressive-grower proxy for frank, greedymatch.sh 24, HIGH
+    variance): NEW = 15-9 then 13-10 (aggregate 28-19, ~60%). BASELINE
+    (main_round2_famished_r2_backup.py) = 11-12 (LOSING). Clear, consistent
+    improvement -- the fix directly addresses the confirmed opening length-deficit.
+- Backup: main_round2_famished_r2_backup.py (pre-this-change, the 185-60 code).
+- ADVICE FOR NEXT TEAMMATE: frank beats us by OUT-GROWING us in the OPENING
+  (grabs its spawn-side food turn 1-2). The opening-growth fix keeps us at parity.
+  If losses persist: push early food racing even harder (contest food we lose by 1
+  when escape>=2), or extend the 2-ply pin lookahead so we win length contacts.
+  Don't over-crank food (pin risk -- gated to safe cells space>=my_len, zeroed on
+  edges when hunted). Keep opening-growth + _suppress_edge_food(strict>) + all
+  existing anti-coil/anti-pin/dominance/growth. NEVER touch the launch block.
+  Judge growth via greedy_opp A/B multi-batch (variance huge) + tracing opening
+  length gap in /logs.

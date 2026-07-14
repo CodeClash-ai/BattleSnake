@@ -372,11 +372,7 @@ def _choose_move(game_state):
     # (10,0) right along the bottom wall into the (10,3) dead-end death-march).
     # When we are AT/ABOVE parity and healthy and not hunted, we do NOT need to
     # race edge food; suppress the edge-food lure so we prefer open interior room.
-    # Only suppress edge food when STRICTLY LONGER: when TIED (esp. the opening)
-    # we MUST grab close spawn-side edge food to keep pace with frank, who eats
-    # its adjacent spawn food on turn 1-2. Suppressing edge food when tied made
-    # us walk past close edge food toward center food and permanently fall behind.
-    _suppress_edge_food = (my_len > _max_ol and my_health >= 40)
+    _suppress_edge_food = (my_len >= _max_ol and my_health >= 40)
     # Distance to food from current head (baseline) for a directional bonus.
 
     def score_candidate(cand):
@@ -784,25 +780,14 @@ def _choose_move(game_state):
         # are AT LEAST tied on length, healthy, and not being hunted. This keeps us
         # off walls in the even-length band without touching the hungry/food logic.
         if (not being_hunted) and my_health >= 30 and my_len >= _max_ol:
-            # OPENING GROWTH (fix vs famished-frank R1: 58/60 losses we were
-            # SHORTER; frank eats its adjacent spawn food on turn 1-2 while we
-            # walked toward CENTER food and fell behind by turn 2 and never
-            # recovered). When exactly TIED and still short (early game, len<=8)
-            # the wall-coil risk is ~zero, so SOFTEN this center-pull/edge penalty
-            # so close spawn-side edge food (2 cells away at spawn) wins over
-            # center food. Longer snakes keep the full anti-wall-coil steering.
-            _early_tied = (my_len == _max_ol and my_len <= 8)
             _dc = abs(nc[0] - cx) + abs(nc[1] - cy)
-            if _early_tied:
-                score -= _dc * 0.5
-            else:
-                score -= _dc * 2.5
+            score -= _dc * 2.5
             _on_edge_n = (nc[0] == 0 or nc[0] == width - 1
                           or nc[1] == 0 or nc[1] == height - 1)
             if _on_edge_n:
-                score -= (6.0 if _early_tied else 25.0)
+                score -= 25.0
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= (15.0 if _early_tied else 50.0)
+                    score -= 50.0
 
         # GENERAL ANTI-WALL-COIL (fix vs OliverMKing__astar-snake, round-0):
         # 47/79 losses were multi-turn self-coils/wall-hugs where we ran up a
