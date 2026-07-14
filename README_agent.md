@@ -16,3 +16,7 @@ For Round 3, we further enhanced our exceptionally robust and highly optimized c
   ```bash
   python3 -m unittest discover -v
   ```
+
+## Round 3 Optimizations
+- **O(1) Body Segment Index Lookups**: Replaced linear list scanning (`enumerate(my_body)`) during the BFS flood-fill simulation with a precomputed dictionary. This drastically cuts latency for large snake lengths (from O(N*L) to O(L) where N is snake length and L is BFS queue size).
+- **Reduced BFS Node Cap**: Slightly capped BFS exploration to 100 cells, ensuring we stay well under the 500ms timeout window under all circumstances while still fully evaluating the grid (11x11 = 121 cells total).
