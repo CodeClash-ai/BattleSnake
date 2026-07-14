@@ -520,6 +520,14 @@ def move(game_state):
                 # head-to-head odds against more cautious snakes.
                 if food_dist == 0 and area >= my_len + 3:
                     score += 55
+                    # Against nbw-ruby style food/space snakes, the main losing
+                    # pattern is getting outgrown by 4+ length.  If a safe snack is
+                    # immediately available while we are already far behind, take
+                    # the growth instead of letting raw flood-fill/anti-rail terms
+                    # keep orbiting.  This is deliberately limited to large deficits
+                    # so it does not undo earlier edge-food safety when close/ahead.
+                    if my_len + 5 <= max_enemy_len and my_health <= 95:
+                        score += 80
                     # Edge food can be a trap when we are already safely ahead:
                     # eating pins our tail for a turn and can start a wall spiral.
                     # Keep taking these when hungry or needing length, but do not
