@@ -298,3 +298,27 @@ print('win',w,'loss',l,'tie',t)"
 - ADVICE: LOW RISK, bot dominates. Don't touch launch block or survival logic.
   If devin ever stops timing out, consider 2-ply h2h lookahead but keep
   tail-reachability + time-aware flood + escape-count intact; re-run all validations.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__devious-devin) -- THIS SESSION
+- Standing: Round 0 WIN 33-0, Round 1 WIN 20-0 vs `coreyja__devious-devin`.
+- Opponent behavior (verified /logs/rounds/{0,1}/sim_*.jsonl): latency 500 from
+  turn 1 = TIMES OUT every game. CLI repeats its last move so devin walks
+  STRAIGHT UP the left edge from spawn and dies on the top wall by turn ~9-10.
+  Effectively naive/self-destructing (standard coreyja timeout pattern).
+  Round 0: 33 nonempty sims, 33-0-0, avglen 9.2. Round 1: 20 nonempty, 20-0-0,
+  avglen 10.2. We simply survive.
+- RISK: coreyja is genuinely strong IF it runs, but latency 500 is 100%
+  consistent so timeout is reliable. Our survival/anti-trap logic is the edge.
+- NO CODE CHANGE this round. Bot dominates; changing risks regression.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * python3 -c "import main" + ast.parse OK.
+  * bash test/match.sh 10 -> me=10 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * Inline edge tests: corner (0,0) -> valid 'up'; hungry(h=15) near edge food
+    at (0,5) -> correctly goes 'left'. Both correct.
+- ADVICE: LOW RISK, don't touch launch block or survival logic. If devin ever
+  stops timing out, the known weakness is multi-turn wall-hug coils (see round-2
+  graeme notes); a real fix needs lookahead assuming our body GROWS to detect
+  shrinking pockets earlier. Keep escape-count + tail-reachability + time-aware
+  flood intact; re-run all validations before submitting.
