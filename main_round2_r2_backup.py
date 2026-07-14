@@ -227,39 +227,6 @@ def _choose_move(game_state):
         else:
             score -= 200.0
 
-        # Escape-count: how many of the new head's neighbours are still safe
-        # to enter next turn (in bounds, not a body segment now, not a losing
-        # head-to-head)?  Moving into a cell with 0-1 escapes is how we walked
-        # into wall traps in round 1 (sim_152 bottom-row chase, sim_235 coil).
-        escapes = 0
-        for ex, ey in DIRS.values():
-            en = (nc[0] + ex, nc[1] + ey)
-            if not in_bounds(en):
-                continue
-            if en in occupied:
-                continue
-            el = enemy_next.get(en, 0)
-            if el >= my_len:
-                continue  # a cell an equal/longer enemy could take = not a safe escape
-            escapes += 1
-        if escapes == 0:
-            score -= 400.0   # dead-end unless our tail retreat saves us
-        elif escapes == 1:
-            score -= 40.0    # single escape = risky corridor
-
-        # Edge/wall penalty: hugging walls is what let the opponent cut us off
-        # along the bottom row (sim_152) and let us coil into a corner (sim_235).
-        # Only a SMALL nudge toward the interior, and disabled when hungry so we
-        # can still reach food located on an edge/corner (solo starve otherwise).
-        if my_health >= 40:
-            on_edge = (nc[0] == 0 or nc[0] == width - 1
-                       or nc[1] == 0 or nc[1] == height - 1)
-            if on_edge:
-                score -= 3.0
-                # corner is worse (only two exits at most)
-                if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 5.0
-
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.
         if nc in hazards:
@@ -288,18 +255,8 @@ def _choose_move(game_state):
         return min(_manhattan(nc, f) for f in food)
 
     if food and want_food:
-        # Prefer the move that most reduces distance to nearest food, but never
-        # sacrifice space for a marginal distance gain: break near-ties by space.
-        # This stops us diving into a wall-corner just to shave one manhattan
-        # step toward food while the enemy closes in (round-1 sim_152 death).
-        opp_heads_all = [(o["body"][0]["x"], o["body"][0]["y"]) for o in opponents]
-        def food_pref(s):
-            nc = s[3]
-            fd = food_dist(nc)
-            # if enemy head is near AND we are on an edge heading toward it,
-            # prefer more space over chasing the contested food.
-            return (fd, -s[1])
-        best.sort(key=food_pref)
+        # Prefer the move that most reduces distance to nearest food.
+        best.sort(key=lambda s: (food_dist(s[3]), -s[1]))
     else:
         # We are clearly longer than every opponent: hunt to force a
         # favorable head-to-head, while keeping space priority.

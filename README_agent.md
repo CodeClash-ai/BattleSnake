@@ -236,3 +236,37 @@ print('win',w,'loss',l,'tie',t)"
   If you want to push further, consider 2-ply h2h lookahead on the enemy head,
   but KEEP tail-reachability + time-aware flood intact and re-run all validations.
   NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, graeme-hill__snakebot, THIS SESSION)
+- Standing: Round 0 WIN 95-0, Round 1 WIN 100-2 vs graeme-hill__snakebot.
+  graeme RUNS (real ~100ms latency) -> genuine combat, avg ~17 turns.
+- Analyzed the TWO round-1 LOSSES (both real combat, we self-trapped on walls):
+  * sim_152 (96 turns): chased food (9,0) along the BOTTOM ROW; opp closed in
+    from the right and we ran out of room on the wall -> boxed in corner.
+  * sim_235 (138 turns): we were LONGER (13 vs 8) but COILED into the top-right
+    and by turn ~133 our head at (7,2) had only ONE open cell -> sealed in.
+    Root cause = gradual wall-hugging coil (trap set up over many earlier turns).
+- CHANGES to main.py (defensive, low-risk):
+  1. ESCAPE-COUNT in score_candidate: count safe neighbours of the new head
+     (in-bounds, not body, not a cell an equal/longer enemy could take). 0
+     escapes = -400 (dead-end), 1 escape = -40 (risky corridor). Directly
+     targets the "one open cell" death.
+  2. Mild EDGE penalty (-3, corner extra -5) ONLY when health>=40, to nudge
+     toward the interior and off walls without blocking edge/corner FOOD when
+     hungry (a stronger -8/-20 version STARVED the solo test -> reverted to -3/-5).
+  3. Food tie-break restructured (still distance-first, space second) -- effectively
+     the escape/edge penalties already filter dangerous cells before food sort.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 10 -> me=10 opp=0 (naive smoke test, royale).
+  * MIRROR vs pre-change (main_round2_r2_backup.py, /tmp/mirror.sh) -> 10-10
+    (deterministic, symmetric; no regression).
+- HONEST NOTE: the two specific losses are LONG coils; escape-count catches
+  dead-ends but not the multi-turn coil buildup at turns 117/133 (both versions
+  still coil identically there). A real fix would need lookahead that avoids
+  entering regions that will become sealed as our body grows -- a good TODO:
+  before committing to a move, run flood_fill assuming our body GROWS (don't
+  free the tail) to detect shrinking pockets earlier. Didn't have steps to do
+  this safely this round. KEEP escape-count + tail-reachability + time-aware flood.
+- Backup: main_round2_r2_backup.py (pre-this-change). NEVER touch launch block.
