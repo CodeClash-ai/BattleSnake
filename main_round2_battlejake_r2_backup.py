@@ -433,15 +433,9 @@ def _choose_move(game_state):
         # many turns before it seals, independent of length.
         if (not being_hunted) and my_health >= 30 and my_tail is not None \
                 and len(my_body) >= 2:
-            _eats_u = nc in _food_cells  # landing on food: tail does NOT retreat
-            if _eats_u:
-                _occ_u = set(my_body)         # full body stays (grows by one)
-                _occ_u.add(nc)
-                _future_tail_u = my_body[-1]  # tail stays put this turn
-            else:
-                _occ_u = set(my_body[:-1])    # body after move: old tail vacates
-                _occ_u.add(nc)
-                _future_tail_u = my_body[-2]  # cell the tail retreats to
+            _occ_u = set(my_body[:-1])   # body after move: old tail vacates
+            _occ_u.add(nc)
+            _future_tail_u = my_body[-2]  # cell the tail retreats to
             _reg_u, _tail_ok_u = _region_and_tail(
                 nc, _occ_u, _future_tail_u, limit=None)
             if _tail_ok_u:
@@ -495,10 +489,7 @@ def _choose_move(game_state):
                 # funneling into a shrinking pocket 2 moves ahead (the coil).
                 # Use a generous limit so a truly open region is distinguished
                 # from a shrinking pocket even for a longer near-equal snake.
-                if nc in _food_cells:
-                    _occ2n = set(my_body)
-                else:
-                    _occ2n = set(my_body[:-1])
+                _occ2n = set(my_body[:-1])
                 _occ2n.add(nc)
                 _best2n = 0
                 for _b2xn, _b2yn in DIRS.values():
@@ -570,14 +561,9 @@ def _choose_move(game_state):
             # needs (the time-aware/static floods overcount through 1-wide
             # channels and via tail retreat, so they miss the multi-turn coil).
             if my_tail is not None and len(my_body) >= 2:
-                if nc in _food_cells:          # eating: tail does NOT retreat
-                    _occ_tr = set(my_body)
-                    _occ_tr.add(nc)
-                    _future_tail = my_body[-1]
-                else:
-                    _occ_tr = set(my_body[:-1])   # body after move: drop old tail
-                    _occ_tr.add(nc)
-                    _future_tail = my_body[-2]     # the cell the tail vacates to
+                _occ_tr = set(my_body[:-1])   # body after move: drop old tail
+                _occ_tr.add(nc)
+                _future_tail = my_body[-2]     # the cell the tail vacates to
                 _reg, _tail_ok = _region_and_tail(
                     nc, _occ_tr, _future_tail, limit=None)
                 if _tail_ok:
@@ -603,10 +589,7 @@ def _choose_move(game_state):
             # reachable from any safe neighbour of nc. If even the BEST follow-up
             # region is smaller than our length, this move funnels us into a
             # shrinking pocket 2 moves ahead -- the exact multi-turn interior coil.
-            if nc in _food_cells:
-                _occ2 = set(my_body)
-            else:
-                _occ2 = set(my_body[:-1])
+            _occ2 = set(my_body[:-1])
             _occ2.add(nc)
             _best2 = 0
             for _b2x, _b2y in DIRS.values():

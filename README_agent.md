@@ -1765,3 +1765,38 @@ print('win',w,'loss',l,'tie',t)"
   chokepoint-quality + near-equal-anti-coil + dominance tail-follow + all
   existing anti-coil/anti-pin/growth. Use /tmp/livesim.py (frozen-opp forward
   sim from a given sim turn) to verify wall-coil fixes. NEVER touch launch block.
+
+## ROUND 2 UPDATE (opus-4-8, joshhartmann11__battlejake2019 -- FOOD-DOUBLING TAIL FIX)
+- Standing: R0 WIN 213-37, R1 WIN 224-25 (1t). The R0 edge-food-suppression cut
+  losses 37->25. Analyzed ALL 25 R1 losses (/tmp/analyze2.py, recreate from git):
+  23/25 = SELF-COIL (0 safe nbrs at death), 19/25 while LONGER, high health
+  (74-100), MODERATE lengths (10-31, NOT huge-dominance regime). Edge 14 / int 11.
+  Traced sim_180 (t141-144, len10 v9 interior): we ATE food at (9,8) -> grew ->
+  turned back INTO our own coil pocket at (7,7) and sealed (all 4 nbrs own body).
+- ROOT CAUSE (a real BUG all prior notes flagged as a TODO): the tail-reachable-
+  region + 2-ply-static anti-coil blocks ALL assumed the tail RETREATS
+  (_occ = my_body[:-1]). But when the new head lands on FOOD the tail does NOT
+  retreat -- the body stays and grows. So those blocks OVERCOUNTED the reachable
+  region right when eating food seals a pocket (the exact sim_180 death). The
+  bot happily ate wall/pocket food that doubled its tail and self-sealed.
+- FIX (main.py, targeted & low-risk): in all four tail-region / 2-ply-static
+  blocks (universal ~line 436, dominance ~line 566, near-equal 2-ply ~line 492,
+  dominance 2-ply ~line 592), when nc is in _food_cells use the FULL body
+  (set(my_body)) as walls and keep the current tail as _future_tail (no retreat).
+  This makes the anti-coil see the TRUE post-eat space, so it avoids eating food
+  that would seal a shrinking pocket.
+- VERIFIED: frozen-opp livesim (/tmp/livesim.py) from sim_180 t140 now SURVIVES
+  30 steps (recorded game died t145). grow_solo (heavy food 20, 450t, seeds 0-5)
+  = 6/6 SURVIVE reaching len up to 44 (no regression, strong).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0, move() ~1.7ms/call
+  (zero timeout risk).
+- Backup: main_round2_battlejake_r2_backup.py (pre-this-change, the 224-25 code).
+- ADVICE FOR NEXT TEAMMATE: battlejake beats us ONLY by our own self-coils
+  (23/25) mostly when LONGER at moderate lengths -- the food-doubling tail bug was
+  the missing piece (we sealed pockets by eating food that doubled the tail). The
+  DEEPEST coils still need a true space-filling/longest-survivable-path planner
+  (floods overcount through 1-wide channels). Keep the food-doubling tail fix +
+  chokepoint-quality + universal-tail-region + near-equal-anti-coil + dominance
+  tail-follow + _suppress_edge_food + all existing anti-coil/anti-pin/growth.
+  NEVER touch the launch block. Judge via /tmp/livesim.py + grow_solo + solo_test.
