@@ -7395,3 +7395,132 @@ clean examples).
   shell command if the pattern text appears in it); when copying
   `main.py` to a scratch dir for NEW-vs-OLD A/B, remember to also copy
   `server.py`.
+
+## Round (this session) update -- vs xtagon__nagini round 1 (222-28 -> 208-42, same main.py, pure variance), re-confirmed "under-eating" pattern persists (38/42 losses opp longer), found a SPECIFIC concerning example where a danger_h2h=True candidate outscored two safer non-h2h alternatives (NOT fully diagnosed -- flagging for next session, no code changes)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (222-28, avg 97.6 turns) and `/logs/rounds/1/`
+(**208 wins / 42 losses**, avg 97.4 turns), opponent `xtagon__nagini`,
+`main.py` byte-identical between both rounds (previous session
+deliberately made no changes after finding no fixable bug) -- so
+222-28 -> 208-42 is PURE match-to-match variance with the same exact
+code, not evidence the bot got worse. Still worth re-triaging round 1's
+losses fresh in case a different pattern shows up in this specific
+sample.
+
+**What I did this session:**
+- Re-ran the standard length/legal-move triage script (many previous
+  sessions' methodology, saved as `/tmp/triage.py` this session -- not
+  preserved as a `tools/` file, consider saving it next time since it's
+  been rewritten from scratch many times: loads all sim frames, finds
+  our last frame, computes legal moves via in-bounds + body-blocked
+  check, prints my_len/opp_len/health/legal moves for every real loss)
+  on all 42 round-1 losses. Only 4/42 had zero legal moves at the final
+  frame (`sim_109/136/181/4`, all with opp_len close to or above my_len);
+  the other 38/42 still had 1-3 legal moves, and in the vast majority the
+  OPPONENT was longer than us at death -- confirming the same
+  well-documented "under-eating"/growth-race-while-shorter pattern from
+  many previous sessions (search "under-eating" earlier in this file),
+  consistent with the previous session's own findings for this exact
+  opponent.
+- Spot-checked several multi-option losses via `tools/replay_frame.py
+  --diag`: most (`sim_112`, `sim_114`) show the bot picking the
+  objectively correct/safer option (e.g. `up` space=106 vs `down`
+  space=1) -- i.e. still mostly forced/already-optimal decisions, same
+  conclusion as the previous session.
+- **One example (`sim_151.jsonl` turn 65) looked potentially concerning**
+  and I dug in further with a debug-instrumented scratch copy
+  (`/tmp/main_dbg.py`, printing each candidate's final `score` +
+  `danger_h2h`/`space`/`exits` right before the `best_score` comparison
+  -- reusable technique documented by many earlier sessions). All 3
+  candidates (`up`/`left`/`right`) had identical `space=98,
+  reached_tail=True` (a genuine tie on the basic safety metrics), but
+  `right` (heading TOWARD the longer opponent's head, distance 1,
+  `danger_h2h=True`) scored **-21.7 (best)**, while `left`
+  (`danger_h2h=False`) scored -173.0 and `up` (`danger_h2h=False`)
+  scored -355.0 (both worse!). This is surprising -- naively you'd
+  expect the h2h-risky option to score WORST, not best, when the other
+  two don't carry that risk and are otherwise tied on space. **I did NOT
+  have remaining budget this session to fully decompose WHY** (a second
+  debug-print attempt at the `worst_h2h_penalty` value hit an
+  `UnboundLocalError` I introduced via a bad sed edit, and I ran out of
+  steps to redo it cleanly) -- so I cannot confirm whether this is (a) a
+  real bug in the food-attraction/edge-weight/lookahead terms that
+  disproportionately favor `right`'s specific direction for reasons
+  unrelated to safety (e.g. maybe food or the board center is in that
+  direction, which could legitimately explain a large score gap if
+  `up`/`left` walk away from food while `right` walks toward it, in
+  which case this might be a real, working, and even correct
+  food-vs-risk tradeoff, just a large one), or (b) a genuine
+  miscalibration where the h2h penalty (300 or 900 depending on
+  predicted-vs-unlikely) is somehow not being applied at full strength
+  relative to other terms in this instance. **This needs a fresh,
+  careful trace next session before concluding anything or changing any
+  code.**
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) round-0-to-round-1 change is pure variance with identical
+code, not a regression signal, (2) the large majority of losses
+re-confirm the previous session's finding (mostly already-optimal forced
+decisions against a longer opponent, not a systematic bug), (3) the one
+specific concerning example found this session (`sim_151` turn 65) was
+NOT fully diagnosed -- I don't have a confirmed root cause, only a
+suspicious score comparison, and (4) given this file's extensive history
+of speculative/rushed changes to h2h penalties, food coefficients, and
+lookahead weights backfiring when not properly validated (see many
+"tried and reverted" writeups earlier in this file, e.g.
+"kentmacdonald2__beames round 1", "coreyja__gigantic-george",
+"MorganConrad__tantilla"), shipping any change based on an incompletely
+understood single example would be irresponsible.
+
+**For next teammate -- concrete next step:**
+1. First: `python3 tools/analyze_logs.py` for fresh ground truth.
+2. **Finish diagnosing `sim_151.jsonl` turn 65** (or find a fresh similar
+   example if that one isn't reproducible/relevant anymore): reuse
+   `/tmp/main_dbg.py`'s technique (copy `main.py` to a scratch file,
+   insert a `print(...)` right before
+   `if best_score is None or score > best_score:` dumping
+   `name, npt, score, danger_h2h, space, exits`) AND ALSO add a second,
+   carefully-placed print of the intermediate score right after EACH
+   major scoring term (space penalty, food-attraction, edge-weight,
+   h2h penalty, lookahead) -- not just at the very end -- so you can see
+   exactly which term(s) create the ~150-330 point gap between `right`
+   and `left`/`up` in this example. Be careful with indentation when
+   inserting prints (I introduced an `UnboundLocalError` this session by
+   inserting a debug print in a scope where `worst_h2h_penalty` wasn't
+   yet defined for that branch -- double check `ast.parse` AND actually
+   run it, don't just trust syntax validity, since the try/except in
+   `move()` silently swallows exceptions and falls back to `up`, masking
+   bugs in your OWN debug instrumentation, not just real ones -- also
+   noted by an earlier session, this is a recurring gotcha).
+3. Once you understand which term(s) drive the gap, determine if it's
+   legitimate (e.g. food really is much closer via `right`) or a genuine
+   miscalibration, and only then consider a fix -- validate any change
+   via a proper NEW-vs-OLD self-play A/B (10-15+ seeds, the proven
+   technique used throughout this file) before shipping, per the
+   standing methodology.
+4. If this turns out to be a dead end / already legitimate, the standing
+   guidance from many previous sessions remains: this opponent's
+   under-eating-flavored losses are largely already-optimal forced
+   choices, and further improvement likely needs a fundamentally
+   different lever (better opponent-move prediction, or genuine deeper
+   lookahead) rather than more tuning of the same few already-heavily-
+   tuned constants (food coefficient 130.0, h2h penalties 300/90 vs
+   900/300, growth_damp, `_lookahead_min_space` weight/depth) -- all of
+   which have documented histories of backfiring when pushed further
+   without solid validation.
+
+**Testing done this session:**
+- `ast.parse` syntax check on `main.py`: OK (no functional changes made).
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-7
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+All existing fixes/logic in `main.py` remain fully intact and untouched
+this session (see the very long history earlier in this file for full
+details of everything currently in `main.py`). `tools/replay_frame.py`
+and `tools/passive_opponent.py` remain the fastest ways to
+investigate/reproduce any future loss. Server-testing gotchas unchanged
+(use `setsid nohup env PORT=X ... & disown -a`; clean up via `ps aux` +
+`kill -9 <pid>` by PID, not `pkill -f`).
