@@ -210,6 +210,61 @@ highest-potential-value, highest-risk investment not yet attempted.
 
 ## Session log (most recent first, keep brief -- 5-10 lines per session)
 
+**Session (round 1, NEW opponent `tyrelh__tyrelh-python`, first time seeing
+this name -- round 0 results: 209W/31L/10D = 83.6% win rate, strong):** Ran
+`tools/analyze_logs.py` first (only round 0 exists so far). Triaged all 31
+losses via `tools/replay_frame.py --last`: **this is a DIFFERENT failure
+class than the historically-documented "dominant-length self-trap"** --
+in every loss checked (sim_105/153/233/96/22/48/24/244/65/223), my_len was
+roughly EQUAL to or slightly LESS than opp_len (e.g. 6v7, 7v8, 21v22,
+23v24), not massively ahead. These look like genuine close head-to-head
+races where the opponent is a comparably-strong, comparably-fast-growing
+snake (unlike prior opponents' `README`-documented small/passive/slow
+profiles) -- so `tools/passive_opponent.py` may be a WORSE proxy for THIS
+specific opponent than for previous ones; self-play is probably the more
+representative validation method here.
+Deep-dived one short loss (`sim_153`, turns 21-27) via `--diag`: at turn
+22 our snake (len 6) had 3 legal moves all reporting IDENTICAL
+`space=111, reached_tail=True` (up/down/right from (5,1), opponent at
+(6,2), so `threat_near` and the 4.0 edge-avoidance weight WERE active) --
+picked 'down', which walked along the bottom wall (y=0) rightward over
+several turns into the bottom-right corner area, ending with only 1
+legal move at turn 26, and the opponent (which had grown to len 7) took
+the one escape cell via head-to-head at turn 27 for a clean forced kill.
+The existing `exits`/`contested_exits` penalties and the threat-aware
+edge_weight bonus (see main.py comments ~line 607-627) are already
+designed to discourage exactly this, but evidently weren't enough to
+outweigh whatever pulled us down/right (likely food attraction or the
+degenerate space-tie not distinguishing corridor-narrowing risk this far
+ahead) in this specific instance. Did NOT change scoring weights this
+session -- given the extensive prior-session history of tuning these
+exact levers backfiring in self-play A/B for OTHER opponents (see
+sections above), and limited remaining step budget to properly A/B a new
+change against this brand-new opponent, judged it safer to just document
+this concrete repro case for a future session with more budget to
+implement+validate a targeted fix (e.g. an extra penalty for "committing
+to a 3rd+ consecutive move flush against the same wall while a
+comparable/longer threat is within radius 5" -- distinct from the
+existing single-step edge_weight bonus, which apparently didn't fire
+strongly enough here since all 3 candidates scored as an exact tie on
+the coarse space/reached_tail metrics).
+Verified no regressions: `ast.parse` OK, 3/3 smoke wins vs
+`tools/opponent_ref.py`, no exceptions in server logs. **No functional
+changes shipped this session** (docs/analysis only, given 83.6% is
+already a strong baseline and the new opponent's failure mode needs a
+properly-validated fix, not a rushed one).
+**For next teammate:** (1) opponent name is `tyrelh__tyrelh-python` --
+re-run `tools/analyze_logs.py` fresh if round 1 has new logs by the time
+you start, don't assume this opponent's behavior is unchanged. (2) The
+concrete repro for the "wall-hugging corner trap despite tied
+space-metric candidates" loss class is `/logs/rounds/0/sim_153.jsonl`,
+turns 21-27 -- use `tools/replay_frame.py --turn N --diag` to inspect.
+(3) Since this opponent seems comparably strong/fast-growing (not
+passive), self-play A/B is probably a decent proxy here (unlike for the
+old dominant-length-self-trap class) -- worth trying self-play A/B for
+any fix to this specific corner-trap pattern before shipping.
+
+
 **Session (round 2, opponent still `joshhartmann11__battlejake`, elo #17,
 rung 34/50):** Ran `tools/analyze_logs.py` first: rounds 0 and 1 both
 strong wins (224W/23L/3D = 89.6%, then 228W/22L/0D = 91.2%) against this
