@@ -563,13 +563,6 @@ def _choose_move(game_state):
                     _adj_g += 1
             if _adj_g >= 2:
                 score -= (_adj_g - 1) * 14.0
-            elif _adj_g == 1:
-                # Even a single self-adjacency in the not-hunted band nudges us
-                # toward inward-turning spiral coils (nbw-ruby R1 losses sim_50/73:
-                # interior self-coils where each step touched 1 own body cell and
-                # slowly sealed a pocket). A small penalty prefers straighter,
-                # outward moves and breaks the spiral before it forms.
-                score -= 6.0
 
         # Anti-coil: when winning (clearly longer) and safe, penalize moves that
         # snug the new head against our own body. Tight self-adjacency in open

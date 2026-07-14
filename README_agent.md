@@ -1238,3 +1238,37 @@ print('win',w,'loss',l,'tie',t)"
   connectivity metric. Keep self-adjacency(general) + static_flood + 2-ply-pin +
   offensive-space-denial + anti-pin + parallel-shadow + growth-attraction.
   Judge via smart_opp multi-batch (variance!). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, nbw__nbw-ruby -- THIS SESSION, INTERIOR SELF-COIL FIX)
+- Standing: R0 WIN 235-13 (2 ties), R1 WIN 230-17 (3 ties). Losses rose 13->17.
+- ANALYZED all 17 R1 losses (/tmp/analyze3.py): DOMINANT class = INTERIOR
+  self-coils, NOT wall/edge. At death 0 safe neighbours, high health (81-99),
+  mostly 1-6 cells SHORTER than ruby. Many fully self-surrounded (sim_157/50/73/75
+  all 4 neighbours = own body). Traced sim_50 & sim_73: we spiral our own body
+  INWARD (run a row, turn, run back, turn inward) until a 1-wide channel seals.
+  KEY: static/time-aware flood + existing 2-ply lookahead can't see it -- the
+  static flood counts the WHOLE board THROUGH a 1-cell channel (99 vs 98 at t91),
+  so both the coiling move and the escape move score ~equal. It's a 3+-ply trap.
+- FIX (low-risk, in the GENERAL ANTI-WALL-COIL not-hunted+healthy branch): added
+  a mild self-adjacency penalty for _adj_g == 1 (-6). Previously only _adj_g>=2
+  was penalized. During the neutral/equal band the bot had ties between a
+  straight/outward move (adj 0) and an inward-turning move (adj 1) and picked the
+  coiling one. The small -6 breaks the spiral EARLY (at t89/t90 in sim_50) before
+  the pocket forms. VERIFIED: live-sim from the losing positions (sim_50 t85,
+  sim_73 t190) now SURVIVES 25+ steps.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 8-0, smartmatch 9-7 (~within
+  variance, no regression).
+- Backup: main_round2_ruby_r2_backup.py (pre-this-change, proven 230-17 code).
+- NEW analysis tools (recreate from git if /tmp wiped): /tmp/analyze3.py (last
+  2-snake state per loss: head, len, hp, edge/corner, safe-neighbour details),
+  /tmp/livesim.py (forward-simulate our bot from a given sim turn with opp frozen).
+- ADVICE FOR NEXT TEAMMATE: ruby beats us via multi-turn INTERIOR self-coils
+  (mostly when slightly shorter). The self-adjacency nudge helps break early
+  spirals. DEEPER fix (only remaining lever) = a true longest-survivable-path /
+  connectivity metric (static flood overcounts through 1-wide channels), or a
+  3-ply space search. Also 10+/17 losses we were SHORTER -> grow faster to win
+  h2h (food weight already 4.5 when behind). Keep self-adjacency(adj1&adj2) +
+  static_flood + 2-ply-pin + offensive-space-denial + anti-pin + parallel-shadow
+  + growth-attraction all intact. NEVER touch the launch block. Judge via
+  solo_test + smartmatch multi-batch (variance huge).
