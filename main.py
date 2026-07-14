@@ -218,6 +218,109 @@ def _opp_two_ply_reachable(body, blocked, width, height):
     return result
 
 
+def _body_tuples(body):
+    return [(seg["x"], seg["y"]) for seg in body]
+
+
+def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
+    """Bounded multi-turn forward simulation, used as a *supplementary*,
+    lower-weight tiebreaker signal on top of the existing 1-ply (and
+    1-ply-adversarial) safety checks -- NOT a replacement for them.
+
+    Rationale (see README_agent.md for the extensive history of this exact
+    limitation, discovered across many different opponents/sessions): a
+    single-snapshot (even 1-ply-adversarial) flood-fill genuinely cannot
+    distinguish "this candidate leads into a big open region" from "this
+    candidate leads into a region that a longer/actively-moving opponent
+    (or our own advancing body) will narrow down to a forced single-file
+    corridor a few turns later" -- multiple real losses across many
+    sessions were traced to exactly this blind spot, with two candidates
+    reporting IDENTICAL space/reached_tail values at the pivotal turn.
+    Previous sessions explicitly tried and DISPROVED two cheaper proxies
+    for this: (a) a pure space-maximizing forward simulation with the
+    opponent's body held STATIC (found long escape routes for both
+    branches of a real fatal decision -- i.e. it would not have flagged
+    the trap), and (b) a whole-flood-fill-region "corridor shape" degree
+    metric (mathematically can't discriminate between two nearby
+    candidates that share almost the same connected region). The missing
+    ingredient identified by those investigations was that the OPPONENT
+    ALSO keeps moving during the turns it takes for a corridor to close --
+    so this version advances a simple predicted opponent move (nearest
+    food else board-center, matching `_predict_opp_move`'s heuristic)
+    every simulated step, not just our own body, while our own simulated
+    "future self" greedily picks whichever legal next cell maximizes
+    immediate flood-fill space (a cheap proxy for our own real decision
+    process -- deliberately NOT a full recursive call into `move()`'s
+    complete scoring, which previous sessions judged too expensive/risky
+    to implement and validate blind in a single session).
+
+    Returns the MINIMUM flood-fill space encountered for our own snake
+    along this simulated path (across `depth` simulated turns) -- a small
+    minimum anywhere along the path is a warning sign the corridor
+    narrows dangerously even if the space looked fine initially.
+    """
+    def occ(bodies):
+        blocked = set()
+        for body in bodies:
+            if not body:
+                continue
+            ate = len(body) >= 2 and body[-1] == body[-2]
+            n = len(body)
+            for i, seg in enumerate(body):
+                is_tail = i == n - 1
+                if is_tail and not ate:
+                    continue
+                blocked.add(seg)
+        return blocked
+
+    my_body = list(my_body)
+    opp_bodies = [list(b) for b in opp_bodies]
+    min_space = None
+    for _step in range(depth):
+        blocked = occ([my_body] + opp_bodies)
+        head = my_body[0]
+        best_c = None
+        best_sp = -1
+        for dx, dy in DIRS.values():
+            npt = (head[0] + dx, head[1] + dy)
+            if not _in_bounds(npt, width, height):
+                continue
+            if npt in blocked:
+                continue
+            sp, _ = _flood_fill(npt, blocked, width, height)
+            if sp > best_sp:
+                best_sp = sp
+                best_c = npt
+        if best_c is None:
+            min_space = 0
+            break
+        if min_space is None or best_sp < min_space:
+            min_space = best_sp
+        ate_me = best_c in food_cells
+        my_body = ([best_c] + my_body) if ate_me else ([best_c] + my_body[:-1])
+
+        new_opp_bodies = []
+        for body in opp_bodies:
+            ohead = body[0]
+            legal = []
+            for dx, dy in DIRS.values():
+                npt = (ohead[0] + dx, ohead[1] + dy)
+                if _in_bounds(npt, width, height) and npt not in blocked and npt != best_c:
+                    legal.append(npt)
+            if not legal:
+                new_opp_bodies.append(body)
+                continue
+            if food_cells:
+                target = min(food_cells, key=lambda f: _manhattan(ohead, f))
+            else:
+                target = ((width - 1) / 2.0, (height - 1) / 2.0)
+            choice = min(legal, key=lambda c: _manhattan(c, target))
+            ate_o = choice in food_cells
+            new_opp_bodies.append(([choice] + body) if ate_o else ([choice] + body[:-1]))
+        opp_bodies = new_opp_bodies
+    return min_space if min_space is not None else 0
+
+
 def _predict_opp_move(opp_body, opp_moves, food, width, height):
     """Best-effort guess of which of `opp_moves` an opposing snake will
     actually take next, using the same simple nearest-food-else-center
@@ -559,6 +662,30 @@ def move(game_state):
             if worst_space < my_len:
                 score -= 800.0 * (my_len - worst_space)
             score -= 8.0 * max(0, space - worst_space)
+
+            # Bounded multi-turn forward-simulation lookahead (see
+            # `_lookahead_min_space` docstring above for full rationale
+            # and the extensive prior-session history this is built on).
+            # This is a SUPPLEMENTARY, moderate-weight tiebreaker signal
+            # layered on top of (never replacing) the hard 1-ply and
+            # 1-ply-adversarial safety checks above -- it only matters
+            # when those checks leave multiple candidates looking equally
+            # safe (a real, repeatedly-documented scenario: two options
+            # tied on space/reached_tail at the pivotal turn, one of which
+            # turns out to lead into a corridor that a moving opponent (or
+            # our own advancing body) narrows fatally a few turns later).
+            my_body_tuples = _body_tuples(you["body"])
+            if will_eat:
+                sim_my_body = [npt] + my_body_tuples
+            else:
+                sim_my_body = [npt] + my_body_tuples[:-1]
+            sim_opp_bodies = [_body_tuples(b) for b in threat_bodies]
+            lookahead_depth = 6
+            lookahead_space = _lookahead_min_space(
+                sim_my_body, sim_opp_bodies, food_cells, width, height, lookahead_depth
+            )
+            if lookahead_space < my_len:
+                score -= 15.0 * (my_len - lookahead_space)
 
             # Apply the branching-factor safety term computed above: mild
             # continuous reward for having more exits (tie-break in favor

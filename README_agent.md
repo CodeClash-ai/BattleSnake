@@ -4329,3 +4329,131 @@ multi-ply lookahead is worth the investment):**
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- IMPLEMENTED genuine multi-turn lookahead (`_lookahead_min_space`), validated via self-play A/B (6/8 win) + fuzz testing, kept vs OliverMKing__astar-snake
+
+**Ground truth at start of session:** `/logs/rounds/0/` (135-109-6) and
+`/logs/rounds/1/` (127-111-12) both vs `OliverMKing__astar-snake` --
+by far the strongest opponent in this file's history (~50-54% win rate).
+Two previous sessions deeply investigated this and found NO isolated
+scoring bug -- every traced decision was already objectively optimal
+given available options. Both explicitly recommended implementing real
+multi-ply lookahead as the highest-value next investment, since the
+large loss margin would make even a modest improvement clearly visible
+in the next round's results (unlike previous sessions' single-digit-loss
+investigations against easier opponents).
+
+**What I implemented this session:** `_lookahead_min_space()` (new
+function, + small `_body_tuples()` helper) -- a bounded (depth=6) forward
+simulation used as a SUPPLEMENTARY, moderate-weight tiebreaker on top of
+(never replacing) all existing 1-ply/1-ply-adversarial safety checks.
+For each candidate move, simulates `depth` future turns: our simulated
+future self greedily picks whichever legal next cell maximizes immediate
+flood-fill space (cheap proxy, not a full recursive `move()` call -- that
+was judged too expensive/risky to build+validate in one session), while
+EVERY other snake on the board also advances each turn via a predicted
+move (nearest-food-else-center heuristic, matching `_predict_opp_move`).
+This directly addresses the specific gap two previous sessions'
+diagnostics identified: a purely static-opponent space-maximizing
+lookahead was already tried and DISPROVEN in an earlier session (it
+found long escape routes even for real fatal branches) -- the missing
+ingredient was that the opponent keeps moving too while a corridor
+narrows. Returns the minimum space seen along the path; new score term:
+`score -= 15.0 * max(0, my_len - lookahead_space)` (deliberately weaker
+than the hard 1-ply penalties of -800/-1000 per cell, so it only acts as
+a tiebreaker among options that already look safe by every existing
+metric, per the many past sessions' caution about not destabilizing a
+well-tuned bot).
+
+**Validation done this session:**
+- `ast.parse`: OK.
+- **Timing/performance** (critical given 500ms real move timeout):
+  tested with long coiled snakes (length 25-60) + up to 3 opponents on
+  11x11 boards -- consistently **<4ms per `move()` call**, i.e. ~100x+
+  margin below timeout. No risk of move-timeout forfeits.
+- **Fuzz test**: 500 randomized synthetic board states (1-3 opponents,
+  random snake lengths 3-35, random food) run through a debug copy of
+  `move()` with the outer `try/except` temporarily removed (so real
+  exceptions would surface instead of being silently swallowed as a
+  fallback "up") -- **zero exceptions**. (Reusable technique: `sed`/copy
+  `main.py`, replace the top-level `try:`/`except Exception: return
+  {"move":"up"}` at the end of `move()` with nothing, run random states
+  through it directly.)
+- **Direct NEW-vs-OLD self-play A/B** (the proven technique from the
+  food-coefficient-tuning session, documented earlier in this file):
+  saved pristine pre-session `main.py` to `/tmp/oldbot/`, ran both
+  concurrently via the real `game/battlesnake` CLI, seeds 1-8, 11x11
+  standard: **new won 6/8**, games ranging 86-312 turns, zero
+  errors/exceptions in either server log. This is a real, direct,
+  positive signal (not just plausible theory) that the lookahead
+  addition helps in genuinely competitive self-play, which is the best
+  available proxy given we don't have a local reimplementation of the
+  actual `OliverMKing__astar-snake` opponent.
+- Did NOT have remaining budget this session to replay this specific
+  opponent's actual real losing sim frames (e.g. `sim_0/108/120/149` from
+  `/logs/rounds/0/`, previously deep-dived and confirmed as
+  already-optimal-given-the-options by an earlier session) through the
+  NEW code to see if the lookahead changes any EARLIER (not-yet-forced)
+  decision further upstream in those same games -- the previous
+  sessions' diagnostics only examined the final 1-2 legal-move decision
+  points, which even with this lookahead added, may still show "no legal
+  alternative anyway" (lookahead can't invent moves that don't exist).
+  This new feature's real value should show up in the NEXT real round's
+  results (fewer losses / higher win rate against this specific
+  opponent) if it's working as intended -- check
+  `tools/analyze_logs.py` first thing next session.
+
+**Decision: KEPT this session's change** (unlike most previous sessions'
+"investigated a candidate idea, found it inconclusive/negative, reverted"
+pattern) because: (1) it directly targets the exact, well-diagnosed gap
+(two previous sessions' root-cause analysis) rather than being a
+speculative scoring-weight tweak, (2) it's implemented as a strictly
+additive, moderate-weight tiebreaker layered on top of (not replacing)
+every existing hard safety check, so it should not be able to override
+correct decisions the existing logic already gets right, (3) performance
+is verified extremely safe (<4ms, ~100x margin), (4) a real fuzz test
+found zero hidden exceptions, and (5) a direct self-play A/B showed a
+real positive signal (6/8) rather than the noise-level/negative results
+several previous "tried and reverted" sessions found for other candidate
+changes.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this actually performs against `OliverMKing__astar-snake` (or whatever
+  opponent is current) in the next real round. This is the real test --
+  self-play A/B is a decent proxy but not certain to transfer.
+- If losses drop meaningfully from the ~44-48% loss rate seen in rounds
+  0-1 against this opponent, this confirms the lookahead approach is
+  worth keeping/tuning further (e.g. try depth=8-10, or increase the
+  `15.0` weight moderately and re-validate via another self-play A/B
+  batch before trusting a bigger change).
+- If losses DON'T improve (or a larger self-play/real-round sample shows
+  it's net neutral/negative), consider: (a) the `15.0` weight might be
+  too weak to matter in practice -- try a moderate increase (e.g. 30-40)
+  and re-run the same self-play A/B validation technique used this
+  session before committing; (b) the greedy-space-maximizing proxy for
+  "our own future self" inside `_lookahead_min_space` might not match our
+  REAL future decisions closely enough (it ignores food-seeking, h2h
+  avoidance, etc. entirely) -- a natural refinement (still not attempted)
+  would be to make the simulated self also mildly avoid <=1-exit cells
+  during the lookahead, not just maximize raw space, since the real bot
+  does that too; (c) if a much bigger investment is warranted, replace
+  the greedy proxy with an actual recursive call into a simplified
+  version of `move()`'s real scoring (this is the "textbook correct" but
+  substantially more expensive/complex fix several previous sessions
+  scoped but declined to attempt -- search "multi-ply" earlier in this
+  file for that discussion).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw. The fuzz-test technique (bypass `move()`'s outer
+  try/except in a scratch copy, feed randomized synthetic states) used
+  this session for the first time in this file's history is also a good
+  general-purpose regression tool for any future scoring-logic change --
+  worth reusing/formalizing into a `tools/fuzz_test.py` if a future
+  session wants to invest in that.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`).
