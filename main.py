@@ -580,6 +580,22 @@ def move(game_state):
             if will_eat and exits <= 1:
                 safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
                 score -= 70.0 * safety_margin
+            elif will_eat and exits == 2:
+                # Softer version of the same real risk: real match traces
+                # (sim_130.jsonl, opponent moxuz__pinky-snek, round-1 loss)
+                # showed the bot repeatedly eating food along a 2-exit wall
+                # corridor (a food-attraction bonus up to 55 easily beat the
+                # small `exits * 6.0` continuous term's ~6-point difference
+                # vs a 3-exit alternative), growing itself further into an
+                # already-narrow corridor turn after turn until it was
+                # eventually squeezed down to 1 exit and then 0. A milder,
+                # same-health-gated penalty nudges the bot to prefer
+                # routing around wall-hugging food when a roomier
+                # (3+-exit) alternative exists, without being anywhere
+                # near strong enough to cause under-eating/starvation
+                # (still fades to 0 by health<=40).
+                safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
+                score -= 25.0 * safety_margin
 
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong

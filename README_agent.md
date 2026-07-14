@@ -3842,3 +3842,99 @@ validated the way the food-coefficient change was in an earlier session.
 - Server-testing gotchas unchanged from all previous sessions: use
   `setsid nohup env PORT=X ... & disown -a`; clean up via `ps aux` +
   `kill -9 <pid>` by PID, not `pkill -f`.
+
+## Round (this session) update -- extended the corner/dead-end food-trap penalty to exits==2 (softer, graduated), fixed sim_130-style wall-corridor over-eating
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (234-16, opponent `moxuz__pinky-snek`, avg 99.0 turns)
+and `/logs/rounds/1/` (**240 wins / 10 losses**, avg 90.4 turns) --
+confirms the previous session's "corner/dead-end food trap" fix
+(penalizing `will_eat and exits<=1`) was a real net improvement
+(16->10 losses).
+
+**What I did this session:** used `tools/replay_frame.py --last` on all
+10 round-1 losses; all showed our snake with ZERO legal moves at the
+last logged frame, our snake much LONGER than the opponent in every case
+(12v6, 24v9, 16v6, 20v5, 14v5, ...) -- same self-trap-while-longer
+signature as before, NOT the old under-eating bug. Traced `sim_130.jsonl`
+turn-by-turn (dense logging, turns 55-64) by directly computing
+`exits`/`will_eat` per candidate via a one-off script (same pattern as
+many previous sessions -- see script in this session's trajectory):
+found the bot repeatedly ate food while hugging the right wall (x=10)
+at turns 55/57/59, at exits=3,2,2 respectively -- i.e. the EXISTING
+corner-food penalty (`will_eat and exits<=1`) never fired because exits
+was 2 (not yet <=1) at the actual pivotal turns, even though a same-turn
+alternative (`up`/`down`, away from the wall) had strictly more exits
+(3) and would have avoided committing to the narrowing wall corridor.
+By turn 60, both remaining candidates were already down to exits=1, and
+by turn 63 the corridor dead-ended at the corner `(10,0)` with `space=1`
+-- unrecoverable by then, same well-documented "already too late by the
+time it's a 2-candidate decision" pattern from many previous sessions.
+
+**Fix implemented this session (small, targeted, graduated extension of
+last session's fix):** added an `elif will_eat and exits == 2` branch
+with a smaller, same health-gated penalty (`-25.0 * safety_margin`,
+vs. the existing `-70.0` for `exits<=1`) right after the existing
+`exits<=1` corner-food penalty in the scoring loop. This nudges the bot
+to prefer a 3+-exit alternative over eating food on a 2-exit wall
+corridor cell when health is comfortable, without being anywhere near
+strong enough to reintroduce the previously-fixed starvation/under-eating
+bug (still fades linearly to 0 by health<=40, identical gating logic to
+the existing `exits<=1` tier).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed the exact `sim_130.jsonl` turn 57 (the first pivotal
+  wall-corridor commitment) through the patched `move()`: now picks `up`
+  (3-exit, away from the wall) instead of the old fatal `right`
+  (2-exit, wall-hugging food). Turn 55 (where all 3 candidates still had
+  exits=3, no discriminating signal) is unchanged, as expected.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Self-play (`main.py` vs itself), seed 42: ran 154 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Did NOT have remaining budget this session for a larger NEW-vs-OLD
+  self-play A/B batch (the food-coefficient-tuning session's proven
+  technique) to rigorously validate the exact `-25.0` magnitude, nor to
+  individually re-trace the other 9 round-1 losses to confirm they share
+  this exact `exits==2` mechanism (vs. some other cause) -- only
+  `sim_130.jsonl` was deeply traced this session.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this change performs against the real opponent in the next round. If
+  losses drop further from 10, this confirms the `exits==2` extension is
+  a real improvement (matching the pattern of the previous session's
+  `exits<=1` fix, which took losses from 16->10). If losses don't
+  improve or a NEW-vs-OLD self-play A/B suggests this is net-negative
+  (worth running with 15-20+ seeds for a clean signal, per the
+  food-coefficient-tuning session's methodology, if you have budget),
+  consider reverting or reducing the `-25.0` magnitude.
+- Consider also checking whether extending further to `exits==3` (an
+  even softer, smaller penalty) helps or is unnecessary -- not attempted
+  this session due to budget. Validate with the same
+  `tools/replay_frame.py` technique against fresh losing sim files first.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of each: food coefficient 55.0, `_HEAD_HISTORY`
+  anti-stalemate, graduated h2h prediction, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, `_opp_two_ply_reachable`
+  contested-exits penalty, growth-damping, threat-aware edge-weight
+  boost, and the `exits<=1` corner/dead-end food-trap penalty from the
+  previous session).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first.
+- Server-testing gotchas (all reconfirmed working again this session,
+  though note: this session found STALE leftover background server
+  processes from a much earlier session still running on random ports
+  from a previous invocation -- if a `battlesnake play` command hangs or
+  behaves oddly, run `ps aux | grep python3` first to check for and
+  clean up unexpected leftover processes before debugging further): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it).
