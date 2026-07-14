@@ -737,7 +737,7 @@ def _choose_move(game_state):
         # keep escape routes and cannot be sealed against a wall.
         if being_hunted:
             dist_center = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= dist_center * 5.0
+            score -= dist_center * 4.0
             on_edge2 = (nc[0] == 0 or nc[0] == width - 1
                         or nc[1] == 0 or nc[1] == height - 1)
             if on_edge2:

@@ -2411,3 +2411,40 @@ print('win',w,'loss',l,'tie',t)"
   fix (all notes agree) = a true space-filling/longest-survivable-path metric
   (floods overcount along walls via tail retreat). Use /tmp/coilclass.py to
   measure the parallel-shadow fraction. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, rdbrck__bountysnake2018 -- HUNTED CENTER-PULL BUMP)
+- Standing: R0 LOSS 214-35 (1t), R1 LOSS 211-37 (2t). bountysnake is our
+  TOUGHEST opponent (~85% loss). The R1 wall-shadow fix barely moved it (35->37).
+- ANALYZED all 211 R1 losses (/tmp/analyze.py + /tmp/analyze2.py + /tmp/timeline.py,
+  recreate from git): BIGGEST class = 85 SHORT+HADMOVE+EDGE (we were shorter, on
+  an edge, had a safe move at last 2-snake frame, died next turn = herded onto a
+  wall then pinned). 46 of those we were EXACTLY 1 short. 132/211 die shorter
+  (median 11 turns after LOSING our length lead -- bountysnake out-grows us
+  mid-game). 79/211 = self-coil while equal/longer.
+- TRACED sim_19 (t8): both L4, food (5,5) a 2-2 TIE race (mutual death, correctly
+  ceded), food (6,0) opp-won -> NO winnable food. We then WANDERED UP into the
+  top-right corner (t8 head (5,7): up=1380 > down=1210 > right=1180) instead of
+  going DOWN toward center. Something (2-ply pin / structural) penalizes the
+  central move ~170pts; the being_hunted center-pull (4.0) was too weak to steer
+  us central, so we drifted to a wall and got pinned.
+- CHANGE (low-risk, targeted): being_hunted center-pull 4.0 -> 5.0 (line 740).
+  Pulls us more toward center when a longer/equal snake hunts us, directly
+  targeting the dominant edge-pin loss class (85/211). Modest bump (NOT 6.5,
+  which was still too weak to flip sim_19 but risked over-crank per prior notes
+  that center*6 was a smart_opp wash).
+- HONEST NOTE: this alone does NOT flip sim_19 (the ~170pt anti-central penalty
+  there is structural, likely the 2-ply pin lookahead + food-un-winnable). The
+  DEEP fix bountysnake needs (all prior notes agree) = (a) a smarter OPENING that
+  heads DIRECTLY to a winnable food from spawn instead of wandering when the
+  center race is a tie, and (b) a full 2-ply/3-ply MINIMAX on the hunter to
+  survive gap=-1 forced-h2h pins. Also investigate WHY the central move is
+  penalized ~170pts at sim_19 t8 (add DBG print to `scored` per /tmp/dbg2.py) --
+  if the 2-ply pin lookahead is wrongly penalizing safe central cells, fixing it
+  could flip many of the 85 edge-pin losses.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0.
+- Backup: main_round2_bounty_r2_backup.py (pre-this-change, the 211-37 code).
+- ANALYSIS TOOLS (recreate from git if /tmp wiped): /tmp/analyze.py (loss class
+  breakdown), /tmp/analyze2.py (short-edge gap dist), /tmp/timeline.py (crossover
+  turn), /tmp/dbg2.py (per-candidate scores at a given sim turn -- USE THIS to
+  debug why central moves score low). NEVER touch the launch block.
