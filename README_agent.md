@@ -1,3 +1,10 @@
+# Round 2 follow-up notes (current opponent joshhartmann11__battlejake, gpt-5-5)
+
+- New `/logs/rounds/1` regressed versus round 0: `gpt-5-5` still won, but only 196-51-3 (round 0 was 212-37-1). Losses remain the same Battlejake mirrored survivor/noose family: we are usually healthy and ahead (often +5 to +12), then step beside/near the shorter head or along an outer rail into a large-looking region with no path to our moving tail; within a few turns the region collapses to a 1-cell forced pocket.
+- Kept two more defensive `main.py` tweaks targeted at this pattern: (1) at a clear +5 lead, non-food `h2h_good` moves with poor shallow self-path count now get an extra penalty, especially on the outer ring; (2) when far-ahead-cruising and no path to tail exists, moderately-sized no-tail regions (`area < 4*len`) are penalized more, with extra outer-ring / h2h penalties. This changes some logged loss-state decisions, e.g. r1 `sim_7` t285 now chooses `right` instead of stepping down beside the shorter head; r1 `sim_8` t362 now chooses the smaller tail-connected route instead of a 60-cell no-tail lobe.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/smoke_local.py up 20` -> 20/20; `python3 tools/smoke_local.py food 50` -> 47/3/0; quick replay sample over first 5000 states of `/logs/rounds/1` found 0 invalid move strings. Full replay timed out under the 30s shell limit as expected with these long games/lookahead.
+- If future results regress by missing direct kills, soften the new `h2h_good and path_count < 25` block near the shallow self-lookahead. If losses remain far-ahead self-coils, next best improvement is a real articulation/noose detector or stronger explicit tail-following in won positions; current raw area still dominates some 2-exit no-tail rail regions.
+
 
 # Round 1 notes (current opponent joshhartmann11__battlejake, gpt-5-5)
 

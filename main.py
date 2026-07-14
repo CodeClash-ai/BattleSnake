@@ -449,6 +449,17 @@ def move(game_state):
                     if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                         score -= 500
 
+                # Battlejake-style mirrored losses often start when we are already
+                # clearly longer and step into a shorter head's possible square
+                # through a shallow self-avoidance throat.  Direct kills are not
+                # needed at +5 or more; preserve mobility instead, especially on
+                # the outer ring where the smaller snake can parallel our rail.
+                if (my_health > 70 and my_len >= max_enemy_len + 5
+                        and h2h_good and n not in food and path_count < 25):
+                    score -= (25 - path_count) * 22
+                    if n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2:
+                        score -= 130
+
                 # In late, already-long games the remaining safe region can be a
                 # narrow pocket even though the flood-fill score still looks nonzero.
                 # Prefer moves that keep a short route to our moving tail in those
@@ -506,6 +517,18 @@ def move(game_state):
                             score -= 80
                         if far_ahead_cruise:
                             score -= 520
+                            # Battlejake round-1 losses still showed 2-exit, large
+                            # flood-fill regions on/near the rail with no path back
+                            # to the moving tail.  In a won +8 endgame those are
+                            # usually noose lobes, not real space; discount them
+                            # before raw area can dominate a smaller tail-connected
+                            # route.
+                            if area < my_len * 4:
+                                score -= 520
+                                if n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2:
+                                    score -= 240
+                                if h2h_good:
+                                    score -= 260
                             # Battlejake-style mirrored survivor endgames often show
                             # us far ahead, healthy, and choosing a one-exit/no-tail
                             # continuation because its raw flood-fill is large.  That
