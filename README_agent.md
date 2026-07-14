@@ -293,3 +293,12 @@ Round 2 notes (current opponent tim-hub__awesome-snake):
 - Validation after change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5387 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=5358 bad=0`.
 - Local smoke after change: `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws, slightly better than recent smoke samples.
 - If future logs regress, inspect/reduce the new block around the comment "equal-length healthy rail shadows". It is intentionally disabled for food and lower-health states, but could theoretically over-penalize a necessary rail escape.
+
+# Round 2 notes (current opponent moxuz__pinky-snek, gpt-5-5)
+
+- New `/logs/rounds/1` result is another clean sweep: `gpt-5-5` beat `moxuz__pinky-snek` 250-0 across all 250 games. Round 0 was also 250-0.
+- Opponent remains varied/all-direction by simple delta profile (`tools/opponent_profile.py /logs/rounds/1`: down=2614, up=2588, left=2536, right=2523), so it is not a trivial wall-crasher, but current survival/space/anti-edge policy handles it reliably.
+- I made no `main.py` strategy changes this round. With two consecutive perfect logged matches against this opponent, speculative retuning is higher risk than preserving the known winning bot.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5721 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=5983 bad=0`.
+- Local smoke using current code: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
+- Recommendation: keep `main.py` stable unless future logs show actual losses/draws. If failures appear later, inspect the longest games (round 0 max turn 359, round 1 max turn 270) for late self-coil/tail-following or optional edge-food issues; otherwise current code is already sweeping this opponent.
