@@ -129,7 +129,7 @@ def move(game_state):
             move_scores.append((d, space, can_reach_tail, dist))
 
         # Sort moves:
-        min_space_needed = min(my_length, 30)
+        min_space_needed = my_length
         
         def rank_move(item):
             d, space, can_reach_tail, dist = item
