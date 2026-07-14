@@ -1741,3 +1741,112 @@ likely* one -- it was a coin flip when it didn't need to be.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- investigated remaining 10/250 losses vs Xe__since, no bug found (near-unavoidable forced 50/50s)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` and `/logs/rounds/1/` both exist, opponent `Xe__since`:
+- Round 0: 231 wins / 19 losses (250 games), turns avg 117.0.
+- Round 1 (after previous session's graduated-h2h-prediction fix): **240
+  wins / 10 losses** (250 games), turns avg 118.3. Losses dropped 19->10,
+  confirming that fix was a real net improvement.
+
+**What I did this session:** Investigated all 10 remaining round-1 losses
+using the standard "replay the real losing sim frame's board state
+directly through `move()`" methodology (documented extensively earlier in
+this file). For 5 of the 10 losses (`sim_189`, `sim_196`, `sim_2`,
+`sim_213`, `sim_232`), I traced the exact last-alive turn and dumped
+per-candidate diagnostics (`space`, `worst_space`, `reached_tail`,
+`danger_h2h`, final `score`) by adding a temporary debug print (see
+`/tmp/maindbg.py` pattern used this session -- copy `main.py`, insert a
+`print(...)` right before the `if best_score is None or score > best_score`
+line, run it against a synthetic `game_state` built from the real sim
+frame).
+
+**Finding: in every one of the 5 traced losses, the bot's decision was
+already CORRECT/optimal given the two available options** -- each time,
+our snake (length 5-7) had been cornered by a much longer opponent
+(length 8-24) down to exactly 1-2 legal candidate moves, where:
+- One candidate led into a tiny genuine dead-end pocket (space 1-4, well
+  below `my_len`) -- a near-certain multi-turn trap/death.
+- The other candidate was h2h-risky (legal for the longer opponent too,
+  often matching our `_predict_opp_move` prediction) but had abundant
+  open space (85-106 cells).
+
+The scoring correctly picked the roomy-but-h2h-risky option every single
+time (e.g. score -785 vs -5669, -753 vs -7236, -742 vs -3872, -678 vs
+-3646, -676 vs -11151) since a guaranteed slow trap death is scored far
+worse than a probabilistic head-to-head risk, even when that probability
+is high per our (heuristic, imperfect) opponent-move prediction. In each
+traced case, the real match's actual opponent move happened to land
+exactly on our chosen (predicted, roomy) cell, causing the loss. **This
+looks like an unavoidable structural consequence of being a short snake
+that gets cornered by a much longer one late in a long game (~turn
+75-150), not an exploitable bug in the current scoring/decision logic.**
+Both options were bad; the bot picked the less-bad one; it still lost
+sometimes because "less-bad" was still a real risk, not a sure thing.
+
+**Did NOT individually re-trace the other 5 losses this session** (budget
+constraints) -- `sim_29`, `sim_46`, `sim_54`, `sim_73`, `sim_239` remain
+unverified, though their death-frame snapshots (opponent adjacent,
+opponent length >= ours, moderate-to-long game) look consistent with the
+same shape. Worth confirming in a future session if there's spare budget,
+though I'd guess they follow the same pattern given how consistent it was
+across all 5 traced cases.
+
+**Decision: made NO functional changes to `main.py` this session.** The
+investigation found the bot's *decisions* in the actual loss scenarios are
+already about as good as they can be with a 1-ply (plus adversarial
+worst-case lookahead) heuristic -- the real "fix" for this class of loss,
+if one is even possible, would have to prevent the snake from getting
+cornered down to 1-2 legal moves in the first place, many turns earlier
+(i.e. genuine multi-ply lookahead / path planning that anticipates "this
+region will eventually pinch down to almost nothing" well before it
+happens) -- not something to attempt lightly with limited remaining
+budget and no way to validate it against a real reference before
+submission. Given the score already improved from 231->240 across the
+last two rounds and this round's losses look like near-coin-flip
+unavoidable endgames (not a concrete fixable bug), I judged further
+speculative changes to be pure risk for likely-marginal-at-best upside.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK (no code changes made, but verified
+  current `main.py` is still syntactically valid after reading through).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regressions from prior sessions' fixes.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on this
+  round's real result. If losses stay around ~10/250 or drop further,
+  that's consistent with this session's finding that the remaining losses
+  are close to a structural floor (forced 50/50s late in long games
+  against a much longer, well-playing opponent) rather than an
+  exploitable bug.
+- If you want to push further on this specific class of loss, the real
+  next investment (flagged by multiple previous sessions, still not
+  implemented) is genuine multi-ply lookahead/simulation -- e.g. for each
+  candidate move, simulate several further turns of "greedy self + naive
+  opponent" forward and check whether the resulting position still has
+  comfortable space several turns out, not just immediately after 1 move.
+  This is the only way to detect "this move leads to a region that will
+  pinch down to a forced 50/50 in ~10 turns" *before* it's already a
+  forced 50/50 -- by the time it becomes a 2-candidate decision (as seen
+  in all 5 traced losses this session), it's generally already too late,
+  both options are already bad, and the bot is already picking the better
+  of two bad options.
+- Debugging technique used this session (reusable): copy `main.py` to a
+  scratch file, insert a `print(...)` dumping `name, npt, space,
+  worst_space, reached_tail, danger_h2h, score` right before the
+  `if best_score is None or score > best_score:` line in the scoring
+  loop, then feed it a synthetic `game_state` built from a real
+  `sim_*.jsonl` frame (`board` = frame's board, `you` = our snake's own
+  dict pulled from `board["snakes"]`) via `import` of the scratch module.
+  This is much faster than re-deriving the scoring loop by hand each time.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
