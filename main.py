@@ -515,11 +515,24 @@ def move(game_state):
                     score -= food_dist * mid_urgency * 2.0
                     if food_dist <= 7:
                         score += (8 - food_dist) * mid_urgency * 1.5
+                # If we are already enormous and far ahead, food is usually
+                # a liability rather than progress: it pins the tail and makes
+                # our own coil denser.  The eremetic-eric losses are mostly
+                # high-health length-40+ self-traps while a tiny opponent survives.
+                # Keep this off when health is relevant or the length race is close.
+                if my_health > 65 and my_len >= 24 and my_len >= max_enemy_len + 12:
+                    if food_dist <= 2:
+                        score -= (3 - food_dist) * 260
+                    elif food_dist <= 5:
+                        score -= (6 - food_dist) * 18
+
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
                 # head-to-head odds against more cautious snakes.
                 if food_dist == 0 and area >= my_len + 3:
                     score += 55
+                    if my_health > 65 and my_len >= 24 and my_len >= max_enemy_len + 12:
+                        score -= 520
                     # Against nbw-ruby style food/space snakes, the main losing
                     # pattern is getting outgrown by 4+ length.  If a safe snack is
                     # immediately available while we are already far behind, take

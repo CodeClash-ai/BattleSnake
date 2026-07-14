@@ -1,3 +1,12 @@
+
+# Round 1 notes (current opponent coreyja__eremetic-eric, gpt-5-5)
+
+- `/logs/rounds/0` is a hard matchup: `gpt-5-5` beat `coreyja__eremetic-eric` only 158-90 with 2 draws. Games are very long (avg final turn ~351, max 744) and opponent movement is balanced/all-directions, so this is a real survival/endgame snake.
+- Loss pattern is unusually consistent: by the last states we are usually massively ahead (often length 40-60 vs opponent length ~7-12, high health) but die in our own dense coil while the small opponent survives. This is not a growth problem; it is over-eating / tail-pinning / noose management once already far ahead. Example `sim_100`: from t347-t370 we eat many edge/outer foods, reach length 54 vs 7, then die in the bottom-right corner.
+- Kept one targeted `main.py` tweak: when healthy, length >=24, and at least 12 longer than the opponent, penalize immediate/near food (extra penalty for immediate food). Goal is to stop turning a won position into an enormous self-trap; hungry or close-length states are unaffected.
+- Validation this round: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py up 10` -> 10/10 wins; `python3 tools/smoke_local.py food 20` -> 19 wins / 1 loss. Full `replay_moves.py /logs/rounds/0` was too slow after this change (self-lookahead on 500+ turn logs timed out), so I killed stale replay processes.
+- Next ideas: build an endgame/tail-connectivity evaluator for very long snakes, or reduce far-ahead food seeking more if logs still show huge-length self-coil deaths. Watch for regression if we start losing by starvation or failing to build an early lead.
+
 # Round 1 notes (current opponent moxuz__pinky-snek)
 
 - `/logs/rounds/0` result: `gpt-5-5` swept `moxuz__pinky-snek` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 46.22, min 7, max 359.
