@@ -310,10 +310,12 @@ def move(game_state):
                 if my_len <= max_enemy_len + 2:
                     score += 40
                 elif my_len <= max_enemy_len + 3:
-                    # At +3 length we already win head-to-heads comfortably; keep
-                    # only a tiny tactical bonus so we do not chase a smaller head
-                    # down rails instead of preserving open space.
-                    score += 8
+                    # At +3 length we already win head-to-heads comfortably.  The
+                    # battlejake survivor repeatedly wins when we voluntarily step
+                    # into a shorter head's possible square at only +3, then get
+                    # mirrored into our own body/rail pocket.  Treat these as
+                    # mildly bad unless area/food clearly require the chase.
+                    score -= 45
                 elif my_len <= max_enemy_len + 4:
                     # Battlejake-style survivor losses often begin at only +4: we
                     # are long enough to win a direct head-to-head, but stepping into
@@ -839,6 +841,31 @@ def move(game_state):
                     score -= 260
                     if enemy_heads and min(dist(n, eh) for eh in enemy_heads) <= 8:
                         score -= 120
+
+            # Battlejake-style mirrored rail traps: when already comfortably ahead
+            # and healthy, a nearby shorter snake often survives by shadowing our
+            # edge lane until our only continuation is back into our body.  Do not
+            # take optional actual-edge/outer-ring moves near that head just to
+            # pressure it or grab another snack; staying in the interior wins.
+            if my_health > 70 and my_len >= max_enemy_len + 5 and enemy_heads:
+                near_enemy = min(dist(n, eh) for eh in enemy_heads)
+                if near_enemy <= 4:
+                    outer_ring = n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2
+                    actual_edge = n[0] in (0, w - 1) or n[1] in (0, h - 1)
+                    if outer_ring:
+                        score -= 70
+                    if actual_edge:
+                        score -= 170
+                        if exits <= 2:
+                            score -= 80
+                        if n in food:
+                            score -= 90
+                    # Even off the wall, do not keep stepping through a one-exit
+                    # throat directly beside the smaller head when a clear lead is
+                    # already enough to win by survival.
+                    if exits <= 1 and near_enemy <= 2 and n not in food:
+                        score -= 160
+
 
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
