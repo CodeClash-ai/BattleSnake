@@ -4682,3 +4682,94 @@ shipped speculatively).
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
   `from server import run_server`).
+
+## Round (this session) update -- vs coreyja__eremetic-eric (232-17-1), found real gap in `_lookahead_min_space`'s opponent model, fixed to adversarial worst-case
+
+**Ground truth (`python3 tools/analyze_logs.py`):** `/logs/rounds/0/`
+only, opponent `coreyja__eremetic-eric`. Result: 232 wins / 17 losses /
+1 draw (250 games). Turn counts avg 212.3, max 682 -- by far the longest
+average games seen in this file's history.
+
+**Investigation:** all 17 losses showed the standard "self-trap while
+much longer than a short/weak opponent" signature (my_len 21-73 vs
+opp_len 5-12), same well-documented class as many previous sessions
+(search "spiral-coil"/"multi-ply" earlier in this file). `sim_129.jsonl`
+logs every turn for our snake, so I could trace the exact spiral
+formation (turns 70-108) using `tools/replay_frame.py --diag` plus a
+custom script computing `_lookahead_min_space` for real candidates at
+each turn.
+
+**Root cause found (NEW insight, not previously identified):** the
+existing `_lookahead_min_space`'s opponent proxy (predicts each opponent
+moves toward nearest-food-else-center) reported our candidate `down` as
+consistently safe (space 90-97) for MANY turns right up to the actual
+death, even though the REAL opponent in the match moved differently
+(into a cell that happened to seal our only escape corridor) -- I
+verified this by re-running `_lookahead_min_space` with the ACTUAL
+real-match opponent trajectory vs. its own nearest-food-predicted
+trajectory and finding a huge discrepancy in resulting space (90+ vs
+single digits) as early as turn 92-94. When I patched the opponent model
+to be genuinely ADVERSARIAL (opponent picks whichever of its own legal
+moves minimizes OUR resulting flood-fill space, instead of predicting
+nearest-food) and re-ran the same real turns, it correctly flagged
+danger starting turn ~92-94 (well before the actual death at turn 108),
+matching the true danger profile much more closely than the old
+food-seeking proxy did.
+
+**Fix implemented in `main.py` this session:** modified
+`_lookahead_min_space`'s opponent-move simulation to be adversarial
+(minimize our own immediate flood-fill space) instead of nearest-food
+predictive, for opponents with 2+ legal moves at each simulated step
+(cheap -- bounded by 4 legal directions, extra cost confirmed negligible,
+<0.02ms per call even with a 70-length snake and 2 opponents). This
+makes the existing lookahead's SUPPLEMENTARY (moderate-weight, `score -=
+15.0 * ...`) tiebreaker term more pessimistic/realistic, without
+touching any of the hard 1-ply safety checks, food scoring, growth
+damping, or any other existing logic.
+
+**Testing done:** `ast.parse` OK; performance confirmed cheap (<0.02ms/
+call) even for long snakes + multiple opponents; direct replay of
+`sim_129.jsonl` turns 90-102 confirms the new adversarial model reports
+danger much earlier/more accurately than the old model (see numbers in
+trajectory); local regression batch vs `tools/opponent_ref.py` (naive
+stand-in), seeds 1-3: 3/3 wins, 4-6 turns, zero errors/exceptions in
+server logs.
+
+**NOT done this session (budget ran out):** a full NEW-vs-OLD self-play
+A/B batch (the proven technique from the food-coefficient-tuning
+session) to quantify whether this change is a net positive/negative in
+general competitive play -- only verified it doesn't crash and directly
+improves the diagnosed real scenario. **This is the most important thing
+for the next teammate to do first**: run `python3
+tools/analyze_logs.py` for real ground truth on how this performs, and
+if time permits, a self-play A/B (save a pristine pre-session copy of
+main.py first -- check git history/diff if needed) to validate more
+rigorously. If it looks net-negative in self-play or the next real
+round's losses climb, consider reverting the opponent-model change in
+`_lookahead_min_space` (search for "Adversarial opponent modeling" in the
+function body) back to the nearest-food proxy, or blend the two (e.g.
+average of adversarial and food-seeking space, or only use adversarial
+when the opponent is within some distance threshold) rather than fully
+committing to worst-case which could make the bot overly conservative
+around harmless distant opponents.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth.
+- If this change helps (losses drop from 17), consider also applying
+  similar adversarial-worst-case reasoning elsewhere, or increasing
+  lookahead `depth` (confirmed cheap, currently 6, tested safely up to at
+  least 20-40 in isolated perf tests).
+- If it hurts, revert this specific change (isolated to the opponent-move
+  simulation block inside `_lookahead_min_space`) and consider a milder
+  blend instead.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see extensive history earlier in this file).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw.
+- Server-testing gotchas unchanged: use `setsid nohup env PORT=X ... &
+  disown -a`; clean up via `ps aux` + `kill -9 <pid>` by PID (not
+  `pkill -f`). **New gotcha this session:** `git stash` will revert
+  uncommitted working-tree changes to `main.py` if run casually (e.g. to
+  check git status) -- if you need to inspect git state mid-session,
+  prefer `git diff`/`git status` only, and if you must stash, remember to
+  `git stash pop` immediately.

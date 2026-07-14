@@ -300,6 +300,7 @@ def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
         my_body = ([best_c] + my_body) if ate_me else ([best_c] + my_body[:-1])
 
         new_opp_bodies = []
+        my_head_now = my_body[0]
         for body in opp_bodies:
             ohead = body[0]
             legal = []
@@ -310,11 +311,37 @@ def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
             if not legal:
                 new_opp_bodies.append(body)
                 continue
-            if food_cells:
-                target = min(food_cells, key=lambda f: _manhattan(ohead, f))
+            if len(legal) == 1:
+                choice = legal[0]
             else:
-                target = ((width - 1) / 2.0, (height - 1) / 2.0)
-            choice = min(legal, key=lambda c: _manhattan(c, target))
+                # Adversarial opponent modeling (worst-case-for-us), not
+                # just a naive nearest-food prediction. Real match
+                # analysis (see README_agent.md, opponent
+                # coreyja__eremetic-eric) found that a purely
+                # food-seeking opponent proxy inside this lookahead
+                # reported large, "safe-looking" space for many turns in
+                # a row right up until the actual real opponent made a
+                # move that happened to seal off our only escape
+                # corridor -- confirmed directly by replaying real
+                # sim_129.jsonl frames and comparing this lookahead's
+                # predicted vs. actual outcome. Modeling the opponent as
+                # choosing whichever of its legal moves MINIMIZES our own
+                # immediate flood-fill space (only cheap for the common
+                # 1-2 opponent case, bounded by `legal`'s size, at most 4)
+                # surfaces this danger much earlier/more reliably, at the
+                # cost of being more pessimistic in general -- acceptable
+                # here since this is only a moderate-weight SUPPLEMENTARY
+                # tiebreaker (see `score -=` usage at the call site), not
+                # a hard veto.
+                def _my_space_after(choice, body=body):
+                    ate_o = choice in food_cells
+                    nb = ([choice] + body) if ate_o else ([choice] + body[:-1])
+                    other_bodies = [b for b in opp_bodies if b is not body] + [nb]
+                    blocked2 = occ([my_body] + other_bodies)
+                    blocked2.discard(my_head_now)
+                    sp, _ = _flood_fill(my_head_now, blocked2, width, height)
+                    return sp
+                choice = min(legal, key=_my_space_after)
             ate_o = choice in food_cells
             new_opp_bodies.append(([choice] + body) if ate_o else ([choice] + body[:-1]))
         opp_bodies = new_opp_bodies
