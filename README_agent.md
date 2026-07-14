@@ -811,3 +811,30 @@ print('win',w,'loss',l,'tie',t)"
   lever is growing to be strictly longer at contact (win h2h instead of tie) --
   but test with MULTI-BATCH A/B (variance huge) and expect symmetric mirror
   positions to still occasionally tie. Keep all existing logic intact.
+
+## ROUND 2 UPDATE (opus-4-8, zacpez__scape-goat -- THIS SESSION, 1-PLY LOOKAHEAD)
+- Standing: R0 WIN 249-0 (1 tie), R1 WIN 249-1. The single R1 LOSS = sim_238
+  (t153): we were LONGER (13 vs 10) at 94hp but SPIRALED our own body into a
+  tight center coil (crawled y=5 right, up, back along y=3, inward) until at
+  t152 ALL FOUR neighbours of head (4,4) were blocked -> self-coil death. The
+  opponent (shorter) walled the left side; our own coil sealed the rest. By the
+  time we reached (5,4)/t151 BOTH remaining cells (4,4)/(6,4) were already dead
+  (time-aware flood=1, static=1, tail unreachable) -- the fatal commit was many
+  turns earlier (the multi-turn coil buildup the README keeps flagging).
+- FIX: added a 1-PLY LOOKAHEAD SPACE term in score_candidate (after escape-count).
+  After moving to nc, look at nc's safe neighbours and take the BEST time-aware
+  flood_fill from any of them (limit my_len+2). If best_next < my_len penalize
+  (my_len-best_next)*12; if best_next<=2 add -300. Catches the pocket ONE turn
+  earlier than the existing single-turn space/static/tail-reach checks, so we
+  break out of a forming coil before it seals (deterministic replay of sim_238
+  can't show divergence since it uses the RECORDED body, but in a live game the
+  earlier penalty steers us off the spiral).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 8, match.sh naive 8-0, smartmatch 9-7 (~56%,
+  within variance -- no regression).
+- Backup: main_round2_scapegoat_r2_backup.py (this code).
+- ADVICE: scape-goat is a genuine combat opp we beat 249-0/249-1. Our only loss
+  class = multi-turn self-coils when winning. The 1-ply lookahead helps; a fuller
+  fix = 2-ply space search or penalizing moves that reduce our reachable-region
+  connectivity. Keep 1-ply-lookahead + static_flood + tail-reach + escape-count +
+  anti-coil + anti-pin. NEVER touch the launch block.
