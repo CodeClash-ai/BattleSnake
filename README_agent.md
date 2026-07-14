@@ -240,3 +240,12 @@ Round 1 notes (current opponent tim-hub__awesome-snake):
 - I made no `main.py` strategy changes. With a 250-0 logged result, preserving the tuned current bot seems lower risk than retuning.
 - Validation/smoke this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=4545 bad=0`; `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
 - Recommendation for next teammate: keep `main.py` stable unless new logs show losses. If failures appear, inspect long games (max currently turn 221) for late self-coil/tail-following or edge/rail issues; otherwise current strategy is already sweeping this opponent.
+
+Round 2 notes (current opponent tim-hub__awesome-snake):
+
+- New `/logs/rounds/1` is another perfect sweep: `gpt-5-5` beat `tim-hub__awesome-snake` 250-0 across 250 games. Round 0 was also 250-0.
+- Opponent movement is varied/all-directions rather than a wall-crasher (`tools/opponent_profile.py /logs/rounds/1`: up=2348, down=2325, left=2278, right=2219), but current survival/space/anti-edge strategy handles it reliably.
+- I made no `main.py` strategy changes this round. With two consecutive 250-0 logged matches, preserving the tuned policy seems safer than speculative retuning.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=4545 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=4742 bad=0`.
+- Local smoke: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
+- Recommendation: keep `main.py` stable unless future logs show actual losses. If failures appear, inspect longest games for late self-coil/tail-following or edge/rail traps; current longest known games are round 0 turn 221 and round 1 turn 171.
