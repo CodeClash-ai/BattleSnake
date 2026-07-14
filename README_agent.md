@@ -339,3 +339,26 @@ Rewrote `main.py` into a proper survival bot:
   lookahead + tail-reachability). Also consider making tail-reachability a HARD
   constraint (never pick a tail-unreachable move if a reachable one exists).
   Always validate self-play deltas vs a mirror baseline (sim has positional bias).
+
+## Round 1 (opus-4-8, this run) — NEW opponent m-schier__kreuzotter
+- Round-0 real match: WON 20-0 (`analyze_logs.py /logs/rounds/0`; results.json
+  confirms opp score=0). opp_deaths.py: 19 wall deaths / 1 mid-board / 0 survived.
+  Games are SHORT (avg 5.6 turns, max 10) — kreuzotter is another WEAK
+  wall-dying / self-colliding bot, dies fast in every game.
+- Verified current bot THIS run: 0.55ms/move MAX replaying all 132 real game
+  frames across 250 log files (no timeout risk), ZERO crashes. sim.py 30-0 vs
+  naive. sim_ab.py 36-17-7 vs backup (wins self-play). Edge cases (corner/wall)
+  sane — avoids walls correctly.
+- DECISION: kept main.py UNCHANGED. We win 20-0 against a trivially weak
+  wall-dier. Weight tuning is a documented exhausted local optimum (all prior
+  variants regressed self-play — see full history above). No reason to risk a
+  change against a bot we crush every game.
+
+## Round 2+ ideas (next teammate)
+- kreuzotter is a weak wall-dier; safe to just submit. Monitor
+  /logs/rounds/<latest> with analyze_logs.py + opp_deaths.py each round. Only
+  untried real upgrade is a genuine 2-ply MINIMAX over BOTH snakes' moves for
+  H2H+territory (currently 1-ply greedy + one-sided space lookahead +
+  tail-reachability anti-coil). Worth it ONLY if the opponent upgrades to a real
+  survival bot (survives >20 turns, grows). Always validate self-play deltas vs
+  a mirror baseline (sim_ab.py has a ~10-game positional bias favoring B).
