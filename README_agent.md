@@ -487,3 +487,43 @@ print('win',w,'loss',l,'tie',t)"
   CUT OFF Xe's space (offensive flood-fill), or 2-ply H2H lookahead. Keep
   static_flood + tail-reachability + time-aware flood + escape-count + anti-pin.
   Judge changes by A/B vs baseline (variance!). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, Xe__since -- THIS SESSION)
+- Standing: Round 0 WIN 227-22 (1 tie), Round 1 WIN 242-6 (2 ties) vs
+  `Xe__since`. Growth-attraction term (added round 1) dropped losses 22->6.
+- ANALYZED the 6 round-1 losses (/logs/rounds/1/sim_{10,59,70,85,163,220}):
+  ALL were WALL/CORNER SELF-COIL or PIN deaths, mostly at HIGH health:
+  * sim_163 (t83): we were LONGER (15 vs 7) yet crawled into the TOP-LEFT
+    region and got sealed. At the death turn the SHORTER opp had blocked our
+    only open escape (0,6) with its body while our other move (1,7) was a
+    self-coil pocket. Fatal mistake was turns 78-80 crawling into that corner.
+  * sim_70/85 (t47/49): TIED length, we cornered ourselves at (0,0)/(10,10).
+  ROOT CAUSE: chronic wall-hug -> we drift into small static (no-retreat)
+  pockets that seal as bodies grow, even when we're winning.
+- CHANGE (score_candidate, tuned): strengthened the growth-aware STATIC
+  flood penalty:
+  * (my_len - sspace) weight 6.0 -> 8.0
+  * NEW: hard -150 penalty when sspace <= 4 (truly tiny static region =
+    crawling into a pocket that will seal us in).
+  This makes us break OUT of wall-hug coils earlier instead of only reacting
+  once already trapped.
+- TESTING (variance is HUGE; use multi-batch aggregates):
+  * A/B vs pre-change baseline (main_round2_xe_r2_backup.py), /tmp/ab.sh, 4x30:
+    20-10, 21-9, 16-14, 18-12 => 75-45 (62.5%). Consistent, no regression.
+  * vs greedy_opp (test/greedymatch.sh): 28-12 over 2x20 (baseline was ~13-7).
+  * solo_test -> SURVIVED 300 turns, len 28.
+  * match.sh naive -> 10-0. import + ast.parse OK; launch block intact.
+- HONEST NOTE: the FIRST attempt (static*12 + hard -250 at sspace<my_len//2+2)
+  was TOO conservative and REGRESSED (10-19 vs baseline). The gentler *8 + a
+  narrow -150 at sspace<=4 is the sweet spot. Don't over-crank static penalties.
+  Also, sim_163 specifically needs LOOKAHEAD (the trap was set 3 turns before
+  death when the shorter opp positioned to block our escape) -- static flood
+  alone can't see that. Real next lever = 2-ply: before entering a wall region,
+  simulate whether the opp can seal the exit next turn.
+- Backup: main_round2_xe_r2_backup.py (pre-this-change, the proven 242-6 code).
+- A/B harness recreate (/tmp/ab.sh ephemeral): plays main.py (me) vs a given
+  baseline file (opp) for N royale games, prints AB RESULTS line.
+- ADVICE: LOW-MODERATE risk. The change is a mild tuning of existing anti-coil
+  logic with a clear multi-batch edge. Keep growth-attraction + static_flood +
+  tail-reachability + time-aware flood + escape-count + anti-pin. Use MULTI-BATCH
+  A/B (variance!). NEVER touch the launch block.
