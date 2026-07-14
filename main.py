@@ -576,15 +576,14 @@ def move(game_state):
                     if deficit >= 4 and my_len <= 12 and my_health > 45 and food_dist <= 10:
                         score += (11 - food_dist) * 10
                         score -= food_dist * 3
-                    if deficit >= 6 and my_health <= 95 and food_dist <= 2:
-                        # Very narrow extra catch-up pressure for this matchup:
-                        # if we are badly behind and already off full health, a
-                        # safe adjacent/near snack is usually worth more than a
-                        # small open-space tie-break.  Keep the magnitude modest;
-                        # broader food urgency has hurt generic smoke tests.
-                        score += (3 - food_dist) * 28
+                    if deficit >= 6 and my_health <= 97 and my_len <= 22 and food_dist <= 3:
+                        # Narrow extra catch-up pressure for strong food racers:
+                        # when badly behind, a safe very-near snack/route is usually
+                        # worth more than small open-space tie-breaks. Keep it short
+                        # range only; broad food urgency has hurt smoke tests.
+                        score += (4 - food_dist) * 42
                         if food_dist == 0:
-                            score += 35
+                            score += 55
                 elif my_len == max_enemy_len:
                     hunger += 45
                 if food_dist <= 2:
@@ -686,9 +685,9 @@ def move(game_state):
                         # flood-fill/path-count differences, so widen it slightly
                         # but keep it limited to immediate food (after all hard
                         # safety filters) rather than broad food-chasing.
-                        score += 320
+                        score += 390
                         if my_len + 6 <= max_enemy_len:
-                            score += 180
+                            score += 230
                     # Gigantic-george leaves the board dense with food while staying
                     # short.  In those far-ahead endgames every legal move can be a
                     # snack, so the generic anti-food penalty no longer distinguishes
