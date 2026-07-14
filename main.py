@@ -157,6 +157,23 @@ def _flood_fill_size(start, blocked, width, height, cap):
     return count
 
 
+def _opp_candidate_cells(body, blocked, width, height):
+    """Approximate legal next-head cells for an opposing snake.
+
+    Uses the same global `blocked` set (bodies incl. tail-vacate logic) as
+    a conservative proxy for what cells that snake could legally move into
+    next turn. Doesn't know their actual strategy, just their physically
+    legal moves.
+    """
+    head = (body[0]["x"], body[0]["y"])
+    cells = []
+    for dx, dy in DIRS.values():
+        npt = (head[0] + dx, head[1] + dy)
+        if _in_bounds(npt, width, height) and npt not in blocked:
+            cells.append(npt)
+    return cells
+
+
 def move(game_state):
     try:
         board = game_state["board"]
@@ -219,6 +236,19 @@ def move(game_state):
         my_tail = tails.get(my_id)
         food_cells = {(f["x"], f["y"]) for f in food}
 
+        # Bodies of opposing snakes (for adversarial worst-case lookahead
+        # below) -- only snakes that are still alive/on the board and are
+        # at least roughly as big as us are worth defending against (a
+        # much-shorter snake can't meaningfully wall us off since we'd
+        # win any resulting head-to-head anyway, and modeling it just
+        # wastes a little compute for no benefit).
+        threat_bodies = []
+        for snake in board["snakes"]:
+            if snake["id"] == my_id:
+                continue
+            if lengths.get(snake["id"], 0) >= my_len - 1:
+                threat_bodies.append(snake["body"])
+
         for name, npt, danger_h2h in pool:
             # If this move lands on food, our own tail will NOT vacate this
             # turn (snake grows instead of sliding forward) -- so treat our
@@ -236,6 +266,38 @@ def move(game_state):
                 eff_blocked = blocked
             space, reached_tail = _flood_fill(npt, eff_blocked, width, height, target=my_tail)
 
+            # Adversarial 1-ply lookahead: consider that a nearby
+            # equal-or-longer opponent doesn't just sit still -- it will
+            # take ITS own next move too, and a shadowing/cornering
+            # opponent can convert a currently-open-looking region into a
+            # much smaller one by simply moving alongside us (e.g.
+            # hugging a wall in parallel to cut off our only exit).
+            # For each nearby threat snake, try each of its own physically
+            # legal next moves and recompute our flood-fill space in that
+            # hypothetical -- take the worst (minimum) case across all
+            # threats' choices. This is what a single-snapshot flood-fill
+            # cannot see and is exactly the failure mode that lost a real
+            # match (see README_agent.md: our snake raced up a wall
+            # column while a same-length opponent shadowed one column
+            # over, and got sealed into the corner once the wall ran out
+            # -- at the time, the immediate flood-fill looked fine because
+            # it assumed the opponent wouldn't move).
+            worst_space = space
+            if threat_bodies:
+                for opp_body in threat_bodies:
+                    opp_moves = _opp_candidate_cells(opp_body, eff_blocked, width, height)
+                    if not opp_moves:
+                        continue
+                    for opp_npt in opp_moves:
+                        if opp_npt == npt:
+                            # Already handled via danger_h2h; still worth
+                            # reflecting as zero further space here.
+                            continue
+                        hyp_blocked = eff_blocked | {opp_npt}
+                        hyp_space, _ = _flood_fill(npt, hyp_blocked, width, height, target=my_tail)
+                        if hyp_space < worst_space:
+                            worst_space = hyp_space
+
             score = 0.0
             # Space safety: heavily penalize tight spaces relative to our
             # length (getting trapped = death).
@@ -247,6 +309,21 @@ def move(game_state):
                 # our own tail continues occupying space as we move.
                 score -= 20.0 * (my_len * 1.5 - space)
             score += min(space, width * height) * 2.0
+
+            # Penalize moves whose safety depends on a threatening
+            # opponent NOT moving smartly -- i.e. where the worst-case
+            # (adversarial) reachable space is much smaller than the
+            # optimistic snapshot space computed above. Hard-penalize if
+            # even the worst case would trap us (worst_space < my_len,
+            # same severity tier as the optimistic hard penalty above so
+            # a real forced trap is never masked by an optimistic
+            # snapshot), and apply a smaller continuous penalty
+            # proportional to how much an adversarial opponent move could
+            # shrink our room, to bias away from "races along a wall next
+            # to a same-length-or-longer opponent" scenarios in general.
+            if worst_space < my_len:
+                score -= 800.0 * (my_len - worst_space)
+            score -= 8.0 * max(0, space - worst_space)
 
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong

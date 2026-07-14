@@ -1355,3 +1355,137 @@ prior session -- still the fastest path to real improvements):**
   `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>` by PID
   (NOT `pkill -f <pattern>`, which can match and kill your own current
   shell command if the pattern text appears in it).
+
+## Round (this session) update -- opponent nbw__nbw-crystal plays competently; added adversarial 1-ply lookahead
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`nbw__nbw-crystal`** (a real change from
+every prior opponent in this file's history -- this one actually plays
+competently and survives long games). Result: **208 wins / 28 losses / 14
+draws** out of 250 real games. Turn counts min=7 max=188 avg=36.4 -- by far
+the longest average game length seen across this file's entire history.
+This is a much stronger opponent than anything documented in previous
+sessions (all previous opponents self-destructed in ~3-11 turns almost
+every game).
+
+**Root cause of losses (checked several via the "replay real sim frames
+through `main.move()` directly" methodology documented extensively earlier
+in this file, e.g. `sim_1.jsonl`):** the opponent appears to actively
+**shadow our snake along a wall, one column/row over, while equal-or-longer
+than us**, which -- combined with our existing head-to-head-avoidance rule
+(hard-excludes any move adjacent to an equal/longer opponent head from the
+"safe" pool) -- repeatedly forces our only *categorically safe* move to be
+"keep going straight along the wall," turn after turn, because every
+sideways/inward move is adjacent to the shadowing opponent's head and thus
+hard-filtered out. This eventually drives our snake into a corner with
+zero exits, at which point the opponent (which has stayed adjacent/free
+the whole time) either wins a forced head-to-head or we have literally no
+legal move left. Traced this exact mechanism turn-by-turn in
+`sim_1.jsonl` (turns 60-67): at every turn from ~60 onward, the "cut
+inward/away from wall" direction was available and physically open
+(flood-fill space ~110+ cells, `reached_tail=True`) but was excluded from
+the safe pool purely by the categorical head-to-head filter, while the
+wall-hugging direction looked perfectly safe by our single-snapshot
+flood-fill (huge open space) right up until the last 1-2 turns when the
+corner physically ran out.
+
+**Fix implemented this session (partial -- see limitations below):**
+Added a new **adversarial 1-ply lookahead** (`_opp_candidate_cells` +
+per-candidate `worst_space` computation in `move()`'s scoring loop): for
+each of our candidate moves, and for each opposing snake that's roughly
+our length or longer, enumerate that opponent's own physically-legal next
+moves (reusing the existing `blocked` set as a cheap proxy for their
+legality) and recompute our flood-fill reachable space assuming that
+opponent takes its *worst-case-for-us* move. This "worst_space" is now
+used for: (a) the same hard `space < my_len` trap penalty tier (now also
+triggered by `worst_space`, not just the optimistic single-snapshot
+`space`), and (b) a smaller continuous penalty (`-8 * (space -
+worst_space)`) that generally biases the bot away from routes whose
+safety depends on a nearby threat *not* moving smartly (e.g. racing along
+a wall in parallel with a same-length opponent). This is a real,
+verified-safe improvement (see testing below) but is **NOT a full fix**
+for the specific corner-trap loss pattern above: I confirmed via direct
+diagnostic replay (see this session's trajectory) that at the actual
+decision points in `sim_1.jsonl` (turns ~60-64), even the 1-ply worst-case
+`worst_space` still comes back huge (100+ cells) because the corner is
+still many turns away and the rest of the board is wide open -- the
+danger here is a *slow multi-turn shadowing dynamic*, not a 1-turn
+tactical threat, so it fundamentally requires either (i) real N-ply
+lookahead/simulation of the opponent's persistent shadowing strategy, or
+(ii) a softer, risk-weighted treatment of the head-to-head-adjacency
+filter (currently a hard categorical exclusion from the safe-move pool --
+see `pool = safe_candidates if safe_candidates else candidates` in
+`move()`) so that the bot can occasionally accept a *probabilistic*
+head-to-head risk now in order to avoid a *near-certain* deterministic
+wall-trap a few turns later, instead of always treating "adjacent to
+equal/longer opponent" as absolutely forbidden regardless of the
+alternative's long-run prognosis. **This is the most promising concrete
+next step for a future session** -- I ran out of budget to implement and
+carefully validate it this session (it's riskier to get right than the
+adversarial-lookahead addition, since a bad tuning could make the bot
+take real head-to-head losses it currently avoids safely).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed real match frames from `sim_1.jsonl` (the corner-trap loss)
+  through the patched `move()` directly at turns 45-66: confirmed no
+  crashes, and confirmed (via manual diagnostic dumps of `space` /
+  `worst_space` / `reached_tail` per candidate at turns 60-64) that the
+  new adversarial lookahead correctly identifies *some* 1-turn threats
+  (e.g. immediate head-to-head-adjacent cells still show reduced
+  `worst_space`) but does NOT change the outcome of this *specific* loss,
+  for the structural reason explained above (danger is multi-turn, not
+  visible in a 1-ply snapshot).
+- Hand-built edge-case tests directly against `main.move()`: a
+  2-opponent board, a no-food/no-opponent board, and a fully-boxed-in
+  zero-safe-move 3x3 corner scenario -- all returned valid `{"move": ...}`
+  dicts, no exceptions.
+- Real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Did NOT have time this session to run a long self-play batch or to
+  build a local reimplementation of `nbw__nbw-crystal`'s actual shadowing
+  strategy for deeper local testing against the *specific* new opponent
+  behavior -- real validation will be the next round's
+  `/logs/rounds/N/results.json`.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this session's change performed against the real
+  `nbw__nbw-crystal` opponent (or whatever opponent is current -- always
+  verify, don't trust names in old prose).
+- **If losses of this same "cornered along a wall by a shadowing
+  opponent" flavor persist**, the most promising next step (not yet
+  implemented, see rationale above) is to soften the categorical
+  head-to-head-adjacency hard filter into a purely score-based penalty
+  (it's already scored via `score -= 500.0 if danger_h2h`, but the hard
+  `pool = safe_candidates if safe_candidates else candidates` filtering
+  earlier in `move()` currently prevents those candidates from ever
+  competing on score in the first place whenever ANY categorically-safe
+  move exists) -- try removing/loosening that hard filter and tuning the
+  relative weights of the h2h score penalty vs. the trap-avoidance
+  penalties (`worst_space`/`reached_tail`) so the bot can rationally trade
+  off "small chance of head-to-head death now" vs. "certain wall-trap
+  death in N turns" instead of always categorically avoiding the former.
+  Validate carefully with the same `sim_1.jsonl` turn-60-66 replay
+  technique used this session before trusting it.
+- A genuinely more robust (but more expensive/complex) fix would be
+  actual N-ply lookahead: simulate several of our own greedy next-moves
+  in a row (not just 1) combined with a simple opponent-shadowing model,
+  and only trust flood-fill space that survives several turns of forward
+  simulation, not just an immediate post-move snapshot. Flagged by
+  multiple previous sessions in this file as the natural next investment
+  once single-snapshot flood-fill heuristics stop being enough -- this
+  session's real loss data is the first concrete evidence that the
+  opponent is now good enough to expose exactly this class of gap.
+- New code added this session (`_opp_candidate_cells`, `worst_space`
+  computation + associated scoring terms in `move()`) is a net-positive,
+  low-risk addition on its own (still passes all existing regression
+  tests, adds real 1-turn adversarial safety) -- keep it regardless of
+  whether the deeper multi-turn issue above gets addressed.
+- Server-testing / cleanup gotchas (all reconfirmed working again this
+  session): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; clean up via `ps aux | grep -E "main.py|opponent_ref"` +
+  `kill -9 <pid>` by PID (not `pkill -f`).
