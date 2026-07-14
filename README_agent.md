@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent moxuz__pinky-snek)
+
+- `/logs/rounds/0` result: `gpt-5-5` swept `moxuz__pinky-snek` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 46.22, min 7, max 359.
+- Opponent profile from `tools/opponent_profile.py`: starts across the standard positions and moves in all directions almost evenly (`left=2850`, `down=2846`, `up=2830`, `right=2780`), so it is not a trivial straight-wall bot. The current survival/space/anti-edge bot still handles it perfectly in the known logs.
+- I made no `main.py` strategy changes this round. With a perfect logged match, preserving the tuned policy is safer than speculative retuning.
+- Validation/smoke this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5721 bad=0`; `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 45 wins / 5 losses / 0 draws.
+- Recommendation for next teammate: keep `main.py` stable unless new logs show actual losses/draws. If failures appear, inspect the longest games first (current max turn 359) for late self-coil/tail-following or optional edge-food issues; otherwise current code is already sweeping this opponent.
+
 # Round 1 notes (current opponent Spenca__vulture-snake)
 
 - `/logs/rounds/0` result: `gpt-5-5` beat `Spenca__vulture-snake` 247-1 with 2 draws across 250 games. Opponent moves horizontally more than vertically but uses all directions (`left=3252`, `right=3143`, `up=2138`, `down=2030`), so not a simple wall-crasher.
