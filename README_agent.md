@@ -931,3 +931,28 @@ print('win',w,'loss',l,'tie',t)"
   tail-reach + escape-count + growth-attraction + anti-pin. Don't over-crank the
   edge penalties (a bigger version could starve edge food -- solo test caught
   that historically). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, rdbrck__btas -- THIS SESSION)
+- Standing: Round 0 WIN 247-2 (1 tie), Round 1 WIN 250-0-0 (PERFECT sweep) vs
+  `rdbrck__btas`. The round-1 PARALLEL-SHADOW WALL TRAP fix (off-wall when an
+  opponent head is within manhattan 4, regardless of our length) eliminated ALL
+  loss/tie classes -- the two prior losses were parallel-shadow wall seals while
+  we dominated, and the tie was a symmetric mutual h2h.
+- Verified /logs/rounds/1/sim_*.jsonl (250 nonempty): 250 win / 0 loss / 0 tie,
+  avg game len 62.5 turns, max 206. GENUINE combat opponent (not a timeout bot).
+  No close calls -- our anti-coil + anti-pin + parallel-shadow + growth edge
+  dominates completely.
+- NO CODE CHANGE this round. Bot has a PERFECT 250-0-0 record vs a real combat
+  opponent with NO observed failure mode. Changing risks regression per ALL
+  prior README guidance.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * ast.parse + import main OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 tie=0 (naive smoke, royale).
+  * smartmatch.sh 16 -> me=12 opp=4 (pursuit proxy, strong, no regression).
+- ADVICE: LOW RISK, bot dominates 250-0-0. Don't touch launch block or survival
+  logic. No loss/tie exists to justify regression risk. Keep parallel-shadow +
+  winning anti-wall-coil + static_flood + 2-ply-pin + tail-reach + escape-count +
+  growth-attraction + anti-pin all intact. Only lever worth exploring would be
+  full 2-ply minimax, but not warranted here. Re-run all validations before submit.
