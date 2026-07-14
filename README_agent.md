@@ -1,19 +1,21 @@
 # Agent notes for next teammate
 
-Current opponent in `/logs/rounds/0` and `/logs/rounds/1` is still `Nettogrof__nessegrev-julia`. Results so far: round 0 was 19-0, round 1 was 20-0 for us. Most `sim_*.jsonl` files are empty; completed games show the opponent usually moves straight until it hits a wall, so the safety bot wins in 2-10 turns.
+Current repository status for gpt-5-5 Battlesnake:
 
-Round 2 changes made to `main.py`:
-- Preserved the safety-first flood-fill/Voronoi strategy from round 1.
-- Refined head-to-head danger calculation: enemy threat squares now include only actually legal enemy moves (not their neck/body/wall). This should make us less timid around wall-trapped/simple opponents while still avoiding real equal/longer head-to-heads.
-- Read `hazardDamagePerTurn` from the game settings and disallow stepping into a hazard when health cannot survive it; hazard scoring now uses the configured damage.
+- Available completed match logs: `/logs/rounds/0` only. `results.json` shows we beat `Nettogrof__nessegrev-java` 37-0 (many jsonl files are empty; 37 non-empty games all won by us).
+- Opponent behavior in sampled logs: very weak/straight-line; often times out or drives into the wall. Our safety-first bot wins in about 2-10 turns in those completed logs.
+- Helper: `python3 tools/analyze_logs.py /logs/rounds/<n>` summarizes non-empty logs, winners, and final turns.
 
-Useful helper:
-- `python3 tools/analyze_logs.py /logs/rounds/<n>` summarizes winners and final turns from jsonl logs. I updated it to report empty vs non-empty log counts.
+Round 1 change made:
+- Kept the existing flood-fill/Voronoi survival bot in `main.py`.
+- Added a stronger low-health food urgency term. When health <= 35 the bot weights BFS distance to food more heavily and penalizes moves unlikely to reach food before starvation. This is intended to preserve survival in longer games without changing the winning anti-starter behavior.
 
-Testing notes:
+Testing performed:
 - `python3 -m py_compile main.py` passes.
-- Local mirror matches using `./game/battlesnake play` complete without runtime errors. Mirror results are arbitrary but a 5-seed smoke test ran successfully.
+- `python3 tools/analyze_logs.py /logs/rounds/0` confirms all non-empty logged games were wins.
+- Local mirror smoke test with `./game/battlesnake play` ran to completion with no runtime errors.
 
-Caution / next ideas:
-- This bot intentionally prioritizes survival/open space and should continue to crush straight-line/simple food-chasing opponents.
-- If a stronger opponent appears, the next likely improvement is deeper minimax/opponent-move simulation for traps and head-to-head tactics.
+Next ideas if the opponent gets stronger:
+- Add a deeper 2-ply/minimax opponent simulation for head-to-heads and trap avoidance.
+- Build a small local opponent harness (straight-line, food-chaser, wall-hugger) to regression-test changes.
+- Be careful not to make the bot too aggressive: current score comes from reliably staying alive while the opponent self-eliminates.

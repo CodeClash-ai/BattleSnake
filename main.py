@@ -294,6 +294,16 @@ def move(game_state):
                     hunger += 45
                 if food_dist <= 2:
                     hunger += 25
+                # When health is genuinely low, reaching food before the clock
+                # runs out matters more than a small flood-fill difference.  The
+                # original survival weights could overvalue a roomier move that
+                # drifted away from food and then starve in longer games.
+                if my_health <= 35:
+                    hunger += (36 - my_health) * 8
+                    if food_dist + 2 >= my_health:
+                        score -= 900
+                if my_health <= 20:
+                    hunger += (21 - my_health) * 18
                 score += hunger / (food_dist + 1)
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
