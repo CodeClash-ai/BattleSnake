@@ -78,3 +78,12 @@ Round 1 handoff notes (current opponent coreyja__devious-devin):
 - Validation this round: `python3 -m py_compile main.py` and `python3 tools/replay_moves.py /logs/rounds/0` passed (`checked_states=159 bad=0`).
 - Local smoke: 100/100 wins vs `tools/simple_opponent.py up` seeds 1-100; 45/50 wins, 3 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50.
 - Recommendation: keep current `main.py` unless new logs show losses. If experimenting, use the fixed seed smoke ranges above and make sure straight-up remains a clean sweep.
+
+Round 2 notes (current opponent coreyja__devious-devin):
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` beat `coreyja__devious-devin` 20-0 across all 20 non-empty logs (230 empty files). Avg final turn 7.00, min 2, max 11.
+- Opponent profile remains extremely simple/wall-bound: `/logs/rounds/1` deltas were mostly straight up `(0, 1)=93`, with some down/left noise `(0, -1)=18`, `(-1, 0)=9`. It still dies quickly.
+- I made no `main.py` strategy change this round. Current bot already swept both known rounds (39-0 and 20-0), and reliability against this weak opponent is more valuable than tuning.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=159 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=85 bad=0`).
+- Local smoke using current code: 50/50 wins vs `tools/simple_opponent.py up` seeds 1-50; 44/50 wins, 4 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50.
+- Recommendation: keep `main.py` stable unless future logs show losses or a new opponent strategy. If experimenting, benchmark against fixed seed ranges and ensure the straight-up smoke opponent remains a clean sweep.
