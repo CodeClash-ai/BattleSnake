@@ -674,3 +674,100 @@ checked, the opponent was consistently LONGER than us at the last logged
 frame (e.g. 16v14, 17v14, 15v9) -- may just reflect this being a
 genuinely strong opponent (elo #14, near top of the ladder) that wins
 straightforward length races sometimes, not necessarily a fixable bug.
+
+**Session (round 3, opponent still rdbrck__bountysnake2018 -- rounds so
+far: 0: 70W/179L/1D=28%, 1: 43W/206L/1D=17.2%, 2: 59W/191L=23.6% after
+last session's ungated lookahead_weight/depth bump -- all weak, opponent
+remains our hardest matchup by far):** Ran `tools/analyze_logs.py` first.
+Did a MUCH more precise triage of round-2's 191 losses this session
+(script left at `/tmp/triage3.py` if useful, not copied into `tools/`
+due to step budget -- consider promoting it): confirmed via
+`tools/replay_frame.py --last` across a large sample that **155/191
+(81%) of round-2 losses end at ZERO legal moves** for us specifically at
+a board CORNER (literal (0,0)/(0,10)/(10,0)/(10,10) or near-corner cell)
+-- a dramatically higher self-trap rate than the ~15-20% documented base
+rate for other opponents in this file's history. Median `my_len -
+opp_len` at death is only +5 (NOT the classic "dominant-length" 3x-10x
+pattern many past sessions tuned for) -- so the existing
+advantage-gated safety levers (which only activate once we're hugely
+ahead) are essentially irrelevant here, consistent with 3+ past
+sessions' rejected attempts at strengthening those specific gated levers
+for THIS failure class.
+
+Deep-dived one concrete full trajectory in detail (not just the final
+frame): `/logs/rounds/2/sim_59.jsonl`, turns 150-190 (my_len 16->18,
+opp_len 16->20, roughly even the whole time). Built a debug-instrumented
+scratch copy (`/tmp/dbgmain.py` + `/tmp/dbg_replay.py`, technique
+documented by a prior session -- see "Debug method used" in the archive
+above) that prints full per-candidate score/space/lookahead breakdowns.
+Found: at turns 150-172, all candidates report large raw `space` (79-91,
+comfortably > my_len) and `lookahead_space` mostly still > my_len too --
+i.e. **every existing safety signal reports "fine" this whole time** --
+while the opponent (same length, on the opposite/open side of the board)
+was slowly curling around and claiming the far side of the board. By
+turn 174-176, `lookahead_space` for ALL remaining legal candidates
+suddenly collapses to 0-22 (an inevitable trap that was already baked
+in, just outside the depth-8 lookahead's horizon until then) -- we died
+19 turns later at the literal corner (0,0), exactly the same "false calm
+until it's already too late" mechanism previous sessions found for
+OTHER opponents (`sim_49`/`sim_153`, "wall-hugging trap") but here
+happening much more severely/frequently.
+
+**Implemented a NEW, distinct, previously-untried safety signal this
+session** (not another tweak to the already-exhaustively-tested
+`_lookahead_min_space` advantage-gating lever -- see the long list of
+REJECTED variants above): `_voronoi_exclusive_space()`, a multi-source
+BFS "territory control" metric (my BFS-distance vs every threat's
+BFS-distance from the SAME `eff_blocked` occupancy set; count cells
+where I'm strictly closer than every opponent = "my exclusive
+territory", ties counted as contested/not-mine). Rationale: raw
+flood-fill space counts a region as "safe" even when most of it is
+actually closer to a nearby opponent (who can claim/cut it off later
+without needing to be adjacent yet) -- this is a fundamentally different
+signal than either the raw 1-ply space or the bounded forward-simulation
+lookahead, and directly targets the "opponent quietly wins the far side
+of an open board while our numbers still look fine" mechanism found in
+`sim_59`. Added as a SMALL additive penalty only (`-12.0 * (my_len -
+exclusive_space)` when `exclusive_space < my_len`), deliberately modest
+relative to the existing hard tiers (-1000/-800 per cell) so it cannot
+override an otherwise-clearly-better move on its own, per this file's
+own stated conservative-shipping philosophy for new penalty terms.
+
+**Validation done:** `ast.parse` OK. Fixed one real bug caught while
+implementing (had inserted the new penalty block referencing `score`
+BEFORE `score = 0.0` was assigned -- would have crashed on every real
+move() call; caught immediately via `ast.parse`... no wait, caught via a
+300-iteration random-fuzz `move()` smoke test across 1-3 snakes / varied
+lengths/board positions, 0 exceptions after the fix). **NOT validated
+via NEW-vs-OLD self-play A/B or `tools/passive_opponent.py` batch this
+session** -- ran out of step budget after the investigation +
+implementation + bug-fix + fuzz test. Per this file's own explicitly-
+stated methodology (see "Validation methodology" section, and TWO past
+documented regressions from skipping this exact step), **this is a real
+known risk** -- flagging clearly rather than burying it.
+
+**For next teammate (READ BEFORE trusting this change further):**
+(1) Re-run `tools/analyze_logs.py` FIRST once round 3's real results
+land. (2) If win rate vs `rdbrck__bountysnake2018` improves meaningfully
+(>35-40%) with no new failure signatures, this Voronoi-territory
+direction is worth extending (e.g. slightly raising the -12.0 weight, or
+using `exclusive_space` inside the existing hard-tier gating alongside
+`effective_space`/`worst_space` rather than as a separate small additive
+term). If it regresses or stays flat, the change is a single self-
+contained new block -- search `main.py` for
+`"Voronoi territory-control safety signal"` (also `_voronoi_exclusive_space`
+function definition, right before `_lookahead_min_space`) and revert by
+deleting both. (3) **Please run the proper NEW-vs-OLD self-play A/B
+(10-20 seeds via the real `game/battlesnake` CLI, see methodology
+section) AND a `tools/passive_opponent.py` batch BEFORE this ships to a
+subsequent round if at all possible** -- this session could not, which
+is exactly the situation that caused the two past documented
+regressions in this file. If you have budget for nothing else this
+session, that validation is the single highest-value thing to do. (4)
+The concrete `sim_59.jsonl` turns 150-190 trajectory (see above) is a
+great fixed test case for confirming whether `exclusive_space` actually
+diverges meaningfully EARLIER than `lookahead_space` did for this exact
+scenario (I did not have budget left to check this directly -- the
+`/tmp/dbgmain.py`/`/tmp/dbg_replay.py` debug-print technique, described
+above and in the archive, is the fastest way to check by adding
+`exclusive_space` to the printed fields).

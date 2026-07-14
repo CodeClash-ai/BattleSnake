@@ -222,6 +222,79 @@ def _body_tuples(body):
     return [(seg["x"], seg["y"]) for seg in body]
 
 
+def _voronoi_exclusive_space(my_start, opp_heads, blocked, width, height):
+    """Multi-source BFS "territory control" metric: count cells that WE
+    can reach strictly faster than ANY opponent head (ties count as
+    contested, i.e. NOT ours -- conservative, matches a 50/50 real
+    head-to-head race). This is a different signal than the existing
+    `_flood_fill` raw reachable-space count / `_lookahead_min_space`
+    bounded forward simulation: raw flood-fill space can report a large
+    number even when most of that region is actually CLOSER to a nearby
+    opponent than to us (so the opponent could claim/cut it off well
+    before we can use it), and the bounded lookahead only "sees" that
+    danger once it falls within its depth horizon -- both were found (via
+    real match analysis, opponent rdbrck__bountysnake2018, see
+    README_agent.md) to look perfectly safe several turns before an
+    otherwise-inevitable corner self-trap, because the opponent was
+    steadily claiming ownership of the far side of a nominally-open
+    region turn by turn while our own raw-space numbers stayed
+    comfortably high the whole time. A simple flood-fill distance
+    comparison catches this much earlier since it doesn't need the
+    trap to have already tightened into a narrow corridor -- it directly
+    measures "whose territory is this" from turn 1.
+
+    blocked should be the SAME occupancy set used for the raw flood-fill
+    (i.e. already accounts for tail-vacate / food-freeze logic for this
+    candidate) so results stay consistent with existing signals.
+    Cheap: O(width*height) per call on any realistic board size.
+    """
+    if my_start in blocked:
+        return 0
+    if not opp_heads:
+        # No threats at all -- degenerate case, everything reachable is
+        # ours by definition (matches plain flood-fill in this scenario).
+        count, _ = _flood_fill(my_start, blocked, width, height)
+        return count
+
+    def bfs_dist(start):
+        if start in blocked:
+            return {}
+        dist = {start: 0}
+        frontier = [start]
+        d = 0
+        while frontier:
+            d += 1
+            nxt = []
+            for cell in frontier:
+                for dx, dy in DIRS.values():
+                    npt = (cell[0] + dx, cell[1] + dy)
+                    if npt in dist:
+                        continue
+                    if not _in_bounds(npt, width, height):
+                        continue
+                    if npt in blocked:
+                        continue
+                    dist[npt] = d
+                    nxt.append(npt)
+            frontier = nxt
+        return dist
+
+    my_dist = bfs_dist(my_start)
+    opp_dists = [bfs_dist(h) for h in opp_heads if h not in blocked]
+
+    exclusive = 0
+    for cell, d in my_dist.items():
+        mine_wins = True
+        for od in opp_dists:
+            other_d = od.get(cell)
+            if other_d is not None and other_d <= d:
+                mine_wins = False
+                break
+        if mine_wins:
+            exclusive += 1
+    return exclusive
+
+
 def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
     """Bounded multi-turn forward simulation, used as a *supplementary*,
     lower-weight tiebreaker signal on top of the existing 1-ply (and
@@ -792,6 +865,30 @@ def move(game_state):
             effective_space = max(space, lookahead_space) if will_eat else space
 
             score = 0.0
+            # Voronoi territory-control safety signal (see
+            # `_voronoi_exclusive_space` docstring for full rationale --
+            # a real, well-diagnosed failure mode against opponent
+            # rdbrck__bountysnake2018 where raw flood-fill space AND the
+            # bounded lookahead both looked comfortably safe several
+            # turns before an inevitable corner self-trap, because the
+            # opponent was steadily claiming ownership of the far side of
+            # a nominally-open region turn by turn). Computed using the
+            # SAME eff_blocked set as the raw flood-fill above for
+            # consistency. Kept as a moderate ADDITIVE safety term
+            # (much smaller weight than the hard `effective_space`/
+            # `worst_space` tiers above) so it nudges the bot away from
+            # territory-losing paths without being able to override an
+            # otherwise-clearly-better move on its own -- deliberately
+            # conservative given this project's extensive history of
+            # scoring-weight changes backfiring without careful
+            # validation (see README_agent.md).
+            opp_heads_now = [(b[0]["x"], b[0]["y"]) for b in threat_bodies if b]
+            exclusive_space = _voronoi_exclusive_space(
+                npt, opp_heads_now, eff_blocked, width, height
+            )
+            if exclusive_space < my_len:
+                score -= 12.0 * (my_len - exclusive_space)
+
             # Space safety: heavily penalize tight spaces relative to our
             # length (getting trapped = death). Uses `effective_space`
             # (see above) so a food-eating candidate isn't unfairly
