@@ -174,6 +174,26 @@ def _opp_candidate_cells(body, blocked, width, height):
     return cells
 
 
+def _predict_opp_move(opp_body, opp_moves, food, width, height):
+    """Best-effort guess of which of `opp_moves` an opposing snake will
+    actually take next, using the same simple nearest-food-else-center
+    heuristic that most simple bots (including earlier versions of our own)
+    follow. This is only a heuristic guess -- used to weight head-to-head
+    risk more/less strongly (a legal-but-unlikely collision cell should be
+    penalized less than one that matches the opponent's likely move),
+    rather than to hard-filter anything.
+    """
+    if not opp_moves:
+        return None
+    head = (opp_body[0]["x"], opp_body[0]["y"])
+    if food:
+        nearest_food = min(food, key=lambda f: _manhattan(head, (f["x"], f["y"])))
+        target = (nearest_food["x"], nearest_food["y"])
+    else:
+        target = ((width - 1) / 2.0, (height - 1) / 2.0)
+    return min(opp_moves, key=lambda c: _manhattan(c, target))
+
+
 def move(game_state):
     try:
         board = game_state["board"]
@@ -188,6 +208,35 @@ def move(game_state):
 
         blocked, heads, lengths, tails = _occupied_cells(board, my_id)
 
+        # Precompute, per equal-or-longer opposing snake, its ACTUAL legal
+        # next-head cells (not just "adjacent by Manhattan distance", which
+        # over-counts cells the opponent can't really move into because its
+        # own body blocks them) plus a best-effort guess of which of those
+        # cells it will actually pick (simple nearest-food-else-center
+        # heuristic -- matches the common simple-bot pattern most opponents
+        # seen so far seem to follow, including earlier versions of our own
+        # bot). This lets head-to-head risk be weighted by
+        # plausibility instead of a flat penalty for any adjacency, which
+        # matters a lot when we're boxed into a corner with only 1-2 exits
+        # that are ALL technically adjacent to a longer snake's head --
+        # real loss analysis (see README_agent.md) found a case where our
+        # only two physically-legal moves were BOTH the opponent's only two
+        # physically-legal moves too (a genuine forced near-50/50), and the
+        # opponent's real choice was predictable from its own food-seeking
+        # behavior (it moved toward the cell nearer food) -- picking the
+        # OTHER cell would have survived.
+        opp_legal_moves = {}
+        opp_predicted = {}
+        for snake in board["snakes"]:
+            sid = snake["id"]
+            if sid == my_id:
+                continue
+            if lengths.get(sid, 0) < my_len:
+                continue
+            legal = _opp_candidate_cells(snake["body"], blocked, width, height)
+            opp_legal_moves[sid] = legal
+            opp_predicted[sid] = _predict_opp_move(snake["body"], legal, food, width, height)
+
         candidates = []
         for name, (dx, dy) in DIRS.items():
             npt = (head[0] + dx, head[1] + dy)
@@ -196,18 +245,14 @@ def move(game_state):
             if npt in blocked:
                 continue
 
-            # Head-to-head risk check: if an opposing head could also move
-            # onto npt next turn and that snake is >= our length, treat as
-            # dangerous (skip unless no alternative).
+            # Head-to-head risk check: true if any equal-or-longer opposing
+            # snake can ACTUALLY legally move onto npt next turn (not just
+            # "is adjacent" -- their own body may block that direction).
             danger_h2h = False
-            for sid, hpos in heads.items():
-                if sid == my_id:
-                    continue
-                if _manhattan(hpos, npt) == 1:
-                    # opponent could move into npt too
-                    if lengths.get(sid, 0) >= my_len:
-                        danger_h2h = True
-                        break
+            for sid, legal in opp_legal_moves.items():
+                if npt in legal:
+                    danger_h2h = True
+                    break
 
             candidates.append((name, npt, danger_h2h))
 
@@ -426,8 +471,25 @@ def move(game_state):
             edge_dist = min(npt[0], width - 1 - npt[0], npt[1], height - 1 - npt[1])
             score += 0.3 * edge_dist
 
+            # Graduated head-to-head penalty: instead of a flat penalty for
+            # any legal collision cell, weight by whether it matches our
+            # best-effort prediction of the opponent's actual next move
+            # (near-certain collision -> heavy penalty) vs. merely being
+            # one of several legal-but-less-likely cells for them (real
+            # risk, but should not be treated identically to a predicted
+            # collision -- especially useful in forced-corner scenarios
+            # where ALL of our remaining moves are technically h2h-risky
+            # and we need to pick the *less likely* one instead of just
+            # tying everything at the same penalty, see README_agent.md).
             if danger_h2h:
-                score -= 500.0
+                worst_h2h_penalty = 0.0
+                for sid, legal in opp_legal_moves.items():
+                    if npt in legal:
+                        if npt == opp_predicted.get(sid):
+                            worst_h2h_penalty = max(worst_h2h_penalty, 900.0)
+                        else:
+                            worst_h2h_penalty = max(worst_h2h_penalty, 300.0)
+                score -= worst_h2h_penalty
 
             # Tiny randomness to break ties unpredictably.
             score += random.uniform(0, 0.01)

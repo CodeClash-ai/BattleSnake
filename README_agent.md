@@ -1628,3 +1628,116 @@ loss count).
   this session when I got careless and used a generic pattern -- always
   double check the pattern doesn't match your own command, or just avoid
   `pkill -f` entirely and use PID-based kill).
+
+## Round (this session) update -- FOUND & FIXED a real forced-corner h2h bug (opponent Xe__since, 19/250 losses)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`Xe__since`**. Result: **231 wins / 19
+losses** out of 250 real games. Turn counts min=3 max=331 avg=117.0 -- by
+far the longest average game length seen across this file's history, and
+a genuinely competent opponent (not a fast self-destructor).
+
+**Root cause of losses, found via the standard "replay a real losing sim
+frame through `main.move()` directly" methodology (documented extensively
+earlier in this file):** Checked all 19 losses -- none were starvation
+(health mostly high, e.g. 88-100) and none involved big snakes (length
+5-10 max), so this is a NEW failure class distinct from every previously
+fixed bug in this file. Traced `sim_101.jsonl` turn 111 in detail:
+
+- Our snake (length 7) had body coiled such that only 2 directions were
+  even physically legal: `up -> (2,2)` and `right -> (3,1)`.
+- The opponent (length 13, `Xe__since`) had its head at `(3,2)`, and
+  (confirmed via `_opp_candidate_cells`) its own body constraints meant
+  its ONLY two legal moves were **also exactly** `(3,1)` and `(2,2)` --
+  the exact same two cells.
+- Old code flagged BOTH of our candidates `danger_h2h=True` (flat -500
+  penalty each, since opponent length >= ours), so they scored identically
+  on that term and ties were broken by other terms / tiny randomness.
+  Actual real match: our bot picked `right -> (3,1)`; the opponent (real
+  behavior, confirmed in the log) also moved to `(3,1)` -- head-on
+  collision, we lost (shorter snake dies).
+- Food at the time included `(4,1)`, which is 1 step from `(3,1)` but 3
+  steps from `(2,2)` -- i.e. a simple nearest-food-seeking opponent would
+  clearly prefer moving toward `(3,1)`. The opponent's real move confirmed
+  this bias. If our bot had predicted this and picked `up -> (2,2)`
+  instead, it would have survived this exact real-match scenario.
+
+**Why this differs from the earlier "hard h2h filter" bug (see the much
+earlier session write-up above titled "FOUND & FIXED the
+hard-h2h-filter self-trap bug"):** that fix correctly stopped
+categorically vetoing h2h-risky moves when a much-safer option existed.
+This is a *different* gap: when ALL remaining legal moves are equally
+h2h-risky by the crude "adjacent + opponent >= our length" metric, the
+bot had no way to prefer the *less likely* collision cell over the *more
+likely* one -- it was a coin flip when it didn't need to be.
+
+**Fix implemented this session (in `main.py`):**
+1. `danger_h2h` is now computed from the opponent's ACTUAL legal next
+   moves (via `_opp_candidate_cells`, which already existed for the
+   adversarial `worst_space` lookahead) instead of a crude
+   "Manhattan distance == 1" check -- avoids false positives where an
+   opponent's own body blocks the direction that would otherwise look
+   adjacent-and-dangerous.
+2. New `_predict_opp_move(opp_body, opp_moves, food, width, height)`
+   helper: guesses which of an opponent's legal moves it will actually
+   take, using a simple nearest-food-else-center heuristic (matches the
+   pattern most simple/competent bots seem to follow, including our own
+   food-seeking logic).
+3. The flat `-500.0` h2h penalty is now graduated per-candidate: if the
+   candidate cell matches an opponent's PREDICTED move, penalty is `-900`
+   (near-certain collision, avoid strongly); if it's merely one of that
+   opponent's other legal-but-less-likely cells, penalty is `-300`
+   (still real risk, but should not tie with the predicted-collision
+   cell). Uses the max across all equal-or-longer threats if several
+   apply.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed the exact `sim_101.jsonl` turn-111 state through the patched
+  `move()` 5x: now **consistently returns `up`** (the survives-in-reality
+  choice) instead of the old fatal `right`.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-10
+  turns each, zero errors/exceptions in either server log.
+- Self-play (`main.py` vs itself), seed 77: ran 51 turns, completed
+  cleanly with a winner, zero exceptions in either server log.
+- Did NOT have time this session to re-check all 19 real losses
+  individually (budget-limited) -- only deeply verified `sim_101.jsonl`.
+  The other 18 losses were NOT individually confirmed to share this exact
+  mechanism (all share the "small snake, high health, long game" shape
+  that's consistent with it, but that's circumstantial, not proven per-
+  file). **Recommended next step for next teammate:** replay a few more
+  of the 19 losing sim files (`sim_104/108/122/129/136/161/195/198/20/
+  235/30/31/37/45/51/68/73/76.jsonl`, see `/logs/rounds/0/`) through the
+  new `move()` the same way to confirm/refute this fix addresses them
+  too, and if any losses persist, dump per-candidate `danger_h2h`/
+  `opp_predicted`/scores at the pivotal turn (same technique used this
+  session) to find the next gap.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real `Xe__since` opponent (or whatever
+  opponent is current) in the next round.
+- The `_predict_opp_move` heuristic is deliberately simple (nearest food
+  else center) and is a GUESS, not certain -- if the real opponent uses a
+  different priority order (e.g. avoids hazards, prefers attacking us
+  specifically, etc.), the prediction could be wrong. If losses persist
+  in scenarios where our bot still picks the "wrong" cell in a forced
+  50/50-looking spot, consider refining the opponent model using more
+  real match data (e.g. does `Xe__since` ever move AWAY from nearest food
+  to chase our head instead? check a few more real sim files for
+  opponent behavior patterns when it's adjacent to both food and us).
+- This fix builds directly on top of the existing `_opp_candidate_cells`
+  helper (already used for `worst_space` adversarial lookahead) -- no new
+  expensive computation, still cheap on an 11x11 board.
+- All previous fixes/logic (uncapped flood-fill, food-eating tail-freeze,
+  open_threshold-gated tail-reachability, adversarial worst_space
+  lookahead, no-hard-h2h-filter) remain in place and were not touched
+  this session besides the `danger_h2h` computation + its penalty
+  magnitude, described above.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
