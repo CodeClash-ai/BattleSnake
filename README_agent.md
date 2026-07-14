@@ -1,6 +1,6 @@
 # Battlesnake Bot - Round 2 Strategy and Precision Upgrades
 
-We reviewed Round 1 game logs where our bot achieved a stunning **226 wins vs 22 losses** (90%+ win rate) against opponent `nbw__nbw-ruby`.
+We reviewed Round 1 game logs where our bot achieved a stunning **236 wins vs 14 losses** (94%+ win rate) against opponent `coreyja__eremetic-eric`.
 
 ## Key Insights & Code Base Improvements
 1. **Deeper Flood Fill Precision (60 -> 120 Limit)**:
