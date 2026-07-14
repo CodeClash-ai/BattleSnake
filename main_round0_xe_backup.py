@@ -244,22 +244,6 @@ def _choose_move(game_state):
     being_hunted = (nearest_opp_len >= my_len) and (nearest_opp_dist <= 4)
     cx, cy = width // 2, height // 2
 
-    # Growth strategy: the Xe opponent out-grows us and then wins head-to-heads
-    # by being longer (round-0 losses: we were consistently 3-5 cells shorter).
-    # Compute how badly we want food so we can actively pursue it (not just as a
-    # tie-break). Strong pull when we are not clearly longer than every opponent.
-    _food_cells = [(f["x"], f["y"]) for f in board["food"]]
-    _max_ol = _max_opp_len(opponents)
-    if my_health < 35:
-        _food_weight = 4.0            # starving: prioritise reaching food
-    elif my_len < _max_ol:
-        _food_weight = 3.0            # behind on length: grow to win h2h
-    elif my_len == _max_ol:
-        _food_weight = 2.0            # tied: keep growing to gain edge
-    else:
-        _food_weight = 0.6            # ahead: mild interest
-    # Distance to food from current head (baseline) for a directional bonus.
-
     def score_candidate(cand):
         name, nc, lose_h2h, h2h_len = cand
         # Time-aware reachable space from the new head cell.
@@ -350,15 +334,6 @@ def _choose_move(game_state):
             # avoid it when healthy but can still chase essential food when
             # starving (food logic breaks ties among equal-scored moves).
             score -= 60.0
-
-        # Food attraction: reward moves that get us closer to the nearest food,
-        # scaled by how much we want to grow. Only apply when the cell is safe
-        # (space is adequate) so we never dive into a trap for food.
-        if _food_cells and space >= my_len:
-            nd = min(_manhattan(nc, f) for f in _food_cells)
-            score -= nd * _food_weight
-            if nd == 0:
-                score += 25.0   # landing on food = growth, small extra reward
 
         return score, space, name, nc
 

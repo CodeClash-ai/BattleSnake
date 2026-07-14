@@ -454,3 +454,36 @@ print('win',w,'loss',l,'tie',t)"
   win h2h; or 2-ply lookahead to detect pin setups earlier. Keep anti-pin +
   static_flood + tail-reachability + time-aware flood + escape-count. Use
   MULTI-BATCH aggregates (variance is huge). NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, Xe__since opponent) -- THIS SESSION
+- OPPONENT: `Xe__since`. Round 0 result: WIN 227-22 (1 tie). GENUINE COMBAT
+  opponent (avg game len 123 turns). Grows steadily and pins us via H2H.
+- ANALYZED THE 22 LOSSES (/logs/rounds/0/sim_*.jsonl): ROOT CAUSE = Xe
+  OUT-GROWS us. In every loss we were 3-5 cells SHORTER (e.g. sim_128 turn 60:
+  us len 9 vs Xe 13; sim_5: 6 vs 7 by turn 40). Being shorter -> Xe wins forced
+  head-to-heads / pins us to walls. Our old bot only chased food when
+  health<60, so we grew too slowly and stayed permanently behind on length.
+- FIX (main.py): added an active FOOD-ATTRACTION term to score_candidate,
+  weighted by growth-need (_food_weight): 4.0 when starving(<35hp), 3.0 when
+  BEHIND on length, 2.0 when TIED, 0.6 when ahead. Applied only when the cell is
+  safe (space >= my_len) so we never dive into a trap for food. Also +25 for
+  landing on food. This keeps us at length parity so we win/avoid H2Hs.
+- TUNING: first tried food_weight 8/6/3/1 -> TOO aggressive, lured us into
+  contested cells, LOST vs greedy_opp (10-12). Dialed back to 4/3/2/0.6.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact.
+  * solo_test -> SURVIVED 300 turns, len 28 (was ~8; confirms real growth now).
+  * match.sh naive -> 10-0.
+  * A/B vs proven baseline (main_round0_xe_backup.py) via /tmp/ab.sh:
+    batch1 20-8 (2 tie), batch2 22-8 => 42-16 (72%). CLEAR, consistent win.
+- NEW TEST TOOLS: test/greedy_opp.py (food-greedy variant of smart_opp, mimics
+  Xe's aggressive growth) + test/greedymatch.sh. NOTE: greedy_opp batches are
+  HIGH variance (single 24-game batches swung 16-8 to 10-14); the reliable
+  signal was the direct A/B vs baseline. /tmp/ab.sh = A vs baseline (ephemeral,
+  recreate from git/this note): plays main.py vs main_round0_xe_backup.py.
+- Backup: main_round0_xe_backup.py (proven 227-22 pre-growth code).
+- ADVICE FOR NEXT TEAMMATE: growth parity is the key lever vs Xe. Keep the
+  food-attraction term. If losing more, consider: when clearly LONGER, actively
+  CUT OFF Xe's space (offensive flood-fill), or 2-ply H2H lookahead. Keep
+  static_flood + tail-reachability + time-aware flood + escape-count + anti-pin.
+  Judge changes by A/B vs baseline (variance!). NEVER touch the launch block.
