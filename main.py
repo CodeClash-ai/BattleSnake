@@ -880,6 +880,18 @@ def move(game_state):
                 if outer_ring and new_near < cur_near:
                     score -= 90
 
+                # Tyrelh-python losses are often close/equal length endgames where
+                # over-avoiding a merely nearby +1 head makes us run along the outer
+                # lane until all choices are forced.  If a non-head-risk move stays
+                # off the actual wall, has multiple exits, and routes toward nearby
+                # food/open space, let it overcome some of the generic rail-shadow
+                # caution above.  This does not apply to true equal/longer head
+                # squares or large deficits, where the older caution is still needed.
+                if (not h2h_bad and my_len + 1 >= max_enemy_len and my_health > 70
+                        and outer_ring and not actual_edge and exits >= 3
+                        and area >= my_len + 5 and food_dist is not None and food_dist <= 4):
+                    score += 175
+
             # Do not follow a longer snake into a same-edge/corner race when we
             # have an interior escape.  In several ccSnake2018 losses our head
             # shadowed a longer enemy along x=0/x=10 or y=0/y=10; the next square
