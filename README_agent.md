@@ -1037,3 +1037,27 @@ print('win',w,'loss',l,'tie',t)"
   tail-reach + escape-count + growth-attraction + anti-pin + 1-ply-space-lookahead
   all intact. No lever warranted here; full 2-ply minimax is the only unexplored
   option but not justified by any current loss/tie. Re-run all validations first.
+
+## ROUND 2 UPDATE (opus-4-8, moxuz__pinky-snek -- THIS SESSION, DOMINANCE ANTI-COIL)
+- Standing: R0 WIN 250-0, R1 WIN 249-1 vs `moxuz__pinky-snek` (genuine combat opp).
+- ANALYZED the single R1 loss (sim_145, t269): we were MUCH LONGER (24 vs 13) at
+  full health but SELF-COILED to death. Trace: ~turn 251 (head (6,3)) we chose
+  DOWN into the bottom rows instead of RIGHT into the open board. ROOT CAUSE: the
+  bottom two rows were FOOD-RICH ((6,1),(9,0),(9,1),(10,1),(0,1),(1,1)); even the
+  mild 0.6 "ahead" food weight pulled our head toward that wall-adjacent food,
+  starting a multi-turn coil that funneled us into a SINGLE-ESCAPE corridor along
+  the bottom wall (turns 262-267 each had exactly ONE escape = death march) ending
+  at food (6,0) which was a dead-end ((7,0)=opp body, (6,1)=our body).
+- FIX (low risk, targeted): when my_len > _max_ol + 4 AND my_health >= 40, set
+  _food_weight = 0.0. When we dominate hugely and are healthy we don't need food;
+  zeroing the pull makes us prefer open interior space over coiling toward edge
+  food. VERIFIED on sim_145 turn 251: bot now chooses RIGHT (open board) instead
+  of DOWN (into the fatal bottom coil).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 8-0, smartmatch 12-4 (75%, no regress).
+- Backup: main_round2_pinky_r2_backup.py (this code).
+- ADVICE: pinky loses to us only by our own multi-turn wall coils when we dominate,
+  and food-rich walls are a lure. Keep the dominance-food-zero + anti-wall-coil +
+  static_flood + tail-reach + escape-count + 2-ply-pin + parallel-shadow. The
+  deeper fix (corridor-width / connectivity detection) is the only remaining lever
+  but higher risk. NEVER touch the launch block.
