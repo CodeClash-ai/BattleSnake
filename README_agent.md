@@ -550,3 +550,74 @@ env var), when cleaning up background test servers.
   smoke-test tools; the `setsid nohup ... & disown -a` server-launch
   pattern documented earlier in this file still works for local
   `game/battlesnake` CLI testing.
+
+## Round 2 (this session) update -- ground truth re-verified, no changes needed
+
+**Ground truth (via `python3 tools/analyze_logs.py`):** `/logs/rounds/`
+contains rounds `0` and `1` only at the start of this session, both
+**perfect sweeps** for `sonnet-5` against opponent `csauve__bookworm`:
+- Round 0: 20-0 (20 real games), turn counts min=3 max=11 avg=7.0.
+- Round 1: 35-0 (35 real games), turn counts min=3 max=11 avg=6.7.
+
+Opponent still self-destructs almost immediately every real game (avg
+~7 turns) -- same pattern noted by prior teammates for earlier-named
+opponents. No evidence yet of a competent/long-surviving opponent.
+
+**What I did this session:**
+- Re-ran `tools/analyze_logs.py` to confirm the above ground truth fresh
+  (don't trust old prose about round numbers/opponent names in this file
+  -- confirmed again this session that they've drifted across sessions).
+- Read all of `main.py` end-to-end again; logic is unchanged from what's
+  described earlier in this file (safe-move filtering w/ tail-vacate
+  logic + head-to-head avoidance vs equal/longer snakes -> uncapped BFS
+  flood-fill space scoring w/ graduated penalty + tail-reachability
+  bonus/penalty -> health-scaled nearest-food seeking -> edge-avoidance
+  bonus -> tiny tie-break randomness -> exception-safe fallback). No
+  bugs found.
+- Ran hand-built edge-case tests directly against `main.move()`: (1) a
+  snake with only one truly safe direction, (2) a two-snake board with no
+  food, (3) a fully self-boxed-in 3x3 corner scenario with **zero** safe
+  moves at all (tests the doomed-snake fallback branch that ignores body
+  blocks). All three returned valid `{"move": ...}` dicts, no exceptions.
+- Ran a real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py`, seeds 1-5, 11x11 standard -- **5/5 wins**,
+  games ending in 4-6 turns, matching the real match log distribution.
+- Ran a real self-play game (`main.py` vs itself, seed 42) that ran a
+  full **184 turns** with no exceptions/errors in either server's log --
+  confirms continued stability in long, crowded, big-snake games (where
+  the earlier self-trap bug used to bite, per the historical "Fix
+  implemented in main.py this round" section far above in this file --
+  that fix is still in place, still working, still uncapped flood-fill +
+  tail-reachability check).
+- Cleaned up all background test server processes afterward (`kill -9` by
+  PID, not `pkill -f` -- see the environment gotcha noted earlier in this
+  file about `-f` patterns matching your own shell command).
+
+**Decision: made NO functional changes to `main.py` this session.** Both
+real rounds played so far are perfect sweeps (55/55 total real games won,
+0 losses/draws) against the actual current opponent, and fresh local
+testing (edge cases, naive-opponent smoke test, and a long 184-turn
+self-play game) found zero bugs or crashes. There is no concrete observed
+failure mode to fix right now, so further tinkering would be pure risk
+for no measurable upside -- consistent with the judgment calls made in
+several previous sessions documented above.
+
+**Suggestions for next teammate (still valid, unchanged in substance):**
+- Always start with `python3 tools/analyze_logs.py` for ground truth --
+  ignore stale round-number/opponent-name claims elsewhere in this file.
+- If a real loss ever appears in `/logs/rounds/N/results.json`, use the
+  methodology documented earlier in this file (find the losing
+  `sim_*.jsonl`, trace board state turn-by-turn before death, identify
+  where the scoring heuristic's assumptions broke down) to diagnose and
+  patch a *specific* gap, rather than broad rewrites.
+- The bot is still purely greedy/1-ply. This has been sufficient so far
+  because the opponent has never survived long/played competently in any
+  real game logged to date. If that ever changes, short lookahead
+  (2-3 ply minimax/expectimax against actual opponent behavior) is the
+  natural next investment -- not needed yet.
+- Server-testing gotchas (all still accurate): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach cleanly across tool calls; use fresh unused
+  port numbers each batch; clean up with `kill -9 <pid>` by PID from
+  `ps aux` rather than `pkill -f <pattern>` (which can kill your own
+  current shell command if the pattern string appears in it).
