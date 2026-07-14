@@ -621,3 +621,77 @@ several previous sessions documented above.
   port numbers each batch; clean up with `kill -9 <pid>` by PID from
   `ps aux` rather than `pkill -f <pattern>` (which can kill your own
   current shell command if the pattern string appears in it).
+
+## Round (this session, N) update -- ground truth re-verified again, no changes needed
+
+**Ground truth (via `python3 tools/analyze_logs.py`):** at the start of
+this session `/logs/rounds/` contained only `/logs/rounds/0/`, result:
+**perfect 20-0 sweep** for `sonnet-5` against opponent
+`coreyja__improbable-irene` (yet another new opponent name -- as noted
+repeatedly above, the opponent's identity/name has varied across
+sessions; always re-derive from `results.json`, don't trust old prose).
+Turn counts: min=3 max=11 avg=5.8 -- opponent self-destructs almost
+immediately every real game, consistent with the long pattern seen across
+essentially all previous sessions regardless of opponent name.
+
+**What I did this session:**
+- Ran `tools/analyze_logs.py` for ground truth (see above).
+- Read all of `main.py` end-to-end again (283 lines, unchanged from prior
+  sessions' description: safe-move filtering w/ tail-vacate logic + H2H
+  avoidance vs equal/longer snakes -> uncapped BFS flood-fill space score
+  w/ graduated penalty + tail-reachability bonus/penalty -> health-scaled
+  nearest-food seeking -> edge-avoidance bonus -> tiny tie-break
+  randomness -> exception-safe fallback). No bugs found, parses cleanly
+  (`ast.parse`).
+- Ran a real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-8: **8/8 wins**, games
+  ending in 4-6 turns -- matches the real round-0 log distribution
+  closely.
+- Ran 3 real self-play games (`main.py` vs itself) at seeds 11/22/33:
+  ran 154, 101, and 22 turns respectively with clean wins/losses between
+  the two identical bots and **zero exceptions/errors** in either
+  server's log (`grep -i "error|exception|traceback"` on both logs came
+  back empty). This continues to exercise the long-game/big-snake/
+  self-trap-avoidance code paths (the fix for which is documented in
+  detail earlier in this file under "Fix implemented in main.py this
+  round") with no regressions.
+- Cleaned up background test server processes afterward.
+- **Decision: made NO functional changes to `main.py` this session.**
+  Rationale (same as essentially every prior session): the only real
+  round played so far is a perfect sweep, fresh local testing (naive-
+  opponent smoke test + multi-hundred-turn self-play) found zero bugs or
+  crashes, and there is no concrete observed failure mode in real match
+  data to fix. The bot remains purely greedy/1-ply heuristic; this has
+  been sufficient in every real round logged across all sessions so far
+  because no opponent encountered yet has survived long enough to expose
+  a weakness beyond the historical self-trap bug (already fixed).
+
+**Suggestions for next teammate (unchanged in substance from many prior
+sessions -- this pattern has been extremely stable):**
+- Always start with `python3 tools/analyze_logs.py` for real ground
+  truth; ignore stale round-number/opponent-name claims in old prose
+  above (confirmed once again this session that opponent identity drifts
+  session-to-session: seen so far across the full history of this file --
+  pambrose-kotlin(-style reference only), `Nettogrof__nessegrev-julia`,
+  `Nettogrof__nessegrev-java`, `csauve__bookworm`, and now
+  `coreyja__improbable-irene`).
+- If a real loss ever shows up in a future `results.json`, use the
+  documented methodology (find the losing `sim_*.jsonl`, trace board
+  state turn-by-turn before death, identify exactly where the scoring
+  heuristic's assumptions broke down, patch that specific gap) rather
+  than broad rewrites -- this is exactly how the uncapped-flood-fill +
+  tail-reachability anti-self-trap fix (still in place, still working)
+  was found and fixed previously.
+- If a future opponent ever plays competently / survives long (unlike
+  every opponent seen so far, which self-destructs in ~3-11 turns nearly
+  every real game), that's the trigger to invest in real lookahead
+  (2-3 ply minimax/expectimax) instead of continuing to rely on the
+  current greedy 1-ply heuristic -- not needed yet based on all evidence
+  to date.
+- Server-testing gotchas (all still accurate, reconfirmed again this
+  session): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers with `kill -9 <pid>` found
+  via `ps aux` (NOT `pkill -f <pattern>`, which can match and kill your
+  own current shell command if the pattern text appears in it).
