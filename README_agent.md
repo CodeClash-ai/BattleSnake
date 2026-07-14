@@ -695,3 +695,72 @@ sessions -- this pattern has been extremely stable):**
   numbers each batch; clean up test servers with `kill -9 <pid>` found
   via `ps aux` (NOT `pkill -f <pattern>`, which can match and kill your
   own current shell command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth re-verified, still winning, no changes
+
+**Ground truth (via `python3 tools/analyze_logs.py`) at start of this
+session:** `/logs/rounds/` contained `0` and `1`, both **perfect sweeps**
+for `sonnet-5` against opponent `coreyja__improbable-irene`:
+- Round 0: 20-0 (20 real games), turn counts min=3 max=11 avg=5.8.
+- Round 1: 22-0 (22 real games), turn counts min=3 max=178 avg=22.3 --
+  note this round included at least one much longer game (178 turns) than
+  round 0's max of 11, and we still won every real game, which is a good
+  sign the historical self-trap fix (uncapped flood-fill + tail-
+  reachability bonus/penalty, documented in detail earlier in this file)
+  continues to hold up even as games get longer/more complex.
+
+**What I did this session:**
+- Confirmed the above via `tools/analyze_logs.py`.
+- Read `main.py` (283 lines, unchanged) top-to-bottom again; confirmed
+  `ast.parse` succeeds; logic matches its own docstring (safe-move
+  filtering w/ tail-vacate + H2H avoidance vs equal/longer snakes ->
+  uncapped BFS flood-fill scoring w/ graduated penalty + tail-
+  reachability bonus/penalty -> health-scaled nearest-food seeking ->
+  edge-avoidance bonus -> tiny tie-break randomness -> exception-safe
+  fallback). No bugs spotted.
+- Ran a fresh local batch via the real `game/battlesnake` CLI: `main.py`
+  vs `tools/opponent_ref.py` (naive stand-in), seeds 1-6: **6/6 wins**,
+  games ending in 4-6 turns (matches round-0 distribution). No
+  error/exception/traceback lines in either server log.
+- Ran one self-play game (`main.py` vs itself, seed 99): completed
+  cleanly after **88 turns** with a winner determined, zero exceptions in
+  either server's log. Exercises the longer-game code paths relevant to
+  round 1's 178-turn max game.
+- Cleaned up all background test server PIDs afterward.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: both real rounds played so far are perfect sweeps (42/42 total
+real games won across rounds 0-1, 0 losses/draws) against the actual
+current opponent (`coreyja__improbable-irene`), including a round with a
+much longer max game length (178 turns) than before with no losses --
+strong evidence the bot's anti-self-trap logic scales fine to longer
+games. Fresh local testing this session (naive-opponent smoke test +
+self-play) found zero bugs, crashes, or exceptions. No concrete failure
+mode exists to justify changing scoring weights/logic right now; doing so
+would be pure risk for no observed upside.
+
+**Suggestions for next teammate (same guidance as many prior sessions,
+still valid):**
+- Always start with `python3 tools/analyze_logs.py` for real ground
+  truth; ignore stale round-number/opponent-name claims elsewhere in this
+  file (opponent identity has changed name almost every session so far:
+  see the long list accumulated above -- most recently
+  `coreyja__improbable-irene`).
+- If a real loss ever shows up in a future `results.json`, use the
+  documented methodology (find the losing `sim_*.jsonl`, trace board
+  state turn-by-turn before death, identify exactly where the scoring
+  heuristic's assumptions broke down, patch that specific gap) -- this is
+  how the uncapped-flood-fill + tail-reachability fix was originally
+  found and remains the template for future fixes.
+- Round 1 this session had a max turn count of 178 (vs round 0's max of
+  11) -- worth keeping an eye on whether future rounds keep trending
+  toward longer games (opponent improving / surviving longer). If a
+  future opponent starts playing competently and turn counts/losses climb
+  together, that's the trigger to invest in real lookahead (2-3 ply
+  minimax/expectimax) instead of the current greedy 1-ply heuristic.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers with `kill -9 <pid>` found
+  via `ps aux` (NOT `pkill -f <pattern>`, which can match and kill your
+  own current shell command if the pattern text appears in it).
