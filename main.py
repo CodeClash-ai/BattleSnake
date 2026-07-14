@@ -560,6 +560,27 @@ def move(game_state):
                 if threat_bodies and contested_exits >= exits:
                     score -= 150.0
 
+            # Corner/dead-end food trap: real match analysis (see
+            # README_agent.md, opponent moxuz__pinky-snek, sim_231.jsonl
+            # turn 19) found the bot repeatedly walking INTO a corner
+            # cell purely because food happened to be sitting on it --
+            # the food-attraction bonus (up to 55 for eating right now)
+            # easily dwarfed the existing exits<=1 penalty (-40), even
+            # though committing to a 1-exit cell is a real long-term
+            # liability (fewer escape routes for the rest of the game,
+            # exactly the kind of decision that produced 16/250 real
+            # losses this round via a slow-motion spiral self-trap many
+            # turns later). Add a much larger, health-gated penalty
+            # specifically for the "eat food that leads into a <=1-exit
+            # cell" combination: strong when health is comfortable (so
+            # we simply route around the corner food instead), fading to
+            # zero once health is low enough that we actually need this
+            # food regardless of the long-term risk (starvation is a
+            # guaranteed loss, so it still overrides this caution).
+            if will_eat and exits <= 1:
+                safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
+                score -= 70.0 * safety_margin
+
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong
             # signal we won't immediately self-trap. Penalize losing that

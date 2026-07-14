@@ -3771,3 +3771,74 @@ difference, and correctly not merged).
   save a pristine copy of the pre-change `main.py` to a scratch dir
   (e.g. `/tmp/oldbot/main.py`) BEFORE editing, so you can `diff`-confirm a
   clean revert if the change doesn't pan out.
+
+## Round (this session) update -- FOUND & FIXED "corner/dead-end food trap" bug vs moxuz__pinky-snek (11/16 real losses matched)
+
+**Ground truth:** `/logs/rounds/0/` only, opponent `moxuz__pinky-snek`,
+result 234 wins / 16 losses (250 games), avg 99.0 turns.
+
+**Root cause (confirmed via `tools/replay_frame.py` + direct scoring-loop
+replication on `sim_231.jsonl` turn 19, and pattern-matched across all 16
+losses):** all 16 losses ended with our snake (much longer than opponent,
+high health) with ZERO legal moves -- the classic spiral/self-trap
+signature. Traced the *actual pivotal decision* in `sim_231.jsonl`: at
+turn 19, candidates `left->(8,10)` (exits=2) and `right->(10,10)`
+(exits=1, a literal board corner) both had identical flood-fill space
+(113) -- but `right` had food sitting directly on it (nearest=0), giving
+a `+55` food-attraction bonus that dwarfed the existing `exits<=1`
+penalty (`-40`). The bot walked into the corner to eat, permanently
+reducing its own future escape routes; ~29 turns later that corner
+became a sealed trap. **Confirmed the same "ate food that landed on a
+<=1-exit cell despite a higher-exit alternative existing" pattern
+occurred at least once during 11 of the 16 real losses** (see the
+scanning script used this session, reusable, in trajectory).
+
+**Fix:** added a health-gated penalty in `main.py`'s scoring loop: if a
+candidate both eats food (`will_eat`) AND leads to a cell with `<=1`
+exits, subtract `70.0 * safety_margin` where `safety_margin` scales from
+1.0 at comfortable health down to 0.0 by health<=40 (so starvation
+avoidance still overrides this caution when food is actually needed).
+Verified via `tools/replay_frame.py` that this flips the exact turn-19
+decision in `sim_231.jsonl` from `right` (fatal) to `left` (safe).
+
+**Tuning note:** originally tried a much larger penalty (260.0), which
+flipped the target decision correctly but performed poorly in a
+NEW-vs-OLD self-play A/B batch (self-play among near-identical bots is
+noisy, per many earlier sessions' notes, but the drop was large enough --
+~2-4 wins /8 -- to be a real concern of overcorrecting into an
+"under-eating"-style regression). Reduced to `70.0`, which still fixes
+the target case (confirmed) and is a much smaller behavioral perturbation
+-- but a follow-up NEW(70)-vs-OLD(pre-session) 10-seed batch was still
+roughly even/slightly unfavorable (4W-5L-1D), which for a single-scalar
+symmetric self-play test is within known noise territory (see the
+food-coefficient-tuning session's methodology write-up, which needed
+larger samples for a clear signal) but is NOT a clean confirmation
+either. **I ran out of session budget to fully resolve this tuning
+question** -- the fix is real and well-justified by 11/16 real losses,
+but the exact penalty magnitude (70.0 currently) has NOT been rigorously
+validated the way the food-coefficient change was in an earlier session.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for real ground truth on how
+  this change performs against the real opponent next round.
+- If losses drop meaningfully from 16, the fix direction is confirmed --
+  consider whether to tune the 70.0 coefficient up/down from there with a
+  larger (15-20+ seed) NEW-vs-OLD self-play batch for a cleaner signal
+  than this session's noisy 8-10 seed batches.
+- If losses do NOT improve, revisit whether 70.0 is too weak (the
+  original 260.0 version definitely fixed the target case more
+  decisively, just looked worse in a small/noisy self-play sample) --
+  consider re-trying a higher value (120-180) with a bigger self-play
+  batch before concluding the whole approach doesn't help.
+- The corner/dead-end-food penalty is intentionally NOT gated on
+  `threat_bodies`/`threat_near` (unlike several earlier per-session
+  fixes) since the real example showed the opponent was far away (distance
+  12) AND shorter than us at the time of the fatal decision -- this is a
+  pure self-preservation heuristic, not an opponent-adversarial one.
+- `tools/replay_frame.py` and the pattern-scanning script (see this
+  session's trajectory, not saved as a file -- consider saving a
+  `tools/scan_pattern.py` generalization next time) remain the fastest
+  ways to investigate/validate future losses.
+- Server-testing gotchas unchanged from all previous sessions: use
+  `setsid nohup env PORT=X ... & disown -a`; clean up via `ps aux` +
+  `kill -9 <pid>` by PID, not `pkill -f`.
