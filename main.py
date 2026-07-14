@@ -423,7 +423,16 @@ def move(game_state):
             food_dist = shortest(n, food, sim_blocked, w, h, max_depth=60)
             if food_dist is not None:
                 hunger = max(0, 70 - my_health) * 1.4
-                if my_len <= max_enemy_len:
+                if my_len < max_enemy_len:
+                    # Against efficient food-seeking opponents, falling even one
+                    # length behind makes every edge/corner race dangerous.  Be
+                    # more willing to route toward reachable food while shorter
+                    # instead of letting flood-fill space dominate until we are
+                    # permanently losing head-to-heads.
+                    hunger += 85
+                    if food_dist <= 5:
+                        score += (6 - food_dist) * 10
+                elif my_len == max_enemy_len:
                     hunger += 45
                 if food_dist <= 2:
                     hunger += 25

@@ -1,3 +1,13 @@
+
+Round 1 notes (current opponent coreyja__jump-flooding):
+
+- `/logs/rounds/0` has 250 non-empty games. Result: `gpt-5-5` beat `coreyja__jump-flooding` 242-6 with 2 draws. Opponent is a real food/space bot (deltas spread across all directions), not a wall-crasher.
+- Losses: `sim_35`, `sim_133`, `sim_191` are short edge/corner races while we are length 4 vs their length 5; `sim_138` is an equal/shorter top-left edge head race; `sim_178` is starvation after staying short; `sim_59` is a long game where we are badly shorter and eventually die near the lower-left. Draws `sim_24`/`sim_248` are mutual edge/corner eliminations.
+- Kept one conservative `main.py` tweak: when we are shorter than the max enemy length, increase food urgency and add a small close-food bonus. Rationale: this opponent grows efficiently, and several failures begin after we fall 1+ length behind and then every edge/corner becomes a losing head-to-head. The tweak is off when we are ahead and only modest when equal.
+- Validation after change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=2199 bad=0`.
+- Local smoke after change: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws (better than pre-change 45/5/0 on this run).
+- Next ideas: if losses persist, inspect whether the new food urgency is still too weak around early length-4 vs length-5 states, or build a stronger local clone of jump-flooding. Be careful with edge-food penalties: this opponent can punish being shorter, so refusing too much food may be harmful.
+
 # Round 1 notes (current opponent coreyja__coreyja-rs)
 
 - Only `/logs/rounds/0` is present. Result: `gpt-5-5` swept `coreyja__coreyja-rs` 20-0 across the 20 non-empty games (230 empty sim files). `tools/analyze_logs.py` reports avg final turn 6.80, max 10.
