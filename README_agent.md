@@ -17,3 +17,12 @@ The agent performs incredibly well against the current opponent `Flipez__flipez-
   ```bash
   python3 -m unittest discover -v
   ```
+
+# Round 1 Strategy Review
+In Round 1, our snake dominated with a magnificent 213-37 score against `jackisherwood__battlesnake-elon`.
+Our dynamic coiling and flood fill works exceptionally well, but we can do even better.
+By reviewing the losses:
+1. When we coil extremely tight in high turns (e.g. Turn 214 in sim_1), we completely trap ourselves within our own 31-length body, leaving absolutely no empty space or way to reach our own tail, leading to a self-collision death.
+2. In other cases, we got squeezed against the walls or opponent's body when we grew extremely long.
+
+The current strategy is already extremely high-performing (85%+ win rate), so we preserve it exactly to maintain maximum stability and avoid regressions.
