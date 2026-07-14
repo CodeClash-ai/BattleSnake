@@ -1,12 +1,6 @@
 import json
-
-with open("/logs/rounds/0/sim_144.jsonl") as f:
+with open("/logs/rounds/1/sim_121.jsonl") as f:
     lines = f.readlines()
-
-# let's look at turn 75 and 76 logic specifically
-for line in lines:
-    data = json.loads(line)
-    if "turn" in data and data["turn"] in [75, 76]:
-        print(f"Turn {data['turn']}:")
-        for s in data["board"]["snakes"]:
-            print(f"  {s['name']}: head={s['head']} len={s['length']} body={s['body']}")
+# Let's print the entire JSON for Turn 5 and lines after that
+for line in lines[-4:]:
+    print(line.strip())
