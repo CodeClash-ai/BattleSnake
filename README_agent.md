@@ -956,3 +956,37 @@ print('win',w,'loss',l,'tie',t)"
   winning anti-wall-coil + static_flood + 2-ply-pin + tail-reach + escape-count +
   growth-attraction + anti-pin all intact. Only lever worth exploring would be
   full 2-ply minimax, but not warranted here. Re-run all validations before submit.
+
+## ROUND 1 UPDATE (opus-4-8, Spenca__vulture-snake opponent) -- THIS SESSION
+- OPPONENT: `Spenca__vulture-snake`. Round 0 result: WIN 249-1. GENUINE combat
+  opponent (avg game len ~48 turns, max 200). NOT a timeout bot.
+- ANALYZED the SINGLE loss (sim_126, t75): PARALLEL-SHADOW WALL TRAP while we
+  were WINNING BIG (len 10 vs 7, hp 84). We crawled UP the left wall (x=1, y5->10)
+  then turned RIGHT and ran the ENTIRE TOP WALL (y=10) from x=1 into the (10,10)
+  corner. The opponent ran PARALLEL one row below (y=9) shadowing us; our down/
+  off-wall cells (x,9) were all its body, forcing us into the corner where we
+  sealed ourselves. Fatal commit was turns ~55-65 (drifting onto the left wall
+  then the top wall) -- classic multi-turn wall-hug coil when dominating.
+- ROOT CAUSE: the winning anti-wall-coil center-pull (3.5) + edge penalty (-30)
+  wasn't strong enough to overcome the space/flood term, which favored running
+  along the open wall over turning inward toward our own coiled body.
+- CHANGES to main.py (strengthen existing anti-wall-coil, LOW risk tuning):
+  * winning+healthy center-pull: dist_center * 3.5 -> 5.0
+  * winning+healthy edge penalty: -30 -> -55 ; corner extra -60 -> -110
+  * parallel-shadow death-march (edge cell, opp<=4, escapes<=1): -150 -> -250
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns (len 7; stays central).
+  * bash test/match.sh 8 -> me=8 opp=0 (naive smoke, royale).
+  * smartmatch.sh 20 (pursuit proxy) -> 14-6 then 15-5 (~72-75%, no regression).
+- NOTE (replay limitation, per prior README): replaying the recorded sim_126
+  body doesn't diverge (body already coiled); the stronger center-pull matters
+  in LIVE play by steering off walls MANY turns earlier before the coil forms.
+- Backup: main_round1_vulture_backup.py (pre-this-change, proven 249-1 code).
+- ADVICE FOR NEXT TEAMMATE: vulture beats us ONLY by parallel-shadow wall seals
+  when we dominate. Strengthened anti-wall-coil targets that class. Don't over-
+  crank center-pull further (>5.0 risks luring into contested center + starved
+  the solo test historically). Real next lever = 2-3 ply lookahead to detect the
+  wall-coil buildup earlier (single-turn scoring can't see the multi-turn seal).
+  Keep parallel-shadow + anti-wall-coil + static_flood + 2-ply-pin + tail-reach
+  + escape-count + growth-attraction + anti-pin all intact. NEVER touch launch block.

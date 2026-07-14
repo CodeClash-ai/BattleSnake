@@ -343,7 +343,7 @@ def _choose_move(game_state):
                 # extra: if this edge cell has <=1 non-losing escape it is a
                 # death-march down the wall against a shadowing snake.
                 if escapes <= 1:
-                    score -= 250.0
+                    score -= 150.0
 
         # 1-PLY LOOKAHEAD SPACE (anti multi-turn coil, sim_238 round-1 loss):
         # A single-turn flood can look fine while our body spirals into a loop
@@ -477,13 +477,13 @@ def _choose_move(game_state):
             # toward the interior and strongly avoid edges/corners.
             if my_health >= 30:
                 dist_center = abs(nc[0] - cx) + abs(nc[1] - cy)
-                score -= dist_center * 5.0
+                score -= dist_center * 3.5
                 _on_edge_w = (nc[0] == 0 or nc[0] == width - 1
                               or nc[1] == 0 or nc[1] == height - 1)
                 if _on_edge_w:
-                    score -= 55.0
+                    score -= 30.0
                     if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                        score -= 110.0
+                        score -= 60.0
 
         # 2-PLY PIN LOOKAHEAD (the key fix vs jump-flooding, sim_141/92/232):
         # We repeatedly died by a longer pursuer cutting off our escapes so that
