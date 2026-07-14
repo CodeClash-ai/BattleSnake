@@ -876,6 +876,18 @@ def move(game_state):
                     # let a healthy, longer snake chase unnecessary wall snacks.
                     edge_food = (n[0] in (0, w - 1) or n[1] in (0, h - 1))
                     outer_food = (n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2)
+                    if (my_len <= 10 and my_len <= max_enemy_len + 1 and my_health > 50
+                            and area >= my_len * 4):
+                        # Bountysnake2018 is an efficient early food/space racer.
+                        # When we are still small and not clearly longer, passing a
+                        # safe adjacent snack often leaves us one length behind for
+                        # the rest of the rail-shadow game.  After hard h2h/body
+                        # filters and requiring real space, give immediate food a
+                        # stronger catch-up value; actual edge-food caution below
+                        # still applies to cramped/contested wall snacks.
+                        score += 170
+                        if not edge_food:
+                            score += 55
                     if (my_health > 75 and my_len >= max_enemy_len + 2 and edge_food):
                         score -= 65
                     # A rare rdbrck loss started by taking a high-health y=1 snack
@@ -937,6 +949,19 @@ def move(game_state):
                     score -= 70
                     if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                         score -= 45
+                        # Bountysnake2018 also punishes small +0/+1/+2 leads if we
+                        # voluntarily step onto the actual rail near its head: it
+                        # shadows the adjacent lane until our lead disappears and
+                        # the corner becomes a losing head-to-head.  The older rail
+                        # penalties mostly fired only when equal/shorter or one-exit;
+                        # add a narrow non-food actual-edge penalty for small snakes
+                        # with only a slight lead, while still allowing hungry/food
+                        # edge routes.
+                        if (my_health > 70 and my_len <= 12 and my_len <= max_enemy_len + 2
+                                and exits <= 2):
+                            score -= 150
+                            if min(dist(n, eh) for eh in scary_close) <= 3:
+                                score -= 90
             # Be much more reluctant to enter the rail/corner when a close
             # equal-or-longer snake is nearby and we are not hungry.  The current
             # opponent repeatedly wins the few lost games by shadowing us along
