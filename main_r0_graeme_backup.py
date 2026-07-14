@@ -144,28 +144,17 @@ def move(game_state):
             if space < my_len:
                 score -= (my_len - space) * 200
 
-            # Food seeking. Unchanged from the proven bot EXCEPT we stop
-            # chasing food once we are extremely long with a decisive length
-            # lead (>=25 and >=8 longer than the opponent). This prevents the
-            # over-growth self-trap that lost a 364-turn game vs graeme-hill
-            # (we reached length 39 and cornered ourselves). At length 25+ we
-            # already win every realistic head-to-head, so growth is pure risk.
+            # Food seeking
             if food:
                 nearest = min(_manhattan(np, f) for f in food)
-                longest_opp = max((ol for _, ol in opp_heads), default=0)
-                overgrown = my_len >= 25 and (my_len - longest_opp) >= 8
+                # Weight food by hunger. Always mildly attractive.
                 hunger = 0.0
                 if my_health < 40:
                     hunger = (50 - my_health) * 3.0
-                elif not overgrown:
+                else:
                     hunger = 5.0
                 score += hunger * (1.0 / (nearest + 1)) * 20
-                if my_health < 40:
-                    score -= nearest * 1.5
-                elif overgrown:
-                    score += nearest * 0.4  # actively avoid food
-                else:
-                    score -= nearest * 0.3
+                score -= nearest * (1.5 if my_health < 40 else 0.3)
 
 
             # Aggression: when we are strictly longer than an opponent, close

@@ -217,3 +217,32 @@ Rewrote `main.py` into a proper survival bot:
   greedy + one-sided space lookahead) — worth it ONLY if opponent upgrades to a
   real survival bot (survives >20 turns, grows). Monitor /logs/rounds/<latest>
   with analyze_logs.py each round.
+
+## Round 1 (opus-4-8, this run) — NEW opponent graeme-hill__snakebot
+- Round-0 real match: WON 88-1 (`analyze_logs.py /logs/rounds/0`). This
+  opponent is STRONGER than prior ones — it can survive long games (one went
+  364 turns). Its latency is ~489ms (near the 500ms timeout) but it plays a
+  competent survival game.
+- THE ONE LOSS (sim_206.jsonl, 364 turns): WE self-trapped. Our food-seeking
+  kept us eating forever (health stayed 100 the whole game) until we reached
+  length 39 while the opp stayed ~15. At turn 364 we cornered ourselves in the
+  top-left (head at (3,10), all 3 other moves = self/wall). Classic over-growth
+  self-trap.
+- FIX (main.py food block): stop chasing food once we are BOTH very long AND
+  decisively ahead on length — `overgrown = my_len>=25 and (my_len-longest_opp)>=8`.
+  When overgrown we actively keep distance from food (score += nearest*0.4).
+  At length 25+ we win every realistic H2H, so extra growth is pure self-trap
+  risk. Normal growth (len<25 or small lead) is UNCHANGED from the proven bot.
+- IMPORTANT sim caveat: sim_ab.py / sim.py have a POSITIONAL BIAS — running
+  main_r0_graeme_backup vs an identical copy gives 61-71-18 (not ~50/50). So
+  "A loses self-play 61-71" is NOISE, not a regression. Verified my change is
+  strength-neutral in self-play and still 40-0 vs the naive original (sim.py).
+  Replayed all 364 turns of the loss game through the new bot: no crashes.
+- Backup of the pre-change bot: main_r0_graeme_backup.py.
+
+## Round 2+ ideas (next teammate)
+- If graeme-hill keeps beating us in long games, consider: (a) lower the
+  overgrown length threshold (25->20) if we still over-grow; (b) genuine 2-ply
+  minimax over BOTH snakes' moves; (c) endgame tail-chasing to avoid corners.
+- Watch sim POSITIONAL BIAS: always compare A-vs-B against a mirror A-vs-Acopy
+  baseline before trusting a self-play delta. Don't tune on raw self-play numbers.
