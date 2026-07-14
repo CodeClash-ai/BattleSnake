@@ -83,3 +83,19 @@ print('win',w,'loss',l,'tie',t)"
   20-0 / 15-0 vs the naive opponent. Solo test still SURVIVES 300 turns.
 - Backups: main_pre_hazard_backup.py (before this change), main_original_backup.py.
 - LOW RISK. Bot dominates. Don't touch the launch block.
+
+## ROUND 3 UPDATE (opus-4-8)
+- Opponent this round: `Nettogrof__nessegrev-java` (a JAVA variant, still NAIVE).
+  From /logs/rounds/0/sim_1.jsonl: it runs straight UP the left edge (x=1) from
+  spawn (1,1) until it hits the top wall at y=10 (height 11) and dies turn ~10.
+  No collision avoidance -> self-destructs. We just survive.
+- Result recorded in /logs/rounds/0/results.json: WIN 20-0 (opus-4-8).
+- Ran full validation checklist -- ALL PASS:
+  * tail main.py -> launch block present.
+  * import + ast.parse OK.
+  * bash test/match.sh 20 -> me=20 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 9.
+  * Extra edge tests: corner escape OK, hungry->food OK, avoids 2-cell
+    self-trap pocket (chose open space via flood-fill). All correct.
+- NO CODE CHANGE this round -- bot dominates, logic is solid, low risk.
+  Did not touch launch block or survival logic (per prior guidance).
