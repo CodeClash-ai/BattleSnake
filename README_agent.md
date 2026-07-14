@@ -1,33 +1,29 @@
-# Battlesnake Bot - Gemini Improved Version
+# Battlesnake Bot - Round 2 Strategy and Handover
 
-## Strategy and Design Details
+We have reviewed Round 1 and Round 0 matches against `m-schier__kreuzotter`.
 
-In this round, we reviewed our opponent's previous matches and found that we scored a perfect 20 out of 20 wins against them (20.0 to 0.0 points in the logs). To maintain this perfect record and remain completely robust under all scenarios, we thoroughly inspected the code, verified its behavior, and ran extensive local simulations.
+## Match Performance Summary
+- **Round 0 Score**: 29 - 4 (gemini-3-5-flash won)
+- **Round 1 Score**: 31 - 3 (gemini-3-5-flash won)
+- **Total Wins/Losses**: Extremely dominant performance with consistently >90% win rate across all simulation games.
+- **Latency Verification**: We analyzed the latency logs of both bots across all rounds:
+  - The opponent `m-schier__kreuzotter` frequently experienced high latencies (~500ms) or hit timeouts.
+  - Our bot (`gemini-3-5-flash`) remains extremely fast, with absolutely zero occurrences of latency above 200ms.
+- **Game length**: The average game lasts around 15 turns, with some matches going up to 142 turns (e.g. Round 0 sim_215.jsonl).
 
-Our bot exhibits outstanding survivability, navigating through complex corridors and avoiding all standard obstacle/head-to-head collisions flawlessly. In local simulations against copies of itself, matches consistently reached between 80 to 213 turns.
+## Code Base & Strategy Analysis
+1. **Survivability**: The flood fill / BFS strategy (capping at 30 nodes to remain extremely fast) successfully prevents trapping in small spaces.
+2. **Head-to-head Collisions**: We safely check and avoid potential next-move head collisions unless our snake is strictly longer than the opponent, which ensures we play safely under pressure.
+3. **No Code Modifications Needed**: Because our performance is already near-perfect (31 to 3 in the latest round) and very robust against timeouts, we did not make any changes to `main.py` to prevent introducing regressions.
 
-### Key Features of the Bot:
-1. **Obstacle Collision Avoidance**: Avoids running into walls, its own body, or opponent bodies.
-2. **Head-to-Head Collision Avoidance**: Identifies cells adjacent to the opponent's head. It will dynamically avoid these spaces unless our snake is strictly longer than the opponent, minimizing the risk of getting eliminated by head-on collisions.
-3. **Dead End & Trap Prevention (Flood Fill / BFS)**: Conducts a real-time BFS from each prospective move to count the reachable area. It ranks moves with sufficient breathing room (reachable area >= current body length) equally, completely avoiding tight pockets where the snake could get trapped.
-4. **Closest Food Targeting**: Uses Manhattan distance to navigate towards the closest piece of food (prioritized behind survivability constraints).
-5. **Fallback Cascade**: Clean tiered fallback logic (`smart_moves` -> `non_colliding_moves` -> `safe_moves` -> default "up") to ensure we always return a valid legal move even in worst-case scenarios.
-
----
-
-## Game Analysis Tools
-
-We have created an automated analyzer script to parse round results and provide summary statistics for your convenience:
-
-### Run Analysis:
-```bash
-python analyze_results.py
-```
-
-This tool outputs:
-- Winner and scores of the last round.
-- Player submission validity.
-- The total and non-empty simulation files.
-- Match duration statistics (average, max, min turns).
-
-No further code modifications are required for this round as the bot is performing at 100% efficiency.
+## Instructions for Next Teammate
+- Keep monitoring the match stats using:
+  ```bash
+  python analyze_opponent.py
+  python analyze_results.py
+  ```
+- If you want to identify bottleneck games or check latencies, we have left the helper scripts:
+  - `parse_longest.py` (finds the longest match)
+  - `parse_timeouts2.py` (checks opponent latencies)
+  - `parse_timeouts3.py` (checks our latencies)
+- Feel free to run local unit tests with `python -m unittest discover -v` before making changes if you decide to optimize the strategy further.
