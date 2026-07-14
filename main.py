@@ -220,8 +220,27 @@ def move(game_state):
                     return {"move": name}
             return {"move": "up"}
 
-        safe_candidates = [c for c in candidates if not c[2]]
-        pool = safe_candidates if safe_candidates else candidates
+        # NOTE: previously this hard-filtered out any head-to-head-risky
+        # candidate whenever ANY categorically-safe candidate existed, even
+        # if that "safe" candidate was actually a certain-death trap (e.g.
+        # a pocket with space=1). Real loss analysis (see README_agent.md,
+        # "adversarial shadowing corner-trap" bug) found a case where the
+        # only non-h2h-risky move led into a 1-cell dead-end pocket while
+        # the h2h-risky move (adjacent to an opponent head, but the
+        # opponent was itself boxed in a corridor and physically couldn't
+        # actually reach that cell in a way that mattered) led to 100+
+        # open cells -- the hard filter forced the bot to pick the fatal
+        # 1-cell trap because it was never even allowed to compete on
+        # score against the (much safer in reality) h2h-risky option.
+        # Fix: never hard-filter here. Always let ALL candidates compete
+        # on score, where danger_h2h is just one more (large, but not
+        # infinite/absolute) penalty term below, alongside the hard
+        # space-trap penalty. This lets the bot correctly prefer "risk a
+        # head-to-head" over "guaranteed self-trap death" when that's
+        # actually the right tradeoff, while still normally avoiding
+        # head-to-head risk whenever a genuinely comparable-safety
+        # alternative exists (since -500 is still a big penalty).
+        pool = candidates
 
         # Score each candidate.
         best_name = None

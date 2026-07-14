@@ -1489,3 +1489,142 @@ take real head-to-head losses it currently avoids safely).
   `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
   + `disown -a`; clean up via `ps aux | grep -E "main.py|opponent_ref"` +
   `kill -9 <pid>` by PID (not `pkill -f`).
+
+## Round (this session) update -- FOUND & FIXED the hard-h2h-filter self-trap bug (real fix, verified via replay)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` and `/logs/rounds/1/` both existed, opponent
+`nbw__nbw-crystal` (a genuinely competent opponent -- first one in this
+file's whole history that regularly survives 30-280 turn games):
+- Round 0: 208 wins / 28 losses / 14 draws (250 games), turns avg 36.4.
+- Round 1 (after previous session's "adversarial 1-ply worst_space
+  lookahead" addition): 203 wins / **35 losses** / 12 draws (250 games),
+  turns avg 36.5 -- i.e. losses went UP slightly (28->35) despite that
+  change, so it didn't help against this opponent's real failure mode
+  (confirmed structurally this session, see below).
+
+**Root cause, found via the standard "replay a real losing sim frame
+through `main.move()` directly" methodology (documented extensively
+earlier in this file):** Traced `/logs/rounds/1/sim_0.jsonl` turn-by-turn.
+Our snake died turn 65->66 while boxed into a 1-cell dead-end pocket at
+(0,0). Replayed the EXACT turn-65 board state through `main.move()`:
+
+```
+head (0, 1) blocked {(0,1),(2,4),(1,2),(1,1),(2,0),(1,4),(2,3),(1,0),(1,3)}
+up   (0,2): space=111, reached_tail=True   <- huge open region, totally safe
+down (0,0): space=1,   reached_tail=False  <- certain-death 1-cell trap
+move: {'move': 'down'}   <-- **BUG: picked the 1-cell trap!**
+```
+
+**Exact mechanism:** the old code computed `safe_candidates` (moves that
+are NOT flagged `danger_h2h`, i.e. not adjacent to an opposing head that's
+`>= our length`) and then did
+`pool = safe_candidates if safe_candidates else candidates` -- a **hard
+categorical filter** applied *before* any scoring. At this exact turn, the
+opponent's head happened to be at `(1,2)`, which is Manhattan-distance 1
+from our `up` candidate `(0,2)` -- so `up` got flagged `danger_h2h=True`
+and was **removed from the candidate pool entirely**, even though it led
+to 111 open cells and could still reach our tail. That left `down`
+(`(0,0)`, a genuine certain-death 1-cell pocket) as the ONLY candidate in
+`pool`, so it was chosen by default despite the space-safety scoring
+logic (which would have given it a `-1000*(my_len-space)` = massive
+penalty) never getting a chance to compare it against the actually-safer
+`up` option -- the hard filter short-circuited the comparison before
+scoring ever ran. This is a **strictly worse bug than the actual h2h risk
+it was trying to avoid**: it forced a 100%-certain trap death to dodge a
+head-to-head that may not even have materialized (and even if it did,
+losing a 50/50 head-to-head is far better in expectation than a
+guaranteed death).
+
+**Fix implemented this session (small, surgical, well-isolated):**
+removed the hard filter. `pool = candidates` unconditionally now -- ALL
+physically-legal (in-bounds, non-body-blocked) candidates always compete
+on score together. `danger_h2h` is still tracked and still applies its
+existing `-500.0` score penalty (unchanged), so head-to-head risk is
+still normally avoided whenever a comparably-safe alternative exists
+(the `-500` penalty easily dominates when both options otherwise look
+similar) -- but it can no longer categorically veto a move that is
+*obviously, overwhelmingly safer* by every other measure (e.g. 111 open
+cells + tail-reachable vs. a 1-cell dead end). This directly generalizes
+the lesson from the older "adversarial shadowing" investigation (previous
+session's notes above, which added a 1-ply `worst_space` lookahead but
+didn't find *this* specific hard-filter bug -- that addition is still in
+place and still fine, just wasn't the actual culprit for the increased
+loss count).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed the exact `sim_0.jsonl` turn-65 state through the patched
+  `move()`: now correctly returns **`up`** (the safe 111-open-cell
+  option) instead of the old fatal `down`. Also re-checked turn 64 (one
+  turn earlier, a similar-looking h2h-adjacent-vs-safe choice) -- still
+  picks `left` there since at THAT turn both options were genuinely
+  comparable in space (111 vs 112, both very safe), so no regression;
+  the actual fatal decision was specifically turn 65, now fixed.
+- Also replayed the last-alive frames of `sim_105.jsonl`, `sim_124.jsonl`,
+  `sim_154.jsonl`, `sim_140.jsonl` (the other round-1 losses) turn-by-turn
+  through the patched bot -- no crashes/exceptions; did not individually
+  confirm each one's specific pivotal turn is fixed (ran out of budget),
+  but they all share the same "cornered near a wall/corner by turn
+  40-60, small snake length 4-6" shape as the confirmed bug, so this
+  same hard-filter issue is a strong suspect for at least some of them.
+  **Recommended next step for next teammate:** apply the same
+  replay-and-diff-candidate-scores technique used here (see the one-off
+  script structure in this session's trajectory: build `state =
+  {"board": frame["board"], "you": our_snake_dict}`, call
+  `main.move(state)`, and separately dump each candidate's
+  `space`/`reached_tail`/`danger_h2h` -- easiest by temporarily adding a
+  debug print inside the scoring loop, or copy the loop logic standalone
+  as I did) to the other losses to see if the same or a different bug
+  is at play in each.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-6: **6/6 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Self-play (`main.py` vs itself), seeds 11/22/33: games ran 226, 342,
+  and 185 turns respectively, all completed cleanly with a determined
+  winner, **zero exceptions/errors** in any server log -- confirms
+  stability in long games with the new (less restrictive) candidate pool
+  logic.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real `nbw__nbw-crystal` opponent (or
+  whatever opponent is current) in the next round. If losses drop
+  meaningfully from round 1's 35, this fix was a real net positive; if
+  they don't move much, the other losses likely have a different root
+  cause (see below) and need the same replay-diagnosis treatment.
+- **This bug class (a hard pre-filter that prevents a much-safer option
+  from ever being scored/compared) is worth grep'ing for elsewhere** --
+  I did not find another instance in this codebase this session, but it's
+  the kind of thing that's easy to reintroduce accidentally in future
+  edits. General principle to preserve: prefer "let everything compete on
+  score, add a penalty term" over "hard-filter out a whole category of
+  moves before scoring," since hard filters can accidentally leave only
+  bad options in the pool.
+- The previous session's `_opp_candidate_cells` / `worst_space` adversarial
+  1-ply lookahead is still in place and passed all regression tests this
+  session too -- it's a real (if modest) improvement on its own, keep it.
+- If losses of a genuinely different flavor persist after this fix
+  (e.g. multi-turn shadowing that a 1-ply lookahead truly can't see, per
+  the previous session's honest write-up), the next real investment is
+  either (a) a proper bounded minimax/lookahead a few plies deep (I
+  prototyped a small depth-6 minimax "guaranteed space" evaluator
+  during this session's investigation -- see the trajectory for a
+  working reference implementation with the correct fix for a subtle
+  bug where the current head cell must be excluded from `blocked` when
+  evaluating the leaf flood-fill, i.e. `blocked - {my_head}`, otherwise
+  every leaf trivially evaluates to 0 -- this cost real debugging time,
+  worth reusing directly rather than re-deriving), or (b) continuing the
+  simpler "replay real losses, find the exact bad decision, patch the
+  specific gap" methodology, which has now found and fixed 4 distinct
+  real bugs across this file's history and remains the highest-signal
+  approach.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which killed my own shell mid-command
+  this session when I got careless and used a generic pattern -- always
+  double check the pattern doesn't match your own command, or just avoid
+  `pkill -f` entirely and use PID-based kill).
