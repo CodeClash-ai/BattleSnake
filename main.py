@@ -810,7 +810,7 @@ def move(game_state):
             # guaranteed loss, so it still overrides this caution).
             if will_eat and exits <= 1:
                 safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
-                score -= 70.0 * safety_margin
+                score -= 260.0 * safety_margin
             elif will_eat and exits == 2:
                 # Softer version of the same real risk: real match traces
                 # (sim_130.jsonl, opponent moxuz__pinky-snek, round-1 loss)
@@ -826,7 +826,7 @@ def move(game_state):
                 # near strong enough to cause under-eating/starvation
                 # (still fades to 0 by health<=40).
                 safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
-                score -= 25.0 * safety_margin
+                score -= 90.0 * safety_margin
 
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong

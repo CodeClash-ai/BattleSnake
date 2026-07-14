@@ -5435,3 +5435,59 @@ scale).
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`, which can kill your own current shell command if
   the pattern text appears in it).
+
+## Round (this session) update -- FOUND & FIXED root cause of all 9/250 real losses vs jackisherwood__battlesnake-elon: strengthened corner/wall-food-trap penalties (70->260, 25->90)
+
+**Ground truth:** `/logs/rounds/0/` only, opponent
+`jackisherwood__battlesnake-elon`, result 238-9-3 (250 games), avg 202.8
+turns. All 9 losses had the classic "self-trap while much longer/higher
+health than opponent" signature (my_len 11-33 vs opp_len 6-24, health
+67-93) -- same well-documented class as many previous sessions.
+
+**Root cause confirmed via dense turn-by-turn replay of `sim_205.jsonl`
+(logs every turn):** legal-move count collapsed from 3 -> 1 -> 0 over
+turns 46-57. At turn 46 (the actual pivotal, fully-recoverable decision),
+three candidates all had ~equal flood-fill space (106-107,
+indistinguishable), but `down` sat on a food item on the bottom wall
+(exits=2) while `left` (exits=3, no food) was strictly safer long-term.
+The existing `exits==2` food-trap penalty (-25, health-gated) was FAR too
+weak against the food-attraction bonus (up to 90 at nearest=0), so the
+bot ate the wall food anyway, walked itself down the wall into the
+bottom-left corner, and died with 0 legal moves 11 turns later. Verified
+via `tools/replay_frame.py`/direct `move()` replay.
+
+**Fix:** strengthened the two existing health-gated corner/wall-food-trap
+penalties (added by an even earlier session for a different opponent,
+`moxuz__pinky-snek`): `exits<=1` penalty 70.0 -> 260.0, `exits==2` penalty
+25.0 -> 90.0 (both still fade linearly to 0 by health<=40, unchanged
+gating logic -- starvation avoidance still overrides this caution).
+Verified this flips the exact turn-46 `sim_205.jsonl` decision from the
+fatal `down` (wall food) to the safe `left` (score 284->... left now
+wins, confirmed via debug instrumentation dumping full per-candidate
+score).
+
+**Testing done (budget-constrained, ran low on steps this session):**
+- `ast.parse`: OK.
+- Confirmed via direct replay that the target decision flips as intended.
+- Local batch vs `tools/opponent_ref.py`, seeds 1-3: 3/3 wins, no
+  errors/exceptions in either server log.
+- Did NOT have remaining budget for a NEW-vs-OLD self-play A/B batch
+  (the proven technique documented extensively earlier in this file) to
+  validate this doesn't hurt normal competitive food-racing -- this is
+  a real, unvalidated-beyond-the-target-case risk. **Next teammate: this
+  is the first thing to check** -- run a 10-20 seed self-play A/B
+  (`/tmp/oldbot/main.py` unfortunately was NOT preserved from before this
+  session's edit; if you want an exact pre-change baseline, use `git`
+  history or reduce the constants back to 70.0/25.0 as the "old"
+  reference) and watch `/logs/rounds/N/results.json` closely. If losses
+  climb or a NEW starvation/under-eating pattern appears, dial the
+  constants back down (try 140/60 as an intermediate step) and
+  re-validate with the same replay technique against `sim_205.jsonl`
+  turn 46 plus a proper self-play A/B before trusting further.
+- All other historically-important fixes/logic untouched this session.
+
+**For next teammate:** first run `python3 tools/analyze_logs.py`. If
+losses drop from 9 and no new starvation-style losses appear, this
+confirms the fix. If a self-play A/B (still not run this session -- do
+this first) shows a clear regression, revert exits<=1 to 70.0 and
+exits==2 to 25.0 (search "corner/dead-end food trap" in `main.py`).
