@@ -169,6 +169,7 @@ def move(game_state):
         my_health = you.get("health", 100)
         food = [pt(f) for f in board.get("food", [])]
         hazards = {pt(x) for x in board.get("hazards", [])}
+        hazard_damage = game_state.get("game", {}).get("ruleset", {}).get("settings", {}).get("hazardDamagePerTurn", 14)
         snakes = board.get("snakes", [])
         enemies = [s for s in snakes if s.get("id") != my_id]
 
@@ -191,16 +192,33 @@ def move(game_state):
         enemy_lengths = {pt(s["head"]): s.get("length", len(s.get("body", []))) for s in enemies}
         danger_equal_longer = set()
         danger_shorter = set()
+        enemy_nexts = []
         for s in enemies:
-            eh = pt(s["head"])
-            elen = s.get("length", len(s.get("body", [])))
+            body = [pt(x) for x in s.get("body", [])]
+            if not body:
+                continue
+            eh = body[0]
+            elen = s.get("length", len(body))
+            # Head-to-head danger only matters for squares the enemy can actually
+            # choose.  The first version marked all four adjacent cells, including
+            # the enemy neck or occupied body cells; that was safe but could make us
+            # unnecessarily timid around food and wall-trapped opponents.
+            opts = []
+            neck2 = body[1] if len(body) > 1 else None
             for d in MOVES.values():
                 n = add(eh, d)
-                if inside(n, w, h):
-                    if elen >= my_len:
-                        danger_equal_longer.add(n)
-                    else:
-                        danger_shorter.add(n)
+                if not inside(n, w, h):
+                    continue
+                if n == neck2 and len(set(body[:3])) > 1:
+                    continue
+                if n in blocked and n != head:
+                    continue
+                opts.append(n)
+                if elen >= my_len:
+                    danger_equal_longer.add(n)
+                else:
+                    danger_shorter.add(n)
+            enemy_nexts.append((s, opts))
 
         # Avoid reversing into our neck when length has expanded from the start.
         neck = my_body[1] if len(my_body) > 1 else None
@@ -215,6 +233,8 @@ def move(game_state):
             if n == neck and len(set(my_body[:3])) > 1:
                 continue
             if n in blocked:
+                continue
+            if n in hazards and my_health <= hazard_damage + 1:
                 continue
 
             # Never voluntarily take a tie/losing head-to-head if any other move exists.
@@ -289,7 +309,7 @@ def move(game_state):
             if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                 score -= 12
             if n in hazards:
-                score -= 200 + max(0, 25 - my_health) * 10
+                score -= 200 + max(0, hazard_damage + 12 - my_health) * 10
 
             # If stronger, squeeze toward the opponent; if weaker, maintain distance.
             if enemy_heads:

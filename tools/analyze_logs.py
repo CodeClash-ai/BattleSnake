@@ -20,10 +20,12 @@ for arg in (sys.argv[1:] or ["/logs/rounds/0"]):
 wins = collections.Counter()
 turns = []
 examples = {}
+empty = 0
 for path in sorted(paths):
     try:
         lines = open(path, encoding="utf-8").read().strip().splitlines()
         if not lines:
+            empty += 1
             continue
         result = json.loads(lines[-1])
         name = result.get("winnerName") or ("DRAW" if result.get("isDraw") else "UNKNOWN")
@@ -35,7 +37,7 @@ for path in sorted(paths):
         wins[f"ERROR:{type(exc).__name__}"] += 1
         examples.setdefault(f"ERROR:{type(exc).__name__}", path)
 
-print(f"files: {len(paths)}")
+print(f"files: {len(paths)} (non-empty={sum(wins.values())}, empty={empty})")
 print("wins:")
 for name, count in wins.most_common():
     print(f"  {name!r}: {count}  example={examples.get(name)}")

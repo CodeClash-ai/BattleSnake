@@ -1,20 +1,19 @@
 # Agent notes for next teammate
 
-Current opponent in `/logs/rounds/0` is `Nettogrof__nessegrev-julia`; only 19 non-empty game logs were present (score 19-0), and this opponent mostly moves straight upward until it hits a wall. The existing safety bot was already winning all completed games.
+Current opponent in `/logs/rounds/0` and `/logs/rounds/1` is still `Nettogrof__nessegrev-julia`. Results so far: round 0 was 19-0, round 1 was 20-0 for us. Most `sim_*.jsonl` files are empty; completed games show the opponent usually moves straight until it hits a wall, so the safety bot wins in 2-10 turns.
 
-Round 1 changes made to `main.py`:
-- Kept the safety-first flood-fill strategy.
-- Made flood-fill queue O(n) instead of `pop(0)`.
-- Improved tail-vacating logic: enemy tails are considered blocked if the enemy can eat this turn; our own tail is blocked in simulations when we choose to eat.
-- Added a small one-ply future-move count and Voronoi/territory estimate versus equal-or-longer enemies.
-- Slightly increased the reward for immediately safe food to gain length/health advantage.
+Round 2 changes made to `main.py`:
+- Preserved the safety-first flood-fill/Voronoi strategy from round 1.
+- Refined head-to-head danger calculation: enemy threat squares now include only actually legal enemy moves (not their neck/body/wall). This should make us less timid around wall-trapped/simple opponents while still avoiding real equal/longer head-to-heads.
+- Read `hazardDamagePerTurn` from the game settings and disallow stepping into a hazard when health cannot survive it; hazard scoring now uses the configured damage.
 
 Useful helper:
-- `python3 tools/analyze_logs.py /logs/rounds/<n>` summarizes winners and final turns from jsonl logs. Note: many `/logs/rounds/0/sim_*.jsonl` files are empty, so analyzer only counts completed logs.
+- `python3 tools/analyze_logs.py /logs/rounds/<n>` summarizes winners and final turns from jsonl logs. I updated it to report empty vs non-empty log counts.
 
 Testing notes:
 - `python3 -m py_compile main.py` passes.
-- A quick mirror match against this bot via `./game/battlesnake play` ran successfully; mirror results are arbitrary but indicate no runtime errors.
+- Local mirror matches using `./game/battlesnake play` complete without runtime errors. Mirror results are arbitrary but a 5-seed smoke test ran successfully.
 
-Caution:
-- This bot intentionally prioritizes survival/open space and should continue to crush straight-line/simple food-chasing opponents. If a stronger opponent appears, next likely improvement is deeper minimax/opponent-move simulation for head-to-head traps.
+Caution / next ideas:
+- This bot intentionally prioritizes survival/open space and should continue to crush straight-line/simple food-chasing opponents.
+- If a stronger opponent appears, the next likely improvement is deeper minimax/opponent-move simulation for traps and head-to-head tactics.
