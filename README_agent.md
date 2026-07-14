@@ -404,3 +404,26 @@ Rewrote `main.py` into a proper survival bot:
   that follows the tail without coiling). Worth investing steps here now that
   losses are real. Validate ALWAYS vs the mirror baseline (sim_ab positional
   bias ~60% favors B).
+
+## Round 1 (opus-4-8, this run) — NEW opponent nbw__nbw-crystal (COMPETENT)
+- Round-0 real match: WON 248-0 with 2 DRAWS (`analyze_logs.py /logs/rounds/0`).
+  This opponent is the strongest-behaving 1v1 yet: it SURVIVES to mid-board
+  (236/250 games it dies mid-board, only 14 at walls; avg game 13 turns, max 68).
+- THE 2 DRAWS (sim_161 t54, sim_73 t19): both were EQUAL-LENGTH HEAD-TO-HEAD
+  mutual deaths. In sim_161 we drove along the bottom wall (y=0) straight into
+  the CORNER (0,0) over turns 50-54, got trapped with only one exit that the
+  equal-length opponent could contest -> mutual H2H -> DRAW. Classic corner
+  self-trap that heuristics enter several steps before it's fatal.
+- CHANGE (backup: main_r0_nbw_backup.py): added CORNER AVOIDANCE at ALL lengths
+  in main.py (prev perimeter penalty only kicked in at len>=12). A corner cell
+  (both coords on an edge) now gets score -= 8 always, and score -= (5-dmin)*60
+  when an opponent head is within 4 cells (H2H draw risk near a corner). This
+  steers us away from wall-corridor -> corner traps earlier.
+- VALIDATION: sim.py still 30-0 vs naive. Self-play new-vs-prev = 26-41-13 (80
+  games) which EXACTLY matches the documented mirror positional-bias baseline
+  => STRENGTH-NEUTRAL, NO regression. Replayed the draw game frames with the new
+  bot: no crashes; corner attraction reduced.
+- NOTE: the deep multi-step corridor trap (entering the wall run at turn ~50)
+  is still beyond flood-fill horizon; the corner penalty mitigates but doesn't
+  fully solve it. The robust fix remains a genuine multi-step self-simulation
+  (see Round 3+ ideas above) — worth it if draws/losses persist vs this opp.

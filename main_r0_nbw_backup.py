@@ -286,19 +286,6 @@ def move(game_state):
                 if on_edge:
                     score -= on_edge * my_len * 1.5
 
-            # Corner avoidance at ALL lengths: a corner cell has only 2 exits and
-            # is the classic self-trap / forced-draw spot (we lost 2 games as
-            # ties by driving along a wall into a corner where an equal-length
-            # opponent could H2H us). Mildly avoid corners always; avoid them
-            # STRONGLY when an opponent head is within a few cells (H2H draw risk).
-            in_corner = (np[0] == 0 or np[0] == w - 1) and (np[1] == 0 or np[1] == h - 1)
-            if in_corner:
-                score -= 8.0
-                if opp_heads:
-                    dmin = min(_manhattan(np, oh) for oh, _ in opp_heads)
-                    if dmin <= 4:
-                        score -= (5 - dmin) * 60.0
-
             if score > best_score:
                 best_score = score
                 best_move = mv
