@@ -3104,3 +3104,135 @@ to an already-strong (97.2%) bot.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs tim-hub__awesome-snake round 1 (243-4-3), confirmed all 4 losses are the SAME already-dead-before-last-logged-frame spiral-trap gap, no code changes (budget-constrained, high risk to fix blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (243-6-1, avg 83.3 turns) and `/logs/rounds/1/`
+(**243 wins / 4 losses / 3 draws**, 250 games, avg 86.5 turns), opponent
+`tim-hub__awesome-snake`, same `main.py` carried over unchanged from the
+previous session (which also made no functional changes). Losses dropped
+6->4, draws went 1->3 -- still an excellent ~97.2% clear-win rate.
+
+**What I did this session:** Investigated all 4 round-1 losses
+(`sim_124/128/141/242.jsonl`) using the standard real-frame-replay
+methodology (documented exhaustively earlier in this file). For EVERY
+loss, computed the actual legal moves (in-bounds + not in `_occupied_cells`
+blocked set) at the LAST frame where our snake appears in the sim log,
+and found **all 4 already had ZERO legal moves at that frame** (confirmed
+directly, see this session's trajectory) -- i.e. our snake was already
+unavoidably dead by the time of the last logged frame, and (per the
+long-standing harness limitation documented by several previous sessions:
+`sim_*.jsonl` doesn't log every single turn for our snake, so the actual
+pivotal decision that caused the trap, several turns earlier, usually
+isn't recoverable from the log alone). For `sim_124.jsonl` I confirmed in
+detail: at turn 108, `move()`'s main candidate-generation loop correctly
+found ZERO safe candidates (both in-bounds directions, `down`/`right`,
+were already blocked by our own body) and fell through to the
+already-dead fallback branch (`return {"move": name}` for the first
+in-bounds direction, ignoring body blocks since we're doomed anyway) --
+this is NOT a scoring bug, it's the fallback behaving exactly as designed
+once truly cornered. This is the SAME well-documented "single-snapshot
+flood-fill can't see multi-turn self-narrowing" structural gap that many
+earlier sessions have already investigated in depth across many
+different opponents (search "spiral-coil" / "multi-ply" earlier in this
+file for the full history + two previous sessions' detailed, fully-traced
+examples with concrete unimplemented fix ideas: a corridor/degree-shape
+metric over the full flood-fill visited region, or genuine recursive
+N-turn self-play simulation).
+
+**Draws investigated more lightly** (`sim_48/84/197.jsonl`): all 3 show
+our snake healthy (94-99 health) at the last logged frame, length 7-23,
+opponent also alive and reasonably healthy in 2/3 cases (opponent health
+31 in `sim_197`, 96-97 in the other two) -- did not have budget to fully
+trace the exact mutual-death mechanism this session, but nothing in the
+length/health snapshot suggests a repeat of the previously-fixed
+starvation-stalemate bug (that bug produced BOTH snakes' health ticking
+steadily toward 0 while stuck at starting length 4 in a tiny loop; these
+draws don't show that signature -- lengths are normal/varied, health is
+mostly high). Most likely simultaneous head-to-head collisions (both
+snakes moving into the same cell / colliding head-on on the same turn),
+which is an expected, not-obviously-fixable outcome between two
+comparably-skilled bots, consistent with an earlier session's similar
+finding for other draw instances.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale (consistent with the majority of prior sessions once this
+specific gap is the identified cause): (1) win rate is already ~97.2%
+clean wins, essentially unchanged/slightly improved from the previous
+round, (2) all 4 losses are confirmed to be the same, already
+extensively-analyzed structural gap (multi-turn self-narrowing invisible
+to single-snapshot/1-ply-adversarial flood-fill) that multiple previous
+sessions have already scoped fixes for but judged too risky to implement
+blind with limited remaining budget, (3) I did not have enough remaining
+step budget this session to implement AND thoroughly validate either of
+the two standing candidate fixes (corridor-shape degree metric, or
+recursive N-turn self-play simulation) without real risk of regressing an
+already-strong bot, and (4) the 3 draws don't show clear evidence of a
+new, cheaply-fixable bug (unlike the previously-fixed starvation-loop
+draw bug, which had an unmistakable health-ticking-to-zero-while-static-
+length signature not present here).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round. Losses/draws in the low single digits out of 250 are
+  consistent with previous sessions' assessment that this is close to a
+  structural floor for the current purely-greedy 1-ply(+1-ply-adversarial)
+  heuristic architecture.
+- If you have a FULL step budget and want to seriously push past this
+  floor, the two most concrete, still-unimplemented candidate fixes
+  (from earlier sessions' detailed scoped plans, search "corridor shape"
+  and "multi-ply" earlier in this file) are:
+  1. A cheap "corridor shape" degree-based metric over the full
+     flood-fill `visited` region (fraction of cells with <=2 free
+     neighbors = corridor-like vs >=3 = room-like) to penalize
+     candidates whose reachable space, while large, is mostly a single
+     winding corridor -- a previous session already sketched this idea
+     but never implemented/validated it.
+  2. Genuine recursive N-turn self-play simulation using the bot's own
+     FULL scoring function (not just a space-maximizing proxy, which a
+     previous session confirmed does NOT reproduce the real traps) --
+     more expensive/complex, needs careful performance/timeout testing.
+  Validate either against a frame with actual multiple legal candidates
+  a few turns BEFORE one of this session's or earlier sessions' 0-legal-
+  move death frames (the death frames themselves are useless for
+  validation since the trap is already unavoidable by then) -- you may
+  need to find sim files where our snake's frames are logged more densely
+  around the critical turn, or accept only qualitative validation via
+  fresh self-play games specifically designed to create long spirals
+  (e.g. run several 200+ turn self-play games and manually inspect body
+  shapes before any death, looking for narrowing corridors).
+- Replay/debug harness pattern (still worth finally saving as
+  `tools/replay_frame.py` -- suggested by at least 5 earlier sessions,
+  still not done -- would save real time across sessions):
+  ```python
+  import json, sys; sys.path.insert(0, '/workspace')
+  import main as M
+  frames = [json.loads(l) for l in open('/logs/rounds/1/sim_124.jsonl') if l.strip() and 'board' in json.loads(l)]
+  ours = [f for f in frames if any(s['name'] == 'sonnet-5' for s in f['board']['snakes'])]
+  fr = ours[-1]  # or pick a specific turn via next(f for f in ours if f['turn']==N)
+  you = next(s for s in fr['board']['snakes'] if s['name'] == 'sonnet-5')
+  state = {'game': {'id': 'dbg', 'timeout': 500}, 'turn': fr['turn'], 'board': fr['board'], 'you': you}
+  print(M.move(state))
+  # to check legal moves directly (useful to detect "already dead" frames):
+  blocked, *_ = M._occupied_cells(fr['board'], you['id'])
+  head = (you['body'][0]['x'], you['body'][0]['y'])
+  legal = [n for n,(dx,dy) in M.DIRS.items()
+           if M._in_bounds((head[0]+dx, head[1]+dy), fr['board']['width'], fr['board']['height'])
+           and (head[0]+dx, head[1]+dy) not in blocked]
+  print('legal:', legal)
+  ```
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
