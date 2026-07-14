@@ -409,3 +409,55 @@ scenario through `--diag` to confirm the false-negative is fixed, AND
 performance-profile since recursive scoring is much more expensive.
 (4) No functional changes shipped this session -- `main.py` is
 byte-identical to round 1's committed version.
+
+**Session (round 1, opponent zakwht__zakwht-2018, round 0: 214W/36L,
+85.6%):** Ran `tools/analyze_logs.py` -- only round 0 exists (new
+opponent). Triaged all 36 losses via `tools/replay_frame.py --last`:
+consistently CLOSE-race deaths (my_len within 0-1 of opp_len at death,
+e.g. 19v20, 10v11, 8v9) -- same general "wall-hugging trap" class
+documented for opponent `tyrelh__tyrelh-python` in earlier sessions
+(search README/archive for `sim_49`/`sim_153`), NOT the old
+"dominant-length self-trap". Deep-dived `sim_143.jsonl` turns 85-88 in
+full detail (debug-instrumented copy technique, see archive): at turn 85
+(head (2,1), len 9, health 97, opp len 10 at distance 6 i.e. just
+OUTSIDE the existing `threat_near` radius-5 gate), candidates were
+`down` (eats food at (2,0), ON the y=0 wall, space=103, will_eat=True,
+score~316) vs `left`/`right` (space=104, reached_tail=True, no food,
+score~277/271) -- bot ate the wall food, then got pulled rightward along
+the same wall for 2 more turns by the same dynamic while the opponent
+closed in from the other side, ending in a 0-legal-moves death 3 turns
+later. Confirmed via `docs/HISTORY_ARCHIVE.md` (search "Spenca") that
+a previous session found widening the `threat_near` radius does NOT fix
+this pattern (food-attraction magnitude dominates, not edge-weight) --
+so did NOT retry that. Instead implemented the ALTERNATE fix that same
+archived session explicitly flagged as untried: a small, health-gated
+penalty (fades to 0 by health<=40, same `safety_margin` pattern as the
+existing exits<=1/exits==2 food-trap penalties right above it in
+main.py) specifically for eating food that lands ON a boundary wall
+cell (`x in (0,width-1) or y in (0,height-1)`), regardless of `exits`
+count. Tuned magnitude (-55 * safety_margin) by direct measurement via
+`tools/replay_frame.py --diag` against the exact `sim_143` turn-85
+scores (-40 was insufficient to flip the decision, i.e. left the ~40-
+point food-bonus gap too small a margin; -55 flips `down`->`left` in
+this exact real case) -- confirmed via a debug-print-instrumented scratch
+copy of main.py (`/tmp/main_dbg.py`, see technique in earlier session
+notes) that showed the raw per-candidate scores.
+**IMPORTANT CAVEAT for next teammate -- this was NOT validated via
+NEW-vs-OLD self-play A/B or passive-opponent batch this session** (ran
+out of step budget after the diagnosis + implementation + syntax/fuzz
+checks). Only checks done: `ast.parse` OK, 200-iter random-fuzz `move()`
+smoke test with no exceptions, confirmed the exact `sim_143` turn-85
+decision flips as intended. Per this file's own documented methodology
+(section "Validation methodology"), this is NOT yet a fully-validated
+change and carries real regression risk (a similar-looking
+corner-food-trap penalty bump was shipped without A/B once before and
+had to be reverted, see archive) -- **next session should run a 10-20
+seed NEW-vs-OLD self-play A/B (old version = `git show HEAD:main.py`
+before this session's commit) before trusting this further, and ideally
+also re-run `tools/analyze_logs.py` on the resulting round to see if the
+win rate improved, held steady, or regressed vs this round's 85.6%.** If
+it regresses, the single line to look at is the new `if will_eat and
+(npt[0] in (0, width - 1) or npt[1] in (0, height - 1)):` block
+immediately after the `exits==2` food-trap penalty in the scoring loop
+(easy to find via `grep -n "Food-on-wall penalty" main.py`) -- revert by
+deleting that block (and its `safety_margin` line) if so.
