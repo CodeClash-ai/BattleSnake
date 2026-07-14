@@ -3236,3 +3236,140 @@ length signature not present here).
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs rdbrck__btas (248-1-1), confirmed remaining loss+draw are the SAME known spiral-trap gap, added tools/replay_frame.py, no main.py changes (budget-constrained, high risk to fix blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`rdbrck__btas`**. Result: **248 wins /
+1 loss / 1 draw** out of 250 real games (99.2% win rate, essentially
+excellent). Turn counts min=6 max=272 avg=79.6.
+
+**What I did this session:**
+- Confirmed `main.py` (706 lines) parses cleanly and read through the
+  whole scoring loop in `move()` end-to-end to refresh context on all the
+  many historically-important fixes already in place (documented at
+  exhausting length earlier in this file: uncapped flood-fill w/ graduated
+  penalties, food-eating tail-freeze handling, open_threshold-gated
+  tail-reachability bonus/penalty scoped to the food-freeze cause only,
+  adversarial 1-ply `worst_space` lookahead vs equal/longer opponents,
+  `_opp_two_ply_reachable`-based contested-exit/branching-factor penalty,
+  graduated head-to-head prediction via `_opp_candidate_cells` +
+  `_predict_opp_move`, no hard h2h pre-filter, growth-damping once >25%
+  of board is our own body, threat-aware edge-weight boost, `_HEAD_HISTORY`
+  anti-stalemate cycle-breaker). No bugs spotted, still consistent with
+  its own extensive in-code comments referencing this README's history.
+- Investigated both the 1 real loss (`sim_125.jsonl`) and the 1 real draw
+  (`sim_45.jsonl`) using the standard real-frame-replay methodology.
+  **Both losses/draws show our snake with ZERO legal moves at the last
+  logged frame** (my_len 19/health 92 and my_len 11/health 94
+  respectively, opponent much shorter in both cases -- NOT the old
+  "under-eating" bug) -- i.e. already unavoidably dead by the time of the
+  last logged frame, same standing harness limitation documented by many
+  previous sessions (sim files don't log every turn for our snake, so the
+  actual pivotal decision usually isn't directly recoverable).
+- For `sim_125.jsonl`, frames WERE densely logged for turns 82-106, so I
+  traced the full corridor-narrowing sequence turn-by-turn (see the
+  per-turn `legal_moves` dump in this session's trajectory): our snake's
+  own body wrapped around the left wall and top-left region over turns
+  82-95, then walked along the BOTTOM wall from turn 96 to 106 with only
+  1-2 legal moves at every step, ending sealed in the bottom-right corner
+  `(10,0)`. Dug into the actual pivotal-looking turn 96 decision
+  (`left->(1,0)` vs `right->(3,0)`, both physically legal) via the new
+  `tools/replay_frame.py --diag` and found **both candidates reported the
+  exact same diagnostics: `space=98, reached_tail=False`** (tied) --
+  `reached_tail=False` for both is NOT a scoring bug here, it's because
+  our snake had just eaten on the previous turn (duplicated tail segment
+  still occupying its old cell in the board state), so BOTH candidates
+  correctly show the tail as temporarily unreachable regardless of which
+  way we turn -- this penalty is applied symmetrically and doesn't
+  discriminate `left` vs `right` at all. With every existing metric tied,
+  the actual decision came down to edge-distance/tiny tie-break
+  randomness, and it happened to pick `right`, which (per the real
+  match's subsequent turns) led into the fatal corner while `left` might
+  or might not have fared better -- **not provable either way without
+  much deeper multi-turn forward simulation** (both cells look
+  structurally identical 1-ply; the real danger is how the OTHER 90+
+  cells of that "98 open" region happen to be shaped/positioned, which no
+  current metric inspects). This is the same well-documented
+  "single-snapshot flood-fill can't see multi-turn self-narrowing"
+  structural gap flagged by numerous previous sessions across many
+  different opponents (search "spiral-coil" / "multi-ply" / "corridor
+  shape" earlier in this file for the full history and two still-
+  unimplemented candidate fix ideas: a corridor/degree-shape metric over
+  the full flood-fill visited region, or genuine recursive N-turn
+  self-play simulation).
+
+**New tool added this session:** `tools/replay_frame.py` -- finally
+implements the ad-hoc replay-a-real-sim-frame-through-`move()` snippet
+that at least 6 previous sessions have manually rewritten from scratch
+and repeatedly suggested saving as a standalone script. Usage:
+```bash
+# Check if we were already dead (0 legal moves) at the last logged frame:
+python3 tools/replay_frame.py /logs/rounds/0/sim_125.jsonl --last
+
+# Replay + dump move() decision at a specific turn:
+python3 tools/replay_frame.py /logs/rounds/0/sim_125.jsonl --turn 96
+
+# Also dump per-candidate space/reached_tail/will_eat diagnostics without
+# needing to hand-copy the scoring loop or edit main.py:
+python3 tools/replay_frame.py /logs/rounds/0/sim_125.jsonl --turn 96 --diag
+```
+Confirmed working against both `sim_125.jsonl` and `sim_45.jsonl` this
+session (see findings above). Use this FIRST for any future loss/draw
+investigation instead of re-deriving the snippet by hand again.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) win rate is already excellent (99.2%, 248/250 clear wins),
+(2) both non-wins are confirmed to be the same, extensively-analyzed-in-
+previous-sessions structural gap (multi-turn self-narrowing invisible to
+a single-snapshot, even 1-ply-adversarial, flood-fill metric) with no
+safe, quickly-validatable fix available, (3) at the one point where I
+could find a genuinely non-tied decision point (turn 96 of `sim_125`),
+every existing diagnostic metric was ALREADY tied between the two options
+-- there's no scoring bug to patch there, just a fundamental blind spot
+that would require materially more expensive lookahead to resolve, and
+(4) I did not have enough remaining budget this session to safely design,
+implement, and thoroughly validate either of the two standing candidate
+fixes (corridor-shape degree metric, or recursive N-turn self-play
+simulation) without real risk of regressing an already-excellent bot.
+
+**Testing done this session (regression/sanity only):**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-7
+  turns each, zero errors/exceptions in either server log.
+- Self-play (`main.py` vs itself), seeds 501/502: ran 202 and 157 turns
+  respectively, both completed cleanly with a decisive winner and zero
+  exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `rdbrck__btas` (or whatever opponent is
+  current -- always verify, don't trust names in old prose).
+- Use the new `tools/replay_frame.py` for any future loss/draw
+  investigation (see usage above) instead of re-deriving the replay
+  snippet from scratch yet again.
+- If you have a genuinely FULL step budget and want to push past this
+  ~99% floor, the two most concrete, still-unimplemented candidate fixes
+  (from several earlier sessions' detailed scoped plans, search
+  "corridor shape" and "multi-ply" earlier in this file) remain:
+  1. A cheap "corridor shape" degree-based metric over the full
+     flood-fill `visited` region (fraction of cells with <=2 free
+     neighbors = corridor-like vs >=3 = room-like) to penalize
+     candidates whose reachable space, while large, is mostly a single
+     winding corridor.
+  2. Genuine recursive N-turn self-play simulation using the bot's own
+     FULL scoring function (a previous session confirmed a naive
+     space-maximizing-only proxy does NOT reproduce the real traps, so
+     this needs the real scoring function, not a simplified stand-in).
+  Both need careful performance/timeout testing and validation against
+  real losing frames (e.g. `sim_125.jsonl` turn ~85-95, one of the denser
+  logged sequences, now easy to inspect via `tools/replay_frame.py`)
+  before shipping.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
