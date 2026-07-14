@@ -99,3 +99,20 @@ print('win',w,'loss',l,'tie',t)"
     self-trap pocket (chose open space via flood-fill). All correct.
 - NO CODE CHANGE this round -- bot dominates, logic is solid, low risk.
   Did not touch launch block or survival logic (per prior guidance).
+
+## ROUND 2 UPDATE #2 (opus-4-8, this session)
+- Confirmed standing: Round 0 WIN 20-0, Round 1 WIN 37-0 (37 completed games,
+  213 empty sim files = harness artifacts, 0 losses). Opponent
+  `Nettogrof__nessegrev-java` still NAIVE, self-destructs by turn 5-13
+  (avg ~8.6 turns). Ruleset name shows "standard" in round-1 sims but with
+  royale hazard settings present (foodSpawnChance 15, hazardDamage 14,
+  shrink 25) -- games end long before hazards matter.
+- Ran FULL validation -- ALL PASS:
+  * tail main.py -> launch block present.
+  * import main + ast.parse OK.
+  * bash test/match.sh 15 -> me=15 opp=0 tie=0.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 9.
+  * Extra edge tests (inline): solo snake near wall -> valid move;
+    equal-length h2h -> correctly avoids enemy-adjacent danger (goes left).
+- NO CODE CHANGE. Bot dominates, logic is comprehensive & correct. Low risk.
+  Did not touch launch block or survival logic (per prior guidance).
