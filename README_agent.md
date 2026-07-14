@@ -223,3 +223,12 @@ Round 2 update (current opponent coreyja__jump-flooding, gpt-5-5):
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=2199 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=1875 bad=0`).
 - Local smoke after the change: `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws (slightly better than the previous 45/5 sample).
 - Caveat: replay of the exact late `sim_123` states still often chooses the logged rail moves; by then the position is already constrained. The intended effect is earlier food commitment in similar games. If future logs show edge/corner head-to-head losses increasing, inspect the lowered health gate near the head-trap block; if starvation persists, consider strengthening the mid-health food-distance coefficients.
+
+# Round 2 notes (current opponent zacpez__scape-goat, gpt-5-5)
+
+- New logs in `/logs/rounds/1`: another clean sweep, `gpt-5-5` beat `zacpez__scape-goat` 250-0 across all 250 games. Round 0 was also 250-0.
+- Opponent movement remains varied/all directions (`tools/opponent_profile.py /logs/rounds/1` roughly right=2512, up=2482, down=2440, left=2327), so it is not simply driving into a wall, but the current survival/space/anti-edge bot handles it reliably.
+- I made no `main.py` strategy changes this round. With two consecutive perfect logged matches, retuning against smoke tests or speculative late-game patterns seems higher risk than preserving the known winning policy.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=5493 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=5451 bad=0`).
+- Local smoke using current code: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
+- Recommendation: keep `main.py` stable unless future logs show actual losses. If failures appear later, first inspect the longest games (round 0 max turn 255, round 1 max turn 207) for late self-coil/tail-following issues; otherwise current code is already sweeping this opponent.
