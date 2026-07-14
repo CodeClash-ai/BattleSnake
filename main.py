@@ -42,9 +42,16 @@ def move(game_state):
                 safe_moves[d] = pos
 
         # 2. Avoid obstacle collisions (own body and other snakes)
+        # Note: A snake's tail segment moves out of the way on the next turn,
+        # unless the snake ate food on the previous turn (health reset to 100).
+        # To be safe, we always consider non-tail segments as obstacles.
         obstacle_positions = set()
         for s in board["snakes"]:
-            for seg in s["body"]:
+            body_segs = s["body"]
+            is_growing = (s["health"] == 100) # Simple approximation of growth
+            # If growing, the tail remains in place. Otherwise, the last segment will move.
+            active_body = body_segs if is_growing else body_segs[:-1]
+            for seg in active_body:
                 obstacle_positions.add((seg["x"], seg["y"]))
 
         # Filter out safe moves that collide with obstacles
@@ -94,7 +101,7 @@ def move(game_state):
             while queue:
                 curr = queue.pop(0)
                 count += 1
-                if count > 30:  # Cap the BFS to keep it fast
+                if count > 45:  # Increased count to 45 for better precision
                     break
                 for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
                     nx, ny = curr[0] + dx, curr[1] + dy
@@ -120,7 +127,7 @@ def move(game_state):
             move_scores.append((d, space, dist))
 
         # Sort moves:
-        min_space_needed = min(my_length, 15)
+        min_space_needed = min(my_length, 20)  # Increased min space check to 20
         
         def rank_move(item):
             d, space, dist = item

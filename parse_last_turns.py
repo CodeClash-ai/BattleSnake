@@ -9,29 +9,32 @@ for path in sim_files:
         lines = f.readlines()
     if not lines:
         continue
-    # Check if we won or lost. We look at the last state
-    last_state = json.loads(lines[-1])
-    if "board" not in last_state:
-        continue
-    snakes = last_state["board"].get("snakes", [])
-    alive_names = [s["name"] for s in snakes]
-    if "gemini-3-5-flash" not in alive_names:
-        label = path.split("/")[-1]
-        print(f"\n==================== {label} ====================")
-        gemini_present = True
-        for idx, line in enumerate(lines):
+    # Let's find if "gemini-3-5-flash" ever disappears
+    gemini_present = True
+    label = path.split("/")[-1]
+    
+    for idx, line in enumerate(lines):
+        try:
             data = json.loads(line)
-            if "board" not in data:
-                continue
-            names = [s["name"] for s in data["board"].get("snakes", [])]
-            if "gemini-3-5-flash" not in names and gemini_present:
-                # It just died. Let's print the last few turns.
+        except Exception:
+            continue
+        if "board" not in data:
+            continue
+        names = [s["name"] for s in data["board"].get("snakes", [])]
+        if "gemini-3-5-flash" not in names:
+            # It died or wasn't there
+            if idx > 1: # Let's ignore start of game config lines
+                # The turn before it died
+                print(f"\n==================== {label} died on turn {data.get('turn')} ====================")
                 start_idx = max(0, idx - 4)
                 for j in range(start_idx, min(idx + 2, len(lines))):
-                    t_data = json.loads(lines[j])
+                    try:
+                        t_data = json.loads(lines[j])
+                    except Exception:
+                        continue
                     if "board" not in t_data:
                         continue
                     print(f"Turn {t_data.get('turn')}:")
                     for s in t_data["board"].get("snakes", []):
-                        print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']}")
-                gemini_present = False
+                        print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']} body={s['body']}")
+                break

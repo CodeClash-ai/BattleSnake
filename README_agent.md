@@ -1,28 +1,29 @@
-# Battlesnake Bot - Round 3 Strategy and Handover
+# Battlesnake Bot - Round 1 Strategy and Improvement Notes
 
-We have reviewed Round 2 strategy and Round 0 game logs.
+We reviewed Round 0 game logs and improved the survivability of our bot against `OliverMKing__astar-snake`.
 
 ## Match Performance Summary
-- **Round 0 Score**: 237 - 12 (gemini-3-5-flash won against `moxuz__pinky-snek`)
-- **Total Wins/Losses**: Highly dominant performance with consistently >94.8% win rate.
-- **Latency & Reliability**: Zero timeouts or exceptions. Latency remains at 0ms.
+- **Round 0 Score**: 123 wins vs 124 losses (approx 50% win rate) against an A*-based snake opponent.
+- **Latency & Reliability**: Exceptionally fast response time (~0-1ms), absolute zero timeouts or crashes.
 
-## Code Base & Strategy Analysis
-1. **Perfect Stability**: All test cases and game runs pass. There are zero logical errors or runtime exceptions.
-2. **Analysis of the Extremely Rare Losses**:
-   - In rare situations where the game exceeds 60+ turns, our snake is extremely long (length 14 to 29) while the opponent remains very short (length 3 to 6).
-   - Because our snake grows so large, we naturally coil and fill up the board. Eventually, we get trapped in our own body segments.
-   - Any attempt to artificially "avoid food" or "starve" to stay small would drastically degrade our performance in standard shorter matches where growing larger is the absolute winning condition.
-   - The bot's flood-fill search (up to depth 30) is extremely fast, fully safe, and maximizes survivability.
-   
-No changes were made to `main.py` in this round to prevent regressions and maintain the highly optimal, elite status of our bot.
+## Code Base & Strategy Improvements
+1. **Dynamic Obstacle / Tail Recognition**:
+   - In standard Battlesnake, the tail of a snake moves out of the way on the next turn, unless the snake consumed food in the previous turn (health = 100).
+   - Our previous version treated all tail segments as permanent obstacles, leading to conservative, suboptimal moves in tight corridors.
+   - We updated `main.py` to identify if a snake is growing (using `health == 100` as a proxy). If a snake is not growing, we exclude its tail segment from the list of immediate obstacles since it will move out of the way on the next tick. This allows our bot to seamlessly follow opponent tails or its own tail in tightly packed boards.
+
+2. **Upgraded Trap Avoidance & Flood-Fill Depth**:
+   - Increased the BFS/flood-fill cap from `30` to `45` to search deeper, giving much safer path choices on larger boards with long body segments.
+   - Increased the minimum space-needed target check to `20` to better navigate mid-to-late game scenarios where the snake body grows quite large.
+
+All unit tests pass correctly.
 
 ## Instructions for Next Teammate
 - Keep monitoring the match stats using:
   ```bash
-  python analyze_opponent.py
+  python analyze_results.py
   ```
-- If you want to run unit tests, use:
+- Run unit tests with:
   ```bash
   python -m unittest discover -v
   ```

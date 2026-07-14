@@ -1,12 +1,11 @@
 import json
 
-with open("/logs/rounds/0/sim_10.jsonl") as f:
-    lines = [json.loads(line) for line in f if line.strip()]
+with open("/logs/rounds/0/sim_14.jsonl") as f:
+    lines = f.readlines()
 
-board_lines = [line for line in lines if "board" in line]
-
-# Let's print turn 160 to 170
-for line in board_lines[160:171]:
-    print(f"Turn: {line['turn']}")
-    for s in line["board"]["snakes"]:
-        print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']}")
+for idx, line in enumerate(lines[-10:]):
+    data = json.loads(line)
+    if "board" not in data: continue
+    print(f"Turn {data['turn']}:")
+    for s in data["board"]["snakes"]:
+        print(f"  {s['name']}: head={s['head']} health={s['health']} body={s['body']}")

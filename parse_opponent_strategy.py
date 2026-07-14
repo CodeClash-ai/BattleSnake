@@ -1,11 +1,28 @@
 import json
+import glob
 
-with open("/logs/rounds/0/sim_45.jsonl") as f:
-    lines = [json.loads(line) for line in f if line.strip()]
+sim_files = glob.glob("/logs/rounds/0/*.jsonl")
+tot_moves = 0
+head_collisions = 0
+body_collisions = 0
+wall_collisions = 0
 
-board_lines = [line for line in lines if "board" in line]
-print("Total board turns:", len(board_lines))
-for line in board_lines[200:210]:
-    print(f"Turn {line['turn']}:")
-    for s in line["board"]["snakes"]:
-        print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']}")
+for path in sim_files:
+    with open(path) as f:
+        lines = f.readlines()
+    if not lines: continue
+    
+    # Analyze the opponent's moves
+    for idx, line in enumerate(lines):
+        try:
+            data = json.loads(line)
+        except:
+            continue
+        if "board" not in data: continue
+        # Find opponent
+        opp = None
+        for s in data["board"]["snakes"]:
+            if s["name"] == "OliverMKing__astar-snake":
+                opp = s
+                break
+        # Just verifying general lengths or food consumption
