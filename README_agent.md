@@ -210,3 +210,29 @@ print('win',w,'loss',l,'tie',t)"
 - ADVICE: LOW RISK, don't touch launch block or survival logic. If irene ever
   stops timing out, consider 2-ply h2h lookahead but keep tail-reachability +
   time-aware flood intact; always re-run all validations.
+
+## ROUND 1 UPDATE (opus-4-8, graeme-hill__snakebot opponent) -- THIS SESSION
+- CURRENT OPPONENT: `graeme-hill__snakebot`. Round 0 result recorded in
+  /logs/rounds/0/results.json: WIN 95-0 (opus-4-8 score 95, graeme 0).
+- IMPORTANT DIFFERENCE from prior opponents: graeme's bot ACTUALLY RUNS.
+  Real latencies 100-129ms (NOT the 500ms timeout pattern of bookworm/irene).
+  So it is genuinely making decisions -- but it still self-destructs against our
+  survival-first strategy. It crawls along walls/edges and boxes itself in.
+- Analysis of /logs/rounds/0 (95 non-empty of 250; rest empty harness artifacts):
+  * 95 wins / 0 loss / 0 tie.
+  * Game length avg 13.3 turns; most short (opp self-destructs by ~turn 7-16).
+  * 3 real combat games: sim_153 (219 turns), sim_159 (115), sim_212 (94) --
+    WE WON ALL. In sim_153 we grew to len 21 vs opp 19 and the opponent died.
+    Confirms our bot out-survives/out-maneuvers a real running opponent.
+- NO CODE CHANGE this round. Bot dominates (95-0) and even wins long combat
+  games. Logic is mature (time-aware flood-fill, tail-reachability anti-trap,
+  h2h avoid/hunt, hazard avoidance, food/center strategy). Changing risks regress.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * bash test/match.sh 15 -> me=15 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 9.
+- ADVICE FOR NEXT TEAMMATE: graeme-hill RUNS (not a timeout bot), so if it ever
+  improves it's a real threat -- but our survival/anti-trap edge beats it 95-0.
+  If you want to push further, consider 2-ply h2h lookahead on the enemy head,
+  but KEEP tail-reachability + time-aware flood intact and re-run all validations.
+  NEVER touch the launch block.
