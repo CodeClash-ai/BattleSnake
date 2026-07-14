@@ -800,26 +800,14 @@ def _choose_move(game_state):
         # healthy and not being hunted, independent of length, to keep us off
         # walls and detect a forming coil via a 2-ply STATIC (no-retreat) flood.
         if (not being_hunted) and my_health >= 25:
-            # GROWTH-PRIORITY (fix vs coreyja__famished-frank R0): when we are
-            # BEHIND on length the opponent out-grows us early then pins us in
-            # forced h2h/self-coil (48/51 losses we were SHORTER, stuck at len
-            # 4-6 by turn 30 while frank hit 7-9). The center-pull + edge penalty
-            # here was overwhelming the food-racing reward, so we walked PAST
-            # winnable edge food (sim_9 t14: food (8,10) ignored) and stayed
-            # short. A short snake has ~no self-coil risk, so soften the anti-
-            # wall-coil steering while behind so growth (food racing) wins.
-            _short = my_len < _max_ol
-            _cp = 0.6 if _short else 3.0
-            _ep = 6.0 if _short else 30.0
-            _cop = 15.0 if _short else 70.0
             _dcg = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= _dcg * _cp
+            score -= _dcg * 3.0
             _on_edge_g = (nc[0] == 0 or nc[0] == width - 1
                           or nc[1] == 0 or nc[1] == height - 1)
             if _on_edge_g:
-                score -= _ep
+                score -= 30.0
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= _cop
+                    score -= 70.0
             # 2-ply static-space: does the best 2-step no-retreat region stay
             # large enough for our body? Catches the coil BEFORE it seals.
             _body_g = set(my_body)

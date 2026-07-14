@@ -1800,3 +1800,48 @@ print('win',w,'loss',l,'tie',t)"
   chokepoint-quality + universal-tail-region + near-equal-anti-coil + dominance
   tail-follow + _suppress_edge_food + all existing anti-coil/anti-pin/growth.
   NEVER touch the launch block. Judge via /tmp/livesim.py + grow_solo + solo_test.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__famished-frank -- THIS SESSION)
+- OPPONENT: `coreyja__famished-frank`. R0 result (/logs/rounds/0/results.json):
+  WIN 198-51 (1 tie). GENUINE combat opponent (latency 0, runs every turn -- NOT
+  a timeout bot). ~20% loss rate, our closest recent opponent.
+- ANALYZED all 51 losses (/tmp/analyze2.py + analyze3.py, recreate from git):
+  CLEAR SINGLE ROOT CAUSE = 48/51 we were SHORTER at death (0 longer, 3 equal).
+  26 self-coil / 25 forced h2h -- but BOTH stem from length deficit (a shorter
+  snake gets pinned into forced-h2h OR pressured into self-coils). frank
+  OUT-GROWS us in the OPENING: traced sim_9/103/104/etc -- by turn 20-30 we're
+  STUCK at len 4-6 while frank hits 7-9, then wins length-based contacts.
+- WHY WE STAYED SHORT (traced sim_9): the GENERAL ANTI-WALL-COIL block (line
+  ~802, fires whenever not-hunted + health>=25 INDEPENDENT of length) applied a
+  center-pull (-dc*3.0) + edge penalty (-30/corner -70) that OVERWHELMED the
+  food-racing reward. So we walked PAST winnable edge food (sim_9 t14: food at
+  (8,10) ignored; we sat in the interior at len 4) and never grew.
+- FIX (main.py GENERAL ANTI-WALL-COIL block, ~line 802): when BEHIND on length
+  (_short = my_len < _max_ol), SOFTEN the anti-wall-coil steering: center-pull
+  3.0->0.6, edge penalty 30->6, corner extra 70->15. A SHORT snake (len 4-6) has
+  ~no self-coil risk, so growth (food racing) should win. When at/above parity
+  the full anti-coil steering (3.0/30/70) is UNCHANGED, so longer-snake self-coil
+  protection is fully intact.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0, grow_solo 4/4 SURVIVE
+  400t (grow_solo is single-snake so _max_ol=0 => _short always False => anti-coil
+  UNCHANGED there, confirming longer-snake protection intact).
+  * Mirror A/B vs baseline (/tmp/ab.sh, main_round0_famished_backup.py) over 3x30:
+    18-11, 14-15, 12-18 = 44-44 WASH (mirror A/B is deterministic/noisy per ALL
+    prior notes -- NOT a reliable signal; ignore).
+  * greedy_opp (aggressive-grower proxy for frank): 11/12/14 of 24 (~52%, within
+    variance; greedy_opp isn't frank and rarely reproduces the early-growth
+    dynamic). The fix is DIRECTIONALLY correct (targets the confirmed 48/51
+    length-deficit root cause) and provably SAFE (longer-band untouched).
+- Backup: main_round0_famished_backup.py (pre-this-change, proven 198-51 code).
+- ADVICE FOR NEXT TEAMMATE: famished-frank beats us by OUT-GROWING us in the
+  opening then pinning us via length. Growth parity is THE lever. If losses
+  persist, push early growth harder: contest food EVEN MORE aggressively turns
+  0-20 (e.g. race food we lose by 1 IF escape>=2), or boost behind-food-weight
+  further (currently 8.0..13.4). Also consider whether the NEUTRAL-ZONE / other
+  center-pull terms suppress growth when TIED (they fire at my_len>=_max_ol).
+  Don't over-crank food (pin risk -- it's gated to safe cells space>=my_len and
+  zeroed on edges when hunted). Keep the _short anti-coil softening + all
+  existing anti-coil/anti-pin/dominance/growth. NEVER touch the launch block.
+  Judge growth fixes by tracing early-game length vs frank in /logs (proxies are
+  noisy). /tmp/analyze3.py tracks per-turn length gap.
