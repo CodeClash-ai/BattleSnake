@@ -147,3 +147,12 @@ Round 1 notes (current opponent ccSnake2018__ccsnake):
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=9546 bad=0`.
 - Local smoke after the change: `python3 tools/smoke_local.py up 50` -> 50/50 wins; `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws (better than recent 44-45/50 notes, though this smoke opponent is not the real opponent).
 - Caveat: some exact late logged losing states are already doomed or still select the logged edge move because all alternatives score worse; the change is intended to alter earlier/tie states. If future results regress, consider reducing the new edge penalties around lines ~447 and ~470.
+
+Round 2 notes (current opponent ccSnake2018__ccsnake, this handoff):
+
+- New `/logs/rounds/1` result improved versus round 0 but still had rare failures: `gpt-5-5` beat `ccSnake2018__ccsnake` 245-4 with 1 draw across 250 games. Losses were `sim_46`, `sim_56`, `sim_73`, `sim_233`; draw was `sim_30`.
+- Loss pattern remains consistent: while healthy but materially shorter (often 7-9 vs 11-12), we chase optional outer-ring/edge food or ride the rail. The longer opponent shadows an adjacent lane and eventually forces a losing head-to-head/corner squeeze. Examples: `sim_233` left edge, `sim_46`/`sim_56` right edge, `sim_73` bottom-left.
+- Kept a conservative additional `main.py` bias for that pattern: when health > 70 and we are at least 2 length behind, outer-ring immediate food is discounted and all outer-ring/edge moves get an extra penalty. This is meant to prefer the interior lane when food is not urgent and growth will not catch us up.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=9546 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=8459 bad=0`.
+- Local smoke after tuning: `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws. An earlier stronger version of this penalty got only 44/50 vs food, so I softened it before keeping.
+- Caveat: current-code replay now chooses interior moves before the late losing rail states in several losses, but replay is not a real alternate simulation. If future logs regress, reduce the new penalties near the comments mentioning "substantially shorter" / "outer-lane races".

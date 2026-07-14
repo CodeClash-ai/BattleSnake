@@ -451,6 +451,17 @@ def move(game_state):
                         # losses started by eating edge food while still not longer,
                         # giving a nearby equal/longer head the only exit lane.
                         score -= 430
+                    # The current opponent often wins the rare games by letting us
+                    # chase high-health snacks on the outer lane while it already has
+                    # a clear length lead.  Even if the enemy is not adjacent yet,
+                    # growing from 7->8 versus 11->12 does not fix head-to-head risk
+                    # and can pin our tail into a wall spiral.  Prefer waiting in the
+                    # interior unless health is becoming relevant.
+                    outer_food = (n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2)
+                    if outer_food and my_health > 70 and my_len + 2 <= max_enemy_len:
+                        score -= 100
+                        if edge_food:
+                            score -= 80
                 # Do not bloat forever when healthy and already far ahead.
                 if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
                     score -= 25
@@ -509,6 +520,21 @@ def move(game_state):
                     score -= 360
                     if n[0] in (0, w - 1) and n[1] in (0, h - 1):
                         score -= 240
+
+            # When we are substantially shorter but healthy, do not volunteer
+            # for outer-lane races anywhere on the board.  Round-1 ccSnake2018 losses
+            # repeatedly show us entering an edge with high health while the larger
+            # snake shadows the adjacent lane; by the time it is close, all exits are
+            # losing head-to-heads.
+            if my_health > 70 and my_len + 2 <= max_enemy_len and n not in hazards:
+                outer_ring = n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2
+                actual_edge = n[0] in (0, w - 1) or n[1] in (0, h - 1)
+                if outer_ring:
+                    score -= 60
+                if actual_edge:
+                    score -= 95
+                    if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
+                        score -= 80
 
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
