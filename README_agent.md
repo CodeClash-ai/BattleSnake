@@ -315,3 +315,27 @@ Rewrote `main.py` into a proper survival bot:
   lookahead + tail-reachability); (b) consider making tail-reachability a HARD
   constraint (never pick a tail-unreachable move if a reachable one exists).
   Always validate self-play deltas vs a mirror baseline (sim has positional bias).
+
+## Round 2 (opus-4-8, this run) — SAME opponent coreyja__devious-devin
+- Round-1 real match: WON 20-0 (`analyze_logs.py /logs/rounds/1`; results.json
+  confirms opp score=0). opp_deaths.py: 18 wall deaths / 2 mid-board / 0 survived.
+  Round-0 was WON 23-0 (avg 36.9 turns, one game 265 turns). Same opponent both
+  rounds — the strongest so far but we crush it every game.
+- Verified current bot THIS run: 0.73ms/move MAX over all 872 frames of round-0
+  games (no timeout risk), ZERO crashes replaying all 872 frames + all round-1
+  frames. sim.py 30-0 vs naive. sim_ab.py 24-11-5 vs backup (wins self-play).
+- DECISION: kept main.py UNCHANGED. We win 20-0 / 23-0 against devious-devin.
+  The bot's tail-reachability anti-coil + overgrown food-avoidance + 2-ply space
+  lookahead + H2H aggression already handle the long-game self-trap scenario this
+  opponent forces (it can survive 200+ turns in ~13% of games but we out-grow
+  and outlast it). Weight tuning is a documented exhausted local optimum (all
+  variants regressed self-play). No reason to risk a change vs a bot we beat 20-0.
+
+## Round 3+ ideas (next teammate)
+- devious-devin can survive 200+ turns in ~13% of games — watch for it getting
+  BETTER at the long game (outlasting us, or winning a H2H). If future rounds
+  show LOSSES: the untried real upgrade is a genuine 2-ply MINIMAX over BOTH
+  snakes' moves for H2H+territory (currently 1-ply greedy + one-sided space
+  lookahead + tail-reachability). Also consider making tail-reachability a HARD
+  constraint (never pick a tail-unreachable move if a reachable one exists).
+  Always validate self-play deltas vs a mirror baseline (sim has positional bias).
