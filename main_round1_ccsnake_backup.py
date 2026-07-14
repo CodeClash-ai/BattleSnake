@@ -241,7 +241,7 @@ def _choose_move(game_state):
             nearest_opp_dist = d
             nearest_opp_len = s["length"]
     # Threatened = a longer/equal opponent is close enough to hunt us.
-    being_hunted = (nearest_opp_len >= my_len) and (nearest_opp_dist <= 5)
+    being_hunted = (nearest_opp_len >= my_len) and (nearest_opp_dist <= 4)
     cx, cy = width // 2, height // 2
 
     # Growth strategy: the Xe opponent out-grows us and then wins head-to-heads
@@ -343,16 +343,9 @@ def _choose_move(game_state):
             on_edge2 = (nc[0] == 0 or nc[0] == width - 1
                         or nc[1] == 0 or nc[1] == height - 1)
             if on_edge2:
-                score -= 35.0
+                score -= 25.0
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 80.0
-            # Being pinned: if the pursuing opponent is BEHIND us relative to
-            # the wall we're heading toward, moving further along/into the wall
-            # lets it seal us. Penalize cells whose safe-escape count is low
-            # extra hard while hunted (a corridor along a wall is a death march
-            # against a longer chaser).
-            if escapes <= 1:
-                score -= 120.0
+                    score -= 40.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.
@@ -366,17 +359,9 @@ def _choose_move(game_state):
         # scaled by how much we want to grow. Only apply when the cell is safe
         # (space is adequate) so we never dive into a trap for food.
         if _food_cells and space >= my_len:
-            _fw = _food_weight
-            # When a longer/equal opponent is hunting us, do NOT let food lure
-            # us into edge/corner cells where we can be pinned (ccsnake losses
-            # sim_103 etc: we chased corner food while shorter and got sealed).
-            _on_edge_f = (nc[0] == 0 or nc[0] == width - 1
-                          or nc[1] == 0 or nc[1] == height - 1)
-            if being_hunted and _on_edge_f:
-                _fw = 0.0
             nd = min(_manhattan(nc, f) for f in _food_cells)
-            score -= nd * _fw
-            if nd == 0 and not (being_hunted and _on_edge_f):
+            score -= nd * _food_weight
+            if nd == 0:
                 score += 25.0   # landing on food = growth, small extra reward
 
         return score, space, name, nc

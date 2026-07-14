@@ -527,3 +527,39 @@ print('win',w,'loss',l,'tie',t)"
   logic with a clear multi-batch edge. Keep growth-attraction + static_flood +
   tail-reachability + time-aware flood + escape-count + anti-pin. Use MULTI-BATCH
   A/B (variance!). NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, ccSnake2018__ccsnake opponent) -- THIS SESSION
+- OPPONENT: `ccSnake2018__ccsnake`. Round 0 result: WIN 228-22 (0 ties).
+  GENUINE COMBAT opponent (avg game len ~79 turns, up to 206). It pursues us
+  and pins us to walls/corners.
+- ANALYZED THE 22 LOSSES (/logs/rounds/0/sim_*.jsonl): ROOT CAUSE = WALL/CORNER
+  PIN while SHORTER-or-EQUAL at HIGH health. In every loss our head died at an
+  edge/corner: (0,0),(10,0),(0,0),(6,10) etc. Example sim_103: we crawled DOWN
+  the left wall to eat corner food (0,1) while opp (len6 vs our 5) chased behind
+  along the wall, then sealed us at (0,0). Food attraction lured us into a corner
+  we couldn't escape.
+- CHANGES to main.py (targeted, validated):
+  1. being_hunted distance threshold 4 -> 5 (detect the chaser one cell sooner).
+  2. When being_hunted: edge penalty 25->35, corner 40->80, AND a new -120
+     penalty for entering a cell with <=1 safe escapes (a wall corridor is a
+     death march against a longer chaser).
+  3. FOOD-vs-PIN fix: when being_hunted, food attraction is ZEROED for edge/
+     corner cells (and the +25 land-on-food bonus suppressed there) so food can
+     no longer lure us into a pin. Interior food still attracts normally.
+- VERIFIED the exact sim_103 trap: bot now moves 'right' (toward open board)
+  instead of 'down' into the corner food. Fix works.
+- TESTING (vs test/smart_opp = pursuit/center-control proxy, matches ccsnake):
+  * baseline (main_round1_ccsnake_backup.py): 22-7-1 / 30.
+  * new: 26-4 / 30, 24-6 / 30, 31-8-1 / 40  => ~81/110 (~74%) consistent gain.
+  * greedy_opp: 11-8-1 / 20 (fine).
+  * solo_test -> SURVIVED 300 turns, len 28. match.sh naive -> 10-0.
+  * MIRROR A/B vs backup (/tmp/ab.sh): 14-14, 14-15 (wash -- expected for two
+    near-identical snakes; not a regression signal).
+  * ast.parse + import OK; launch block intact.
+- Backup: main_round1_ccsnake_backup.py (pre-this-change).
+- ADVICE FOR NEXT TEAMMATE: ccsnake wins by PURSUIT+PIN. Our anti-pin + no-food-
+  into-corner-when-hunted is the key edge. Next lever: when SHORTER, actively
+  grow via SAFE interior food to flip length parity; or 2-ply lookahead to detect
+  pin setups 2-3 turns before death (the fatal corner commit happens early). Keep
+  anti-pin + static_flood + tail-reachability + time-aware flood + escape-count.
+  Use smart_opp multi-batch (variance huge). NEVER touch the launch block.
