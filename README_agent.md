@@ -2696,3 +2696,149 @@ losing/drawing sim files (`sim_48/168/172/203/23/239/249/63.jsonl` in
   was being silently caught and masked), insert a debug `print(...)`
   right before `if best_score is None or score > best_score:`, then feed
   a synthetic `game_state` built from a real `sim_*.jsonl` frame.
+
+## Round (this session) update -- deep-dived opponent zacpez__scape-goat's 4/250 losses, confirmed it's the same known multi-ply spiral-trap gap, no code changes (high risk to fix blind with remaining budget)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`zacpez__scape-goat`**. Result: **246
+wins / 4 losses** out of 250 real games (98.4% win rate). Turn counts
+min=6 max=228 avg=87.8 -- a long-surviving opponent.
+
+**Investigation of all 4 losses (`sim_192/247/27/3.jsonl`):** in every
+loss, at time of death our snake was MUCH longer than the opponent (18-22
+vs 4-9 segments) -- i.e. NOT the "under-eating"/length-disadvantage bug
+fixed in an earlier session (search "under-eating" above). Replayed the
+final frame containing our snake through `main.move()` for all 4: by that
+point our snake already had 0-1 legal moves (already unrecoverably
+trapped), same as several previous sessions' findings for other
+opponents. Traced `sim_192.jsonl` turn-by-turn from turn 95 through death
+(turn 121) by calling `main.move()` + dumping each candidate's
+`(space, reached_tail)` directly (see the one-off script used this
+session, not saved as a file -- pattern: build `state = {"board":
+frame["board"], "you": our_snake_dict, "game": {...}}` from a real sim
+frame, call `main.move(state)`, and separately re-derive candidate
+diagnostics via `_occupied_cells` + `_flood_fill` the same way `move()`
+does internally).
+
+**Confirmed exact mechanism (a NEW concrete data point for the
+long-documented "single-snapshot flood-fill can't see multi-turn
+self-narrowing" limitation -- search "multi-ply" / "spiral-coil" earlier
+in this file for the full history of this class of bug across many
+opponents):** at turn 115, our snake (length 22) had exactly two legal
+moves, `up->(9,5)` and `down->(9,3)`, and **both reported the exact same
+diagnostic: `space=96, reached_tail=True`** -- i.e. completely
+indistinguishable by every existing metric (space safety, tail
+reachability, adversarial worst_space -- the opponent was too short
+relative to us to even register as a `threat_body`, so none of the
+adversarial/exits/contested-exits machinery applied here at all; this was
+a *pure self-inflicted* spiral, no opponent shadowing involved). The bot
+picked `down`. Over the next 5 turns, the candidate pool collapsed
+1-by-1 (turn 116: only 1 legal move left; by turn 117: `space=3`; turn
+118: `space=2`; turn 119: `space=1`; turn 120: **zero legal moves**,
+certain death) purely because our own already-coiled body (occupying a
+big loop/spiral shape built up over the preceding ~20 turns) walled off
+the specific corridor `down` led into, even though the *total* connected
+open region at turn 115 (96 cells) was almost the entire rest of the
+board and looked identical to the `up` alternative.
+
+**Why I did NOT attempt a fix this session (tried, then backed off):**
+I prototyped a "simulate N forward turns of a pure-space-maximizing
+greedy self-only policy, track the minimum space seen" lookahead
+(reusable code sketch is in this session's trajectory, not merged) to
+see whether it would have flagged `down` as risky ahead of time.
+**It did NOT** -- a pure "always take whichever neighbor cell maximizes
+immediate flood-fill space" 10-step simulation from either `up` or `down`
+at turn 115 found long escape paths with min_space staying in the
+80s-90s the whole way for BOTH branches (i.e. a purely space-greedy
+policy would have successfully avoided the trap that the REAL bot's full
+scoring function -- which also weighs food distance, edge avoidance,
+exits/branching-factor, tail-reachability bonus, etc. -- did not avoid).
+This means the actual divergence happens because those OTHER score terms
+(not raw space) pulled the real bot's turn-116-120 decisions down a
+different, fatal path than a naive space-maximizer would have taken, AND
+because the real opponent was also moving/closing off cells dynamically
+over those turns (my simulation held the opponent's body static, which
+is an oversimplification -- the real turn-118 grid dump shows the
+opponent actively repositioning near the corner as the trap closed).
+Properly capturing this would require recursively simulating the bot's
+**full** scoring function (not just a space-maximizing proxy) several
+turns deep, interleaved with a plausible model of the opponent's own
+future moves -- a substantially bigger, riskier change (recursion into
+`move()`'s complete logic, real performance/timeout risk, hard to
+validate thoroughly) than anything attempted in previous "no changes"
+sessions' shallower experiments. With only a handful of steps left in
+this session's budget, I judged it unsafe to ship an under-tested version
+of this to a bot that's already winning 98.4% of real games -- shipping a
+half-validated recursive scoring change risks a much worse regression
+(e.g. timeouts, infinite loops, or a subtly-wrong opponent model making
+things worse) than the ~1.6% loss rate it might fix.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Verified via `ast.parse` (unchanged, still valid) and a quick local
+regression batch (`main.py` vs `tools/opponent_ref.py`, seeds 1-3: 3/3
+wins, 4-6 turns each, zero errors/exceptions in server logs) that nothing
+is broken. No new code was merged.
+
+**For next teammate (concrete, scoped plan, now with fresh concrete
+data):**
+- This is the SAME fundamental gap flagged by many previous sessions
+  (search "multi-ply", "spiral-coil", "adversarial shadowing" earlier in
+  this file) -- a purely single-snapshot (even 1-ply-adversarial) space
+  metric cannot see several-turns-out self-narrowing, and this session
+  adds a very clean, concrete, fully-instrumented example
+  (`sim_192.jsonl` turn 115, two candidates with IDENTICAL
+  `space=96, reached_tail=True` where only one was actually fatal) that's
+  ready to use as a validation target if you want to attempt a real fix.
+- Key new insight from this session's investigation (not established by
+  earlier sessions as clearly): a **pure space-maximizing greedy
+  self-only forward simulation does NOT reproduce this specific trap** --
+  it successfully finds escape routes 10 steps deep for both `up` and
+  `down` at the critical turn. This means the real danger comes from
+  the INTERACTION between the other scoring terms (food/edge/exits/tail-
+  bonus) and the opponent's own dynamic movement over subsequent turns,
+  not from raw space alone. **The correct next-step fix is therefore NOT
+  "add a shallow space-lookahead tiebreak"** (I verified this specific
+  idea doesn't work on the real failing case, saving the next teammate
+  from re-deriving this) -- it likely needs either (a) a recursive
+  self-play simulation using the bot's OWN FULL scoring function N turns
+  deep (expensive, needs careful depth/performance tuning and thorough
+  testing), or (b) a much simpler mitigating heuristic: detect when our
+  own body has coiled into a spiral/loop shape (e.g. check if a
+  candidate's reachable region, while large, has a low ratio of
+  "cells with >=3 open neighbors" to total reachable cells -- a rough
+  proxy for "mostly a series of 1-wide corridors" vs "an actually open
+  room") and penalize committing into such shapes even when total space
+  looks fine. Neither was implemented or validated this session due to
+  budget -- both are reasonable starting points for a future session with
+  a full budget.
+- Reusable validation harness pattern (used this session, not saved as a
+  file -- consider finally writing `tools/replay_frame.py` as suggested
+  by at least 2 earlier sessions, since this exact ad-hoc script has now
+  been rewritten from scratch many times across this file's history):
+  ```python
+  import json, sys; sys.path.insert(0, '.')
+  import main as M
+  frames = [json.loads(l) for l in open('/logs/rounds/0/sim_192.jsonl') if l.strip() and 'board' in json.loads(l)]
+  ours = [f for f in frames if any(s['name'] == 'sonnet-5' for s in f['board']['snakes'])]
+  fr = next(f for f in ours if f['turn'] == 115)
+  you = next(s for s in fr['board']['snakes'] if s['name'] == 'sonnet-5')
+  state = {'game': {'id': 'dbg', 'timeout': 500}, 'turn': fr['turn'], 'board': fr['board'], 'you': you}
+  print(M.move(state))
+  ```
+- All previously-fixed bugs/logic remain intact and untouched this
+  session (food coefficient 55.0, `_HEAD_HISTORY` anti-stalemate,
+  graduated h2h prediction via `_opp_candidate_cells`/`_predict_opp_move`,
+  no hard h2h pre-filter, uncapped flood-fill with graduated penalties,
+  tail-reachability gating scoped to the food-freeze cause only,
+  adversarial 1-ply `worst_space` lookahead, growth-damping once >25% of
+  board is our own body, threat-aware edge-weight boost). Given the
+  opponent here was too short to trigger the `threat_bodies`/adversarial
+  machinery at all, none of those terms were relevant to this session's
+  specific 4 losses -- worth remembering that many of the historical
+  fixes only engage against comparably-sized-or-longer opponents.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
