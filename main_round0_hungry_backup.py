@@ -767,9 +767,7 @@ def _choose_move(game_state):
                         # Widen the stretch race: whenever BEHIND (by 1+), contest
                         # food we lose the race by 1 cell IF it's a safe landing
                         # (escapes>=2), so we keep pace even when only 1 short.
-                        _behind2 = my_len < _max_ol - 1
-                        _sm = 2 if _behind2 else 1  # vs TheApX__hungry (out-grows us): when clearly behind, contest food we lose by up to 2 cells (safe landings only)
-                        _stretch = (_behind_now and my_fd <= opp_fd + _sm and escapes >= 2)
+                        _stretch = (_behind_now and my_fd <= opp_fd + 1 and escapes >= 2)
                     else:
                         _win_race = (my_fd < opp_fd - 1)
                         _stretch = False
