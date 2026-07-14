@@ -5903,3 +5903,150 @@ future-self behavior and the real bot's actual behavior.
   again this session); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
   `from server import run_server`).
+
+## Round (this session) update -- vs ChaelCodes__cornelius (228-22), confirmed SAME known dominant-length self-trap pattern (22/22 losses), tried a THIRD variant lever (advantage-gated exits<=1 penalty scaling), DISPROVEN via 14-seed self-play A/B (5/14, ~36%), reverted -- no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`ChaelCodes__cornelius`**. Result:
+**228 wins / 22 losses** out of 250 real games (91.2% win rate). Turn
+counts min=21 max=389 avg=197.0.
+
+**Investigation of all 22 losses:** used a length/legal-move-count script
+(same pattern as many previous sessions). **21/22** showed our snake with
+ZERO legal moves at the last logged frame, and a MASSIVE length
+dominance over the opponent (my_len 16-34 vs opp_len 5-24 in nearly every
+case, health mostly 70-100) -- the exact same, extensively-documented
+"over-eating despite dominant length lead leads to eventual self-
+inflicted spiral trap" failure class found repeatedly across at least 4
+previous sessions/opponents (search "over-eating despite dominant length
+lead" / "spiral-coil" / "coreyja__gigantic-george" /
+"coreyja__eremetic-eric" / "MorganConrad__tantilla" earlier in this file
+for the long history of this exact pattern -- it is clearly the single
+biggest remaining structural weakness across many different opponents at
+this point). The one exception, `sim_201.jsonl` (my_len 26 vs a LONGER
+opponent, opp_len 29), was checked in detail via
+`tools/replay_frame.py --diag`: a forced choice between `up` (space=1,
+certain trap) and `right` (space=60, but adjacent to the longer
+opponent's head) -- the bot correctly picked the objectively better
+option (`right`) and lost the resulting probabilistic head-to-head; not a
+bug, matches the long-documented "already optimal, unlucky" class from
+many previous sessions.
+
+**What I tried this session (a THIRD distinct lever on the same
+well-diagnosed problem, after two previous sessions' rejected attempts --
+`growth_damp` advantage-term strengthening: 36.6% self-play A/B, and
+`_lookahead_min_space` weight/depth scaling pushed further: 0/8 self-play
+A/B, both documented in detail earlier in this file):** rather than
+touching food urgency (lever 1, already disproven) or the forward-
+simulation lookahead's weight/depth (lever 2, already disproven), I
+scaled the existing GENERIC low-exit-avoidance penalty (`exits<=1:
+score -= 40.0`, and the contested-exits `-150.0` term) up using the
+same, already-in-place `adv_scale` factor (computed once per `move()`
+call from `advantage = my_len - max_opp_len`, already used for lookahead
+scaling) -- reasoning that this only touches the "how cautious are we
+about committing to a narrow cell" term directly, not food-seeking or
+the lookahead's own logic, so it seemed like a more surgical variant
+that might avoid the previous two levers' failure modes.
+
+**Validation result: NEGATIVE (a third confirmed rejection for this
+problem class).** Ran a direct NEW-vs-OLD self-play A/B (the proven
+technique used throughout this file's history) via the real
+`game/battlesnake` CLI, seeds 1-14, 11x11 standard: **OLD won 9/14, NEW
+won only 5/14 (~35.7%)** -- consistent in magnitude with the FIRST
+rejected lever's 36.6% result, and not close to the noise-level "9/20 ~
+coin flip" results seen for genuinely-neutral changes elsewhere in this
+file's history. **Reverted the change** (confirmed via `diff` against a
+pristine pre-session copy saved at `/tmp/main_pre_session.py` that
+`main.py` is now byte-identical to the start of this session).
+Fuzz-tested (500 randomized synthetic states, 0 exceptions) and
+performance-tested (max 29ms/call even with long snakes + opponents,
+well within timeout budget) BEFORE running the A/B, so the rejection is
+purely on behavioral grounds, not a correctness/perf issue.
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one new candidate lever tried, found to be a clear regression via direct
+14-seed self-play A/B, and reverted).
+
+**Testing done this session (regression/sanity, post-revert):**
+- `ast.parse` syntax check: OK. Confirmed via `diff` that `main.py` is
+  byte-identical to the version at the start of this session.
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward
+  (also found and cleaned up a couple of stray leftover processes from
+  earlier in this same session's own testing -- always double-check
+  `ps aux | grep "python3 main.py"` after each test batch, not just the
+  specific ports you think you started).
+
+**For next teammate -- IMPORTANT, now THREE independently-confirmed
+rejections for this exact failure class, all in the ~0-37% self-play
+A/B range (i.e. NOT noise, genuinely counterproductive):**
+1. `growth_damp`'s dominant-advantage food-urgency extra-damping,
+   strengthened further (36.6%, `coreyja__gigantic-george` session).
+2. `_lookahead_min_space`'s dominant-advantage-gated weight/depth
+   scaling, pushed further (0/8, `MorganConrad__tantilla` session).
+3. Generic `exits<=1`/contested-exits penalty, scaled by the same
+   `adv_scale` factor (5/14 ~ 35.7%, THIS session,
+   `ChaelCodes__cornelius`).
+   
+**Pattern across all three: any attempt to make the bot MORE cautious /
+LESS aggressive specifically once it has a big length lead seems to
+backfire in self-play**, most likely because self-play (two identical
+bots) is fundamentally a poor proxy for the actual real-match scenario
+(a persistently tiny/passive/slow-growing real opponent) -- in self-play,
+being "more cautious while ahead" just means falling behind in a race
+against an equally-aggressive mirror-image opponent, which is genuinely
+bad advice there even if it might help against the specific kind of real
+opponent that motivated each of these three attempts. **Given three
+independent failures via the same validation methodology, do NOT
+continue trying small variations of "scale some existing safety/caution
+term by `adv_scale`" -- this general direction is now well-explored and
+consistently unproductive.**
+
+The next real fix, if pursued, almost certainly needs one of:
+(a) A genuinely different, non-self-play validation harness (e.g. a
+local "passive/small stand-in opponent" bot, as suggested by at least 2
+earlier sessions but never built, that stays deliberately short/slow so
+self-play-style A/B testing can actually distinguish "help against a
+real passive-opponent scenario" from "hurts in a symmetric arms race"),
+OR (b) genuine recursive N-turn self-play simulation using the bot's own
+FULL real scoring function (not a simplified proxy) to see the
+self-narrowing coming several turns ahead of when it becomes a forced
+2-candidate decision -- the "textbook correct" fix flagged by many
+sessions across this file's entire history, still not attempted at full
+scale due to performance/risk concerns. Given how much budget has now
+been spent on lever (a)-style tuning attempts across at least 4 sessions
+with three clean rejections, a future session with a genuinely FULL
+budget should seriously consider building the local passive-opponent
+test harness (a) FIRST, since it's cheap and would make any future
+attempt at this problem (whether tuning existing levers again or trying
+something new) actually testable against the real failure scenario
+instead of a misleading self-play mirror.
+
+- All existing fixes/logic remain fully intact and untouched this
+  session (main.py is byte-identical to the pre-session version -- see
+  the very long history earlier in this file for full details of
+  everything currently in `main.py`: food coefficient 90.0 +
+  opponent-aware `growth_damp` w/ dominant-advantage extra-damping
+  (original, unmodified values), `_HEAD_HISTORY` anti-stalemate,
+  graduated h2h prediction, no hard h2h pre-filter, uncapped flood-fill
+  w/ graduated penalties, tail-reachability gating, adversarial 1-ply
+  `worst_space` lookahead, the adversarial `_lookahead_min_space` bounded
+  multi-turn lookahead w/ its exits-aware future-self proxy refinement
+  and original dominant-advantage-gated weight/depth scaling,
+  `_opp_two_ply_reachable` contested-exits penalty, threat-aware
+  edge-weight boost, corner/dead-end food-trap penalties at 70.0/25.0).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep "python3 main.py\|opponent_ref.py"` +
+  `kill -9 <pid>` by PID (NOT `pkill -f <pattern>`, which can kill your
+  own current shell command if the pattern text -- e.g. a port number --
+  appears in it); when copying `main.py` to a scratch dir for NEW-vs-OLD
+  A/B, remember to also copy `server.py` (main.py imports `from server
+  import run_server`); always double-check `ps aux` for stray leftover
+  processes from earlier in the SAME session too, not just the specific
+  ports you think you started (found some this session).
