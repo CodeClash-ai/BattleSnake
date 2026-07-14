@@ -6901,3 +6901,126 @@ only affects the h2h penalty term (nothing else).
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py`.
+
+## Round (this session) update -- vs kentmacdonald2__beames round 1 (212-35-3 -> 220-25-5), CONFIRMED previous session's equal-length-h2h-penalty softening (900/300->450/150) was a REAL improvement in the actual round, tried pushing it further (300/100), DISPROVEN via 7-seed self-play A/B (2/7), reverted to 450/150 -- no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (212 wins / 35 losses / 3 draws, avg 93.5 turns) and
+`/logs/rounds/1/` (**220 wins / 25 losses / 5 draws**, avg 98.0 turns),
+opponent `kentmacdonald2__beames`. Round 0 used the OLD flat h2h penalty
+(900.0/300.0 for both equal- and longer-opponent collisions); round 1 has
+the previous session's change (equal-length collisions softened to
+450.0/150.0, longer-opponent collisions unchanged at 900.0/300.0) --
+**this real-round comparison confirms that fix was a genuine
+improvement** (losses 35->25, draws 3->5, wins 212->220) even though the
+previous session explicitly flagged it as unvalidated-via-self-play at
+the time it was shipped. Do NOT revert that fix back to a flat
+900.0/300.0 for equal-length collisions.
+
+**What I did this session:**
+- Re-ran the length-comparison triage script (many previous sessions'
+  standard first step) on all 25 round-1 losses: **the opponent was
+  longer than us in ALL 25/25 losses** (same "under-eating" signature as
+  round 0, search "under-eating" earlier in this file) -- i.e. the
+  equal-length-h2h fix helped (fewer total losses) but did not eliminate
+  the underlying growth-rate gap against this specific opponent. Traced
+  length growth over time for 4 representative losses
+  (`sim_21/159/7/104`): opponent consistently grows faster than us,
+  especially in the EARLY game (e.g. `sim_159`: turn 24 us=5 vs opp=7,
+  turn 96 us=10 vs opp=16) -- the gap sometimes narrows by mid-game but
+  rarely closes fully before the eventual loss.
+- Given the previous session's own uncertainty about whether 450.0/150.0
+  was the right magnitude (it only verified the exact target scenario
+  flipped with a MUCH more aggressive 220.0/70.0, not the shipped
+  450.0/150.0), and the persistent under-eating pattern suggesting
+  "maybe push further helps more", I tried a further softening: changed
+  the equal-length case from `450.0, 150.0` to `300.0, 100.0` (still well
+  short of the previously-traced 220.0/70.0, a conservative next step).
+- **Validated via a direct NEW-vs-OLD self-play A/B** (the proven
+  technique used throughout this file's history): saved the current
+  (450.0/150.0) `main.py` as the "OLD" reference to `/tmp/oldbot/`,
+  applied the 300.0/100.0 change as "NEW", ran both concurrently via the
+  real `game/battlesnake` CLI, seeds 1-7, 11x11 standard: **OLD (450/150)
+  won 5/7, NEW (300/100) won only 2/7** -- a clear negative signal, not
+  noise (games ranged 112-367 turns, zero errors/exceptions in either
+  server log). **Reverted immediately** (confirmed via `diff` that
+  `main.py` is now byte-identical to `/tmp/oldbot/main.py`, i.e. back to
+  the real-round-validated 450.0/150.0 values).
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate further-softening of an already-shipped, already-real-
+round-validated lever was tried, found to be a clear regression via
+direct 7-seed self-play A/B, and reverted). This is a valuable negative
+data point: **450.0/150.0 (the current value) appears to be close to (or
+past) the right amount of softening for the equal-length h2h penalty --
+pushing it further toward the more-aggressive 220.0/70.0 that was only
+theoretically explored (never shipped) by the previous session is
+actively counterproductive**, presumably because too-weak an
+equal-length-collision penalty starts making the bot recklessly contest
+food/cells against equal-length opponents even when the resulting 50/50
+mutual-elimination risk isn't worth it, losing more mirror-match
+head-to-heads than the extra food gained is worth.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK. Confirmed via `diff` that `main.py` is
+  byte-identical to the version at the start of this session.
+- The 7-seed self-play A/B above already serves as validation for the
+  revert.
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward
+  (found and killed a couple of lingering `<defunct>` zombies too --
+  harmless but worth a final `ps aux` check before finishing).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  round 2 performs against `kentmacdonald2__beames` (or whatever opponent
+  is current). If the win rate holds around/above 88% (220/250), the
+  current 450.0/150.0 tuning is confirmed as a good, stable value -- do
+  NOT push it further toward 300/100 or lower without much stronger
+  evidence than this session's quick 7-seed check (though given how
+  clear-cut 2/7 was, I'd be surprised if a bigger sample changed the
+  conclusion).
+- The underlying "under-eating"/growth-rate-disadvantage pattern is
+  STILL present in all 25 round-1 losses (opponent longer than us every
+  time) even after the h2h fix helped -- this looks like it may be a
+  genuine skill/speed gap against a strong, fast-growing opponent
+  (similar in flavor to the `coreyja__famished-frank` session's finding,
+  search "coreyja__famished-frank" earlier in this file, where the food
+  coefficient was already bumped 90->130 and a self-play-positive further
+  push did NOT help in the real round either). Both the h2h-penalty lever
+  (this session) and the food-coefficient lever (an earlier session, for
+  a different opponent) seem to have hit a point of diminishing/negative
+  returns for addressing "opponent is just a strong, fast, comparably-
+  skilled food-seeker" -- further chasing this exact growth-rate gap via
+  more scoring-weight tuning has a growing track record of backfiring
+  once pushed past the currently-shipped values. If a future session
+  wants to keep pursuing this, consider a fundamentally different lever
+  (e.g. genuine multi-ply lookahead specifically for early-game food
+  contests, or a smarter opponent-behavior model) rather than continuing
+  to push the same two already-tuned constants further.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything currently in `main.py`: food coefficient
+  130.0, opponent-aware `growth_damp` w/ dominant-advantage extra-
+  damping, `_HEAD_HISTORY` anti-stalemate, graduated h2h prediction w/
+  the equal-vs-longer-length distinction at 450.0/150.0 vs 900.0/300.0,
+  no hard h2h pre-filter, uncapped flood-fill w/ graduated penalties,
+  tail-reachability gating, adversarial 1-ply `worst_space` lookahead,
+  the adversarial `_lookahead_min_space` bounded multi-turn lookahead
+  (with its food-eating-tail-freeze-artifact fix and dominant-advantage-
+  gated weight/depth scaling), `_opp_two_ply_reachable` contested-exits
+  penalty, threat-aware edge-weight boost, corner/dead-end food-trap
+  penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID directly
+  (grepping by port number in the command line is unreliable since env
+  vars don't always show in `ps aux`'s COMMAND column -- grep for the
+  script name, e.g. `python3 main.py`, instead, and kill the actual PID
+  from the listing); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py`.
