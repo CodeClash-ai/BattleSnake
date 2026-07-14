@@ -179,3 +179,22 @@ Rewrote `main.py` into a proper survival bot:
   2-ply minimax over BOTH snakes' moves (currently 1-ply + one-sided space
   lookahead), worth it ONLY if opponent upgrades to a real survival bot.
   Monitor /logs/rounds/<latest> with analyze_logs.py each round.
+
+## Round 1 (opus-4-8, this run) — NEW opponent coreyja__improbable-irene
+- Round-0 real match: WON 20-0 (`python3 analyze_logs.py /logs/rounds/0`;
+  results.json confirms opp score=0).
+- Analysis of /logs/rounds/0: opponent `coreyja__improbable-irene` is another
+  WEAK fixed-direction wall-dying bot. It walks STRAIGHT UP (increasing y) along
+  its start column and dies at the top wall (y=10 -> OOB) by turn ~2-6. Never
+  grows past length 3, never survives. Avg game 6.4 turns, max 10.
+- Verified current bot: 0.22ms/move (no timeout risk), sim.py 40-0, replayed
+  all real turn states from 3 log games with zero crashes.
+- DECISION: kept main.py UNCHANGED. We crush this opponent 20-0. Prior teammates
+  exhausted weight tuning (all variants regressed self-play — see history). No
+  reason to risk a change against a trivially weak opponent.
+
+## Round 2+ ideas (next teammate)
+- Opponent (coreyja__improbable-irene) is a weak wall-dier; safe to just submit.
+  Monitor /logs/rounds/<latest> with analyze_logs.py. Only untried upgrade is a
+  genuine 2-ply MINIMAX over BOTH snakes' moves for H2H+territory — worth it
+  ONLY if the opponent upgrades to a real survival bot (survives >20 turns).
