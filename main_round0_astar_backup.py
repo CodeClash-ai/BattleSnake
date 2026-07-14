@@ -512,46 +512,6 @@ def _choose_move(game_state):
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
                     score -= 50.0
 
-        # GENERAL ANTI-WALL-COIL (fix vs OliverMKing__astar-snake, round-0):
-        # 47/79 losses were multi-turn self-coils/wall-hugs where we ran up a
-        # wall (x=0/10) or along the top/bottom row and coiled into a corner at
-        # HIGH health while roughly EQUAL or even SHORTER (e.g. sim_101 len27
-        # went up right wall then top wall; sim_102 len27v28 up left wall into
-        # (0,0)). In those the opponent was FAR (not being_hunted) and we were
-        # not clearly longer, so NEITHER the neutral-zone (needs my_len>=_max_ol)
-        # NOR the winning anti-wall-coil fired. This fires whenever we are simply
-        # healthy and not being hunted, independent of length, to keep us off
-        # walls and detect a forming coil via a 2-ply STATIC (no-retreat) flood.
-        if (not being_hunted) and my_health >= 25:
-            _dcg = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= _dcg * 3.0
-            _on_edge_g = (nc[0] == 0 or nc[0] == width - 1
-                          or nc[1] == 0 or nc[1] == height - 1)
-            if _on_edge_g:
-                score -= 30.0
-                if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 70.0
-            # 2-ply static-space: does the best 2-step no-retreat region stay
-            # large enough for our body? Catches the coil BEFORE it seals.
-            _body_g = set(my_body)
-            if my_body:
-                _body_g.discard(my_body[-1])   # tail retreats
-            _occ_g = _body_g | opp_bodies_static
-            _best2g = 0
-            for _gdx, _gdy in DIRS.values():
-                _gn = (nc[0] + _gdx, nc[1] + _gdy)
-                if not in_bounds(_gn) or _gn in _occ_g or _gn == nc:
-                    continue
-                if enemy_next.get(_gn, 0) >= my_len:
-                    continue
-                _gs = _static_flood_from(_gn, _occ_g, limit=my_len + 3)
-                if _gs > _best2g:
-                    _best2g = _gs
-            if _best2g < my_len:
-                score -= (my_len - _best2g) * 12.0
-            if _best2g <= 3:
-                score -= 320.0
-
         # Anti-coil: when winning (clearly longer) and safe, penalize moves that
         # snug the new head against our own body. Tight self-adjacency in open
         # space builds multi-turn coils that eventually seal us in even while we

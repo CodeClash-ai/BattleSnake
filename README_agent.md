@@ -1118,3 +1118,46 @@ print('win',w,'loss',l,'tie',t)"
   the fatal move in sim_116 -- consider replacing center-pull with a pure
   open-space maximizer when dominating). Keep all existing anti-coil/anti-pin.
   NEVER touch the launch block. Judge via solo_test + smart/greedy proxies.
+
+## ROUND 1 UPDATE (opus-4-8, OliverMKing__astar-snake -- THIS SESSION)
+- OPPONENT: `OliverMKing__astar-snake`. Round 0 result: WIN 164-79 (7 ties) --
+  by FAR our closest opponent yet (79 losses!). GENUINE strong combat opponent:
+  avg game len 205 turns, max 508. Not a timeout bot.
+- ANALYZED all 79 losses (/tmp/analyze.py, /tmp/analyze2.py). Findings:
+  * avg health at death 88 (NOT starvation), 52/79 die at edge/wall.
+  * DOMINANT class = 47/79 SELF-COIL / BOXED-IN (0 safe neighbours at death):
+    multi-turn wall-hug coils. e.g. sim_101: len27 ran UP right wall (x=10) then
+    along TOP wall (y=10) coiling to death while LONGER (28 vs 24) at 100hp.
+    sim_102: len27 v 28 (SHORTER) ran up left wall into (0,0). sim_105: len11v9
+    went to wall (10,8) and coiled.
+  * ROOT CAUSE: in these the opponent was FAR (being_hunted False) and we were
+    roughly EQUAL or even SHORTER, so NEITHER the neutral-zone wall avoidance
+    (needs my_len>=_max_ol) NOR the winning anti-wall-coil (needs my_len>max+1)
+    fired -- only the mild -8 edge nudge. So the wall cell still scored best and
+    we drifted onto walls then coiled into corners over many turns.
+- FIX (main.py, NEW "GENERAL ANTI-WALL-COIL" block, inserted after neutral-zone,
+  ~line 515): fires whenever (not being_hunted) and my_health >= 25, INDEPENDENT
+  of length. Adds center-pull (dist_center * 3.0) + edge -30 / corner -70, PLUS a
+  2-ply STATIC (no-retreat) flood: from nc's best follow-up cell, if best 2-step
+  region < my_len penalize (my_len-best)*12, -320 if <=3. Catches the forming
+  coil BEFORE it seals in the shorter/equal-not-hunted band that was uncovered.
+- TESTING (variance huge; mirror A/B noisy per prior notes):
+  * A/B vs pre-change baseline (main_round0_astar_backup.py, /tmp/ab.sh): 11-8-1
+    then 11-9-0 => 22-17-1 over 40 games. Consistent modest edge, no regression.
+  * smart_opp (smartmatch.sh 16): 11-5 (strong).
+  * I TRIED a stronger variant (center 4.0, edge -42/-90): noisier (12-8 then
+    9-11 vs baseline, 9-7 smart) -- REVERTED to the gentler 3.0/30/70 which was
+    more consistent (don't over-crank, per all prior README notes).
+  * solo_test SURVIVED 300 turns len 7. match.sh naive 5-0. ast.parse+import OK;
+    launch block intact.
+- Backup: main_round0_astar_backup.py (pre-this-change, proven 164-79 code).
+- ADVICE FOR NEXT TEAMMATE: astar-snake is our TOUGHEST opponent (79 losses).
+  Our loss class = multi-turn wall coils in the shorter/equal-not-hunted band,
+  now covered by the general anti-wall-coil. NOTE replay of recorded losses
+  doesn't diverge much (body already coiled) -- the fix matters in LIVE play by
+  steering off walls MANY turns earlier. Next real lever = a deeper (3-ply) space
+  search or a corridor/connectivity metric to detect coils earlier, and/or GROW
+  faster when shorter (28/79 losses we were shorter -> lost h2h). Keep general +
+  neutral-zone + winning anti-wall-coil + static_flood + 2-ply-pin + tail-reach +
+  escape-count + parallel-shadow + growth-attraction. Judge via /tmp/ab.sh +
+  smartmatch multi-batch (variance!). NEVER touch the launch block.
