@@ -309,10 +309,15 @@ def move(game_state):
                 # chase patterns.  Keep a larger bonus only when length is close.
                 if my_len <= max_enemy_len + 3:
                     score += 40
-                elif my_len <= max_enemy_len + 6:
-                    score += 12
+                elif my_len <= max_enemy_len + 4:
+                    score += 8
                 else:
-                    score -= 50
+                    # When we are already far ahead, do not enter even a shorter
+                    # snake's possible head square just to chase it.  Amphibious
+                    # Arthur's rare wins often start with us shadowing a much
+                    # smaller head into a cramped pocket; outliving in open space
+                    # is safer than forcing a nonessential head-to-head.
+                    score -= 70
             # Prefer cells with multiple exits (less likely to enter a cul-de-sac).
             exits = 0
             for d2 in MOVES.values():
