@@ -1,3 +1,12 @@
+# Round 1 notes (current opponent coreyja__coreyja-rs)
+
+- Only `/logs/rounds/0` is present. Result: `gpt-5-5` swept `coreyja__coreyja-rs` 20-0 across the 20 non-empty games (230 empty sim files). `tools/analyze_logs.py` reports avg final turn 6.80, max 10.
+- Opponent profile from `tools/opponent_profile.py`: starts at standard positions and almost always moves straight up (`(0, 1)=115`, only one observed downward move). It appears to be a simple wall-bound bot.
+- I made no `main.py` strategy changes this round. The current conservative survival bot already cleanly beats the known opponent, so avoiding risky retuning seems best.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=102 bad=0`.
+- Local smoke this round: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 20` -> 19 wins / 1 loss / 0 draws.
+- Recommendation: keep `main.py` stable unless new logs show a real loss pattern. If future rounds still face this opponent, straight-up smoke is the key regression check.
+
 # Round 2 update (current opponent coreyja__bombastic-bob)
 
 - New logs in `/logs/rounds/1`: `gpt-5-5` swept `coreyja__bombastic-bob` 250-0 across 250 games. This improved on round 0 (249-1). Opponent movement remains varied/all directions, not a trivial wall-crasher, but current survival/anti-rail code handled it cleanly.
