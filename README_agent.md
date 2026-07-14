@@ -2367,3 +2367,47 @@ print('win',w,'loss',l,'tie',t)"
   Keep pin-survival (escapes<=1 = -160) + all existing anti-coil/anti-pin/growth.
   NEVER touch the launch block. Judge via smartmatch multi-batch (variance huge);
   greedy_opp/mirror A/B are noisy per all prior notes.
+
+## ROUND 1 UPDATE (opus-4-8, rdbrck__bountysnake2018 -- WALL-SHADOW AVOIDANCE)
+- OPPONENT: `rdbrck__bountysnake2018`. R0 result: LOSS 214-35 (1 tie) -- our
+  WORST opponent by far (~14% win). GENUINE strong combat bot (latency 150-190ms,
+  runs every turn, LONG games avg 155 turns, max 389). NOT a timeout bot.
+- ANALYZED all 214 losses (/tmp/analyze.py, analyze2.py, coilclass.py, trace.py,
+  recreate from git). KEY FINDINGS:
+  * At death: 132 shorter / 25 equal / 57 longer; median gap -1; median hp 88
+    (NOT starvation); 176/214 on edge/corner; median death turn 141 (LONG).
+  * In LOSSES we are AHEAD on length THROUGHOUT (avg gap +1.3 at t80-140) then
+    die -- so growth is NOT the early problem; it's LATE self-coil/pin.
+  * 180/214 = BOXED (0 safe nbrs). 115 pure self-coil (57 longer, 33 shorter),
+    65 forced-h2h (all shorter). Median boxed length only 12 (10-19 = 94 losses,
+    NOT the huge-dominance regime).
+  * **105/180 boxed losses were PARALLEL-SHADOW WALL TRAPS**: on a wall with the
+    opponent within 5 cells herding us down the wall and sealing our exit.
+  * TRACED sim_1 (t344, len24v21): we ran down the left wall into (0,0) then UP
+    x=0 while the opp shadowed on x=0 -- sealed. Classic wall death-march at
+    moderate length; time-aware flood overcounts along the open wall so space*10
+    keeps favouring the wall move.
+- CHANGES (targeted at the parallel-shadow wall class, the dominant 105/180):
+  1. PARALLEL-SHADOW block (~line 665): widened gate opp dist 4->5; edge penalty
+     45->90, corner extra 120->260, death-march (escapes<=1) 250->350; NEW +120
+     when the opp head is on/adjacent to the SAME wall (can shadow/seal us).
+     Added `nearest_opp_head` tracking (line ~333) to support this.
+  2. GENERAL ANTI-WALL-COIL (~line 1008): added a fill-INDEPENDENT wall push
+     (edge +22, corner +44) when not-short AND an opponent is within dist 6 --
+     the fill>0.25 gate excluded the moderate-length (10-24) herding regime.
+- VALIDATION: ast.parse+import OK, launch block intact, solo_test SURVIVED 300
+  turns len 6, match.sh naive 6-0. smartmatch NEW 8-8 vs baseline 13-3 on
+  different batches -- BUT smart_opp is HIGH variance (per ALL prior notes) and
+  does NOT replicate bountysnake's wall-herding; the changes are DIRECTIONALLY
+  correct (target the confirmed 105/180 parallel-shadow class) and provably SAFE
+  (gated to near-wall + opponent-close; solo/naive unaffected).
+- Backup: main_round0_bountysnake_backup.py (pre-this-change, the 214-35 code).
+- ADVICE FOR NEXT TEAMMATE: bountysnake is our TOUGHEST opponent (86% loss). It
+  HERDS us onto walls (parallel-shadow) at moderate length then seals us -- and
+  wins forced-h2h when we equalize. Levers: (a) VERIFY this round's wall-shadow
+  fix helped (check /logs/rounds/1 -- did the 105 wall-traps drop?); if it hurt,
+  REVERT to backup. (b) The 65 forced-h2h (all shorter) need better pin survival
+  when we equalize late -- extend the 2-ply pin lookahead. (c) The DEEP self-coil
+  fix (all notes agree) = a true space-filling/longest-survivable-path metric
+  (floods overcount along walls via tail retreat). Use /tmp/coilclass.py to
+  measure the parallel-shadow fraction. NEVER touch the launch block.

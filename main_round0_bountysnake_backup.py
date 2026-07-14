@@ -330,14 +330,12 @@ def _choose_move(game_state):
     # open room and avoid walls so we cannot be cut off.
     nearest_opp_len = 0
     nearest_opp_dist = 9999
-    nearest_opp_head = None
     for s in opponents:
         oh = (s["body"][0]["x"], s["body"][0]["y"])
         d = _manhattan(head, oh)
         if d < nearest_opp_dist:
             nearest_opp_dist = d
             nearest_opp_len = s["length"]
-            nearest_opp_head = oh
     # Threatened = a longer/equal opponent is close enough to hunt us.
     being_hunted = (nearest_opp_len >= my_len) and (nearest_opp_dist <= 5)
     cx, cy = width // 2, height // 2
@@ -671,31 +669,18 @@ def _choose_move(game_state):
         # never fired). Fix: when ANY opponent head is close (<=4) and our new
         # head lands on an edge, penalize it -- pull us off the wall into open
         # board where a shadow cannot cut us off. Applies regardless of length.
-        # vs rdbrck__bountysnake2018 (R0 214-35): 105/180 boxed losses were
-        # PARALLEL-SHADOW WALL TRAPS at moderate length (median 12) with the opp
-        # within 5 cells herding us down a wall. Widen the gate to <=5 and make
-        # the wall/corner penalty near-prohibitive so we peel off the wall EARLY
-        # (time-aware flood overcounts along an open wall so space*10 keeps
-        # favouring it; these penalties must be large to overcome that).
-        if nearest_opp_dist <= 5:
+        if nearest_opp_dist <= 4:
             _on_edge_s = (nc[0] == 0 or nc[0] == width - 1
                           or nc[1] == 0 or nc[1] == height - 1)
             if _on_edge_s:
-                score -= 90.0
+                score -= 45.0
                 # heading INTO a corner with a close opponent = near-certain seal
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 260.0
+                    score -= 120.0
                 # extra: if this edge cell has <=1 non-losing escape it is a
                 # death-march down the wall against a shadowing snake.
                 if escapes <= 1:
-                    score -= 350.0
-                # if the opponent is itself near this wall (on/adjacent to it) it
-                # can shadow us and seal our exit -- extra push off the wall.
-                _ohx = nearest_opp_head[0] if nearest_opp_head else -9
-                _ohy = nearest_opp_head[1] if nearest_opp_head else -9
-                if (nc[0] in (0, width - 1) and abs(_ohx - nc[0]) <= 1) or \
-                   (nc[1] in (0, height - 1) and abs(_ohy - nc[1]) <= 1):
-                    score -= 120.0
+                    score -= 250.0
 
         # 1-PLY LOOKAHEAD SPACE (anti multi-turn coil, sim_238 round-1 loss):
         # A single-turn flood can look fine while our body spirals into a loop
@@ -1009,14 +994,6 @@ def _choose_move(game_state):
                 _extra_g = (_fill_g - 0.25) * 130.0
                 _ep += _extra_g
                 _cop += _extra_g * 2.0
-            # vs rdbrck__bountysnake2018: it herds us onto walls at MODERATE
-            # length (median 12) while shadowing within 5 -- below the fill>0.25
-            # gate above. When an opponent is close-ish (<=6) and we are not
-            # short, add a fill-independent wall push so we don't get herded onto
-            # a wall then sealed. Modest (won't override combat positioning).
-            if (not _short) and nearest_opp_dist <= 6:
-                _ep += 22.0
-                _cop += 44.0
             _dcg = abs(nc[0] - cx) + abs(nc[1] - cy)
             score -= _dcg * _cp
             _on_edge_g = (nc[0] == 0 or nc[0] == width - 1
