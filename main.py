@@ -192,9 +192,21 @@ def _choose_move(game_state):
         # Prefer the move that most reduces distance to nearest food.
         best.sort(key=lambda s: (food_dist(s[3]), -s[1]))
     else:
-        # Prefer more space, then move toward center for safety.
-        center = (width // 2, height // 2)
-        best.sort(key=lambda s: (-s[1], _manhattan(s[3], center)))
+        # We are clearly longer than every opponent: hunt to force a
+        # favorable head-to-head, while keeping space priority.
+        clearly_longer = my_len > _max_opp_len(opponents) + 1
+        if clearly_longer and opponents:
+            opp_heads = [(o["body"][0]["x"], o["body"][0]["y"]) for o in opponents]
+
+            def opp_dist(nc):
+                return min(_manhattan(nc, oh) for oh in opp_heads)
+
+            # Keep ample space, then close distance to the enemy head.
+            best.sort(key=lambda s: (-s[1], opp_dist(s[3])))
+        else:
+            # Prefer more space, then move toward center for safety.
+            center = (width // 2, height // 2)
+            best.sort(key=lambda s: (-s[1], _manhattan(s[3], center)))
 
     return best[0][2]
 
