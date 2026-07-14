@@ -307,10 +307,18 @@ def move(game_state):
                 # already safely ahead there is little need to dive into the
                 # squares around its head; doing so can pull us into cramped
                 # chase patterns.  Keep a larger bonus only when length is close.
-                if my_len <= max_enemy_len + 3:
+                if my_len <= max_enemy_len + 2:
                     score += 40
-                elif my_len <= max_enemy_len + 4:
+                elif my_len <= max_enemy_len + 3:
+                    # At +3 length we already win head-to-heads comfortably; keep
+                    # only a tiny tactical bonus so we do not chase a smaller head
+                    # down rails instead of preserving open space.
                     score += 8
+                elif my_len <= max_enemy_len + 4:
+                    # At +4 length a chase bonus has caused us to shadow a smaller
+                    # snake into our own coil in this long-survivor matchup, so keep
+                    # the move neutral unless it is otherwise best.
+                    score += 0
                 else:
                     # When we are already far ahead, do not enter even a shorter
                     # snake's possible head square just to chase it.  Amphibious
@@ -855,11 +863,14 @@ def move(game_state):
             if enemy_heads:
                 nearest_enemy = min(dist(n, eh) for eh in enemy_heads)
                 if my_len > max_enemy_len:
-                    if my_len <= max_enemy_len + 6:
+                    if my_len <= max_enemy_len + 3:
                         score += max(0, 7 - nearest_enemy) * 3
                     else:
-                        # When far ahead, do not keep chasing a smaller head into
-                        # cramped coils; simply outlive it in open space.
+                        # When safely ahead, do not keep chasing a smaller head into
+                        # cramped coils; simply outlive it in open space.  ChaelCodes
+                        # losses often begin around +4 to +8 length when the old
+                        # proximity bonus pulled us toward a short survivor instead
+                        # of preserving open lanes.
                         score += max(0, 5 - nearest_enemy) * 0.5
                 else:
                     score += min(nearest_enemy, 6) * 4
