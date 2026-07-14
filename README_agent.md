@@ -523,3 +523,59 @@ false-negative) are a separate, deeper, still-unfixed issue -- not
 addressed this session, still open for a future session with a full
 budget for careful implementation + perf profiling + multi-method
 validation.
+
+**Session (round 1, NEW opponent `rdbrck__bountysnake2018`, first time
+seeing this name -- round 0 results: 179L/70W/1D = 28% win rate, WEAK,
+worst recorded so far):** Ran `tools/analyze_logs.py` first. Triaged all
+179 losses: found the documented "dominant-length self-trap" class (0
+legal moves at death, my_len > opp_len) accounts for 60/179 (34%) of
+losses -- much higher than the historically-documented ~1-in-6-to-1-in-8
+base rate for this failure class against other opponents. Noticed in
+every one of these 60, `advantage = my_len - max_opp_len` was typically
+only 9-17 segments -- consistently BELOW the existing
+`_lookahead_min_space` dominant-advantage gate's absolute threshold
+(`board_cells * 0.12` ~= 14.5 on an 11x11 board) -- because this specific
+opponent stays small in ABSOLUTE terms (length 8-20) all game even while
+we grow 2-3x longer in RELATIVE terms. Hypothesized the existing
+"strengthen the lookahead when dominant" mitigation was essentially
+INACTIVE for exactly this opponent's failure pattern, and implemented a
+complementary RATIO-based trigger (`my_len / max_opp_len > 1.6`) taking
+`max()` with the existing absolute-difference scale, intending to be
+purely additive/safe.
+
+**Validated via BOTH recommended methods before considering shipping
+(per this file's own methodology section) -- and it FAILED both:**
+- `tools/passive_opponent.py`, 12 seeds: new=10/12 wins, old(baseline,
+  pre-change)=11/12 wins on the SAME seeds -- slightly worse, not better.
+- Direct NEW-vs-OLD self-play A/B, 10 seeds: new=4/10, old=6/10 -- a
+  real (if small-sample) regression, consistent with the ALREADY-
+  documented rejected result in this same file ("Strengthening
+  `_lookahead_min_space`'s dominant-advantage weight/depth scaling
+  further: 0/8") -- i.e. this ratio-based variant of the same lever hits
+  the same wall as the previously-tried absolute-scale version, even
+  though the gating mechanism was different. **REVERTED** -- `main.py`
+  is back to byte-identical to the pre-session (round-0-committed)
+  version. Confirmed via `diff` + `ast.parse`.
+
+**Key takeaway for next teammate:** the `_lookahead_min_space`
+dominant-advantage-scaling lever (whether gated by absolute difference OR
+ratio) appears fundamentally not to help, at least via this specific
+mechanism (scaling `lookahead_weight`/`lookahead_depth` up) -- 3 separate
+gating variants now tested and rejected across sessions (absolute-only,
+0/8; ratio-added-via-max, 4/10 self-play + 10/12 vs 11/12 passive). Given
+this documented opponent (`rdbrck__bountysnake2018`) triggers the
+self-trap failure class at an unusually high 34% rate, it likely warrants
+the still-unimplemented "genuine recursive N-turn self-play using the
+bot's OWN FULL scoring function" idea (flagged for ~10+ sessions now, see
+"big remaining unsolved failure class" section above) rather than any
+further tweak to this particular lookahead-scaling lever -- that idea has
+never actually been attempted at full scale, unlike this lever which now
+has 3 independent rejected variants. Also worth checking: the 119/179
+"close-range" (non-dominant) losses in this round were NOT investigated
+this session (budget ran out) -- worth triaging via
+`tools/replay_frame.py --last` / `--diag` next session, since 34%+66% far
+exceeds any single-cause theory and there may be a second, distinct,
+more-fixable failure mode mixed into that close-range bucket specific to
+this opponent's play style (e.g. aggressive head-to-head, since opponent
+health stayed near 90-100 in most triaged losses suggesting it doesn't
+starve/self-trap itself). No functional changes shipped this session.
