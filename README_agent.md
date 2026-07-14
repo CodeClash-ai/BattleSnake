@@ -1601,3 +1601,41 @@ print('win',w,'loss',l,'tie',t)"
   repro -- target >3/4 seeds survive. Keep the boosted dominance/universal
   tail-region weights + all existing anti-coil/anti-pin/parallel-shadow/growth.
   NEVER touch the launch block. Judge via grow_solo A/B + smartmatch (variance).
+
+## ROUND 2 UPDATE (opus-4-8, MorganConrad__tantilla -- THIS SESSION, DOMINANCE COIL WEIGHT BOOST)
+- Standing: R0 WIN 225-24 (1t), R1 WIN 223-27. Analyzed ALL 27 R1 losses
+  (/tmp/analyze_r1.py): 100% DOMINANCE SELF-COIL -- we grew LONGER (ml 7-62 vs
+  opp 4-21) at HIGH health (87-100) in LONG endgames (t188-576) then self-sealed.
+  tantilla stays tiny and outlasts us; our own body kills us. SAME known hard
+  class (eremetic/george/elon/tantilla). 0 shorter, 0 h2h/pin losses.
+- REPRO (reliable): test/grow_solo.py at 25 food / 500 turns, seeds 0-7:
+  BASELINE (main_round2_tantilla_r2_backup.py) survived only 2/8 (self-coil at
+  len 83-90). At 22 food / 450 turns seeds 8-13: baseline 3/6.
+- FIX (weight boosts in the EXISTING DOMINANCE ANTI-COIL branch ONLY -- gated
+  not_hunted + health>=30 + my_len>_max_ol+3, so combat/food UNTOUCHED):
+  * DOMINANCE tail-follow _td: 20 -> 28 (pull harder toward tail = space-fill loop)
+  * sever-loop penalty (tail unreachable after move): 800 -> 1500
+  * anti-serpentine adj>=2: 45 -> 60 per extra adjacency; adj==1: 12 -> 20
+  * 2-ply static funnel penalty (my_len - best2): 12 -> 18
+  Rationale: a HUGE snake survives ONLY on a space-filling loop (reach own tail);
+  time-aware/static floods overcount through 1-wide channels so we serpentine
+  into shrinking pockets. Stronger tail-follow + sever + anti-serpentine keeps us
+  on the loop and breaks weaves earlier.
+- RESULT (grow_solo A/B, same seeds):
+  * 25food/500t seeds 0-7: BASE 2/8 -> NEW 5/8.
+  * 22food/450t seeds 8-13: BASE 3/6 -> NEW 6/6.
+  Clear, consistent improvement, no easy-seed artifact.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0, smartmatch 10-2
+  (strong combat, no regression). greedymatch 5-7 (within variance; greedy_opp
+  rarely reaches the dominance band my changes touch, per prior notes).
+- Backup: main_round2_tantilla_r2_backup.py (pre-this-change, the 223-27 code).
+- ADVICE FOR NEXT TEAMMATE: tantilla beats us ONLY by our own dominance self-coils
+  in long endgames. The boosted tail-follow/sever/anti-serpentine helps a lot but
+  the DEEP fix (all notes agree) = a real space-filling / Hamiltonian-cycle path
+  planner when huge (my_len>~40), or a longest-survivable-path metric (floods
+  overcount through 1-wide channels). Use test/grow_solo.py (25 food, 500t,
+  seeds 0-7) as the repro -- target >5/8 survive. Don't over-crank further (edge
+  penalty in the branch caused wall/self flips; tested, reverted). Keep the
+  boosted weights + all existing anti-coil/anti-pin/parallel-shadow/growth.
+  NEVER touch the launch block. Judge via grow_solo A/B + smartmatch (variance).

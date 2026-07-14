@@ -491,7 +491,7 @@ def _choose_move(game_state):
             # loop) and reward keeping the largest STATIC (no-retreat) region.
             if my_tail is not None:
                 _td = abs(nc[0] - my_tail[0]) + abs(nc[1] - my_tail[1])
-                score -= _td * 28.0
+                score -= _td * 20.0
             score += sspace * 8.0
             # TAIL-REACHABLE REGION (huge-snake space-filling survival): from the
             # new head, flood the board treating our body-after-move as walls and
@@ -510,7 +510,7 @@ def _choose_move(game_state):
                 if _tail_ok:
                     score += 120.0             # stays on a survivable loop
                 else:
-                    score -= 1500.0            # severs the loop -> coil death
+                    score -= 800.0            # severs the loop -> coil death
                 # also reward a bigger reachable region (open room, no channel)
                 score += _reg * 16.0
             # ANTI-SERPENTINE: snugging the head against 2+ of our own body cells
@@ -522,9 +522,9 @@ def _choose_move(game_state):
                 if (nc[0] + _adx, nc[1] + _ady) in _own_d:
                     _adj_d += 1
             if _adj_d >= 2:
-                score -= (_adj_d - 1) * 60.0
+                score -= (_adj_d - 1) * 45.0
             elif _adj_d == 1:
-                score -= 20.0
+                score -= 12.0
             # 2-PLY STATIC LOOKAHEAD when HUGE: after moving to nc (body grown by
             # one, tail retreated), look at the best static (no-retreat) region
             # reachable from any safe neighbour of nc. If even the BEST follow-up
@@ -541,7 +541,7 @@ def _choose_move(game_state):
                 if _s2v > _best2:
                     _best2 = _s2v
             if _best2 < my_len:
-                score -= (my_len - _best2) * 18.0
+                score -= (my_len - _best2) * 12.0
             if _best2 <= 4:
                 score -= 300.0
 
