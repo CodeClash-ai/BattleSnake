@@ -393,13 +393,13 @@ def _choose_move(game_state):
             _reg_u, _tail_ok_u = _region_and_tail(
                 nc, _occ_u, _future_tail_u, limit=None)
             if _tail_ok_u:
-                score += 90.0             # stays on a survivable space-filling loop
+                score += 50.0             # stays on a survivable space-filling loop
             else:
-                score -= 500.0            # severs the loop -> multi-turn coil death
+                score -= 350.0            # severs the loop -> multi-turn coil death
             # Prefer moves that keep a static region at least as large as we are;
             # a region smaller than our length is a pocket that seals as we grow.
             if _reg_u < my_len:
-                score -= (my_len - _reg_u) * 14.0
+                score -= (my_len - _reg_u) * 10.0
             if _reg_u <= 4:
                 score -= 250.0
             # NEAR-EQUAL-LENGTH ANTI-COIL (fix vs jackisherwood__battlesnake-elon
@@ -491,7 +491,7 @@ def _choose_move(game_state):
             # loop) and reward keeping the largest STATIC (no-retreat) region.
             if my_tail is not None:
                 _td = abs(nc[0] - my_tail[0]) + abs(nc[1] - my_tail[1])
-                score -= _td * 20.0
+                score -= _td * 12.0
             score += sspace * 8.0
             # TAIL-REACHABLE REGION (huge-snake space-filling survival): from the
             # new head, flood the board treating our body-after-move as walls and
@@ -508,11 +508,11 @@ def _choose_move(game_state):
                 _reg, _tail_ok = _region_and_tail(
                     nc, _occ_tr, _future_tail, limit=None)
                 if _tail_ok:
-                    score += 120.0             # stays on a survivable loop
+                    score += 60.0             # stays on a survivable loop
                 else:
-                    score -= 800.0            # severs the loop -> coil death
+                    score -= 400.0            # severs the loop -> coil death
                 # also reward a bigger reachable region (open room, no channel)
-                score += _reg * 16.0
+                score += _reg * 10.0
             # ANTI-SERPENTINE: snugging the head against 2+ of our own body cells
             # is weaving a coil that fills a sub-length pocket over many turns
             # (sim_12/sim_141 interior coils). Penalize hard, scaled with length.
