@@ -327,6 +327,13 @@ def move(game_state):
             score += exits * 18
             if exits <= 1 and area < my_len + 4:
                 score -= 250
+            # Against strong A*/space opponents, equal-length endgames often turn
+            # into self-coils: a one-exit move may have more than my_len cells of
+            # flood-fill, but still be a one-way pocket with no way back to the
+            # moving tail.  Add a mild general penalty before the far-ahead-only
+            # noose rule below.
+            if my_len >= 14 and my_health > 65 and exits <= 1 and area < my_len * 2 and n not in food:
+                score -= 90
             # In long games where we are already far ahead, a one-exit move can
             # be the mouth of a large-looking but effectively one-way noose.
             # Amphibious Arthur's rare wins often happen after we voluntarily
@@ -438,6 +445,21 @@ def move(game_state):
                         score += max(0, 18 - tail_dist) * 4
                     else:
                         score -= 40
+                elif my_health > 65 and my_len >= 14 and area < my_len * 2 and n not in food:
+                    # In close-length long games, survival often depends on staying
+                    # connected to our own tail rather than maximizing raw area.
+                    # This is intentionally limited to cramped, non-food moves so
+                    # it does not override early growth or open-board play.
+                    tail_cell = next_body[-1]
+                    tail_blocked = set(sim_blocked)
+                    tail_blocked.discard(tail_cell)
+                    tail_dist = shortest(n, [tail_cell], tail_blocked, w, h, max_depth=w * h)
+                    if tail_dist is None:
+                        score -= 160
+                    else:
+                        score += max(0, 12 - tail_dist) * 14
+                        if n == my_body[-1]:
+                            score += 140
 
             # Voronoi-style space ownership versus equal/longer opponents.
             scary_heads = [pt(s["head"]) for s in enemies if s.get("length", len(s.get("body", []))) >= my_len]
