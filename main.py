@@ -1,49 +1,33 @@
 """
-Faithful port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into
-CodeClash v1.
+Strong Battlesnake bot for CodeClash 1v1 standard 11x11.
 
-Original: io/battlesnake/examples/kotlin/SimpleSnake.kt (uses the
-battlesnake-quickstart "io.battlesnake.core" framework, which speaks the raw
-BattleSnake v1 API JSON directly -- board width/height, body/food x,y, and the
-standard y-up / bottom-left coordinate system where "up" = y+1, "down" = y-1).
+Strategy:
+  - Enumerate the 4 possible moves.
+  - Simulate the board one step ahead (bodies shift, tails move).
+  - Avoid walls, self, and opponent bodies.
+  - Avoid losing head-to-head collisions; seek winning ones.
+  - Use flood-fill to estimate reachable free space for each candidate move,
+    strongly preferring moves that don't trap us.
+  - Seek food when health is low or when it's safe/close, targeting NEAREST food.
+  - Score each move with a weighted combination and pick the best.
 
-Original strategy (reproduced exactly):
-
-    fun moveTo(request, position): MoveResponse =
-        when {
-            head.x > position.x -> LEFT
-            head.x < position.x -> RIGHT
-            head.y > position.y -> DOWN
-            else                -> UP
-        }
-
-    fun nearestFood(head, foodList): Food =
-        foodList.maxByOrNull { head - it.position }!!   // Position.minus == Manhattan
-                                                        // -> picks the FARTHEST food
-
-    if (isFoodAvailable)
-        moveTo(head, nearestFood(head, foodList).position)
-    else
-        moveTo(head, boardCenter)
-
-Faithfulness notes:
-  - Position.minus is Manhattan distance; maxByOrNull selects the largest, i.e.
-    the *farthest* food (a genuine quirk of the original -- preserved).
-  - moveTo returns exactly ONE move by strict priority: x fully dominates y.
-    If x differs, y is never consulted. The final "else -> UP" also covers the
-    fully-aligned (head == target) case.
-  - The original has NO collision / out-of-bounds avoidance at all; it blindly
-    returns the moveTo direction. We do not add any. The only wrapper is the
-    arena-required try/except legal fallback.
+Coordinate system: BattleSnake v1 (y-up, bottom-left origin).
+  up = y+1, down = y-1, left = x-1, right = x+1.
 """
+
+DIRS = {
+    "up": (0, 1),
+    "down": (0, -1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
 
 
 def info():
-    # DescribeResponse("me", "#ff00ff", "beluga", "bolt")
     return {
         "apiversion": "1",
         "author": "me",
-        "color": "#ff00ff",
+        "color": "#00ccff",
         "head": "beluga",
         "tail": "bolt",
     }
@@ -58,55 +42,140 @@ def end(game_state):
 
 
 def _manhattan(a, b):
-    # Position.minus: abs(dx) + abs(dy)
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
-def _board_center(width, height):
-    # Board.center: ((w even ? w/2 : (w+1)/2) - 1, same for height)
-    center_x = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
-    center_y = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
-    return (center_x, center_y)
+def _in_bounds(p, w, h):
+    return 0 <= p[0] < w and 0 <= p[1] < h
 
 
-def _move_to(head, target):
-    """Exact reproduction of SimpleSnake.moveTo (y-up API)."""
-    hx, hy = head
-    tx, ty = target
-    if hx > tx:
-        return "left"
-    if hx < tx:
-        return "right"
-    if hy > ty:
-        return "down"
-    return "up"
+def _flood_fill(start, blocked, w, h, limit):
+    """Count reachable free cells from start, up to limit (BFS)."""
+    if start in blocked or not _in_bounds(start, w, h):
+        return 0
+    seen = {start}
+    stack = [start]
+    count = 0
+    while stack and count < limit:
+        cx, cy = stack.pop()
+        count += 1
+        for dx, dy in DIRS.values():
+            np = (cx + dx, cy + dy)
+            if np in seen:
+                continue
+            if not _in_bounds(np, w, h):
+                continue
+            if np in blocked:
+                continue
+            seen.add(np)
+            stack.append(np)
+    return count
 
 
 def move(game_state):
     try:
         board = game_state["board"]
-        width, height = board["width"], board["height"]
-        head_seg = game_state["you"]["body"][0]
-        head = (head_seg["x"], head_seg["y"])
+        w, h = board["width"], board["height"]
+        you = game_state["you"]
+        me_body = [(s["x"], s["y"]) for s in you["body"]]
+        head = me_body[0]
+        my_len = len(me_body)
+        my_health = you["health"]
 
-        food = board.get("food", [])
-        if food:
-            # nearestFood: maxByOrNull(Manhattan) -> farthest food.
-            # Kotlin maxByOrNull keeps the FIRST element attaining the max.
-            target = None
-            best = -1
-            for f in food:
-                fp = (f["x"], f["y"])
-                d = _manhattan(head, fp)
-                if d > best:
-                    best = d
-                    target = fp
-        else:
-            target = _board_center(width, height)
+        snakes = board["snakes"]
+        food = [(f["x"], f["y"]) for f in board.get("food", [])]
 
-        return {"move": _move_to(head, target)}
+        # Build set of occupied cells that will persist next turn.
+        # Each snake's tail moves away unless the snake just ate (health==100
+        # after eating -> body has duplicate tail). We conservatively treat the
+        # tail as free if the snake did NOT eat (i.e. body[-1] != body[-2]).
+        occupied = set()
+        opp_heads = []  # (head_pos, length)
+        for s in snakes:
+            body = [(seg["x"], seg["y"]) for seg in s["body"]]
+            # tail will move; keep it blocked only if the snake likely grows
+            grows = (len(body) >= 2 and body[-1] == body[-2]) or s["health"] == 100
+            cells = body if grows else body[:-1]
+            for c in cells:
+                occupied.add(c)
+            if s["id"] != you["id"]:
+                opp_heads.append((body[0], len(body)))
+
+        # Opponent's possible next head positions (for head-to-head handling).
+        opp_next = {}  # cell -> max opp length that could arrive there
+        for ohead, olen in opp_heads:
+            for dx, dy in DIRS.values():
+                np = (ohead[0] + dx, ohead[1] + dy)
+                if _in_bounds(np, w, h):
+                    if np not in opp_next or olen > opp_next[np]:
+                        opp_next[np] = olen
+
+        best_move = None
+        best_score = -1e18
+
+        for mv, (dx, dy) in DIRS.items():
+            np = (head[0] + dx, head[1] + dy)
+
+            # Hard constraints
+            if not _in_bounds(np, w, h):
+                continue
+            if np in occupied:
+                continue
+
+            score = 0.0
+
+            # Head-to-head danger evaluation
+            hh_len = opp_next.get(np, 0)
+            if hh_len:
+                if hh_len >= my_len:
+                    # We'd lose or tie the head-to-head: very bad
+                    score -= 10000
+                else:
+                    # We'd win it: bonus
+                    score += 500
+
+            # Flood fill: space available after moving here.
+            blocked = set(occupied)
+            blocked.add(head)  # our new neck occupies head cell
+            space = _flood_fill(np, blocked, w, h, my_len * 4 + 20)
+            score += space * 100
+
+            # Prefer not to shrink into a space smaller than our body.
+            if space < my_len:
+                score -= (my_len - space) * 200
+
+            # Food seeking
+            if food:
+                nearest = min(_manhattan(np, f) for f in food)
+                # Weight food by hunger. Always mildly attractive.
+                hunger = 0.0
+                if my_health < 40:
+                    hunger = (50 - my_health) * 3.0
+                else:
+                    hunger = 5.0
+                score += hunger * (1.0 / (nearest + 1)) * 20
+                score -= nearest * (1.5 if my_health < 40 else 0.3)
+
+            # Slight preference for staying near center (mobility).
+            cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+            score -= (abs(np[0] - cx) + abs(np[1] - cy)) * 0.5
+
+            if score > best_score:
+                best_score = score
+                best_move = mv
+
+        if best_move is None:
+            # No safe move found; pick any in-bounds to maybe survive.
+            for mv, (dx, dy) in DIRS.items():
+                np = (head[0] + dx, head[1] + dy)
+                if _in_bounds(np, w, h):
+                    best_move = mv
+                    break
+            if best_move is None:
+                best_move = "up"
+
+        return {"move": best_move}
     except Exception:
-        # Arena-required legal fallback (original has none).
         return {"move": "up"}
 
 
