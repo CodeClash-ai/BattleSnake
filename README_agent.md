@@ -1204,3 +1204,37 @@ print('win',w,'loss',l,'tie',t)"
   faster early. Keep offensive-space-denial + all existing anti-coil/anti-pin.
   Test via /tmp/abspace.sh vs space_opp (multi-batch, variance huge). NEVER touch
   the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, nbw__nbw-ruby opponent) -- THIS SESSION
+- OPPONENT: `nbw__nbw-ruby` (same author as nbw-crystal). Round 0 result:
+  WIN 235-13 (2 ties). GENUINE combat opponent, avg game len ~74 turns, max 363.
+- ANALYZED all 13 losses (at last 2-snake turn): DOMINANT class = our head on/
+  near an EDGE with 0-1 safe neighbours at HIGH health (11/13 hp>=80) = boxed
+  self-coil / pin. 7 hunted (opp>=us within dist5), 6 NOT-hunted self-coils.
+  Key not-hunted coils: sim_16 (len18 EQUAL, serpentine weave in top-right 4x4
+  pocket x5-8 y6-9), sim_139 (len19 vs18, serpentine weave near left wall),
+  sim_135/246. ROOT CAUSE for the not-hunted EQUAL-length coils: the self-
+  adjacency anti-coil penalty only fired when my_len > max_opp+1 (clearly
+  longer), so in the EQUAL band nothing discouraged the weaving coil buildup.
+- FIX (main.py, in the GENERAL ANTI-WALL-COIL block, ~line 553): added a
+  SELF-ADJACENCY penalty that fires whenever (not being_hunted) and health>=25,
+  INDEPENDENT of length: if the new head touches >=2 of our own body cells,
+  -(adj-1)*14. Discourages the serpentine weave (2+ self-adjacencies) that
+  builds multi-turn coils in the equal-length band, before it seals. Uses >=2
+  threshold so normal tail-following (1 adjacency) is never penalized.
+- VERIFIED on a synthetic top-right serpentine coil (len8): bot now chooses
+  'left' (toward open center) instead of continuing to coil. Correct.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 8-0.
+  smart_opp (smartmatch.sh 24): 15-9 then 19-5 => 34-14 (~71%, no regression,
+  IMPROVED). Mirror A/B vs backup (/tmp/ab.sh, main_round0_ruby_backup.py):
+  16-13-1 then 14-16 = 30-29-1 over 60 (wash -- mirror is noisy per prior notes).
+- Backup: main_round0_ruby_backup.py (pre-this-change, proven 235-13 code).
+- ADVICE FOR NEXT TEAMMATE: ruby beats us via edge/corner boxed self-coils
+  (mostly at high health). The equal-band self-adjacency fix targets the not-
+  hunted coils. Remaining lever: 7/13 losses were HUNTED (opp >= us, pinned) --
+  grow to length parity faster (food weight already 4.5 when behind), or extend
+  the 2-ply pin lookahead. Also deeper self-coils need 3-ply space search /
+  connectivity metric. Keep self-adjacency(general) + static_flood + 2-ply-pin +
+  offensive-space-denial + anti-pin + parallel-shadow + growth-attraction.
+  Judge via smart_opp multi-batch (variance!). NEVER touch the launch block.

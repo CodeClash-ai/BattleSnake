@@ -551,18 +551,6 @@ def _choose_move(game_state):
                 score -= (my_len - _best2g) * 12.0
             if _best2g <= 3:
                 score -= 320.0
-            # SELF-ADJACENCY anti-coil (fix vs nbw-ruby R0 losses sim_16/139:
-            # multi-turn serpentine self-coils in the EQUAL-length band where the
-            # winning anti-coil never fired). Discourage snugging the new head
-            # against our own body, which is how a weaving coil builds up before
-            # it seals. Applies whenever not-hunted+healthy, independent of length.
-            _own_body_g = set(my_body[:-1])
-            _adj_g = 0
-            for _agx, _agy in DIRS.values():
-                if (nc[0] + _agx, nc[1] + _agy) in _own_body_g:
-                    _adj_g += 1
-            if _adj_g >= 2:
-                score -= (_adj_g - 1) * 14.0
 
         # Anti-coil: when winning (clearly longer) and safe, penalize moves that
         # snug the new head against our own body. Tight self-adjacency in open
