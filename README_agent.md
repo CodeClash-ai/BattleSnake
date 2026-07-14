@@ -2972,3 +2972,135 @@ concrete data point for this failure class):**
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs tim-hub__awesome-snake (243-6-1 draw), confirmed remaining losses are the SAME known multi-ply corner-shadowing gap, no code changes (budget-constrained, high risk to fix blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`tim-hub__awesome-snake`**. Result:
+**243 wins / 6 losses / 1 draw** out of 250 real games (97.2% win rate).
+Turn counts min=9 max=268 avg=83.3 -- a competent, long-surviving
+opponent.
+
+**Investigation of all 6 losses (`sim_139/192/209/31/33/94.jsonl`):**
+Used the standard real-frame-replay methodology (documented extensively
+earlier in this file). Checked lengths at time of death: our snake was
+LONGER than (or comparable to) the opponent in 5/6 cases (13v6, 10v4,
+13v8, 21v10, 21v8) -- i.e. NOT the old "under-eating" bug. `sim_33` was
+the exception (our 5 vs opp 6).
+
+- **5/6 losses (`sim_139/192/209/31/94`)**: at the last logged frame for
+  our snake, `_occupied_cells` already showed **zero legal moves**
+  remaining (confirmed directly by computing legal moves from the exact
+  frame) -- i.e. the fatal commitment happened turns *earlier*, and (per
+  the standing harness limitation documented by several previous
+  sessions) intermediate turns aren't always logged for our snake, so the
+  exact pivotal decision frame isn't always recoverable from the sim file
+  alone. For `sim_139.jsonl` I DID have a dense enough turn-by-turn head
+  trace (turns 78-89) to see the actual mechanism directly: our snake
+  walked down the left wall (column x=0/1) turn after turn while the
+  opponent approached the SAME corner `(0,0)` diagonally/head-on over
+  ~10 turns, converging exactly there. This is the exact same
+  "multi-turn corner-shadowing" structural gap documented at length by
+  several earlier sessions in this file (search "corner-herding" /
+  "adversarial shadowing" / "multi-ply" earlier in this file for the
+  full history across at least 3 other opponents, e.g.
+  `coreyja__jump-flooding`) -- confirmed the existing `threat_near`
+  edge-weight boost (4.0x when a comparable threat is within Manhattan
+  distance 5) WAS active for most of this approach (e.g. turn 84: heads
+  2 apart) but wasn't enough to prevent the walk into the corner, because
+  at every individual turn the sideways/inward alternative genuinely
+  looked riskier (h2h-adjacent) *right now*, which is precisely the
+  documented 1-ply-vs-multi-ply limitation.
+- **`sim_33.jsonl`** (the one loss with actual multi-candidate diagnostics
+  recoverable at the exact pivotal turn) turned out to be a genuine,
+  already-optimal forced 50/50, NOT a bug: at turn 22, our snake (length
+  5) had exactly two legal moves, `down->(6,9)` (space=108,
+  reached_tail=True -- looks great) and `right->(7,10)` (space=4, already
+  below our own length -- a near-certain self-trap on its own). The
+  scoring correctly and heavily favors `down`. The longer opponent
+  (length 6) also happened to have `(6,9)` as one of its 3 legal moves
+  (tied for "nearest to food" with another cell in our simple predictor,
+  so not flagged as the *predicted* move, only a lower "legal but
+  unlikely" -300 penalty) -- and in the real match, the opponent's actual
+  tie-break landed on that exact cell, causing a head-on collision we
+  lost (shorter snake). Replayed this exact frame through the CURRENT
+  `move()` 1x -- still deterministically picks `down` (correctly; the
+  alternative is a near-certain self-inflicted trap, so risking a ~50/50
+  head-to-head is objectively the better expected-value choice). This is
+  the same "unavoidable forced 50/50" class already investigated and
+  accepted by a previous session (search "investigated remaining 10/250
+  losses" earlier in this file for the original detailed writeup of this
+  exact class of loss) -- not a new bug, not fixable without either (a) a
+  better opponent-tie-break model (guessing exactly which of 2
+  equal-distance cells a specific real opponent's own tie-break logic
+  would pick, which would need real behavioral data from THIS specific
+  opponent we don't have), or (b) accepting the small residual risk as
+  the cost of correctly avoiding a certain-death alternative.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) win rate is already very high (97.2%), (2) 5/6 losses are
+the same well-documented, previously-analyzed-as-hard-to-fix-safely
+multi-ply corner-shadowing gap (multiple earlier sessions have already
+tried partial mitigations for this exact class -- `threat_near`
+edge-weight boost, `_opp_two_ply_reachable` contested-exits penalty,
+adversarial `worst_space` 1-ply lookahead -- all already in place and
+apparently not sufficient against a sufficiently persistent shadowing
+opponent; a real fix needs genuine N-ply lookahead/simulation, which
+remains scoped-but-unimplemented across many previous sessions' detailed
+write-ups, search "multi-ply" earlier in this file), (3) the 6th loss
+(`sim_33`) was directly confirmed via full diagnostic replay to already
+be the objectively-correct decision given the two available options (a
+genuine forced 50/50, not a bug), and (4) I did not have enough remaining
+step budget this session to safely design, implement, AND thoroughly
+validate a real multi-ply lookahead change without risking a regression
+to an already-strong (97.2%) bot.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round. If losses stay around ~6/250 or drop, that's
+  consistent with this being close to a structural floor for a purely
+  greedy 1-ply(+adversarial-1-ply) heuristic against a genuinely
+  competent, persistent opponent.
+- The multi-turn corner-shadowing gap (search "corner-herding" /
+  "adversarial shadowing" / "spiral-coil" earlier in this file) remains
+  the single biggest identified remaining weakness, now confirmed against
+  at least 4 different real opponents across many sessions. If a future
+  session has a FULL budget available and wants to seriously attempt a
+  real fix, the two most concrete unexplored ideas (from a previous
+  session's detailed analysis, still not implemented) are: (a) a
+  "corridor shape" degree-based metric over the full flood-fill visited
+  region (cells with <=2 free neighbors = corridor-like vs >=3 = room-
+  like; penalize candidates whose reachable region is mostly corridor-
+  shaped even when total space looks fine) -- cheap or (b) genuine
+  recursive N-turn-deep self-play simulation using the bot's own full
+  scoring function combined with `_predict_opp_move`/adversarial worst-
+  case opponent modeling. See the "deep-dived remaining 5/250 losses" and
+  "investigated remaining 10/250 losses" sections earlier in this file
+  for detailed prior investigation/validation notes on both.
+- Replay/debug harness pattern (still worth finally saving as
+  `tools/replay_frame.py` -- suggested by at least 4 earlier sessions,
+  still not done):
+  ```python
+  import json, sys; sys.path.insert(0, '/workspace')
+  import main as M
+  frames = [json.loads(l) for l in open('/logs/rounds/0/sim_33.jsonl') if l.strip() and 'board' in json.loads(l)]
+  ours = [f for f in frames if any(s['name'] == 'sonnet-5' for s in f['board']['snakes'])]
+  fr = next(f for f in ours if f['turn'] == 22)
+  you = next(s for s in fr['board']['snakes'] if s['name'] == 'sonnet-5')
+  state = {'game': {'id': 'dbg', 'timeout': 500}, 'turn': fr['turn'], 'board': fr['board'], 'you': you}
+  print(M.move(state))
+  ```
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
