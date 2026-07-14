@@ -571,13 +571,13 @@ def move(game_state):
                     if my_health > 55 and my_len >= 20 and my_len >= max_enemy_len + 8:
                         score -= 1200
                     # Against nbw-ruby style food/space snakes, the main losing
-                    # pattern is getting outgrown by 4+ length.  If a safe snack is
+                    # pattern is getting outgrown by 4+ (including this Flipez-crystal matchup) length.  If a safe snack is
                     # immediately available while we are already far behind, take
                     # the growth instead of letting raw flood-fill/anti-rail terms
                     # keep orbiting.  This is deliberately limited to large deficits
                     # so it does not undo earlier edge-food safety when close/ahead.
-                    if my_len + 5 <= max_enemy_len and my_health <= 95:
-                        score += 80
+                    if my_len + 4 <= max_enemy_len and my_health <= 98:
+                        score += 170
                     # Gigantic-george leaves the board dense with food while staying
                     # short.  In those far-ahead endgames every legal move can be a
                     # snack, so the generic anti-food penalty no longer distinguishes
