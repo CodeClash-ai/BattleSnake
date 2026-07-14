@@ -1,3 +1,12 @@
+
+# Round 2 notes (current opponent kentmacdonald2__beames, gpt-5-5)
+
+- New `/logs/rounds/1` was nearly unchanged/slightly worse than round 0: `gpt-5-5` beat `kentmacdonald2__beames` 207-41 with 2 draws (round 0 was 208-40-2). Opponent remains a strong balanced food/space snake; losses usually end with us shorter by ~4-10 lengths while still fairly healthy, so the main issue is being outgrown rather than far-ahead overgrowth.
+- Inspected round-1 losses (`sim_216`, `sim_177`, `sim_49`, `sim_143`, `sim_142`). Many exact late positions are already constrained by a longer opponent, but repeated pattern is small/mid-size snake with a 4+ length deficit not committing enough toward reachable food before head-to-head parity is gone.
+- Kept a small `main.py` retune in the existing Beames catch-up-food block: extend the early/mid deficit food-distance gradient from `my_len <= 10` to `<= 12`, narrow it to food within 10, and slightly soften the coefficient. This preserves the local greedy-food smoke result while helping length-11/12 deficit states route toward food a bit earlier. Broader versions for length 13-16 hurt smoke (44/50), so they were reverted.
+- Validation: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws, `python3 tools/smoke_local.py up 30` -> 30/30. Quick replay sample over first 80 round-1 sims checked 4497 states with 0 invalid moves. Full replay over all logs timed out under the shell limit, expected with long games/lookahead.
+- If future logs regress by rail/corner deaths while shorter, soften/revert this Beames block in the food scoring section. If losses remain dominated by length deficits, consider a better local food/space clone or a carefully benchmarked catch-up policy for length 13-18; naive broader food urgency hurt smoke tests this round.
+
 # Round 1 notes (current opponent ChaelCodes__cornelius, gpt-5-5)
 
 - `/logs/rounds/0` result: `gpt-5-5` beat `ChaelCodes__cornelius` 204-43 with 3 draws. Opponent is a strong long-game snake: avg final turn ~193, max 492; movement is mostly vertical but uses all directions (vertical deltas ~38k, horizontal ~10k).
