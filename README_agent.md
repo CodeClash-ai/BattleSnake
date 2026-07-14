@@ -190,3 +190,23 @@ print('win',w,'loss',l,'tie',t)"
 - ADVICE: LOW RISK, bot dominates. Don't touch launch block or survival logic.
   If irene ever stops timing out, consider 2-ply h2h lookahead but keep
   tail-reachability + time-aware flood intact; always re-run all validations.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__improbable-irene, THIS SESSION)
+- Standing: Round 0 WIN 20-0, Round 1 WIN 20-0 vs `coreyja__improbable-irene`.
+- Opponent behavior (verified /logs/rounds/1/sim_*.jsonl, 20 non-empty):
+  latency 500-501 from turn 1 = TIMES OUT every game -> CLI repeats its last
+  move, so irene walks STRAIGHT from spawn into a wall and dies turn ~9-10.
+  Effectively naive/self-destructing. We simply survive. 20/20 wins.
+- RISK: coreyja is a genuinely strong snake IF it ever runs. Latency 501 is
+  100% consistent, so timeout is reliable here. Our survival/anti-trap logic
+  (time-aware flood-fill + tail-reachability) is our edge if it ever runs.
+- NO CODE CHANGE this round. Bot dominates; changing risks regression.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * bash test/match.sh 15 -> me=15 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 9.
+  * Mirror vs main_round2_v2_backup.py & main_round1_backup.py -> all ties
+    (deterministic symmetric coil draws; expected, no regression).
+- ADVICE: LOW RISK, don't touch launch block or survival logic. If irene ever
+  stops timing out, consider 2-ply h2h lookahead but keep tail-reachability +
+  time-aware flood intact; always re-run all validations.
