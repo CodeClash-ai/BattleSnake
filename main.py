@@ -447,7 +447,10 @@ def move(game_state):
                     # stays disabled by the health gate below.
                     if (edge_food and my_health > 55 and my_len + 1 <= max_enemy_len
                             and enemy_heads and min(dist(n, eh) for eh in enemy_heads) <= 4):
-                        score -= 230
+                        # Stronger rail-snack avoidance: against ccSnake2018 several
+                        # losses started by eating edge food while still not longer,
+                        # giving a nearby equal/longer head the only exit lane.
+                        score -= 430
                 # Do not bloat forever when healthy and already far ahead.
                 if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
                     score -= 25
@@ -467,6 +470,45 @@ def move(game_state):
                     score -= 70
                     if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                         score -= 45
+            # Be much more reluctant to enter the rail/corner when a close
+            # equal-or-longer snake is nearby and we are not hungry.  The current
+            # opponent repeatedly wins the few lost games by shadowing us along
+            # an edge until our only exit is a losing head-to-head.
+            close_longer = [eh for eh in enemy_heads
+                            if enemy_lengths.get(eh, 0) >= my_len and dist(n, eh) <= 6]
+            if my_health > 55 and my_len <= max_enemy_len and close_longer:
+                outer_ring = n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2
+                actual_edge = n[0] in (0, w - 1) or n[1] in (0, h - 1)
+                if outer_ring:
+                    score -= 65
+                if actual_edge:
+                    score -= 160
+                    if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
+                        score -= 180
+                # If the move also closes distance to that stronger head, it is
+                # especially likely to start/continue a rail race.
+                cur_near = min(dist(head, eh) for eh in close_longer)
+                new_near = min(dist(n, eh) for eh in close_longer)
+                if outer_ring and new_near < cur_near:
+                    score -= 90
+
+            # Do not follow a longer snake into a same-edge/corner race when we
+            # have an interior escape.  In several ccSnake2018 losses our head
+            # shadowed a longer enemy along x=0/x=10 or y=0/y=10; the next square
+            # was not an immediate head-to-head yet, but the opponent could take
+            # the only rail exit on the following turn.
+            if my_health > 55 and my_len <= max_enemy_len and enemy_heads:
+                same_edge_race = False
+                for eh in enemy_heads:
+                    if enemy_lengths.get(eh, 0) < my_len or dist(n, eh) > 3:
+                        continue
+                    if (n[0] == eh[0] and n[0] in (0, w - 1)) or (n[1] == eh[1] and n[1] in (0, h - 1)):
+                        same_edge_race = True
+                        break
+                if same_edge_race:
+                    score -= 360
+                    if n[0] in (0, w - 1) and n[1] in (0, h - 1):
+                        score -= 240
 
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
