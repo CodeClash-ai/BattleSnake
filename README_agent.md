@@ -1453,3 +1453,37 @@ print('win',w,'loss',l,'tie',t)"
   food is still gated to safe cells space>=my_len and zeroed on edges when hunted).
   Keep all existing anti-coil/anti-pin/parallel-shadow/dominance logic intact.
   NEVER touch the launch block. Judge via greedy_opp multi-batch (variance huge).
+
+## ROUND 2 UPDATE (opus-4-8, Flipez__flipez-crystal -- THIS SESSION, EARLY-GROWTH BOOST)
+- Standing: R0 WIN 219-29 (2t), R1 WIN 221-26 (3t). R1 behind-food-weight boost
+  cut losses only 29->26. STILL losing to length deficit.
+- ANALYZED all 26 R1 losses (/tmp/analyze.py + /tmp/analyze_gap.py): 100% we were
+  SHORTER at death (gap 1-23). KEY NEW FINDING: 25/26 losses we FELL BEHIND VERY
+  EARLY -- median turn 10, 16 losses by turn 10-19, 9 by turn 0-9. flipez does a
+  burst-eat in the opening (traced sim_15: at t50 we were LONGER 10v9, then flipez
+  ate 3 food in ~10 turns and flipped ahead; sim_102/53: flipez reaches len7 by t20
+  while we sit at len4). ROOT CAUSE: when TIED or slightly ahead our food pull was
+  weak (tied 3.5, ahead 0.6) and the tied food-RACE rule was conservative
+  (my_fd<opp_fd-1), so flipez freely grabbed food and pulled ahead in the opening.
+- CHANGE (score_candidate food block, targeted early-growth parity):
+  * tied food_weight 3.5 -> 5.5 (contest hard so flipez can't pull ahead)
+  * behind food_weight base 7.0 -> 8.0, scale 0.8 -> 0.9 (8.0..13.4)
+  * FOOD RACING: TIED snakes (my_len <= _max_ol, new `_aggro`) now use the
+    aggressive win-OR-tie race rule (my_fd <= opp_fd) + race_w 5.0, same as behind.
+    Even/ahead snakes still use the conservative my_fd<opp_fd-1 (unchanged) so we
+    never dive into contested cells when already winning.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 8-0, grow_solo 6/6 seeds SURVIVE
+  400t (no self-coil regression, len 11-18).
+  * greedy_opp A/B (/tmp/abg.sh, aggressive-grower proxy for flipez, HIGH variance):
+    NEW = 20-9-1 + 19-11 => 39-20 (66%). BASELINE (main_round2_flipez_r2_backup.py)
+    = 20-10 + 16-14 => 36-24 (60%). Modest consistent edge, no regression.
+- Backup: main_round2_flipez_r2_backup.py (pre-this-change, the 221-26 code).
+- ADVICE FOR NEXT TEAMMATE: flipez OUT-GROWS us in the OPENING (turns 0-19) then
+  pins us via length. Early growth parity is THE lever. If losses persist, the
+  remaining move is to contest food EVEN MORE aggressively in turns 0-20 (e.g.
+  when tied, also contest food we lose the race by 1 IF escape>=2), or add a
+  2-ply h2h to win length-based contacts. Don't over-crank food -- it's gated to
+  safe cells (space>=my_len) and zeroed on edges when hunted. Keep all existing
+  anti-coil/anti-pin/parallel-shadow/dominance logic intact. Judge via
+  /tmp/abg.sh (greedy_opp) MULTI-BATCH (variance huge). NEVER touch launch block.

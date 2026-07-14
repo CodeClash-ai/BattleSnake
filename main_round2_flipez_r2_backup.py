@@ -314,9 +314,9 @@ def _choose_move(game_state):
         # BEHIND on length -- flipez-crystal out-grows us early (avg gap 5.3)
         # then wins forced h2h. Grow AGGRESSIVELY to reach length parity.
         _behind = _max_ol - my_len
-        _food_weight = 8.0 + min(_behind, 6) * 0.9   # 8.0..13.4
+        _food_weight = 7.0 + min(_behind, 6) * 0.8   # 7.0..11.8
     elif my_len == _max_ol:
-        _food_weight = 5.5            # tied: contest hard so flipez cannot pull ahead
+        _food_weight = 3.5            # tied: keep growing to gain edge
     else:
         _food_weight = 0.6            # ahead: mild interest
     # DOMINANCE ANTI-COIL (fix vs pinky-snek sim_145 R1 loss): when we are
@@ -599,15 +599,14 @@ def _choose_move(game_state):
                     # When BEHIND on length we MUST grow to reach parity, so
                     # contest any food we win OR tie the race for (my_fd<=opp_fd);
                     # when even/ahead only take food we clearly win (my_fd<opp_fd-1).
-                    _aggro = my_len <= _max_ol
-                    _win_race = (my_fd <= opp_fd) if _aggro else (my_fd < opp_fd - 1)
+                    _win_race = (my_fd <= opp_fd) if _behind_now else (my_fd < opp_fd - 1)
                     if _win_race:
                         _corner_f = ((f[0] in (0, width - 1))
                                      and (f[1] in (0, height - 1)))
                         if _corner_f and escapes <= 1:
                             continue  # deep corner pin risk, skip
                         # reward getting closer; big bonus for landing on it
-                        _race_w = 5.0 if _aggro else 3.0
+                        _race_w = 5.0 if _behind_now else 3.0
                         score += (opp_fd - my_fd + 1) * _race_w
                         if my_fd == 0:
                             score += 55.0
