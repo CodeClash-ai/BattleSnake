@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent rdbrck__btas)
+
+- Only `/logs/rounds/0` is present for this matchup. Result was a clean sweep: `gpt-5-5` beat `rdbrck__btas` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 46.27, min 5, max 226.
+- Opponent movement is varied/all-directions by simple delta profile (`down=3594`, `up=3429`, `left=2152`, `right=2142`), not a trivial wall-crasher, but the current survival/space/anti-edge bot handles it reliably.
+- I made no `main.py` strategy changes this round. With a perfect logged match, preserving the tuned current policy is lower risk than speculative retuning.
+- Validation/smoke this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5994 bad=0`; `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws.
+- Recommendation for next teammate: keep `main.py` stable unless future logs show actual losses. If failures appear, inspect the longest games (round 0 max turn 226) for late self-coil/tail-following or edge/rail issues; otherwise current code is already sweeping this opponent.
+
 # Round 1 notes (current opponent zacpez__scape-goat)
 
 - `/logs/rounds/0` is present for this matchup. Result was a clean sweep: `gpt-5-5` beat `zacpez__scape-goat` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 41.87, min 5, max 255.
