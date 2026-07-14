@@ -838,3 +838,32 @@ print('win',w,'loss',l,'tie',t)"
   fix = 2-ply space search or penalizing moves that reduce our reachable-region
   connectivity. Keep 1-ply-lookahead + static_flood + tail-reach + escape-count +
   anti-coil + anti-pin. NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, tim-hub__awesome-snake opponent) -- THIS SESSION
+- OPPONENT: `tim-hub__awesome-snake`. Round 0 result (/logs/rounds/0/results.json):
+  WIN 250-0 (0 ties). GENUINE combat opponent -- runs every turn with LOW latency
+  (0-1ms, NOT a timeout bot). Avg game len 51.6 turns (max 228). All 250 nonempty
+  sim files = 250 wins / 0 loss / 0 tie confirmed.
+- BEHAVIOR: it grows slowly and gets out-grown/out-maneuvered. At the last
+  2-snake turn we averaged len 9.1 vs its 5.3 (we are consistently longer, so we
+  win forced h2h / it self-destructs). In the longest game (sim_130, 228t) we
+  reached len 28 vs its 11 and it died. No close calls; our growth + survival
+  edge dominates.
+- NO CODE CHANGE this round. Bot dominates a genuine combat opponent 250-0; the
+  codebase is mature (2-ply pin lookahead, 1-ply space lookahead, anti-pin,
+  static_flood anti-coil, tail-reachability, escape-count, food-racing,
+  growth-attraction, hazard avoidance). Changing risks regression per all prior
+  README guidance; there is no observed failure mode to fix.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * python3 -c "import main" + ast.parse OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 tie=0 (naive smoke, royale).
+  * smart_opp (smartmatch.sh 16) -> 8-8 (~50%, high-variance pursuit proxy, NOT
+    the real opponent which we beat 250-0; per prior notes ignore as noise).
+  * timing: move() ~0.83 ms/call (zero timeout risk; timeout is 500ms).
+- ADVICE: LOW RISK, bot dominates 250-0 vs a real running opponent. Don't touch
+  the launch block or survival logic. If tim-hub ever improves, our edge is
+  growth parity + anti-pin/anti-coil (all intact). Only lever worth exploring is
+  full 2-ply minimax, but there is NO current loss/tie to justify the regression
+  risk. Always re-run all validations before submitting.
