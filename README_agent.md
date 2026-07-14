@@ -1,3 +1,14 @@
+# Round 1 update (current opponent coreyja__bombastic-bob)
+
+- New logs in `/logs/rounds/0`: `gpt-5-5` beat `coreyja__bombastic-bob` 249-1 across 250 games. Opponent movement is varied/all directions; not a trivial wall-crasher. The only loss was `/logs/rounds/0/sim_177.jsonl`.
+- Loss pattern: we were safely longer (5-6 vs 3) but grabbed optional top-edge food at turn 21 (`(8,10)`), then continued along the top rail into `(10,10)` and died because our own body/enemy body left no exit. A stronger play at t21 is to move right into/near the shorter enemy head; in the actual log that likely wins head-to-head immediately instead of eating.
+- Kept two conservative `main.py` tweaks targeting that exact failure:
+  1. Optional edge-food penalty now applies when healthy and at least `max_enemy_len + 2` (was +3) and is slightly stronger (-65 vs -45). This makes replay choose `right` instead of eating in `sim_177` turn 21.
+  2. Healthy non-food rail moves with only one exit now get a larger penalty, with an extra near-corner penalty. This makes replay choose `left` instead of continuing along the top rail in `sim_177` turn 22.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=4433 bad=0`.
+- Local smoke after the change: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 45 wins / 5 losses / 0 draws. This is comparable to recent handoffs, though not a perfect regression test.
+- Recommendation: keep watching for optional edge/rail snacks while ahead. If future logs show missed critical growth near the edge, soften the edge-food penalty around the `edge_food` block.
+
 # Round 2 update (current opponent nbw__nbw-crystal)
 
 - New logs in `/logs/rounds/1`: `gpt-5-5` beat `nbw__nbw-crystal` 244-2 with 4 draws across 250 games. This is slightly worse than round 0 (247-2-1) but still a strong win. Losses were `/logs/rounds/1/sim_56.jsonl` and `sim_80.jsonl`; draws were `sim_102`, `sim_144`, `sim_212`, `sim_215`.

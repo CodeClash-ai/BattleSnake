@@ -438,8 +438,8 @@ def move(game_state):
                     # Keep taking these when hungry or needing length, but do not
                     # let a healthy, longer snake chase unnecessary wall snacks.
                     edge_food = (n[0] in (0, w - 1) or n[1] in (0, h - 1))
-                    if (my_health > 75 and my_len >= max_enemy_len + 3 and edge_food):
-                        score -= 45
+                    if (my_health > 75 and my_len >= max_enemy_len + 2 and edge_food):
+                        score -= 65
                     # Do not grab optional rail food when a longer/equal enemy is
                     # already close enough to force the next exit.  Several Xe__since
                     # losses were healthy top/bottom-edge snacks that immediately
@@ -551,7 +551,17 @@ def move(game_state):
                 # can later force a head-to-head.  Prefer the adjacent interior
                 # lane when we are healthy and not taking food.
                 if my_health > 55 and exits <= 1 and n not in food:
-                    score -= 45
+                    # A one-exit rail move can still have a large flood-fill score
+                    # because the space opens up after stepping through the next
+                    # corner cell, but in practice these moves are brittle: a
+                    # nearby body/head can force us to continue into the corner
+                    # before the tail opens.  This caused the only round-0 loss
+                    # versus coreyja__bombastic-bob (top-edge chase into (10,10)).
+                    score -= 120
+                    near_corner = ((n[0] <= 1 or n[0] >= w - 2) and n[1] in (0, h - 1)) or \
+                                  ((n[1] <= 1 or n[1] >= h - 2) and n[0] in (0, w - 1))
+                    if near_corner:
+                        score -= 80
             if n in hazards:
                 score -= 200 + max(0, hazard_damage + 12 - my_health) * 10
 
