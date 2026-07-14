@@ -301,7 +301,39 @@ def move(game_state):
 
             score = area * 12.0
             if h2h_bad:
-                score -= 10000
+                # Normally never enter a possible equal/longer head square.  However,
+                # in this tyrelh-python matchup several close losses reached a state
+                # where the only non-head-risk move was an immediate self-trap (area
+                # 1-3), while the "risky" square opened the board and the opponent was
+                # only equal/+1 length.  Treat that as a last-ditch gamble instead of
+                # choosing certain death; any reasonable safe alternative keeps the
+                # full hard penalty.
+                h2h_penalty = 10000
+                if my_health > 15 and my_len + 1 >= max_enemy_len and area >= max(12, my_len * 3):
+                    best_safe_area = 0
+                    best_safe_exits = 0
+                    for od in MOVES.values():
+                        on = add(head, od)
+                        if on == n or not inside(on, w, h):
+                            continue
+                        if on == neck and len(set(my_body[:3])) > 1:
+                            continue
+                        if on in blocked or on in danger_equal_longer:
+                            continue
+                        if on in hazards and my_health <= hazard_damage + 1:
+                            continue
+                        osimb = set(blocked)
+                        osimb.add(head)
+                        if on in food and my_body:
+                            osimb.add(my_body[-1])
+                        oa = flood(on, osimb, w, h, limit=w * h)
+                        oe = sum(1 for d2 in MOVES.values()
+                                 if inside(add(on, d2), w, h) and add(on, d2) not in osimb)
+                        if oa > best_safe_area or (oa == best_safe_area and oe > best_safe_exits):
+                            best_safe_area, best_safe_exits = oa, oe
+                    if best_safe_area <= max(4, my_len // 2) or (best_safe_area <= my_len and best_safe_exits <= 1):
+                        h2h_penalty = 850 + max(0, max_enemy_len - my_len) * 220
+                score -= h2h_penalty
             if h2h_good and my_len > max_enemy_len:
                 # A shorter snake cannot beat us head-to-head, but when we are
                 # already safely ahead there is little need to dive into the
