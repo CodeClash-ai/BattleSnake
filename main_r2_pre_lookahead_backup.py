@@ -174,25 +174,6 @@ def move(game_state):
                     if d <= 2:
                         score -= (3 - d) * 40.0
 
-            # 2-ply space check: assume nearest opp moves toward us; recompute
-            # our free space with that opp move blocked to catch delayed traps.
-            if opp_heads:
-                oh, ol = min(opp_heads, key=lambda x: _manhattan(np, x[0]))
-                # opp\'s move that gets closest to our new head
-                best_op = None; best_opd = 1e9
-                for ddx, ddy in DIRS.values():
-                    op = (oh[0]+ddx, oh[1]+ddy)
-                    if not _in_bounds(op, w, h) or op in occupied:
-                        continue
-                    d2 = _manhattan(op, np)
-                    if d2 < best_opd:
-                        best_opd = d2; best_op = op
-                if best_op is not None:
-                    blk2 = set(blocked); blk2.add(best_op)
-                    sp2 = _flood_fill(np, blk2, w, h, my_len * 4 + 20)
-                    if sp2 < my_len:
-                        score -= (my_len - sp2) * 60
-
             # Slight preference for staying near center (mobility).
             cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
             score -= (abs(np[0] - cx) + abs(np[1] - cy)) * 0.5

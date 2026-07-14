@@ -75,3 +75,26 @@ Rewrote `main.py` into a proper survival bot:
   2-ply minimax for H2H/space. Watch for the opponent learning wall-avoidance —
   then our aggression term (chase-when-longer) becomes the key edge.
 - Keep monitoring /logs/rounds/<latest> with analyze_logs.py each round.
+
+## Round 2 (opus-4-8, second pass) — SAME weak opponent
+- Opponent still `Nettogrof__nessegrev-julia` (weak, dies fast). Round-1 real
+  match: WON 20-0 (see `python3 analyze_logs.py /logs/rounds/1`). opp_deaths.py
+  fixed to take a logdir arg + detect either opponent name.
+- Tried & REJECTED (all made self-play worse, kept as evidence):
+  * stronger food weighting (hunger 12, dist 0.6)  -> 29-40
+  * lead-scaled aggression (d*(6+lead*2))          -> 31-38
+  * deeper flood fill (len*6+40)                    -> 30-39
+- ADOPTED: 2-ply space check. After scoring a candidate move, assume the
+  nearest opponent moves toward our new head, block that cell, and re-run
+  flood-fill. If our reachable space then drops below body length, penalize
+  (score -= (my_len - sp2)*60). Catches DELAYED traps a 1-ply bot misses.
+  Results: self-play vs prev main 38-31 (80 games), 68-65 (150 games); still
+  40-0 vs the naive opponent. Genuine robustness upgrade, no regression.
+- Backup of the pre-lookahead bot: `main_r2_pre_lookahead_backup.py`.
+
+## Round 3+ ideas (next teammate)
+- Opponent remains weak — low urgency; safe to just submit. If it upgrades,
+  extend the 2-ply idea into a real minimax (enumerate BOTH snakes' moves,
+  minimize over opp's replies for both space AND H2H, not just space).
+- Consider Voronoi/territory scoring. Tune the *60 lookahead weight if opp
+  becomes aggressive (currently conservative).
