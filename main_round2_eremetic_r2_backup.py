@@ -379,27 +379,6 @@ def _choose_move(game_state):
             # Also prefer maximizing our own reachable room when dominant: a
             # move into a smaller time-aware region is a step toward a coil.
             score += space * 3.0
-            # DOMINANCE TAIL-FOLLOWING (fix vs coreyja__eremetic-eric R1 losses:
-            # 19 DOMINANCE SELF-COILs at len 29-62). A huge snake survives
-            # indefinitely only by CHASING ITS OWN TAIL (a space-filling loop).
-            # The time-aware flood OVERCOUNTS through 1-wide channels so space*3
-            # lets us serpentine into a shrinking pocket. Instead, when HUGE,
-            # reward moving CLOSER to our own tail cell (the classic survival
-            # loop) and reward keeping the largest STATIC (no-retreat) region.
-            if my_tail is not None:
-                _td = abs(nc[0] - my_tail[0]) + abs(nc[1] - my_tail[1])
-                score -= _td * 12.0
-            score += sspace * 4.0
-            # ANTI-SERPENTINE: snugging the head against 2+ of our own body cells
-            # is weaving a coil that fills a sub-length pocket over many turns
-            # (sim_12/sim_141 interior coils). Penalize hard, scaled with length.
-            _own_d = set(my_body[:-1])
-            _adj_d = 0
-            for _adx, _ady in DIRS.values():
-                if (nc[0] + _adx, nc[1] + _ady) in _own_d:
-                    _adj_d += 1
-            if _adj_d >= 2:
-                score -= (_adj_d - 1) * 30.0
 
         # PARALLEL-SHADOW WALL TRAP (rdbrck__btas round-0 losses sim_156/177):
         # Even when we are MUCH LONGER, the opponent shadows us along the OUTER

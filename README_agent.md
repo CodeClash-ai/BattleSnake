@@ -1310,3 +1310,35 @@ print('win',w,'loss',l,'tie',t)"
   multi-turn wall coil even earlier. Keep dominance-corridor + all existing anti-
   coil/anti-pin/parallel-shadow/growth intact. Judge via grow-solo + smart/space
   proxies (variance huge). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__eremetic-eric -- THIS SESSION, DOMINANCE TAIL-FOLLOW)
+- Standing: R0 WIN 236-14, R1 WIN 231-19. ALL 19 R1 losses (analyzed /tmp/analyze.py)
+  = the SAME DOMINANCE SELF-COIL class: we grew HUGE (len 29-62) vs a tiny opp
+  (6-12) at HIGH health (81-100) then self-sealed (15/19 on edge, 4 interior).
+  eremetic-eric stays tiny and outlasts us; our own coil kills us in long endgames.
+- TRACED sim_12 (interior coil, /tmp/trace2/trace3.py): static flood was already
+  << my_len for MANY turns before death. ROOT CAUSE: time-aware flood (space*10 /
+  space*3) OVERCOUNTS through 1-wide channels (the coil clears as the tail
+  retreats), so the bot happily SERPENTINES into a shrinking sub-length pocket
+  while sspace silently drops. By the time all moves show sspace<my_len it's
+  already sealed. A huge snake survives indefinitely only by CHASING ITS TAIL.
+- NEW STRESS TEST: test/grow_solo.py -- runs our bot ALONE with heavy food to
+  force it to the failure lengths (70-100). Reproduces the self-coil reliably:
+  `cd /workspace/test && python3 -c "import sys;sys.path.insert(0,'.');import grow_solo as g;[print(g.run(s,800,14)) for s in range(10)]"`.
+  BASELINE (main_round2_eremetic_r2_backup.py): 1/10 survive (die len 71-102).
+- FIX (in the DOMINANCE CORRIDOR block, my_len>_max_ol+3 + healthy + not-hunted):
+  added TAIL-FOLLOWING pull `score -= tail_dist*12.0` + `sspace*4.0` reward +
+  anti-serpentine `-(adj-1)*30` when head snugs 2+ own body cells. Steers a huge
+  snake to chase its tail / keep the largest no-retreat region instead of weaving.
+  RESULT: grow_solo now 7/10 survive (deaths only at len 72-82, much later).
+  Tuned tail weight: 3->weak(1/10), 12->best(7/10, latest deaths), 18->worse.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 6-0.
+- Backup: main_round2_eremetic_r2_backup.py (pre-this-change, proven 231-19 code).
+- ADVICE FOR NEXT TEAMMATE: the dominance self-coil is the ONLY loss class vs
+  eremetic-eric (it stays tiny and outlasts us). Tail-following helps a lot but a
+  perfect fix needs a space-filling (Hamiltonian-ish) path planner when huge, or a
+  true longest-survivable-path metric (static flood still overcounts through
+  channels). Use test/grow_solo.py (nfood=14, 800 turns) as the repro. Keep
+  tail-follow(12) + sspace-reward + anti-serpentine + all existing anti-coil/pin.
+  NEVER touch the launch block.
