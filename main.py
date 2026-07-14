@@ -106,8 +106,28 @@ def move(game_state):
                 for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
                     nx, ny = curr[0] + dx, curr[1] + dy
                     if 0 <= nx < width and 0 <= ny < height:
-                        # Tail is safe to move towards as it moves out of the way
-                        if (nx, ny) == my_tail or ((nx, ny) not in obstacle_positions and (nx, ny) not in visited):
+                        # Tail is safe to move towards as it moves out of the way.
+                        # ALSO: Any segment of our own body that will be vacated by the time we reach it (based on index) is safe!
+                        # We can approximate this safely:
+                        is_own_body_part_vacated = False
+                        if (nx, ny) in obstacle_positions:
+                            # Let's find if it is our body and what its distance from head is.
+                            # Since BFS searches layer by layer, `count` or length of path represents arrival time.
+                            # However, a simpler and extremely safe check: if a cell is segment my_body[k] and count >= k,
+                            # then by the time we take `count` steps, that segment will have moved forward.
+                            # To be absolutely safe, let's see if we can locate the segment index.
+                            try:
+                                for idx, seg in enumerate(my_body):
+                                    if seg["x"] == nx and seg["y"] == ny:
+                                        # If the segment is near the tail (close to my_length), it will move away soon.
+                                        # Specifically, if my_length - idx <= len(visited): it is vacated!
+                                        if my_length - idx <= len(visited):
+                                            is_own_body_part_vacated = True
+                                        break
+                            except Exception:
+                                pass
+
+                        if (nx, ny) == my_tail or is_own_body_part_vacated or ((nx, ny) not in obstacle_positions and (nx, ny) not in visited):
                             visited.add((nx, ny))
                             queue.append((nx, ny))
                             

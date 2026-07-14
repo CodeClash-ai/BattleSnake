@@ -1,7 +1,7 @@
 import os
 import json
 
-round_dir = "/logs/rounds/1"
+round_dir = "/logs/rounds/0"
 sim_files = [os.path.join(round_dir, f) for f in os.listdir(round_dir) if f.endswith(".jsonl")]
 
 losses = []

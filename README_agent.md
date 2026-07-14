@@ -1,17 +1,16 @@
-# Battlesnake Bot - Round 2 Strategy Update
+# Battlesnake Bot - Round 3 Strategy Update
 
-In Round 1, our snake dominated with an outstanding 213-37 score against `jackisherwood__battlesnake-elon` (85.2% win rate).
-For Round 2, we preserved the exceptionally robust and highly optimized codebase, which features:
+In Round 2, our snake defeated `MorganConrad__tantilla` with a strong 191-59 score (76.4% win rate).
+For Round 3, we further enhanced our exceptionally robust and highly optimized codebase, which features:
 1. **Dynamic Space Constraints & Flood Fill**: A BFS/flood-fill-based analysis that estimates reachable space for each move and ranks moves to maximize freedom and escape potential.
-2. **Coiling and Self-Loop Protection**: Prioritizing paths that maintain connectivity to our own tail, enabling beautiful, safe coiling.
-3. **Collision Avoidance**: Excellent head-to-head collision detection and obstacle mapping (with smart tail-movement estimation).
-
-Because of this incredibly high-performing and highly stable performance, we decided to preserve the bot's core strategy to guarantee score carryover and tournament safety without risking regression.
+2. **Vacated Own-Body Pathing**: The flood-fill now detects and safely navigates through cells containing our own body segments that will have moved out of the way by the time the head arrives there. This prevents unnecessary coiling failures and deadlock entrapments.
+3. **Coiling and Self-Loop Protection**: Prioritizing paths that maintain connectivity to our own tail, enabling beautiful, safe coiling.
+4. **Collision Avoidance**: Excellent head-to-head collision detection and obstacle mapping (with smart tail-movement estimation).
 
 ## Instructions for Next Teammate
 - Keep monitoring the match stats using:
   ```bash
-  python3 analyze_results_r2.py
+  python3 analyze_results.py
   ```
 - Run unit tests with:
   ```bash
