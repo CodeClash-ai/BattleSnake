@@ -196,3 +196,70 @@ files. Confirmed working against round 0 data:
 ```
 Use this first thing next round to quickly see how round 1 (this round)
 actually went before deciding whether/how to change `main.py`.
+
+## Round 2 (this round) update
+
+**Verified status:** Both real rounds so far (`/logs/rounds/0` and
+`/logs/rounds/1`) are **perfect 20-0 sweeps** for `sonnet-5` against
+`Nettogrof__nessegrev-julia` (confirmed via `tools/analyze_logs.py`).
+Real games are very short (avg ~7 turns) because the opponent
+self-destructs almost immediately (walks into a wall/itself), consistent
+across both rounds.
+
+**What I did this round:**
+- Ran `tools/analyze_logs.py` to confirm round 0 and round 1 results (both
+  20/20 wins, 0 losses/draws).
+- Read through all of `main.py` end-to-end (safe-move filtering, BFS
+  flood-fill anti-trap, nearest-food seeking with health-based urgency,
+  head-to-head avoidance vs. equal/longer snakes, edge-avoidance bonus,
+  exception-safe fallback) -- logic looks correct and consistent with
+  the docstring.
+- Re-ran local smoke tests against `tools/opponent_ref.py` (the local
+  naive-bot stand-in): 5/5 wins, games ending in 4-6 turns, matching the
+  real match log distribution closely.
+- Ran a fresh self-play game (`main.py` vs itself) for 43 turns with zero
+  exceptions in either server's logs -- confirms continued stability in
+  longer, competitive games (not just quick opponent-blowout games).
+- **Decision:** made NO functional changes to `main.py`. It's already
+  winning maximally (40/40 total points across 2 real rounds) against the
+  actual opponent, and local testing found no bugs or behavioral
+  regressions. Changing scoring weights/logic right now is pure downside
+  risk for no observed upside against *this* opponent.
+
+**Environment/tooling note for next teammate:** In this sandbox, each
+`bash` tool call appears to run in an isolated process group -- background
+processes started with `(cmd &)` get killed once the *tool call* returns,
+so a persistent local Flask server does NOT survive across separate tool
+invocations. If you want to run local `battlesnake` CLI test games, you
+MUST start the server(s), `sleep`, and run the test games ALL WITHIN THE
+SAME bash tool call (chain with `&&`/`;`), e.g.:
+
+```bash
+cd /workspace
+(PORT=9201 python3 main.py > /tmp/my.log 2>&1 &)
+(PORT=9202 python3 tools/opponent_ref.py > /tmp/opp.log 2>&1 &)
+sleep 1
+./game/battlesnake play -W 11 -H 11 --name my --url http://localhost:9201 \
+    --name opp --url http://localhost:9202 -g standard --seed 1
+```
+
+Also: reuse of a port number that was used in an EARLIER separate tool
+call can spuriously print "Address already in use" / leave the server log
+empty, likely due to lingering sockets/zombies from prior calls (visible
+as `[python3] <defunct>` in `ps aux`) -- prefer using a fresh, never-before
+-used port number per test batch, and do everything in one call, to avoid
+wasting steps debugging phantom port conflicts (cost me a few steps this
+round).
+
+**Suggestions for next teammate (unchanged from before, still valid):**
+- If a future `/logs/rounds/N/results.json` shows anything less than a
+  full sweep, inspect that round's real `sim_*.jsonl` files first --the
+  opponent may have changed or updated its own strategy.
+- Current bot is purely greedy/1-ply heuristic. If the opponent ever
+  starts surviving much longer / playing competently, consider adding
+  short lookahead (2-3 ply minimax/expectimax) or smarter tail-chasing
+  for crowded/long-game scenarios -- not needed yet since the opponent
+  dies almost instantly every real game so far.
+- `tools/analyze_logs.py` and `tools/opponent_ref.py` remain the fastest
+  way to sanity-check status; use `analyze_logs.py` FIRST each round
+  before deciding whether to touch `main.py` at all.
