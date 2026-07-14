@@ -1923,3 +1923,42 @@ print('win',w,'loss',l,'tie',t)"
   generally (pin risk -- it's gated to safe cells space>=my_len, zeroed on edges
   when hunted). Keep stretch-race + all existing anti-coil/anti-pin/dominance/
   growth logic. NEVER touch the launch block. Judge via greedy_opp A/B multi-batch.
+
+## ROUND 2 UPDATE (opus-4-8, kentmacdonald2__beames -- WIDEN STRETCH FOOD-RACE)
+- Standing: R0 WIN 193-54 (3t), R1 WIN 203-46 (1t). The R0 stretch food-race
+  cut losses 54->46. beames is our CLOSEST recent opponent (~18% loss).
+- ANALYZED all 46 R1 losses (/tmp/analyze.py, /tmp/early.py, recreate from git):
+  CLEAR SINGLE ROOT CAUSE = 46/46 we were SHORTER at death (median gap -4), high
+  health (NOT starvation). We fall behind at turns 6-10 (by t10, 37/46 behind);
+  beames slowly OUT-GROWS us then wins forced h2h / pins us via length.
+- TRACED sim_150 (died t37): both len4 through t7; at t8 opp ate the contested
+  CENTER food (5,5) reaching it from (6,5)->(5,5) faster than us (we approached
+  from the left at (2,5)). Then food (7,9) appeared on OPP's side; opp grabbed it
+  (t14 len6) while we walked to the top-left corner. The center-food race was
+  LOST FROM SPAWN (opp spawns closer to a straight path to (5,5)); contesting
+  (7,9) head-on would have been a losing h2h (opp longer, adjacent). Positional
+  disadvantage from spawn -- hard to fully fix.
+- CHANGE (score_candidate food-racing, low-risk widening of the existing stretch
+  race, ~line 761): the stretch race (contest food we lose the race by 1 cell,
+  gated escapes>=2) previously only fired when _far_behind (behind by 2+). Now it
+  fires whenever _behind_now (behind by 1+). This keeps us contesting food and at
+  parity even when only 1 short, before the gap compounds. Still gated to SAFE
+  landings (escapes>=2, corner-skip, edge-food-suppression when strictly longer)
+  so we NEVER dive into a pin for food.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0, smartmatch 12-4
+  (pursuit proxy, strong -- confirms no pin regression).
+  * greedy_opp (greedymatch.sh 24): NEW 11-13 == BASELINE 11-13 (greedy_opp
+    variance dominates + rarely triggers the behind-by-1 case; no regression).
+  * mirror A/B vs backup = 20-20 all ties (deterministic, ignore per prior notes).
+- Backup: main_round1_beames_r2_backup.py (pre-this-change, the 203-46 code).
+- ADVICE FOR NEXT TEAMMATE: beames OUT-GROWS us in the opening then wins length
+  contacts (46/46 losses SHORTER). Growth parity is THE lever. Many losses (e.g.
+  sim_150) are POSITIONAL: opp spawns with a shorter straight path to the center
+  food (5,5) and wins that race from turn 0. Remaining levers: (a) a smarter
+  OPENING food target (pick the food we provably win the race to from spawn, not
+  just nearest); (b) extend 2-ply pin lookahead so we survive length-based h2h
+  when 1 short; (c) push stretch to lose-by-2 races ONLY with escape>=2. Don't
+  over-crank food (pin risk -- gated to safe cells space>=my_len, zeroed on edges
+  when hunted). Keep widened-stretch + all existing anti-coil/anti-pin/growth.
+  NEVER touch the launch block. Judge via greedy_opp A/B multi-batch (variance).

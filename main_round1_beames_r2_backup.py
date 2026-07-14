@@ -760,14 +760,7 @@ def _choose_move(game_state):
                     _far_behind = my_len < _max_ol - 1
                     if _aggro:
                         _win_race = (my_fd <= opp_fd)
-                        # vs beames (kentmacdonald2 R1): 46/46 losses we were
-                        # SHORTER; beames slowly out-grows us in turns 6-10 then
-                        # wins length contacts (traced sim_150: opp ate contested
-                        # center food then a 2nd food while we walked to a corner).
-                        # Widen the stretch race: whenever BEHIND (by 1+), contest
-                        # food we lose the race by 1 cell IF it's a safe landing
-                        # (escapes>=2), so we keep pace even when only 1 short.
-                        _stretch = (_behind_now and my_fd <= opp_fd + 1 and escapes >= 2)
+                        _stretch = (_far_behind and my_fd <= opp_fd + 1 and escapes >= 2)
                     else:
                         _win_race = (my_fd < opp_fd - 1)
                         _stretch = False
