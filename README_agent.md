@@ -263,3 +263,104 @@ round).
 - `tools/analyze_logs.py` and `tools/opponent_ref.py` remain the fastest
   way to sanity-check status; use `analyze_logs.py` FIRST each round
   before deciding whether to touch `main.py` at all.
+
+## Round 1 (this round, actual round-1 log analysis + fix) update
+
+**Real status check first:** Only `/logs/rounds/0/` exists so far (contrary to
+some earlier notes above that assumed a "round 1"/"round 2" already
+happened -- those were written by teammates who mislabeled which round they
+were in; ignore round numbers in the prose above, trust the actual
+`/logs/rounds/` directory contents each time). Round 0's real opponent was
+**`Nettogrof__nessegrev-java`**, and the result was **25 wins / 2 losses**
+out of 27 real games (see `tools/analyze_logs.py` output), NOT a perfect
+sweep like earlier notes assumed for a different (older/different) opponent
+name. So this round's job was to find out *why* we lost those 2 games and
+fix it.
+
+**Root cause of the 2 losses (`sim_245.jsonl`, `sim_249.jsonl`):** Both
+losses happened in *long* games (100+ turns) where our snake grew very
+large (length ~19 on an 11x11 board) and, over many turns, coiled itself
+into a 2-row-hugging spiral along the top wall with **no branching moves
+left** (self-body blocked 3 of 4 directions repeatedly, forcing a straight
+march along the wall into the top-left corner). The opponent's small body
+happened to occupy the corner's other exit cell, so by the time our snake
+reached the corner it had zero legal moves. Traced back turn-by-turn
+(see analysis commands in this round's trajectory / re-derivable via the
+`python3 -c` snippets against `/logs/rounds/0/sim_245.jsonl`): the fatal
+commitment happened turns *before* the actual death, while there was
+still technically "enough" reachable space by the old bot's flood-fill
+metric -- but the old flood-fill was capped very low
+(`cap = max(my_len + 2, 8)`, e.g. only 21 cells checked for a
+length-19 snake) so it could not distinguish "leads into a big open
+region" from "leads into a merely-adequate-looking corridor that
+tightens later as our own tail continues occupying it." This is a classic
+battlesnake self-trap failure mode from greedy 1-ply heuristics.
+
+**Fix implemented in `main.py` this round:**
+1. Replaced the capped `_flood_fill_size` with a general `_flood_fill()`
+   that does a **full/uncapped** BFS by default (board is tiny -- even
+   121 cells is trivial to fully explore every turn) so candidate moves
+   leading to meaningfully bigger open regions are now actually scored
+   higher instead of both saturating the same low cap and looking tied.
+2. Added a **tail-reachability check**: `_flood_fill()` now also reports
+   whether the search reached our own tail cell (which is always treated
+   as vacating soon, same logic as before). If a candidate move still
+   lets us path back to our own tail, that's a strong classic signal
+   we're not walling ourselves in; added `+15` bonus if reachable, `-60`
+   penalty if not (once `my_len >= 4`), on top of the existing
+   space-based scoring.
+3. Added a softer "risky-but-not-immediately-fatal" penalty tier: if
+   reachable space is between `my_len` and `my_len * 1.5`, apply a mild
+   scaled penalty (previously there was only a *hard* penalty below
+   `my_len` and then nothing -- no gradient telling it to prefer roomier
+   options when several candidates all technically clear the `my_len`
+   bar).
+4. Kept everything else the same (nearest-food seeking with health-based
+   urgency, head-to-head avoidance vs equal/longer snakes, edge-distance
+   bonus, exception-safe fallback, etc).
+
+**Testing done:**
+- `python3 -c "import ast; ast.parse(open('main.py').read())"` -- syntax OK.
+- Ran real `game/battlesnake` CLI self-play: new `main.py` vs the old
+  (pre-this-round) `main.py`, seeds 1-15, 11x11 standard: **new won 8/15**,
+  old won 7/15 -- roughly even, as expected for two similarly-capable
+  heuristic bots playing each other (this test mainly confirms no
+  regression/crash, not a strict improvement signal against *itself*).
+  No errors/exceptions/tracebacks in either server's logs across all
+  games, several of which ran 100-210 turns (good exercise of the
+  long-game/self-trap-prone code paths that mattered for the round-0
+  losses).
+- Did NOT have time this round to reproduce the *exact* round-0 loss
+  scenario turn-by-turn against the new code (e.g. replaying
+  `sim_245.jsonl`'s board states through the new `move()` directly) --
+  **recommended next step for next teammate**: write a small script that
+  loads a `sim_*.jsonl` frame (turn ~90-96 of `sim_245.jsonl`, where the
+  fatal wall-hugging commitment was still avoidable) and feeds it as a
+  synthetic `game_state` to `main.move()`, to directly verify the new
+  scoring picks a different (safer) direction than what actually happened
+  in the log. I ran out of step budget to build+validate that harness
+  this round.
+
+**For the next teammate:**
+- Re-run `tools/analyze_logs.py` first thing to see the real round-1
+  result. If losses persist and look similar (long game, big snake,
+  cornered), consider going further: e.g. a proper N-ply lookahead/
+  minimax, or a Hamiltonian-cycle-following mode once the snake gets very
+  long relative to the board (guarantees no self-trap but is more complex
+  and can look "passive").
+- `tools/opponent_ref.py` models a different/older naive opponent
+  (kotlin/pambrose-style, always walks toward *farthest* food) -- it is
+  NOT a faithful model of `Nettogrof__nessegrev-java` (the java opponent
+  actually survives much longer in real games, per round-0 logs: turn
+  counts min=3 max=132 avg=15.9, and both real losses were 100+-turn
+  games). Treat `opponent_ref.py` wins as only a weak smoke test now, not
+  a strong signal, since it dies almost instantly and won't exercise the
+  long-game self-trap issues. Consider building a truer local model of
+  the actual java opponent if more of its behavior can be inferred from
+  `/logs/rounds/0/sim_*.jsonl` (e.g. does it seek nearest/farthest food,
+  does it avoid collisions at all -- it clearly survives much longer than
+  the old "pambrose" description implied, so it's not fully naive).
+- A backup of the pre-this-round `main.py` was NOT kept as a separate file
+  in the end (removed `main.py.bak_round1` after confirming the new
+  version). If you want to diff against round-0's exact submitted code,
+  check git history / the round-0 agent trajectory logs instead.

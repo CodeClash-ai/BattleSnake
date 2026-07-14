@@ -75,10 +75,12 @@ def _occupied_cells(board, you_id):
     tails_that_move = set()
     heads = {}
     lengths = {}
+    tails = {}
     for snake in board["snakes"]:
         body = snake["body"]
         lengths[snake["id"]] = len(body)
         heads[snake["id"]] = (body[0]["x"], body[0]["y"])
+        tails[snake["id"]] = (body[-1]["x"], body[-1]["y"])
         # Determine if this snake ate food last turn (tail didn't move).
         # Heuristic: if last two body segments are identical (stacked),
         # that indicates growth just happened (common battlesnake engine
@@ -102,18 +104,29 @@ def _occupied_cells(board, you_id):
     # Remove tail cells from blocked only if they aren't also occupied by
     # another body segment (defensive; sets already prevent duplicates from
     # counting twice but overlapping snakes could still be an issue).
-    return blocked, heads, lengths
+    return blocked, heads, lengths, tails
 
 
-def _flood_fill_size(start, blocked, width, height, cap):
-    """BFS to count reachable empty cells from `start`, stopping early once
-    `cap` cells have been found (cap is usually our own length, we only need
-    to know if we have at least that much space)."""
+def _flood_fill(start, blocked, width, height, cap=None, target=None):
+    """BFS from `start` over non-blocked in-bounds cells.
+
+    Returns (count, reached_target):
+      count -- number of reachable cells (including start), capped at `cap`
+               if given (stops early once cap cells are found -- used only
+               as a cheap early-exit; pass cap=None / a big number for a
+               full/uncapped flood-fill, which is fine on small boards).
+      reached_target -- True if `target` cell (e.g. our own tail) was seen
+               during the search (useful to check "can I still get back to
+               my tail" as a proxy for not being self-trapped later).
+    """
     if start in blocked:
-        return 0
+        return 0, (target == start)
+    if cap is None:
+        cap = width * height + 1
     seen = {start}
     frontier = [start]
     count = 1
+    reached_target = start == target
     while frontier and count < cap:
         nxt = []
         for cell in frontier:
@@ -127,12 +140,20 @@ def _flood_fill_size(start, blocked, width, height, cap):
                     continue
                 seen.add(npt)
                 count += 1
+                if npt == target:
+                    reached_target = True
                 nxt.append(npt)
                 if count >= cap:
                     break
             if count >= cap:
                 break
         frontier = nxt
+    return count, reached_target
+
+
+def _flood_fill_size(start, blocked, width, height, cap):
+    """Back-compat wrapper: just the count, capped."""
+    count, _ = _flood_fill(start, blocked, width, height, cap=cap)
     return count
 
 
@@ -148,7 +169,7 @@ def move(game_state):
 
         food = board.get("food", [])
 
-        blocked, heads, lengths = _occupied_cells(board, my_id)
+        blocked, heads, lengths, tails = _occupied_cells(board, my_id)
 
         candidates = []
         for name, (dx, dy) in DIRS.items():
@@ -188,17 +209,39 @@ def move(game_state):
         # Score each candidate.
         best_name = None
         best_score = None
-        cap = max(my_len + 2, 8)
+        # Full (uncapped) flood-fill: the board is small (<= a few hundred
+        # cells even on big boards), so this is cheap and lets us actually
+        # tell apart "leads to a big open region" vs "leads into a
+        # medium-but-eventually-closing pocket" -- a low cap made those
+        # look identical before, which contributed to self-trapping into
+        # dead-end corridors/corners on long games (see round-0 loss
+        # analysis in README_agent.md).
+        my_tail = tails.get(my_id)
 
         for name, npt, danger_h2h in pool:
-            space = _flood_fill_size(npt, blocked, width, height, cap)
+            space, reached_tail = _flood_fill(npt, blocked, width, height, target=my_tail)
 
             score = 0.0
             # Space safety: heavily penalize tight spaces relative to our
             # length (getting trapped = death).
             if space < my_len:
                 score -= 1000.0 * (my_len - space)
-            score += min(space, cap) * 2.0
+            elif space < my_len * 1.5:
+                # Still risky-ish: comfortably more than our length is
+                # much safer than "just barely" enough, especially since
+                # our own tail continues occupying space as we move.
+                score -= 20.0 * (my_len * 1.5 - space)
+            score += min(space, width * height) * 2.0
+
+            # Tail-chasing safety net: if we can still path to our own
+            # tail (which is guaranteed to vacate soon), that's a strong
+            # signal we won't immediately self-trap. Penalize losing that
+            # property, especially once we're reasonably long.
+            if my_tail is not None and my_len >= 4:
+                if reached_tail:
+                    score += 15.0
+                else:
+                    score -= 60.0
 
             # Food attraction.
             if food:
