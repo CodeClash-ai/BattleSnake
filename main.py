@@ -402,6 +402,35 @@ def move(game_state):
         else:
             growth_damp = 1.0
 
+        # Threat-proximity-aware edge/corner avoidance. Real match analysis
+        # (see README_agent.md, opponent coreyja__jump-flooding) found that
+        # this specific opponent actively shadows our head diagonally
+        # adjacent and herds us toward a corner/wall over many turns, then
+        # either wins a forced head-to-head or seals us in with zero legal
+        # moves once the wall runs out -- confirmed via replaying real
+        # sim_48/sim_168/sim_172/sim_203/sim_249/sim_63.jsonl frames: in
+        # every one of those losses/draws, both snakes' final head
+        # positions were in/near a corner with the opponent diagonally
+        # adjacent (e.g. us at (10,10), opponent at (9,9)). The existing
+        # flat 0.3-weighted edge_dist bonus is too weak to counteract the
+        # (larger) short-term food-attraction/space terms that pull the
+        # bot along a wall toward a corner turn by turn. Since being near
+        # a wall/corner is only actually risky when a comparably-sized
+        # opponent is nearby to exploit it (on a truly empty board hugging
+        # an edge is harmless), only boost the edge-avoidance weight when a
+        # threat snake's head is within a small radius of OUR CURRENT head
+        # -- this keeps normal food-seeking/space-seeking behavior
+        # unchanged when no threat is nearby, but makes the bot much more
+        # reluctant to walk itself toward a corner while being shadowed.
+        threat_near = False
+        for tb in threat_bodies:
+            if tb:
+                tb_head = (tb[0]["x"], tb[0]["y"])
+                if _manhattan(head, tb_head) <= 5:
+                    threat_near = True
+                    break
+        edge_weight = 4.0 if threat_near else 0.3
+
         for name, npt, danger_h2h in pool:
             # If this move lands on food, our own tail will NOT vacate this
             # turn (snake grows instead of sliding forward) -- so treat our
@@ -625,7 +654,7 @@ def move(game_state):
 
             # Slight preference against hugging edges (more escape routes).
             edge_dist = min(npt[0], width - 1 - npt[0], npt[1], height - 1 - npt[1])
-            score += 0.3 * edge_dist
+            score += edge_weight * edge_dist
 
             # Anti-stalemate: if we've been stuck orbiting a tiny set of
             # cells for a while (see `stuck` computed above), strongly

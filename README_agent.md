@@ -2606,3 +2606,93 @@ scoped-but-unimplemented plans for this, search "multi-ply" above).
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- diagnosed corner-herding opponent (coreyja__jump-flooding), added threat-aware edge/corner avoidance (partial mitigation, not a full fix)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (246-4, opponent `coreyja__jump-flooding`) and
+`/logs/rounds/1/` (242 wins / 4 losses / 4 draws out of 250). Already a
+very strong win rate (~96.8% clear wins).
+
+**Root cause investigated:** all 4 losses AND all 4 draws in round 1 end
+with both snakes' heads in/near the SAME corner, diagonally adjacent
+(e.g. us at (10,10), opponent at (9,9); or (0,0)/(1,1)). Traced
+`sim_48.jsonl` turn-by-turn: our bot correctly avoids each individual
+head-to-head-risky move turn by turn (the `danger_h2h` penalty correctly
+fires and is scored higher than the "cut inward" option every single
+turn, e.g. turn 18: `left` scored -219 due to a legal+predicted opponent
+collision vs `up` scoring +272) -- but doing so repeatedly funnels us
+along a wall into a corner, because the opponent (name suggests it uses
+flood-fill/jump-flooding itself) appears to deliberately shadow our head
+diagonally and contests our only "escape inward" cell every single turn,
+leaving "keep going along the wall" as the only *locally* non-h2h-risky
+choice each individual turn, until the wall runs out. **This is the same
+fundamental single-snapshot-vs-multi-turn-shadowing limitation flagged by
+several earlier sessions in this file** (search "adversarial shadowing"
+above) -- confirmed again this session that it's a genuine multi-ply gap,
+not a simple scoring bug: at every individual decision point examined,
+the bot's 1-ply (+ 1-ply-adversarial) choice was locally correct/optimal
+given the immediate h2h risk of the alternative.
+
+**Partial mitigation implemented this session:** added `threat_near`
+detection (any comparably-sized opponent within Manhattan distance 5 of
+our current head) that boosts the edge/wall-avoidance score weight from
+0.3 to 4.0 when a threat is nearby (unchanged at 0.3 when no threat is
+around, so normal open-board food/space-seeking behavior is untouched).
+This did NOT change the outcome of the specific `sim_48` turn-18 decision
+(the h2h penalty still correctly dominates, as it should -- cutting
+inward IS the genuinely riskier option at that exact instant), so this is
+NOT a full fix for the corner-herding pattern, just a general-purpose
+nudge that should help in cases where hugging a wall is a close call
+(previously edge-avoidance was very weak at 0.3, easily swamped by other
+terms) without an immediate h2h justification. Real validation is the
+next round's results.
+
+**What would actually fix this (still not implemented, same conclusion as
+several earlier sessions):** genuine multi-ply lookahead/simulation --
+specifically here, recognizing several turns in advance that "the
+opponent can keep contesting my only inward exit turn after turn while
+I'm forced along this wall, and the wall provably runs out in N turns" --
+a 1-ply (or even 1-ply-adversarial-worst-case) flood-fill snapshot cannot
+see this since at each individual turn the immediate alternative genuinely
+does look riskier RIGHT NOW. This is the same limitation described in
+detail by multiple earlier sessions (search "multi-ply" earlier in this
+file for scoped-but-unimplemented plans) -- this opponent
+(`coreyja__jump-flooding`) is a very good real trigger case for actually
+attempting it if a future session has a full budget available, since the
+failure mode is now precisely characterized and there are 8 real
+losing/drawing sim files (`sim_48/168/172/203/23/239/249/63.jsonl` in
+`/logs/rounds/1/`) to validate against.
+
+**Testing done this session:**
+- `ast.parse` OK.
+- Replayed `sim_48.jsonl` turns 17-19 through the patched `move()`:
+  decisions unchanged (still walks up the wall) -- confirms the h2h-risk
+  scoring correctly dominates at each individual turn and this specific
+  loss is not fixed by the edge-weight change alone (expected, see above).
+- Did NOT have remaining budget this session for a full local batch/self-
+  play regression run after the fix (ran low on steps investigating the
+  root cause) -- **recommended next step for next teammate:** run the
+  standard local regression battery (naive-opponent smoke test 5+ seeds,
+  a couple of 100+ turn self-play games) before trusting this change
+  further, and check `/logs/rounds/2/results.json` once available to see
+  if the edge-weight tweak had any measurable effect (positive or
+  negative) on the loss/draw count against `coreyja__jump-flooding`.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth.
+- If losses/draws of this exact "cornered by a diagonally-shadowing
+  opponent" flavor persist, this is the strongest real case yet for
+  actually implementing genuine N-ply lookahead (all the pieces --
+  `_opp_candidate_cells`, `_predict_opp_move`, `_opp_two_ply_reachable`,
+  the full BFS flood-fill -- already exist and could be composed into a
+  deeper search; see multiple earlier "for next teammate" sections above
+  for scoped plans).
+- Debug technique reminder: to dump per-candidate scores, copy `main.py`
+  to a scratch file, replace the `try:`/`except Exception:` wrapper in
+  `move()` with `if True:` (so real exceptions surface instead of being
+  silently swallowed as a fallback "up" move -- this cost real time this
+  session since a `KeyError` in a first draft of the threat-detection code
+  was being silently caught and masked), insert a debug `print(...)`
+  right before `if best_score is None or score > best_score:`, then feed
+  a synthetic `game_state` built from a real `sim_*.jsonl` frame.
