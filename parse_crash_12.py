@@ -1,15 +1,10 @@
 import json
 
-path = "/logs/rounds/0/sim_12.jsonl"
-with open(path) as f:
+with open("/logs/rounds/0/sim_144.jsonl") as f:
     lines = f.readlines()
 
-for idx, line in enumerate(lines):
+for line in lines:
     data = json.loads(line)
-    if "board" not in data:
-        continue
-    turn = data.get("turn")
-    if turn >= 175:
-        print(f"\n--- Turn {turn} ---")
-        for s in data["board"].get("snakes", []):
-            print(f"  {s['name']}: head={s['head']} body={s['body']} health={s['health']}")
+    if "turn" in data and data["turn"] == 76:
+        # Let's inspect the entire Turn 76 state
+        print(json.dumps(data, indent=2))
