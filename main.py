@@ -394,6 +394,24 @@ def move(game_state):
                 elif path_count < 8:
                     score -= (8 - path_count) * 120
 
+                # In late, already-long games the remaining safe region can be a
+                # narrow pocket even though the flood-fill score still looks nonzero.
+                # Prefer moves that keep a short route to our moving tail in those
+                # cramped pockets; this helps avoid dying in our own coil while far
+                # ahead of a weaker opponent.  The gate keeps it as a defensive
+                # endgame rule rather than a general food/tail-chasing habit.
+                if area <= max(8, my_len // 2) and my_body and my_len >= max_enemy_len + 3 and my_health > 70:
+                    tail_cell = next_body[-1]
+                    tail_blocked = set(sim_blocked)
+                    tail_blocked.discard(tail_cell)
+                    tail_dist = shortest(n, [tail_cell], tail_blocked, w, h, max_depth=w * h)
+                    if tail_dist is None:
+                        score -= 220
+                    else:
+                        score += max(0, 6 - tail_dist) * 38
+                        if n == my_body[-1]:
+                            score += 260
+
             # Voronoi-style space ownership versus equal/longer opponents.
             scary_heads = [pt(s["head"]) for s in enemies if s.get("length", len(s.get("body", []))) >= my_len]
             if scary_heads:

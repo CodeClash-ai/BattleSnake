@@ -184,3 +184,13 @@ Round 2 notes (current opponent ccSnake2018__ccsnake, this handoff):
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=9546 bad=0`; `python3 tools/replay_moves.py /logs/rounds/1` -> `checked_states=8459 bad=0`.
 - Local smoke after tuning: `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws. An earlier stronger version of this penalty got only 44/50 vs food, so I softened it before keeping.
 - Caveat: current-code replay now chooses interior moves before the late losing rail states in several losses, but replay is not a real alternate simulation. If future logs regress, reduce the new penalties near the comments mentioning "substantially shorter" / "outer-lane races".
+
+Round 2 update (current opponent coreyja__coreyja-rs, this handoff):
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` won the match 20-1 across 21 non-empty games. Round 0 was 20-0. The only loss is `/logs/rounds/1/sim_249.jsonl`, a very long turn-229 game; most games still end quickly in our favor.
+- Opponent profile is still mostly vertical/up but not purely suicidal in the long outlier: `/logs/rounds/1` deltas were `(0,1)=161`, `(0,-1)=79`, `(-1,0)=57`, `(1,0)=56`.
+- Loss pattern in `sim_249`: we were far ahead (22 vs 18-19) but coiled in the lower/right corner. At our last logged decision (turn 219) current old scoring chose `down` into a small pocket while our own tail at `(8,2)` was safely available; a tail-following move should keep the coil alive longer.
+- Kept one conservative `main.py` tweak: in long/healthy games where we are clearly ahead and the candidate flood area is tiny (`area <= max(8, my_len // 2)`), add a tail-connectivity/tail-following bonus. This makes the replayed turn 219 choose `right` into our tail instead of deeper into the pocket. The gate is intentionally narrow to avoid changing normal early wins or greedy-food behavior.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=102 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=131 bad=0`).
+- Local smoke after the change: `python3 tools/smoke_local.py up 50` -> 50/50 wins; `python3 tools/smoke_local.py food 50` -> 45 wins / 5 losses / 0 draws, comparable to prior notes.
+- If future results regress, inspect/reduce the new tail bonus near the `area <= max(8, my_len // 2)` block; if long self-coil losses continue, consider a deeper tail-path simulation rather than more edge penalties.
