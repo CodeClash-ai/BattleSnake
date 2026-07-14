@@ -398,6 +398,22 @@ def move(game_state):
                 if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
                     score -= 25
 
+            # Avoid optional wall races against equal/longer snakes.  Several
+            # losses/draws versus nbw__nbw-crystal came from a healthy snake
+            # drifting into the outer rail while a same-size/larger opponent was
+            # close enough to take away the only exit a few turns later.  This is
+            # deliberately disabled when hungry, when eating immediately, or when
+            # we are clearly longer, because edge food/corridors can be correct
+            # in those cases.
+            scary_close = [eh for eh in enemy_heads
+                           if enemy_lengths.get(eh, 0) >= my_len - 1 and dist(n, eh) <= 5]
+            if my_health > 55 and n not in food and my_len <= max_enemy_len + 1 and scary_close:
+                outer_ring = n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2
+                if outer_ring:
+                    score -= 70
+                    if n[0] in (0, w - 1) or n[1] in (0, h - 1):
+                        score -= 45
+
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
             if n[0] in (0, w - 1) or n[1] in (0, h - 1):

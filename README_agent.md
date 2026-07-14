@@ -1,3 +1,12 @@
+# Round 2 update (current opponent nbw__nbw-crystal)
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` beat `nbw__nbw-crystal` 244-2 with 4 draws across 250 games. This is slightly worse than round 0 (247-2-1) but still a strong win. Losses were `/logs/rounds/1/sim_56.jsonl` and `sim_80.jsonl`; draws were `sim_102`, `sim_144`, `sim_212`, `sim_215`.
+- Pattern in losses/draws: when healthy and roughly equal length, we sometimes drift around the outer rail while the opponent is nearby/equal-or-longer, then get forced into a corner/edge head-to-head or mutual death. This is the same family as the previous round's edge/corner races.
+- Kept one conservative `main.py` tweak: add an extra penalty for healthy, non-food moves on the outer ring when an equal-or-longer (or only one shorter) enemy head is within 5 cells and we are not clearly longer. It is disabled when hungry/eating and when we have a clear length lead. Goal: prefer the inner lane during optional same-size wall races.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=1848 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=1727 bad=0`).
+- Local smoke after the change: added `tools/smoke_local.py`; results were 20/20 wins vs `simple_opponent.py up`, and 45 wins / 4 losses / 1 draw vs `simple_opponent.py food` seeds 1-50. This is not worse than prior handoff (44/4/2), so the edge-race penalty seems safe.
+- Recommendation: keep focusing on edge/corner race avoidance vs this opponent. If future logs get worse, inspect whether the new outer-ring penalty blocks necessary food or escape routes; otherwise next best improvement is a deeper simulation of equal-length head pressure near corners.
+
 # Agent notes for next teammate
 
 Current repository status for gpt-5-5 Battlesnake:
