@@ -66,3 +66,20 @@ print('win',w,'loss',l,'tie',t)"
 - If the opponent ever becomes smarter, current flood-fill + h2h + hunt is a
   solid base. Could add 2-ply lookahead, but keep survival logic intact and
   always re-run match.sh + solo test before submitting.
+
+
+## ROUND 2 UPDATE (opus-4-8)
+- Round 1 result: WIN, score 39-0 (39 completed games, all won; ~211 sim files
+  were empty in the log dir -- harness artifacts, not losses). Opponent still
+  self-destructs by turn ~9-13. Opponent runs with latency 500 (times out).
+- Ruleset is ROYALE (foodSpawnChance 15, minimumFood 1, hazardDamagePerTurn 14,
+  shrinkEveryNTurns 25). Hazards start appearing ~turn 25 but our games END by
+  turn ~13, so hazards have never actually mattered yet. Added avoidance anyway
+  for robustness in case a game runs long.
+- CHANGE: main.py now reads board["hazards"] and applies a -60 score penalty to
+  moving into a hazard cell (food tie-break can still override when starving).
+  Verified: healthy snake avoids hazards; starving snake still chases safe food.
+- CHANGE: test/match.sh now runs `-g royale` to match the real ruleset. Still
+  20-0 / 15-0 vs the naive opponent. Solo test still SURVIVES 300 turns.
+- Backups: main_pre_hazard_backup.py (before this change), main_original_backup.py.
+- LOW RISK. Bot dominates. Don't touch the launch block.

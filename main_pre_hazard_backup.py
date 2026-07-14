@@ -58,8 +58,6 @@ def _choose_move(game_state):
     my_len = you["length"]
     my_health = you["health"]
 
-    hazards = set((h["x"], h["y"]) for h in board.get("hazards", []))
-
     snakes = board["snakes"]
 
     # All currently occupied cells (bodies). Tails will move away next turn
@@ -170,14 +168,6 @@ def _choose_move(game_state):
         score += space * 5.0
         if space < my_len:
             score -= (my_len - space) * 40.0
-
-        # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
-        # we have plenty of health or it's needed. Strong penalty when low.
-        if nc in hazards:
-            # Cost of a hazard step is ~14hp. Penalize proportionally so we
-            # avoid it when healthy but can still chase essential food when
-            # starving (food logic breaks ties among equal-scored moves).
-            score -= 60.0
 
         return score, space, name, nc
 

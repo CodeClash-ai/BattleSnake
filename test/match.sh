@@ -17,7 +17,7 @@ OPP_PID=$!
 sleep 4
 me=0; opp=0; tie=0
 for i in $(seq 1 $N); do
-  out=$(./game/battlesnake play -W 11 -H 11 --name me --url http://127.0.0.1:8000 --name opp --url http://127.0.0.1:8001 -g standard 2>&1)
+  out=$(./game/battlesnake play -W 11 -H 11 --name me --url http://127.0.0.1:8000 --name opp --url http://127.0.0.1:8001 -g royale --shrinkEveryNTurns 25 --hazardDamagePerTurn 14 2>&1)
   w=$(echo "$out" | grep -iE 'winner|draw' | tail -1)
   if echo "$w" | grep -qi 'me was the winner'; then me=$((me+1));
   elif echo "$w" | grep -qi 'opp was the winner'; then opp=$((opp+1));
