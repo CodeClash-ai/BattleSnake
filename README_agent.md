@@ -112,3 +112,87 @@ Rewrote `main.py` with an actually competent heuristic bot:
   changes, and profile whether the BFS flood-fill (`_flood_fill_size`) is
   fast enough if games run long (currently capped at `my_len + 2` or 8, so
   should be cheap).
+
+## Round 1 (this round) update
+
+**Context correction:** Despite the "Round 2 update" section above (written
+by a previous agent run), the *actual* `/logs/rounds/` directory on disk
+only contains a single completed round: `/logs/rounds/0/`. That round's
+opponent is `Nettogrof__nessegrev-julia` (NOT `pambrose__pambrose-kotlin`
+as described earlier in this file) -- the opponent apparently changed
+between whatever the earlier notes were based on and the actual current
+match series. Take the opponent-specific claims above (esp. mentions of
+"pambrose-kotlin") with a grain of salt; `tools/opponent_ref.py` is still
+modeling the *old* pambrose-style naive bot, not necessarily
+`Nettogrof__nessegrev-julia` exactly. That said, both opponents behave
+almost identically in practice: looking at `/logs/rounds/0/sim_*.jsonl`,
+`Nettogrof__nessegrev-julia` also self-destructs almost immediately
+(observed deaths at turn 2, turn 4, etc. in the real match logs), so
+`tools/opponent_ref.py` remains a reasonable/conservative local stand-in
+for quick smoke testing even if not byte-for-byte accurate.
+
+**Round 0 result:** `sonnet-5` swept **20-0** (see
+`/logs/rounds/0/results.json`, `scores: {sonnet-5: 20, Nettogrof...: 0.0}`).
+Note: of the 250 `sim_*.jsonl` files in that directory, only 20 are
+non-empty (i.e. only 20 games actually ran/were recorded) and our bot won
+all 20 of them. The other 230 files are empty (0 bytes) -- this looks like
+some harness artifact (pre-allocated file slots not used), not evidence of
+draws/unplayed games affecting score.
+
+**What I did this round:**
+- Re-verified `main.py`'s strategy is intact and functioning (safe-move
+  filtering + BFS flood-fill anti-trap + nearest-food seeking + head-to-head
+  avoidance -- see module docstring for full details). No functional
+  changes made; the bot was already winning maximally.
+- Ran fresh edge-case sanity checks by calling `main.move()` directly with
+  hand-built game states (no food/no opponents, cornered snake, a fully
+  self-surrounded snake body, and a state with an opponent snake nearby).
+  No exceptions in any case; always returns a valid `{"move": ...}` dict.
+- Ran a fresh local batch (15/15, seeds 1-15) of `main.py` vs
+  `tools/opponent_ref.py` using the real `game/battlesnake` CLI binary --
+  **15/15 wins**, consistent with round-0's real 20/20 sweep.
+- Ran a self-play game (`main.py` vs itself, seed 7) for 72 turns with no
+  exceptions/errors in either server's logs, confirming stability in
+  longer games where both snakes actually play competently (unlike the
+  quick opponent-based games which end by turn ~5).
+- **Decision:** made no code changes this round. The bot is already
+  achieving a perfect score against the actual current opponent, real
+  match logs confirm it, and local testing found no bugs/regressions worth
+  fixing. Changing scoring weights or logic right now would be pure risk
+  with no observed upside.
+
+**Suggestions for next teammate:**
+- If `/logs/rounds/1/results.json` (this round's real result, check after
+  it's generated) is anything less than a full sweep, closely inspect
+  `/logs/rounds/1/sim_*.jsonl` for the *actual* opponent behavior this
+  time -- it's possible the matchmaking rotates opponents or the opponent
+  updates their own code between rounds. Don't assume it's still the same
+  simple/naive self-destructing bot forever.
+- The BFS flood-fill cap is `max(my_len + 2, 8)` -- cheap for an 11x11
+  board. If future rounds use bigger boards or the opponent survives much
+  longer (longer games, more food, more snakes), consider profiling/raising
+  this cap, and consider deeper lookahead (2-3 ply search) since the
+  current bot is purely greedy/heuristic per-turn.
+- Consider writing a `tools/analyze_logs.py` that automatically parses
+  `/logs/rounds/N/sim_*.jsonl` + `results.json` and prints win/loss/turn
+  count summaries, since this was done ad-hoc via one-off shell commands
+  each round so far (see the trajectory log for the exact commands used
+  this round, e.g. counting empty vs. non-empty sim files, extracting
+  `winnerName`/`isDraw` from the last JSON line of each sim file).
+
+**New tool added this round:** `tools/analyze_logs.py` -- run
+`python3 tools/analyze_logs.py` (no args = all rounds, or pass specific
+round numbers like `0 1`) to get an automatic win/loss/draw + turn-count
+summary per round from `/logs/rounds/N/results.json` and `sim_*.jsonl`
+files. Confirmed working against round 0 data:
+```
+=== Round dir: /logs/rounds/0 ===
+  results.json winner: sonnet-5
+  results.json scores: {'Nettogrof__nessegrev-julia': 0.0, 'sonnet-5': 20}
+  sim files: 250 total, 230 empty, 20 real games
+  win=20 loss=0 draw=0 unknown=0
+  winners breakdown: {'sonnet-5': 20}
+  turn counts: min=3 max=11 avg=7.5
+```
+Use this first thing next round to quickly see how round 1 (this round)
+actually went before deciding whether/how to change `main.py`.
