@@ -364,3 +364,104 @@ battlesnake self-trap failure mode from greedy 1-ply heuristics.
   in the end (removed `main.py.bak_round1` after confirming the new
   version). If you want to diff against round-0's exact submitted code,
   check git history / the round-0 agent trajectory logs instead.
+
+## Round 2 (this actual round, real /logs/rounds/{0,1} verified) update
+
+**Verified real results (via `tools/analyze_logs.py`, ground truth from
+`/logs/rounds/N/results.json` + `sim_*.jsonl`):**
+- `/logs/rounds/0/`: `sonnet-5` **25 wins / opponent 2 wins** (27 real games
+  recorded), vs opponent `Nettogrof__nessegrev-java`. Turn counts min=3
+  max=132 avg=15.9 -- this is the round where the previous teammate found
+  and fixed the long-game self-trap bug (uncapped flood-fill + tail-
+  reachability bonus/penalty, see the "Fix implemented in main.py this
+  round" section above in this file for full details of that fix).
+- `/logs/rounds/1/`: **20-0 perfect sweep** for `sonnet-5`, same opponent.
+  Turn counts min=3 max=11 avg=6.7 -- opponent self-destructs almost
+  immediately basically every game post-fix. This confirms the self-trap
+  fix from the previous round worked and didn't introduce any regression:
+  round 1 (after the fix) was strictly better than round 0 (0 losses vs 2).
+
+**What I did this round:**
+- Confirmed via `tools/analyze_logs.py` that both real rounds so far are
+  wins for us (25-2 then 20-0), and that the round-0-to-round-1 self-trap
+  fix (already in current `main.py`, described in detail earlier in this
+  file) is holding up -- no further real losses since the fix landed.
+- Read through the entirety of current `main.py` (283 lines) end-to-end:
+  safe-move filtering w/ tail-vacate-aware collision checks, head-to-head
+  avoidance vs equal/longer snakes, **uncapped** BFS flood-fill scoring
+  with a graduated penalty (hard penalty below `my_len`, soft penalty
+  below `1.5x my_len`), a tail-reachability bonus/penalty (can we still
+  path back to our own tail after this move -- strong anti-self-trap
+  signal), nearest-food seeking with health-based urgency scaling,
+  edge-distance bonus, small tie-breaking randomness, and an exception-
+  safe fallback (`except Exception: return {"move": "up"}` plus a
+  no-safe-move degenerate fallback). Logic all looks correct and
+  consistent with the module docstring; found no bugs.
+- **IMPORTANT environment gotcha discovered/reconfirmed this round:**
+  starting local test servers with plain `(cmd &)` inside a bash tool call
+  can leave the *foreground* shell hanging/timing out on later commands in
+  the same or later tool calls, and simple `PORT=X python3 main.py &`
+  backgrounding is unreliable for chaining multiple test batches (a naive
+  attempt this round caused two tool calls to time out / return exit code
+  143 with no output at all, wasting steps). **Fix that worked reliably:**
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  followed by `disown -a`, e.g.:
+  ```bash
+  setsid nohup env PORT=9701 python3 main.py > /tmp/my.log 2>&1 < /dev/null &
+  setsid nohup env PORT=9702 python3 tools/opponent_ref.py > /tmp/opp.log 2>&1 < /dev/null &
+  disown -a
+  sleep 1
+  # now servers are fully detached and safe to use across subsequent
+  # tool calls / commands in the same or even later calls, e.g.:
+  ./game/battlesnake play -W 11 -H 11 --name my --url http://localhost:9701 \
+      --name opp --url http://localhost:9702 -g standard --seed 1
+  ```
+  Also wrap each `battlesnake play` invocation in `timeout 15 ...` as a
+  safety net regardless. Always use fresh, never-before-used port numbers
+  per test batch within a round (lingering `<defunct>`/zombie processes
+  from earlier tool calls in the same round can cause spurious "Address
+  already in use" on port reuse, per prior teammates' notes -- confirmed
+  again this round). When done testing, `pkill -9 -f "python3 main.py"`
+  and `pkill -9 -f "opponent_ref.py"` to clean up before finishing your
+  turn (courtesy to whoever/whatever runs after you in the same sandbox).
+- After fixing the server-detachment issue, ran a clean local batch:
+  **10/10 wins** for `main.py` vs `tools/opponent_ref.py` (seeds 1-10,
+  11x11 standard), games ending in 4-6 turns each -- consistent with the
+  real round-1 log distribution (avg 6.7 turns). An earlier *broken*
+  attempt this round (before fixing the detachment issue) had produced
+  a misleading 2-3/5 "win" batch with some 100-200 turn games -- almost
+  certainly due to stale/zombie server processes from a previous test
+  answering requests inconsistently, NOT a real bot weakness. If you see
+  weird/inconsistent results in a local test batch, suspect the harness
+  before suspecting `main.py` -- always verify server logs
+  (`/tmp/*.log`) don't show "Address already in use" before trusting
+  local results.
+- **Decision:** made NO functional changes to `main.py` this round. Real
+  match data (rounds 0-1) shows the current strategy is strong (25-2 then
+  20-0), the previous round's self-trap fix is validated by the improved
+  round-1 result, and this round's (corrected) local testing found no new
+  bugs. Further tinkering right now is unnecessary risk.
+
+**Suggestions for next teammate:**
+- First thing: run `python3 tools/analyze_logs.py` to check
+  `/logs/rounds/2/` (this round's real result, generated after you
+  submit) once it exists for your round. If it's still a clean sweep or
+  near-sweep, further exotic changes (multi-ply search, Hamiltonian
+  cycles, etc.) are probably not worth the risk. If losses reappear,
+  inspect the specific `sim_*.jsonl` for the failure mode (as was done
+  for the round-0 losses -- see the detailed "Fix implemented in main.py"
+  section above for the methodology: find the losing sim files, trace
+  turn-by-turn body positions in the turns leading up to death, and look
+  for the point where fewer alternatives were available than the scoring
+  metric suggested).
+- If you want to do local server-based testing, copy the
+  `setsid nohup ... & disown -a` pattern above verbatim -- it's the
+  reliable way now; don't waste steps rediscovering the port/hang issue.
+- The opponent's actual name across both real rounds so far has been
+  consistently `Nettogrof__nessegrev-java`. `tools/opponent_ref.py` is
+  still just a rough/naive stand-in (farthest-food, dominant-axis, zero
+  collision-avoidance) and is NOT a verified faithful model of the real
+  java opponent -- it's useful only as a cheap sanity/regression smoke
+  test for our own bot (no exceptions, no infinite loops, wins easily
+  against something naive), not as a strong predictor of real-match
+  score. Treat its results as directional only.
