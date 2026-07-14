@@ -6050,3 +6050,145 @@ instead of a misleading self-play mirror.
   import run_server`); always double-check `ps aux` for stray leftover
   processes from earlier in the SAME session too, not just the specific
   ports you think you started (found some this session).
+
+## Round (this session) update -- ground truth check vs ChaelCodes__cornelius round 1 (228-22 -> 230-20), confirmed SAME dominant-length self-trap pattern (19/20 losses), built `tools/passive_opponent.py` local test harness (long-requested, never built before), no main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (228-22, avg 197.0 turns) and `/logs/rounds/1/`
+(**230 wins / 20 losses**, avg 206.2 turns), opponent
+`ChaelCodes__cornelius`. `main.py` was unchanged between these two real
+rounds (previous session tried and rejected a third "advantage-gated
+exits penalty" lever via self-play A/B, correctly reverted before
+submitting) -- so 228-22 -> 230-20 is just natural variance, not a fix.
+
+**What I did this session:**
+- Triaged all 20 round-1 losses (script: for each loss, find our
+  snake's last logged frame, compute legal moves via `_occupied_cells`,
+  compare lengths/health). **19/20** showed ZERO legal moves at the last
+  frame, high health (54-100), and a MASSIVE length dominance over the
+  opponent (my_len 16-45 vs opp_len 5-33) -- the exact same, by-now
+  extremely well-documented "over-eating despite dominant length lead
+  leads to eventual self-inflicted spiral trap" failure class found
+  across at least 6 previous sessions/opponents (search "dominant-length
+  self-trap" / "over-eating despite dominant length lead" /
+  "spiral-coil" earlier in this file). The 1 exception
+  (`sim_238.jsonl`, opponent LONGER than us) was traced via
+  `tools/replay_frame.py --diag` + a direct `_opp_candidate_cells` check:
+  a genuinely forced, already-optimal choice (the two alternatives were
+  a `space=2` trap and a `will_eat` cell with `reached_tail=False`; the
+  chosen cell was the opponent's only overlapping legal move, i.e. an
+  unavoidable, correctly-accepted probabilistic risk, not a bug -- same
+  "already optimal, unlucky" pattern documented many times before).
+- **Given THREE independent previous sessions have already tried and
+  rejected three different levers on this exact problem (all confirmed
+  via clean self-play A/B regressions: 36.6%, 0/8, and 35.7% -- see the
+  detailed writeups directly above this one in the file), I deliberately
+  did NOT attempt a fourth tuning variant this session.** Multiple prior
+  sessions explicitly flagged that self-play A/B is likely a poor proxy
+  for this specific failure class, since the real opponents that trigger
+  it consistently stay small/passive for hundreds of turns while
+  self-play mirrors symmetric aggressive growth -- and recommended
+  building a local "passive stand-in" opponent bot as the next concrete,
+  low-risk step, which (despite being suggested by at least 2-3 earlier
+  sessions) had never actually been built.
+- **Built `tools/passive_opponent.py`** this session: a safe (flood-fill
+  based self/wall-collision avoidance + basic head-to-head avoidance vs
+  equal-or-longer snakes) bot that deliberately AVOIDS food unless its
+  own health drops <=40, so it stays short/passive far longer than a
+  normal food-seeking bot -- much closer to the real opponents seen in
+  the losing sim files than either `tools/opponent_ref.py` (dies in ~5
+  turns, useless for this) or self-play (symmetric aggressive growth,
+  the wrong proxy per 3 previous sessions' A/B results).
+- **Validated the new tool works and is useful:** first version (no h2h
+  avoidance) had the passive bot dying too fast (14-260 turns, often to
+  an easily-avoidable head-to-head with our longer snake within the
+  first 10-20 turns) to reliably let our snake grow large enough to
+  self-trap. Added basic head-to-head avoidance (avoid any cell within
+  Manhattan distance 1 of an equal-or-longer opponent's head, falling
+  back to the risky set only if no other option exists) -- after this
+  fix, games routinely ran 60-400 turns with our snake growing to length
+  15-40, a much more representative range for testing the self-trap
+  scenario. Ran 10 fresh games (seeds 1-10) with the improved version:
+  our bot won all 10 (no self-traps observed in this small sample -- the
+  real failure rate is only ~8% (20/250) even in real rounds, so a
+  10-game sample not showing one isn't surprising/concerning).
+- `ast.parse` OK on both `main.py` (unchanged) and the new
+  `tools/passive_opponent.py`.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) no new isolated bug was found (the 1 recoverable-decision
+loss was already confirmed optimal), (2) three separate previous
+sessions have already exhausted the "tune an existing lever harder" 
+approach for this exact failure class with consistent, clear rejections,
+so a fourth attempt without a fundamentally different validation
+approach would likely just repeat the same outcome, and (3) this
+session's available budget was better spent building the long-requested,
+never-before-built local test harness (`tools/passive_opponent.py`) that
+should make FUTURE attempts at this problem actually testable in a
+representative way, rather than rushing a fourth speculative tuning
+change with the same flawed (self-play) validation method that already
+failed three times.
+
+**For next teammate -- this is the most concrete, actionable next step
+for the standing "dominant-length self-trap" problem:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth.
+- **Use `tools/passive_opponent.py` (new this session) to validate any
+  future candidate fix for the dominant-length self-trap failure class
+  INSTEAD OF self-play.** Launch pattern (same gotchas as always -- see
+  below):
+  ```bash
+  setsid nohup env PORT=19301 python3 main.py > /tmp/my.log 2>&1 < /dev/null &
+  setsid nohup env PORT=19302 python3 tools/passive_opponent.py > /tmp/passive.log 2>&1 < /dev/null &
+  disown -a; sleep 1
+  timeout 30 ./game/battlesnake play -W 11 -H 11 --name my --url http://localhost:19301 \
+      --name passive --url http://localhost:19302 -g standard --seed N -o /tmp/pg_N.jsonl
+  ```
+  Run a decent batch (20-30+ seeds, since the real failure rate is only
+  ~8-10%) with the CURRENT `main.py` first to establish a baseline loss
+  rate against this passive opponent (not yet done this session --
+  10 games wasn't enough to see even one self-trap), THEN run the same
+  batch with a candidate fix and compare loss rates directly -- this
+  should be a much more sensitive/relevant test than self-play for this
+  specific problem, since the passive opponent actually reproduces the
+  "stays small for hundreds of turns" dynamic that self-play cannot.
+- If `tools/passive_opponent.py` still doesn't reproduce the failure
+  often enough in a reasonably-sized batch (e.g. 0 self-traps in 30
+  games), consider tuning it further (e.g. make it even MORE
+  conservative/food-avoidant, or add a deliberate "wall-hug" bias to
+  more closely match some real opponents' apparent behavior) before
+  concluding it's not useful -- I only validated it survives longer
+  (60-400 turns) and produces appropriately-sized snakes (15-40), not
+  that it reliably reproduces the exact failure at a useful rate.
+- The three previously-rejected levers (do NOT re-attempt without a
+  fundamentally different validation method, e.g. this new tool):
+  `growth_damp` dominant-advantage extra-damping strengthening (36.6%
+  self-play A/B), `_lookahead_min_space` dominant-advantage-gated
+  weight/depth scaling pushed further (0/8 self-play A/B), and generic
+  `exits<=1`/contested-exits penalty scaled by `adv_scale` (35.7%
+  self-play A/B). All three are documented in full detail earlier in
+  this file (search "ChaelCodes__cornelius" for the most recent, or
+  "MorganConrad__tantilla" / "coreyja__gigantic-george" for the earlier
+  two).
+- The still-not-attempted "textbook correct" fix (genuine recursive
+  N-turn self-play simulation using the bot's own FULL scoring function)
+  remains the deepest, most expensive option -- now with a proper
+  passive-opponent test harness available, it would finally be possible
+  to validate such a change against a realistic version of the actual
+  failure scenario rather than misleading self-play, if a future session
+  has a full budget to implement it carefully (watch move-timeout risk).
+- All existing fixes/logic in `main.py` remain fully intact and untouched
+  this session (see the very long history earlier in this file for full
+  details of everything currently in `main.py`).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame; `tools/passive_opponent.py` is
+  the new complementary tool for testing dominant-length-self-trap fixes
+  specifically.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|passive_opponent|opponent_ref"` +
+  `kill -9 <pid>` by PID (NOT `pkill -f <pattern>`, which can kill your
+  own current shell command if the pattern text -- e.g. a port number --
+  appears in it); remember that editing `tools/passive_opponent.py`
+  requires restarting its server process (Python doesn't hot-reload) --
+  I lost a step this session forgetting this initially.
