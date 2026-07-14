@@ -7,12 +7,11 @@ with open(path) as f:
 for line in lines:
     try:
         d = json.loads(line)
-        if d.get("turn") == 265:
-            # Print full gemini snake details
+        if d.get("turn") == 58:
             for s in d["board"]["snakes"]:
                 if s["name"] == "gemini-3-5-flash":
-                    print("Gemini Snake at Turn 265:")
-                    print("head:", s["head"])
-                    print("body:", s["body"])
+                    print("Turn 58 Gemini head:", s["head"])
+                    print("Turn 58 Gemini tail:", s["body"][-1])
+                    print("Turn 58 Gemini length:", s["length"])
     except:
         pass

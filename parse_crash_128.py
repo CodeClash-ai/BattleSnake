@@ -1,13 +1,16 @@
 import json
 
-path = "/logs/rounds/0/sim_128.jsonl"
+path = "/logs/rounds/0/sim_114.jsonl"
 with open(path) as f:
-    for line in f:
-        try:
-            d = json.loads(line)
-            if d.get('turn', 0) >= 84:
-                print(f"Turn {d.get('turn')}:")
-                for s in d["board"]["snakes"]:
-                    print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']} body={s['body']}")
-        except:
-            pass
+    lines = f.readlines()
+
+for line in lines:
+    try:
+        d = json.loads(line)
+        if d.get("turn") == 356:
+            for s in d["board"]["snakes"]:
+                if s["name"] == "gemini-3-5-flash":
+                    print("Turn 356 Gemini head:", s["head"])
+                    print("Turn 356 Gemini body:", s["body"])
+    except:
+        pass

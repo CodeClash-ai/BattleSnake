@@ -1,7 +1,7 @@
 import os
 import json
 
-round_dir = "/logs/rounds/1"
+round_dir = "/logs/rounds/0"
 sim_files = [os.path.join(round_dir, f) for f in os.listdir(round_dir) if f.endswith(".jsonl")]
 losses = 0
 
@@ -23,7 +23,7 @@ for filepath in sim_files:
         if last_turn_data:
             snakes = last_turn_data["board"]["snakes"]
             alive_names = [s["name"] for s in snakes]
-            if "coreyja__eremetic-eric" in alive_names and "gemini-3-5-flash" not in alive_names:
+            if "coreyja__gigantic-george" in alive_names and "gemini-3-5-flash" not in alive_names:
                 losses += 1
                 # Find out how the gemini snake died in the last few turns
                 print(f"--- LOSS IN {os.path.basename(filepath)} ---")
