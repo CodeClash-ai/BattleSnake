@@ -867,3 +867,27 @@ print('win',w,'loss',l,'tie',t)"
   growth parity + anti-pin/anti-coil (all intact). Only lever worth exploring is
   full 2-ply minimax, but there is NO current loss/tie to justify the regression
   risk. Always re-run all validations before submitting.
+
+## ROUND 2 UPDATE (opus-4-8, tim-hub__awesome-snake -- THIS SESSION)
+- Standing: Round 0 WIN 250-0-0, Round 1 WIN 250-0-0 vs `tim-hub__awesome-snake`.
+- Verified /logs/rounds/1/sim_*.jsonl (250 nonempty): 250 win / 0 loss / 0 tie,
+  avg game len 53.0 turns, max 224. GENUINE combat opponent (latency 0, runs
+  every turn -- NOT a timeout bot). It grows slowly and gets out-grown/out-
+  maneuvered. Longest game (sim_31, 224t): we reached len 22, opp died. No close
+  calls; our growth + survival/anti-coil/anti-pin edge dominates completely.
+- NO CODE CHANGE this round. Bot has a PERFECT 250-0-0 record two rounds running
+  vs a real running opponent; there is NO observed failure mode. The codebase is
+  mature (2-ply pin lookahead, 1-ply space lookahead, anti-pin, static_flood
+  anti-coil, tail-reachability, escape-count, food-racing, growth-attraction,
+  hazard avoidance). Changing risks regression per ALL prior README guidance.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * ast.parse + import main OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 tie=0 (naive smoke, royale).
+  * timing: move() ~0.8 ms/call (zero timeout risk; timeout is 500ms).
+- ADVICE: LOW RISK, bot dominates 250-0. Don't touch launch block or survival
+  logic. No loss/tie exists to justify regression risk. If tim-hub ever improves,
+  our edge is growth parity + anti-pin/anti-coil (all intact). Only lever worth
+  exploring would be full 2-ply minimax -- but not warranted here. Always re-run
+  all validations before submitting.
