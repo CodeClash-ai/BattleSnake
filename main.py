@@ -357,6 +357,30 @@ def move(game_state):
             if lengths.get(snake["id"], 0) >= my_len - 1:
                 threat_bodies.append(snake["body"])
 
+        # Once we're already very long relative to the board (i.e. our own
+        # body occupies a large fraction of the board), dial back food-
+        # seeking urgency a bit (when health is comfortable) instead of
+        # growing indiscriminately forever. Real match analysis (see
+        # README_agent.md) found 3 real losses where our snake grew to
+        # 23-32 length on an 11x11 board (19-26% of all cells) and
+        # eventually spiral-coiled itself into a sealed corner pocket --
+        # being *very* long on a small board increases self-trap risk
+        # (less open space to maneuver in, longer own-tail-following
+        # corridors) without a proportional combat benefit once we're
+        # already clearly longer than the opponent. This does NOT reduce
+        # urgency when health is low (starvation is still a guaranteed
+        # loss and always takes priority), only when comfortably healthy
+        # and already large, and it never touches any of the hard
+        # space/trap safety penalties above -- purely a softer nudge to
+        # stop over-growing once already big.
+        board_cells = width * height
+        overgrow_threshold = board_cells * 0.25
+        if health > 60 and my_len > overgrow_threshold:
+            excess = min(1.0, (my_len - overgrow_threshold) / (board_cells * 0.25))
+            growth_damp = 1.0 - 0.5 * excess
+        else:
+            growth_damp = 1.0
+
         for name, npt, danger_h2h in pool:
             # If this move lands on food, our own tail will NOT vacate this
             # turn (snake grows instead of sliding forward) -- so treat our
@@ -515,7 +539,7 @@ def move(game_state):
                     urgency = 1.0 + 8.0 * ((60 - health) / 60.0) ** 2
                 else:
                     urgency = 1.0
-                score += urgency * (55.0 / (nearest + 1))
+                score += growth_damp * urgency * (55.0 / (nearest + 1))
                 # Extra flat bonus for a move that eats RIGHT NOW when
                 # health is getting low -- guarantees survival progress
                 # instead of just "closer is better", which matters once

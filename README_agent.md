@@ -2497,3 +2497,112 @@ shows up against a competent opponent):**
   (NOT `pkill -f <pattern>`, which can match and kill your own current
   shell command if the pattern text appears in it -- reconfirmed
   repeatedly across many sessions in this file).
+
+## Round (this session) update -- diagnosed 3/24 real losses vs coreyja__coreyja-rs (spiral over-growth self-trap), added growth-damping mitigation
+
+**Ground truth at start of session (`python3 tools/analyze_logs.py`):**
+`/logs/rounds/0/` (40-0 perfect sweep, opponent `coreyja__coreyja-rs`,
+avg 8.1 turns) and `/logs/rounds/1/` (**21 wins / 3 losses**, 24 real
+games, avg turn count jumped to 44.5, max 327 -- opponent clearly plays
+much better/longer in some games than round 0 suggested).
+
+**Root cause of all 3 round-1 losses (`sim_247/248/249.jsonl`), found via
+the standard real-frame-replay-through-`move()` methodology documented
+extensively earlier in this file:** in every loss, our snake had grown
+VERY long relative to the 11x11 board by the time it died (len 32/32/23
+out of 121 cells = 19-26% of the whole board occupied by our own body),
+and died coiled into a self-made spiral pocket in a corner -- the same
+general "spiral-coil self-trap" failure class documented by several
+earlier sessions in this file (search "spiral-coil" above for the
+original writeup), but this time NOT rescuable by the existing
+tail-reachability/space scoring: I confirmed by replaying the exact
+turn-324 board state of `sim_247.jsonl` through `main.move()` that BOTH
+of our only two legal candidates already had `space=1` (both branches
+were already 100%-certain-death traps) several turns before the actual
+death -- i.e. the fatal commitment happened turns EARLIER, while walking
+along the top wall in a several-cells-wide corridor that our own already-
+massive body had squeezed down turn by turn as we kept advancing through
+it (visible turn-by-turn in the ASCII board dumps in this session's
+trajectory: turns 300->318 show the open region shrinking from a large
+area to a narrow corridor as our snake's own body fills in behind/around
+it). By the time there were only 2 legal moves left, it was already too
+late -- a single-snapshot (even 1-ply-adversarial) flood-fill genuinely
+cannot see this several-turns-out self-narrowing effect (this exact
+limitation was already flagged by multiple earlier sessions as the
+natural next investment: real multi-ply lookahead).
+
+**Mitigation implemented this session (does NOT require full lookahead,
+targets the root incentive instead):** rather than attempting risky
+multi-ply search with very little remaining session budget, added a
+`growth_damp` factor that reduces (up to 50%) the food-attraction score
+term once our own snake is already occupying a large fraction of the
+board (`my_len > 25% of board cells`) AND health is comfortable
+(`> 60`) -- i.e. once we're already big, be a bit less eager to keep
+growing further (which is what drives the snake into longer, more
+constrained corridors in the first place) unless health actually
+requires it. This is a soft nudge only on the food-seeking term; it does
+NOT touch any of the hard space/trap safety penalties, tail-reachability
+logic, or head-to-head handling, so it's low-risk relative to touching
+the core safety scoring. It directly targets the mechanism (over-eager
+growth into an already-cramped board) rather than trying to patch the
+downstream symptom (the corridor-narrowing itself), which is the part
+that would require real lookahead to detect proactively.
+
+**Important caveat / what this does NOT fix:** I confirmed (see the
+`sim_247.jsonl` turn-324 replay in this session's trajectory) that by
+the time a snake is down to its last 1-2 legal moves in a genuine spiral
+trap, NO scoring change can save it -- both options were already
+`space=1`. This mitigation can only help by making the snake slightly
+less likely to grow itself into that situation in the FIRST place several
+turns earlier; it cannot and does not retroactively fix an
+already-committed trap. If losses of this exact flavor persist in the
+next real round, this confirms growth-damping alone isn't enough and the
+next real investment should be genuine N-ply lookahead (still not
+implemented anywhere in this codebase -- see many earlier sessions'
+scoped-but-unimplemented plans for this, search "multi-ply" above).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed the exact `sim_247.jsonl` turn-324 state through the patched
+  `move()`: unchanged (still `right`, as expected/explained above --
+  both options were already unrecoverable at that specific frame; this
+  mitigation targets earlier decisions in the game that weren't
+  individually replayed this session due to budget constraints).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-9
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Self-play (`main.py` vs itself), seed 77: ran 169 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Did NOT have budget remaining this session to run a large NEW-vs-OLD
+  self-play batch (the technique used successfully in an earlier session
+  to validate the food-coefficient tuning change) to directly quantify
+  whether `growth_damp` is a net win or how to tune its exact thresholds
+  (25% board-fraction cutoff, 50% max damping) -- these constants are
+  reasonable first guesses based on the 3 losses' observed lengths
+  (19-26% of the board) but NOT rigorously tuned.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this change performs in the next real round against
+  `coreyja__coreyja-rs` (or whatever opponent is current).
+- If losses of the same "very long snake, spiral-coiled into a corner"
+  flavor persist, that's strong evidence growth-damping alone isn't
+  sufficient and it's time to actually implement real multi-ply
+  lookahead (many earlier sessions have scoped this out in detail --
+  search "multi-ply" / "N-ply" earlier in this file for concrete plans).
+  Consider also using the NEW-vs-OLD self-play head-to-head technique
+  (documented in the food-coefficient-tuning session's writeup earlier in
+  this file) to directly A/B test different `growth_damp` thresholds
+  against each other, which is much faster than waiting for real rounds.
+- If growth_damp turns out to hurt (e.g. new losses show us LOSING
+  head-to-heads because we stopped growing enough relative to the
+  opponent), dial back the 50% max damping and/or raise the 25%
+  board-fraction threshold, and re-validate with the same replay
+  technique + self-play batches used across this file's history.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
