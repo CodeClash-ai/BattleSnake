@@ -1,45 +1,25 @@
 """
-Faithful port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into
-CodeClash v1.
+CodeClash BattleSnake bot (opus-4-8).
 
-Original: io/battlesnake/examples/kotlin/SimpleSnake.kt (uses the
-battlesnake-quickstart "io.battlesnake.core" framework, which speaks the raw
-BattleSnake v1 API JSON directly -- board width/height, body/food x,y, and the
-standard y-up / bottom-left coordinate system where "up" = y+1, "down" = y-1).
+Strategy: survival-first with flood-fill space evaluation, safe food seeking,
+and opportunistic head-to-head aggression against smaller/equal opponents.
 
-Original strategy (reproduced exactly):
+Coordinate system: y-up, bottom-left origin. up=y+1, down=y-1, left=x-1, right=x+1.
 
-    fun moveTo(request, position): MoveResponse =
-        when {
-            head.x > position.x -> LEFT
-            head.x < position.x -> RIGHT
-            head.y > position.y -> DOWN
-            else                -> UP
-        }
-
-    fun nearestFood(head, foodList): Food =
-        foodList.maxByOrNull { head - it.position }!!   // Position.minus == Manhattan
-                                                        // -> picks the FARTHEST food
-
-    if (isFoodAvailable)
-        moveTo(head, nearestFood(head, foodList).position)
-    else
-        moveTo(head, boardCenter)
-
-Faithfulness notes:
-  - Position.minus is Manhattan distance; maxByOrNull selects the largest, i.e.
-    the *farthest* food (a genuine quirk of the original -- preserved).
-  - moveTo returns exactly ONE move by strict priority: x fully dominates y.
-    If x differs, y is never consulted. The final "else -> UP" also covers the
-    fully-aligned (head == target) case.
-  - The original has NO collision / out-of-bounds avoidance at all; it blindly
-    returns the moveTo direction. We do not add any. The only wrapper is the
-    arena-required try/except legal fallback.
+The opponent (pambrose SimpleSnake) has NO collision avoidance and blindly
+moves toward the farthest food (x dominates y). We simply need to survive
+longer and avoid handing it easy head-to-heads we'd lose.
 """
+
+DIRS = {
+    "up": (0, 1),
+    "down": (0, -1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
 
 
 def info():
-    # DescribeResponse("me", "#ff00ff", "beluga", "bolt")
     return {
         "apiversion": "1",
         "author": "me",
@@ -58,59 +38,168 @@ def end(game_state):
 
 
 def _manhattan(a, b):
-    # Position.minus: abs(dx) + abs(dy)
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-
-def _board_center(width, height):
-    # Board.center: ((w even ? w/2 : (w+1)/2) - 1, same for height)
-    center_x = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
-    center_y = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
-    return (center_x, center_y)
-
-
-def _move_to(head, target):
-    """Exact reproduction of SimpleSnake.moveTo (y-up API)."""
-    hx, hy = head
-    tx, ty = target
-    if hx > tx:
-        return "left"
-    if hx < tx:
-        return "right"
-    if hy > ty:
-        return "down"
-    return "up"
 
 
 def move(game_state):
     try:
-        board = game_state["board"]
-        width, height = board["width"], board["height"]
-        head_seg = game_state["you"]["body"][0]
-        head = (head_seg["x"], head_seg["y"])
-
-        food = board.get("food", [])
-        if food:
-            # nearestFood: maxByOrNull(Manhattan) -> farthest food.
-            # Kotlin maxByOrNull keeps the FIRST element attaining the max.
-            target = None
-            best = -1
-            for f in food:
-                fp = (f["x"], f["y"])
-                d = _manhattan(head, fp)
-                if d > best:
-                    best = d
-                    target = fp
-        else:
-            target = _board_center(width, height)
-
-        return {"move": _move_to(head, target)}
+        return {"move": _choose_move(game_state)}
     except Exception:
-        # Arena-required legal fallback (original has none).
         return {"move": "up"}
 
 
-if __name__ == "__main__":
-    from server import run_server
+def _choose_move(game_state):
+    board = game_state["board"]
+    width = board["width"]
+    height = board["height"]
+    you = game_state["you"]
+    my_body = [(s["x"], s["y"]) for s in you["body"]]
+    head = my_body[0]
+    my_len = you["length"]
+    my_health = you["health"]
 
-    run_server({"info": info, "start": start, "move": move, "end": end})
+    snakes = board["snakes"]
+
+    # All currently occupied cells (bodies). Tails will move away next turn
+    # unless the snake just ate; we approximate by treating tails as free
+    # unless health==100 (just ate).
+    occupied = set()
+    tails = set()
+    for s in snakes:
+        body = [(seg["x"], seg["y"]) for seg in s["body"]]
+        # Body except tail is definitely occupied next turn.
+        for seg in body[:-1]:
+            occupied.add(seg)
+        tail = body[-1]
+        # If snake just ate (health 100 and length>1 with doubled tail), tail stays.
+        if s["health"] == 100:
+            occupied.add(tail)
+        else:
+            tails.add(tail)
+
+    # Opponent snakes and their possible next-head positions (for head-to-head).
+    opponents = [s for s in snakes if s["id"] != you["id"]]
+
+    # Cells threatened by an opponent head next turn (they could move there).
+    enemy_next = {}  # cell -> max opponent length that could occupy it
+    for s in opponents:
+        oh = (s["body"][0]["x"], s["body"][0]["y"])
+        olen = s["length"]
+        for dx, dy in DIRS.values():
+            c = (oh[0] + dx, oh[1] + dy)
+            if c in enemy_next:
+                enemy_next[c] = max(enemy_next[c], olen)
+            else:
+                enemy_next[c] = olen
+
+    def in_bounds(c):
+        return 0 <= c[0] < width and 0 <= c[1] < height
+
+    def is_blocked(c):
+        # Blocked by wall or a body segment that will still be there.
+        if not in_bounds(c):
+            return True
+        if c in occupied:
+            return True
+        return False
+
+    # Evaluate candidate moves.
+    candidates = []
+    for name, (dx, dy) in DIRS.items():
+        nc = (head[0] + dx, head[1] + dy)
+        if is_blocked(nc):
+            continue
+        # Head-to-head danger: an enemy could also move here.
+        h2h_len = enemy_next.get(nc, 0)
+        # We lose or tie a head-to-head unless strictly longer.
+        lose_h2h = h2h_len >= my_len
+        candidates.append((name, nc, lose_h2h, h2h_len))
+
+    if not candidates:
+        # No non-blocked move; try tail cells (may open up).
+        for name, (dx, dy) in DIRS.items():
+            nc = (head[0] + dx, head[1] + dy)
+            if in_bounds(nc) and nc not in occupied:
+                return name
+        return "up"
+
+    # Flood-fill reachable free space from a cell, to avoid trapping ourselves.
+    def flood_fill(start_cell, blocked_set, limit=None):
+        seen = set()
+        stack = [start_cell]
+        seen.add(start_cell)
+        count = 0
+        while stack:
+            cur = stack.pop()
+            count += 1
+            if limit and count >= limit:
+                break
+            for ddx, ddy in DIRS.values():
+                nn = (cur[0] + ddx, cur[1] + ddy)
+                if nn in seen:
+                    continue
+                if not in_bounds(nn):
+                    continue
+                if nn in blocked_set:
+                    continue
+                seen.add(nn)
+                stack.append(nn)
+        return count
+
+    # Build a blocked set for flood fill: bodies (excluding our tail which moves).
+    def score_candidate(cand):
+        name, nc, lose_h2h, h2h_len = cand
+        # blocked set for flood fill from nc: all occupied cells + our new head.
+        blocked = set(occupied)
+        blocked.add(nc)
+        # our tail cell frees up (already excluded from occupied unless ate)
+        space = flood_fill(nc, blocked, limit=width * height)
+
+        score = 0.0
+        # Heavily penalize potential losing head-to-heads.
+        if lose_h2h:
+            score -= 1000.0
+        else:
+            # winning/no h2h - if enemy could be there and we're longer, chance to kill.
+            if h2h_len > 0:
+                score += 30.0
+
+        # Space is critical: reward available room. Need at least my_len space.
+        score += space * 5.0
+        if space < my_len:
+            score -= (my_len - space) * 40.0
+
+        return score, space, name, nc
+
+    scored = [score_candidate(c) for c in candidates]
+    scored.sort(reverse=True)
+
+    best_score = scored[0][0]
+    best = [s for s in scored if s[0] >= best_score - 1e-9]
+
+    # Among the best-scoring safe moves, pick by food strategy.
+    food = [(f["x"], f["y"]) for f in board["food"]]
+
+    # Decide whether to chase food: chase if hungry OR to grow advantage.
+    want_food = my_health < 60 or my_len <= _max_opp_len(opponents) + 1
+
+    def food_dist(nc):
+        if not food:
+            return 9999
+        return min(_manhattan(nc, f) for f in food)
+
+    if food and want_food:
+        # Prefer the move that most reduces distance to nearest food.
+        best.sort(key=lambda s: (food_dist(s[3]), -s[1]))
+    else:
+        # Prefer more space, then move toward center for safety.
+        center = (width // 2, height // 2)
+        best.sort(key=lambda s: (-s[1], _manhattan(s[3], center)))
+
+    return best[0][2]
+
+
+def _max_opp_len(opponents):
+    if not opponents:
+        return 0
+    return max(s["length"] for s in opponents)
