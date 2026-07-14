@@ -2289,3 +2289,36 @@ print('win',w,'loss',l,'tie',t)"
   anti-coil/anti-pin/growth. Don't over-crank the wall penalty (>60 could block
   legit wall-food when hunted+shorter -- the _clear_win_edge path). NEVER touch
   the launch block. Judge via smartmatch multi-batch (variance huge).
+
+## ROUND 1 UPDATE (opus-4-8, zakwht__zakwht-2018 -- TIED-GROWTH NUDGE)
+- OPPONENT: `zakwht__zakwht-2018`. R0 result: WIN 158-89 (3 ties). GENUINE combat
+  opp (latency 0, runs every turn -- NOT a timeout bot). ~36% loss -- our CLOSEST
+  opponent to date.
+- ANALYZED all 89 losses (/tmp/analyze.py + /tmp/early.py + /tmp/pin.py, recreate
+  from git): CLEAR DOMINANT ROOT CAUSE = 80/89 we were SHORTER at death, high
+  health (median 89 -- NOT starvation), 64/89 on an EDGE, 75/89 had a safe move
+  (forced h2h/pin, not self-coil). LENGTH GAP AT DEATH: **64/89 losses we were
+  EXACTLY 1 short (gap -1)**, 13 more were 2 short. Being 1 longer flips those 64
+  to wins. We START EVEN (turn5 gap ~0) but fall behind by turn10 (47/89 behind);
+  the deficit is SMALL (mean -0.5) but decisive at forced h2h.
+- TRACED sim_10: both snakes race the CENTER food (5,5) to a TIE (mutual death),
+  so we correctly cede it -- but then we don't get ahead. POSITIONAL standoff.
+- CHANGE (LOW RISK, targeted): tied-length food_weight 5.5 -> 6.5 (line ~357).
+  When TIED we contest food harder to end up STRICTLY 1 longer, flipping the
+  gap=-1 h2h losses. Small nudge (not over-cranked per prior warnings).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, greedymatch (aggressive-
+  grower proxy) 12-8 then 12-11-1 (~55%, no regression). Mirror A/B all-ties
+  (deterministic, ignore per prior notes).
+- Backup: main_round0_zakwht_backup.py (pre-this-change, the 158-89 code).
+- ADVICE FOR NEXT TEAMMATE: zakwht is our CLOSEST opponent. 64/89 losses are
+  EXACTLY 1 short at a forced h2h -- growth-to-strictly-longer is THE lever, but
+  much of the deficit is POSITIONAL (symmetric center-food standoff we can only
+  tie). Remaining levers: (a) smarter OPENING food target -- when the center food
+  is an un-winnable tie, immediately commit to a 2nd uncontested food to get 1
+  ahead (we currently wander); (b) a full 2-ply minimax on the hunter to survive
+  gap=-1 h2h setups via maneuvering; (c) push tied food_weight further (test
+  carefully, don't over-crank -> pin risk). Don't over-crank food (gated to safe
+  cells space>=my_len, zeroed on edges when hunted). Keep the tied-growth nudge +
+  all existing anti-coil/anti-pin/growth/2-ply-pin. NEVER touch the launch block.
+  Judge via greedy_opp multi-batch (variance huge); mirror A/B is all-ties (noise).
