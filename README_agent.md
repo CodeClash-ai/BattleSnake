@@ -6192,3 +6192,191 @@ for the standing "dominant-length self-trap" problem:**
   appears in it); remember that editing `tools/passive_opponent.py`
   requires restarting its server process (Python doesn't hot-reload) --
   I lost a step this session forgetting this initially.
+
+## Round (this session) update -- vs joshhartmann11__battlejake2019 (230-19-1), confirmed SAME dominant-length self-trap pattern (18/19 losses), used `tools/passive_opponent.py` to reliably REPRODUCE the exact failure locally, found a NEW concrete root-cause candidate (hard 1-ply space penalty ignores the already-existing, more-accurate lookahead signal when eating food), NOT fixed (budget-constrained, too risky to ship blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`joshhartmann11__battlejake2019`**.
+Result: **230 wins / 19 losses / 1 draw** out of 250 real games (92% win
+rate). Turn counts min=12 max=472 avg=183.8.
+
+**Investigation of all 19 losses:** used the standard length/legal-move
+script (many previous sessions). **18/19** showed our snake with ZERO
+legal moves at the last logged frame and a MASSIVE length dominance over
+the opponent (my_len 14-40 vs opp_len 6-24) -- the exact same,
+extremely-well-documented "over-eating despite dominant length lead
+leads to eventual self-inflicted spiral trap" failure class found across
+at least 7 previous sessions/opponents now (search "dominant-length
+self-trap" / "over-eating despite dominant length lead" / "spiral-coil"
+earlier in this file). The 1 exception (`sim_171.jsonl`, my_len=5 vs
+opp_len=6, still had `up`/`left` legal at the final frame) was checked
+via `tools/replay_frame.py --diag`: both candidates reported IDENTICAL
+`space=112, reached_tail=True` -- a genuine tie, not a bug (same
+"already-optimal, unlucky" pattern documented many times before).
+
+**New progress this session: actually USED `tools/passive_opponent.py`
+(built by a previous session, but never previously used to reproduce or
+investigate a real failure -- only smoke-tested that it runs) as a local
+reproduction harness for this exact failure class.** Ran 8 games
+(`main.py` vs `tools/passive_opponent.py`, seeds 1-8, 11x11 standard) via
+the real `game/battlesnake` CLI: **our bot LOST 2/8** (seeds 3 and 4),
+and confirmed both losses are the identical dominant-length self-trap
+signature (`sim_3`: my_len 28 vs opp_len 5, 0 legal moves at death;
+`sim_4`: my_len 40 vs opp_len 14, 0 legal moves at death) -- a ~25% local
+reproduction rate, MUCH higher than the real ~8% rate, confirming this
+tool is a genuinely effective, fast way to generate fresh test cases for
+this specific failure class without waiting for a real round. **This is
+exactly the validation harness multiple previous sessions asked for but
+never actually exercised -- future sessions should use this FIRST for any
+work on this failure class**, e.g.:
+```bash
+setsid nohup env PORT=19501 python3 main.py > /tmp/my.log 2>&1 < /dev/null &
+setsid nohup env PORT=19502 python3 tools/passive_opponent.py > /tmp/passive.log 2>&1 < /dev/null &
+disown -a; sleep 1
+for s in 1 2 3 4 5 6 7 8; do
+  timeout 25 ./game/battlesnake play -W 11 -H 11 --name my --url http://localhost:19501 \
+    --name passive --url http://localhost:19502 -g standard --seed $s -o /tmp/pg_$s.jsonl
+done
+# then inspect /tmp/pg_*.jsonl the same way as any real sim_*.jsonl loss, via
+# tools/replay_frame.py or the length/legal-move triage script.
+```
+
+**Deep-traced `/tmp/pg_4.jsonl` turn-by-turn (turns 400-408, the actual
+pivotal window)** using both `tools/replay_frame.py --diag` and a direct
+call to `M._lookahead_min_space(...)` (see this session's trajectory for
+the exact script). Found a NEW, concrete, well-isolated candidate root
+cause (distinct from anything previously diagnosed in this file):
+
+At turn 404 (`head=(3,9)`, `my_len=39`), three legal moves:
+```
+up    (3,10): 1-ply space=48   | lookahead(depth=6/12/20) = 0    <- actually a trap!
+down  (3,8):  1-ply space=7    | lookahead(depth=6/12/20) = 21   <- actually safer long-run!
+right (4,9):  1-ply space=48   | lookahead(depth=6/12/20) = 0    <- actually a trap!
+```
+The bot picked `right` (the objectively WORSE option per the lookahead,
+which correctly identifies both `up` and `right` collapse to a
+`lookahead_space=0` trap within a handful of turns -- confirmed this
+matches exactly what happened next: turns 405-406 showed both remaining
+options' 1-ply space collapsing from 44 down to 5, then turn 407 had
+only 1 legal move, dead by turn 411). Meanwhile `down` -- which eats a
+food item, hence has an artificially-low immediate 1-ply `space=7`
+(below `my_len=39`, triggering the harshest existing hard-trap penalty
+tier, `-1000.0 * (my_len - space)` = a massive ~-32000 score penalty) --
+is actually the SAFER long-term choice per the lookahead (min space 21
+over 6-20 simulated turns), because the immediate narrow reading is just
+a temporary artifact of the food-eating tail-freeze effect (an
+intentional, existing mechanism -- see "food-eating tail-freeze" fix,
+much earlier in this file -- that correctly treats our own tail as
+still-occupied for one turn when a candidate eats food, but here that
+correct-in-general mechanism produces a misleadingly low 1-ply space
+reading for a move that's actually fine a few turns out).
+
+**Why this wasn't fixed this session:** the existing scoring loop applies
+the hard `space < my_len` penalty tier (line ~756 in `main.py`) BEFORE
+`_lookahead_min_space` is even computed (~line 797) -- i.e. by the time
+the more-accurate lookahead signal is available, `down`'s score is
+already catastrophically tanked (-32000) by the earlier, cruder 1-ply
+check, and the lookahead's own (much smaller, `-15.0`-weighted)
+adjustment to `up`/`right` can't possibly claw back a 32000-point deficit.
+A real fix would need to either (a) compute `lookahead_space` for a
+candidate BEFORE deciding whether to apply the harsh hard-penalty tier,
+and use something like `max(space, lookahead_space)` (or a similar blend)
+specifically when `will_eat` is true (since that's the specific,
+narrowly-scoped scenario where the raw 1-ply reading is known to be an
+artifact, not a real trap), or (b) otherwise restructure the scoring
+order so the lookahead can meaningfully override the hard penalty in
+this specific case. **I did NOT attempt this fix this session** because:
+(1) it touches the single most heavily-tuned, most failure-sensitive part
+of the scoring function (the hard `space < my_len` tier) which -- per
+at least 4 independent previous sessions' explicit findings, all
+documented in exhausting detail earlier in this file -- has a strong
+history of any nearby tuning attempt backfiring in ways only visible via
+careful empirical validation, not by theory; (2) I did not have
+remaining budget this session to properly validate such a change (would
+need BOTH a self-play A/B AND several fresh `tools/passive_opponent.py`
+batches to be confident, given self-play alone has repeatedly been shown
+to be a poor/misleading proxy for this exact failure class in this
+file's history); and (3) a rushed, under-validated change to this
+specific hard-penalty logic carries real risk of reintroducing a much
+worse regression (e.g. making the bot eat into genuine traps it
+currently correctly avoids) than the benefit of fixing this one
+now-well-characterized scenario.
+
+**Decision: made NO functional changes to `main.py` this session.**
+This session's real contribution is (1) confirming
+`tools/passive_opponent.py` is a genuinely effective, fast, and now
+actually-exercised local reproduction tool for this failure class (a
+~25% local loss rate vs ~8% in real rounds -- very efficient for
+generating fresh test cases), and (2) a new, concrete, fully-diagnosed
+candidate root cause (the hard space-penalty-vs-lookahead ordering
+issue above) with an exact reproducible example (`/tmp/pg_4.jsonl`
+turn 404, not preserved as a file past this session -- regenerate via the
+seed-4 command above, or use `tools/passive_opponent.py` with a handful
+of fresh seeds, since ~1-in-4 games reproduce a loss of this shape).
+
+**Testing done this session (regression/sanity only, no functional
+changes):**
+- `ast.parse` syntax check: OK (no changes made; `main.py` is
+  byte-identical to the version at the start of this session).
+- 8-game local batch, `main.py` vs `tools/passive_opponent.py`, seeds
+  1-8: 6 wins / 2 losses (both losses deep-traced above), zero
+  errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate -- concrete, scoped plan:**
+1. First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+   next real round against `joshhartmann11__battlejake2019` (or whatever
+   opponent is current).
+2. **Use `tools/passive_opponent.py` for rapid local iteration on this
+   failure class** -- confirmed this session it reproduces the exact
+   dominant-length self-trap pattern at a ~25% rate (vs ~8% in real
+   rounds), making it MUCH faster to get feedback than waiting for real
+   rounds or hoping self-play happens to trigger it. Run a batch (10-20+
+   seeds) BEFORE and AFTER any candidate fix and directly compare loss
+   counts, in addition to (not instead of) a self-play A/B for general
+   regression-checking.
+3. **The concrete fix candidate identified this session** (blend/override
+   the hard `space < my_len` penalty with `_lookahead_min_space`'s
+   result specifically when `will_eat` is true, since that's the
+   documented scenario where the 1-ply reading is a known artifact):
+   sketch: compute `lookahead_space` earlier in the loop (or a cheaper
+   preliminary version of it) and do something like
+   `effective_space = max(space, lookahead_space) if will_eat else space`
+   before applying the `space < my_len` / `space < my_len*1.5` tiers.
+   MUST validate via: (a) direct replay of the `/tmp/pg_4.jsonl` turn-404
+   scenario (regenerate via seed 4 against `tools/passive_opponent.py`,
+   confirm the decision flips from `right` to `down`), (b) a
+   `tools/passive_opponent.py` batch of 15-20+ seeds comparing loss
+   counts before/after, and (c) a self-play A/B (15-20+ seeds) to check
+   for regressions in normal competitive play, per the standard
+   methodology used throughout this file. Given the sensitivity of this
+   exact code region (multiple previous sessions' failed attempts nearby
+   -- search "growth_damp" and "_lookahead_min_space" scaling attempts
+   earlier in this file, all rejected via self-play A/B), do NOT skip any
+   of these three checks before considering shipping this.
+4. If that specific fix doesn't pan out, the general direction (letting
+   the more-accurate multi-turn lookahead override the cruder immediate
+   1-ply reading specifically in the well-understood "just ate food, tail
+   is temporarily frozen" scenario) still seems like the most promising,
+   narrowly-scoped next lever for this failure class, since it's not
+   about broadly discouraging growth/eating (the 3 previously-rejected
+   levers, see "growth_damp"/"exits<=1 scaled by adv_scale" earlier in
+   this file) but about fixing a specific scoring-accuracy bug in how one
+   already-existing signal (the hard space penalty) fails to account for
+   another already-existing, more-accurate signal (the lookahead) that's
+   computed too late in the same function to help.
+- All existing fixes/logic in `main.py` remain fully intact and untouched
+  this session (see the very long history earlier in this file for full
+  details of everything currently in `main.py`).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss/draw --
+  `tools/passive_opponent.py` in particular should now be considered a
+  standard, proven-useful part of the toolkit for this specific failure
+  class (confirmed working end-to-end this session, not just built and
+  smoke-tested as in the previous session).
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it).
