@@ -1888,3 +1888,38 @@ print('win',w,'loss',l,'tie',t)"
   existing anti-coil/anti-pin/dominance/growth. NEVER touch the launch block.
   Judge growth via greedy_opp A/B multi-batch (variance huge) + tracing opening
   length gap in /logs.
+
+## ROUND 1 UPDATE (opus-4-8, kentmacdonald2__beames -- STRETCH FOOD-RACE FIX)
+- OPPONENT: `kentmacdonald2__beames`. R0 result: WIN 193-54 (3 ties). GENUINE
+  combat opponent (latency 2, runs every turn -- NOT a timeout bot). ~22% loss.
+- ANALYZED all 54 losses (/tmp/analyze3.py + /tmp/analyze4.py + /tmp/opening2.py,
+  recreate from git): CLEAR SINGLE ROOT CAUSE = 52/54 we were SHORTER at death
+  (0 longer, 2 equal), high health (median 88 -- NOT starvation), death gap
+  median -4. We FALL BEHIND at turn 6-10 in 48/54 losses. beames slowly OUT-GROWS
+  us (loss avg len: t10 me4.2 vs opp5.1, t20 4.8v6.4, t30 5.6v7.7, t50 7.4v10.0)
+  then wins forced h2h / pins us via length. NOTE: even in WINS we're behind on
+  length (our survival/anti-coil edge wins ~78% despite being shorter) -- so the
+  lever is closing the gap to win the ~22% of games decided by length contacts.
+- FIX (score_candidate food-racing block, ~line 753, additive & gated): when
+  CLEARLY BEHIND (my_len < _max_ol-1) also contest food we LOSE the race by 1
+  cell (`_stretch = my_fd <= opp_fd+1 and escapes >= 2`), on top of the existing
+  win-or-tie race. Gated to SAFE landings (escapes>=2, corner-skip already
+  applied, edge-food suppression still applies when strictly longer) so we never
+  dive into a pin for food. Positive pull guaranteed (_margin = max(...,1)).
+  This closes the opening length gap so we win length-based contacts.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0, grow_solo 4/4 SURVIVE
+  400t (no self-coil regression -- change only fires when SHORTER, longer-snake
+  anti-coil untouched). greedy_opp (aggressive-grower proxy for beames,
+  greedymatch.sh): 17-7 then 10-10 = 27-17 (~61%, HIGH variance per prior notes).
+  Mirror A/B vs backup 10-10 (deterministic/noisy, ignore per prior notes).
+- Backup: main_round1_beames_backup.py (pre-this-change, the 193-54 code).
+- ADVICE FOR NEXT TEAMMATE: beames OUT-GROWS us then wins length contacts. The
+  stretch food-race helps close the gap. If losses persist, next levers:
+  (a) extend the 2-ply pin lookahead so we survive length-based h2h setups even
+  when 1 short; (b) push stretch even harder (lose-by-2 races) but ONLY with
+  escape>=2 to avoid pins; (c) analyze whether beames pins us via a specific
+  pattern (25 edge / 25 interior / 4 corner deaths). Don't over-crank food
+  generally (pin risk -- it's gated to safe cells space>=my_len, zeroed on edges
+  when hunted). Keep stretch-race + all existing anti-coil/anti-pin/dominance/
+  growth logic. NEVER touch the launch block. Judge via greedy_opp A/B multi-batch.

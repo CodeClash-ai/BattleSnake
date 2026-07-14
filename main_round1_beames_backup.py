@@ -751,20 +751,8 @@ def _choose_move(game_state):
                     # contest any food we win OR tie the race for (my_fd<=opp_fd);
                     # when even/ahead only take food we clearly win (my_fd<opp_fd-1).
                     _aggro = my_len <= _max_ol
-                    # vs beames (kentmacdonald2): 96% of losses we were SHORTER;
-                    # beames slowly out-grows us in the opening then pins us. When
-                    # CLEARLY BEHIND (behind by 2+), also contest food we lose the
-                    # race by 1 cell -- but ONLY if it is a SAFE landing (escapes>=2,
-                    # not a corner) so we never dive into a pin for food. This closes
-                    # the length gap so we win forced h2h contacts.
-                    _far_behind = my_len < _max_ol - 1
-                    if _aggro:
-                        _win_race = (my_fd <= opp_fd)
-                        _stretch = (_far_behind and my_fd <= opp_fd + 1 and escapes >= 2)
-                    else:
-                        _win_race = (my_fd < opp_fd - 1)
-                        _stretch = False
-                    if _win_race or _stretch:
+                    _win_race = (my_fd <= opp_fd) if _aggro else (my_fd < opp_fd - 1)
+                    if _win_race:
                         _corner_f = ((f[0] in (0, width - 1))
                                      and (f[1] in (0, height - 1)))
                         if _corner_f and escapes <= 1:
@@ -783,9 +771,7 @@ def _choose_move(game_state):
                             continue
                         # reward getting closer; big bonus for landing on it
                         _race_w = 5.0 if _aggro else 3.0
-                        # ensure a positive pull even on a 1-cell-losing stretch race
-                        _margin = max(opp_fd - my_fd + 1, 1)
-                        score += _margin * _race_w
+                        score += (opp_fd - my_fd + 1) * _race_w
                         if my_fd == 0:
                             score += 55.0
 
