@@ -1061,3 +1061,33 @@ print('win',w,'loss',l,'tie',t)"
   static_flood + tail-reach + escape-count + 2-ply-pin + parallel-shadow. The
   deeper fix (corridor-width / connectivity detection) is the only remaining lever
   but higher risk. NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__amphibious-arthur -- THIS SESSION)
+- OPPONENT: `coreyja__amphibious-arthur`. Round 0 result: WIN 242-8. GENUINE
+  combat opponent (runs, games up to 262 turns), NOT a timeout bot.
+- ANALYZED all 8 losses. Two classes:
+  1. MULTI-TURN WALL/SELF-COIL while EVEN-or-AHEAD on length (sim_124 len6v4 ran
+     up right wall x=10 into (10,10) corner; sim_102 len12v6 self-coiled center;
+     sim_38 len14v7; sim_85 len14v10). ROOT CAUSE: in the NEUTRAL length band
+     (my_len roughly == opp_len, e.g. len5 vs 4) NEITHER anti-pin (needs opp>=us)
+     NOR the winning anti-wall-coil (needs my_len>max_opp+1) fired -- only the
+     mild -8 edge nudge applied, so the wall cell still scored best and we drifted
+     onto the wall then coiled into a corner.
+  2. OPP OUT-GREW us (sim_236 16v18, sim_243 9v14, sim_95 12v17). Growth-attraction
+     already targets this; not changed this round.
+- FIX (score_candidate, NEW "NEUTRAL-ZONE WALL AVOIDANCE" block, low risk):
+  when (not being_hunted) and my_health>=30 and my_len>=_max_ol, add center-pull
+  (dist_center*2.5) + edge -25 / corner -50. Fills the even-length gap so we stay
+  off walls before a coil forms. Does NOT touch hungry/food logic (gated health>=30
+  and food attraction still overrides via its own scoring/tie-break).
+- VERIFIED on sim_124: at t15 (head 9,6) bot now goes DOWN (interior) instead of
+  RIGHT onto the x=10 wall; at t16 (9,7) goes UP (stays x=9) instead of onto wall.
+  Avoids getting onto the wall that led to the corner seal.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 8-0,
+  smartmatch 11-5 then 13-3 (~75%), greedymatch 11-5. No regression.
+- Backup: main_round1_amphibious_backup.py (pre-this-change, proven 242-8 code).
+- ADVICE: keep the neutral-zone wall avoidance + all existing anti-coil/anti-pin.
+  The out-grown losses (class 2) are the other lever -- could boost food racing
+  when tied to reach length parity faster. Don't over-crank center-pull (>2.5 in
+  neutral band risks luring toward contested center). NEVER touch the launch block.

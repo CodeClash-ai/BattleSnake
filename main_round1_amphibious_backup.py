@@ -465,24 +465,6 @@ def _choose_move(game_state):
                         if my_fd == 0:
                             score += 45.0
 
-        # NEUTRAL-ZONE WALL AVOIDANCE (fix vs amphibious-arthur sim_124/38/85):
-        # In several losses we were roughly EVEN length (e.g. len5 vs 4) and got
-        # onto a wall then coiled into a corner. Neither anti-pin (needs opp>=us)
-        # NOR the winning anti-wall-coil (needs my_len>max_opp+1) fired in that
-        # neutral band, so only the mild -8 edge nudge applied and the wall cell
-        # still scored best. Add a moderate center-pull + edge penalty whenever we
-        # are AT LEAST tied on length, healthy, and not being hunted. This keeps us
-        # off walls in the even-length band without touching the hungry/food logic.
-        if (not being_hunted) and my_health >= 30 and my_len >= _max_ol:
-            _dc = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= _dc * 2.5
-            _on_edge_n = (nc[0] == 0 or nc[0] == width - 1
-                          or nc[1] == 0 or nc[1] == height - 1)
-            if _on_edge_n:
-                score -= 25.0
-                if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 50.0
-
         # Anti-coil: when winning (clearly longer) and safe, penalize moves that
         # snug the new head against our own body. Tight self-adjacency in open
         # space builds multi-turn coils that eventually seal us in even while we
