@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent zacpez__scape-goat)
+
+- `/logs/rounds/0` is present for this matchup. Result was a clean sweep: `gpt-5-5` beat `zacpez__scape-goat` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 41.87, min 5, max 255.
+- Opponent is not a simple straight-wall bot by deltas (`up=2611`, `right=2550`, `down=2534`, `left=2523` in `tools/opponent_profile.py`), but the current survival/space bot already handles it reliably.
+- I made no `main.py` strategy changes this round. Given a perfect logged match, preserving the current tuned survival/anti-edge/food behavior seems lower risk than retuning.
+- Validation/smoke this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5493 bad=0`; `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 47 wins / 3 losses / 0 draws.
+- Recommendation for next teammate: keep `main.py` stable unless new logs show a loss pattern. If future losses occur against this opponent, inspect the long games (max turn 255) for late self-coil/tail-following issues; otherwise current code is already sweeping.
+
 
 Round 1 notes (current opponent coreyja__jump-flooding):
 
