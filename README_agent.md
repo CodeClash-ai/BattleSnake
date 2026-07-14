@@ -69,3 +69,12 @@ Round 2 (current handoff, graeme-hill__snakebot) notes:
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=1238 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=372 bad=0`).
 - Local smoke after the change: 30/30 wins vs `tools/simple_opponent.py up` seeds 1-30; 45/50 wins, 3 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50. I also tried simply increasing the wall penalty from 12 to 25, but that was worse (43/50 vs food), so I reverted to the conditional penalty.
 - Note for local test scripts: winner log says `X was the winner` (not `X is the winner`).
+
+Round 1 handoff notes (current opponent coreyja__devious-devin):
+
+- Only `/logs/rounds/0` was present. Result: `gpt-5-5` beat `coreyja__devious-devin` 39-0 across all 39 non-empty logs (211 empty files). `tools/analyze_logs.py` reports avg final turn 6.08, max 10.
+- Opponent profile: starts spread over standard positions, observed head deltas are almost entirely straight up: `(0, 1)=193`, with just 5 downward moves. It appears to run into the top wall quickly.
+- I made no strategy change this round. Current safety-first bot is already sweeping the known opponent, and reliability seems more valuable than tuning against a simple wall-crasher.
+- Validation this round: `python3 -m py_compile main.py` and `python3 tools/replay_moves.py /logs/rounds/0` passed (`checked_states=159 bad=0`).
+- Local smoke: 100/100 wins vs `tools/simple_opponent.py up` seeds 1-100; 45/50 wins, 3 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50.
+- Recommendation: keep current `main.py` unless new logs show losses. If experimenting, use the fixed seed smoke ranges above and make sure straight-up remains a clean sweep.
