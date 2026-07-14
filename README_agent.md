@@ -465,3 +465,88 @@ battlesnake self-trap failure mode from greedy 1-ply heuristics.
   test for our own bot (no exceptions, no infinite loops, wins easily
   against something naive), not as a strong predictor of real-match
   score. Treat its results as directional only.
+
+## Round (this session) update -- ground-truth check + robustness re-verification
+
+**IMPORTANT ground truth correction:** Ignore round numbers/opponent names
+mentioned in the very long prose history above -- they were written by
+different teammates who were sometimes confused about which round they
+were actually in, and the opponent's name has changed between sessions
+(seen so far: `Nettogrof__nessegrev-java`, and now `csauve__bookworm`).
+**Always regenerate ground truth yourself** by running:
+
+```bash
+python3 tools/analyze_logs.py
+```
+
+At the start of *this* session, `/logs/rounds/` contained **only
+`/logs/rounds/0/`**, result: **perfect 20-0 sweep** for `sonnet-5` against
+`csauve__bookworm` (see `/logs/rounds/0/results.json`). Real games are
+very short (turn counts min=3 max=11 avg=7.0 per `analyze_logs.py`) --
+the opponent self-destructs almost immediately every game, same pattern
+as previous opponents in earlier notes above.
+
+**What I did this session:**
+- Read all of `main.py` (283 lines) end-to-end. Strategy: safe-move
+  filtering (in-bounds, body-collision incl. tail-vacate logic, avoid
+  head-to-head vs equal/longer snakes) -> uncapped BFS flood-fill space
+  scoring with graduated penalties + a tail-reachability bonus/penalty
+  (anti-self-trap) -> nearest-food seeking w/ health-based urgency ->
+  small edge-avoidance bonus -> tiny tie-break randomness -> exception-
+  safe fallback. No bugs found; logic is sound and consistent with its
+  own docstring.
+- Verified `main.py` parses cleanly (`ast.parse`).
+- Ran real local test games via the actual `game/battlesnake` CLI binary:
+  - `main.py` vs `tools/opponent_ref.py` (naive stand-in bot): **5/5
+    wins**, games ending in 4-6 turns -- matches the real round-0 log
+    distribution (avg 7 turns) closely.
+  - `main.py` vs itself (self-play), 3 games: all completed cleanly with
+    no exceptions, including a 136-turn and a 115-turn game (exercises
+    long-game / big-snake / self-trap-avoidance code paths, not just the
+    instant-opponent-death case). Checked `/tmp/*.log` server output for
+    "error"/"exception"/"traceback" -- none found.
+- **Decision: made NO functional changes to `main.py` this session.** The
+  bot is already winning maximally (20/20) in the only real round played
+  so far, and fresh local testing (both vs. the naive reference and in
+  self-play/long games) found zero bugs, crashes, or obviously-wrong
+  decisions. Given the small step budget per session and that this
+  strategy is undefeated in real play, I judged further tinkering to be
+  pure risk without a concrete failure mode to fix (unlike the earlier
+  documented round where real losses in `/logs/rounds/0/sim_*.jsonl`
+  motivated the uncapped-flood-fill + tail-reachability fix -- that fix
+  is still in place and working).
+
+**Environment gotcha found/reconfirmed this session (save yourself the
+steps):** `pkill -f "<pattern>"` / `pgrep -f "<pattern>"` will match
+**their own shell command line** if the pattern string (e.g. `main.py` or
+`opponent_ref.py`) literally appears in the command you just ran, because
+`-f` matches the *full* command line of every process including the
+`bash -c "..."` wrapper for your own command. This can SIGKILL your own
+shell mid-command (shows up as exit code 137 with no output at all,
+looking like an unrelated hang/timeout). **Prefer plain `ps aux | grep py`
++ manual `kill -9 <pid>` by PID**, or use a pattern that does NOT
+textually appear elsewhere in your command (e.g. add a distinguishing
+env var), when cleaning up background test servers.
+
+**Suggestions for next teammate:**
+- Start by running `python3 tools/analyze_logs.py` to see the actual
+  latest `/logs/rounds/` ground truth -- don't trust old prose in this
+  file about round numbers/opponent names, they've been wrong/stale
+  before.
+- If a real loss shows up in a future round, find the specific losing
+  `sim_*.jsonl`, trace the board state turn-by-turn in the moments before
+  death (see the detailed methodology written up earlier in this file
+  under "Fix implemented in main.py this round" for the round where the
+  uncapped-flood-fill + tail-reachability fix was added -- that's the
+  template to follow: find where fewer alternatives existed than the
+  scoring metric assumed, and patch the specific gap).
+- The opponent has changed names across sessions but has consistently
+  been a bot that self-destructs almost immediately (dies within ~3-11
+  turns) in every real game logged so far. If a future opponent survives
+  much longer / plays competently, that's the signal to invest in real
+  lookahead (2-3 ply minimax/expectimax) instead of the current greedy
+  1-ply heuristic -- not needed yet.
+- `tools/opponent_ref.py` + `tools/analyze_logs.py` remain the fastest
+  smoke-test tools; the `setsid nohup ... & disown -a` server-launch
+  pattern documented earlier in this file still works for local
+  `game/battlesnake` CLI testing.
