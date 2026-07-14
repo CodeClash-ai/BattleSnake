@@ -4055,3 +4055,118 @@ defensive change.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs coreyja__amphibious-arthur round 1 (232-16-2, up from 223-26-1), confirmed previous session's fix worked, tried & reverted an edge_weight baseline bump (net negative in self-play), no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (223-26-1, avg 152.7 turns) and `/logs/rounds/1/`
+(**232 wins / 16 losses / 2 draws**, 250 games, avg 165.7 turns),
+opponent `coreyja__amphibious-arthur`. Confirms the previous session's fix
+(removing the length filter on `threat_bodies` so shorter opponents are
+also modeled for space-sealing/adversarial purposes) was a real net
+improvement: losses dropped 26 -> 16 with byte-identical `main.py`
+otherwise. Do NOT revert that fix.
+
+**What I did this session:**
+- Used `tools/replay_frame.py --last` on all 16 round-1 losses. Every
+  single one showed our snake with ZERO legal moves at the last logged
+  frame, our snake much LONGER than the opponent in every case
+  (my_len 15-31 vs opp_len 5-23) -- the same well-documented "self-trap
+  while longer" signature described at exhausting length earlier in this
+  file (search "spiral-coil" / "multi-ply" for the full history).
+- Categorized final head positions: **6/16 died at a literal board
+  corner** `(0,0)/(0,10)/(10,0)/(10,10)` (`sim_103/136/138/170/185/218`),
+  **2/16 died on a wall edge** but not a corner (`sim_2/23`), and **8/16
+  died mid-board** with no wall/corner involved at all
+  (`sim_123/132/151/231/243/245/36/66`).
+- Deep-traced `sim_231.jsonl` (a mid-board, opponent-far-away case) turn
+  by turn from turn 200 to the turn-267 death. Confirmed via
+  `tools/replay_frame.py --diag` at turns 235-243 that candidate
+  `space`/`reached_tail` values were essentially TIED (92-93 cells,
+  `reached_tail=True`) for 8+ consecutive turns right up until turn 243,
+  where one candidate (`up`) suddenly showed `space=1` (correctly
+  avoided) while the other (`down`, chosen) still showed `space=92` --
+  but that "safe-looking" 92-cell region itself collapsed to 0 legal
+  moves 24 turns later purely from our own body continuing to consume
+  the corridor as we advanced through it. The opponent was far away
+  (distance 4+) and much shorter (9 vs 21) the entire time -- this is a
+  PURE self-inflicted spiral, not opponent shadowing. This is the exact
+  same fundamental "single/1-ply-adversarial-snapshot flood-fill cannot
+  see multi-turn self-narrowing" gap that at least 8-10 previous sessions
+  have already found, deeply investigated, and been unable to fix cheaply
+  (two previously-tried candidate proxies -- pure space-maximizing
+  lookahead, and a whole-region corridor-shape/degree metric -- have both
+  been directly disproven on similar real examples by earlier sessions;
+  see "corridor shape" / "multi-ply" earlier in this file). Confirms this
+  remains a genuine, not-cheaply-fixable structural limitation of the
+  current 1-ply(+1-ply-adversarial) architecture, not a new bug.
+- **Tried one concrete, scoped experiment**: bumped the baseline
+  `edge_weight` (used outside the `threat_near` boost, i.e. general
+  wall/corner avoidance with no threat nearby) from `0.3` to `0.8`,
+  reasoning that 6/16 losses ended at a literal corner and a slightly
+  stronger baseline pull away from walls/corners even with no visible
+  threat might help. Validated via the proven NEW-vs-OLD self-play A/B
+  technique (documented in detail in the food-coefficient-tuning
+  session's write-up earlier in this file): ran the modified bot against
+  a saved pristine copy of the pre-session `main.py`, seeds 1-10, 11x11
+  standard, via the real `game/battlesnake` CLI. **Result: OLD (0.3) won
+  6/10, NEW (0.8) won 4/10** -- i.e. the change looked net-negative (or
+  at best noise-level neutral) in direct head-to-head self-play, not a
+  clear improvement. Given the well-established pattern in this file that
+  scoring-weight changes need to be validated (not just theorized) before
+  merging, and this one showed no positive signal, **reverted the change**
+  (confirmed via `diff` that `main.py` is now byte-identical to the
+  pre-session version).
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate change -- edge_weight baseline bump -- was tried, tested
+via direct self-play A/B, found inconclusive-to-negative, and correctly
+reverted).
+
+**Testing done this session (regression/sanity, post-revert):**
+- `ast.parse` syntax check: OK.
+- Confirmed via `diff` that `main.py` is byte-identical to the version at
+  the start of this session (i.e. this session made no net change).
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `coreyja__amphibious-arthur` (or whatever
+  opponent is current). A win rate holding around/above ~93% (232/250
+  this round) is consistent with being close to a structural floor for
+  the current architecture against a long-surviving/competent opponent.
+- **Do not re-try a flat/unconditional `edge_weight` baseline increase**
+  without much stronger validation (e.g. 20+ seed self-play batch, since
+  this session's 10-seed batch leaned negative but isn't fully
+  conclusive either) -- this session's quick test found no positive
+  signal for it.
+- The remaining loss population is now cleanly split: ~40% literal
+  corner/wall deaths (6/16), ~50% pure mid-board self-inflicted spirals
+  with the opponent far away and much shorter (8/16, see the `sim_231`
+  trace above for a fully-characterized example), ~10% wall-but-not-
+  corner (2/16). The mid-board cases are the hardest -- confirmed (again)
+  that candidates were genuinely tied on every existing metric for many
+  consecutive turns before the trap became visible, so no scoring-weight
+  tweak at the visible decision point can fix it; it would need either
+  (a) genuine deep (10-20+ turn) forward simulation to detect the
+  self-narrowing before it happens (expensive, still unimplemented across
+  this file's whole history, flagged by many sessions as the "textbook
+  correct" fix), or (b) a fundamentally different strategy once the snake
+  is very long relative to the board (e.g. explicit Hamiltonian-cycle-
+  following mode, also flagged but never attempted due to complexity/risk).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first, as done again successfully this
+  session (via `--last` for quick triage across all 16 losses, and
+  `--diag` for the detailed `sim_231` trace).
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it). **New gotcha found this session:**
+  when copying `main.py` to a scratch dir (e.g. `/tmp/oldbot/`) for a
+  NEW-vs-OLD self-play A/B test, you must ALSO copy `server.py` there
+  (main.py does `from server import run_server`) -- a bare copy of just
+  `main.py` to an empty scratch dir will fail with
+  `ModuleNotFoundError: No module named 'server'` when run from that
+  directory.
