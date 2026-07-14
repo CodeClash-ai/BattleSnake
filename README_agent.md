@@ -420,3 +420,37 @@ print('win',w,'loss',l,'tie',t)"
   just avoiding our own traps. Keep static_flood + tail-reachability + time-aware
   flood + escape-count. Test with 3+ batches of smartmatch.sh (variance!). NEVER
   touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, nbw__nbw-crystal -- THIS SESSION, ANTI-PIN FIX)
+- Standing: Round 0 WIN 214-24 (12 ties), Round 1 WIN 218-24 (8 ties) vs
+  `nbw__nbw-crystal`. Real combat opponent, avg game len ~59 turns.
+- ANALYZED the 24 round-1 losses: MOST were HEAD-TO-HEAD / PIN deaths at HIGH
+  health (82-97%), NOT starvation or self-coil. Pattern (e.g. sim_0 t27, sim_151,
+  sim_194, sim_103, sim_238): we were SHORTER, a longer opp pursued us, and we
+  FLED toward a wall/corner, letting the longer snake cut us off and win a
+  forced head-to-head. The fatal mistake happened EARLIER (turns 21-22 we dove
+  into the corner) -- by the time both our only moves were losing h2h cells we
+  were already doomed.
+- FIX (score_candidate): new ANTI-PIN term. Compute `being_hunted` =
+  (nearest opponent length >= my_len) AND (nearest opp within manhattan 4).
+  When being_hunted: penalize distance-to-center (*4.0) and add a strong edge
+  (-25) / corner (-40) penalty. This pulls us toward open center and off walls
+  when a longer snake is chasing, so we keep escape routes and can't be pinned.
+  Applied regardless of health, but food tie-break still lets a STARVING snake
+  reach edge food (verified: health 15 + hunted -> still goes to edge food).
+- TUNING (A/B vs test/smart_opp, /tmp/ab.sh, 40-game batches, HIGH variance):
+  * center*4 (chosen): 29-11, 23-17, 27-13 => ~50-62% consistently.
+  * OLD baseline (main_round2_crystal_r2_backup.py): 21-19, 22-17 => ~53%.
+  * center*6 -> 16-23 (over-avoidance, lured into contested center). REJECTED.
+  * center*2.5 -> 25-15 then 17-23 (inconsistent). REJECTED, center*4 better.
+  Net: clear, consistent improvement over baseline, no regression.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 10-0.
+- Backup: main_round2_crystal_r2_backup.py (pre-anti-pin).
+- A/B harness: /tmp/ab.sh (ephemeral) runs a given main file vs smart_opp for N
+  royale games. Recreate from git history / this note if /tmp wiped.
+- ADVICE: crystal wins by PURSUIT+PIN when we're shorter. Anti-pin helps a lot.
+  Next lever: when SHORTER, actively grow (eat safe food) to flip length so we
+  win h2h; or 2-ply lookahead to detect pin setups earlier. Keep anti-pin +
+  static_flood + tail-reachability + time-aware flood + escape-count. Use
+  MULTI-BATCH aggregates (variance is huge). NEVER touch the launch block.

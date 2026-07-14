@@ -227,23 +227,6 @@ def _choose_move(game_state):
         return count
 
     # Build a blocked set for flood fill: bodies (excluding our tail which moves).
-    # Anti-pin: when we are SHORTER than the nearest opponent, a longer snake
-    # can pursue us and pin us to a wall/corner (round-1 crystal losses: sim_0,
-    # sim_151, sim_194, sim_103, sim_238 were all head-to-head/pin deaths at high
-    # health when we fled to an edge). In that situation strongly value center /
-    # open room and avoid walls so we cannot be cut off.
-    nearest_opp_len = 0
-    nearest_opp_dist = 9999
-    for s in opponents:
-        oh = (s["body"][0]["x"], s["body"][0]["y"])
-        d = _manhattan(head, oh)
-        if d < nearest_opp_dist:
-            nearest_opp_dist = d
-            nearest_opp_len = s["length"]
-    # Threatened = a longer/equal opponent is close enough to hunt us.
-    being_hunted = (nearest_opp_len >= my_len) and (nearest_opp_dist <= 4)
-    cx, cy = width // 2, height // 2
-
     def score_candidate(cand):
         name, nc, lose_h2h, h2h_len = cand
         # Time-aware reachable space from the new head cell.
@@ -313,19 +296,6 @@ def _choose_move(game_state):
                 # corner is worse (only two exits at most)
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
                     score -= 16.0
-
-        # Anti-pin (only when being hunted by a longer/equal opponent nearby):
-        # prefer cells toward the center and heavily penalize edges/corners so we
-        # keep escape routes and cannot be sealed against a wall.
-        if being_hunted:
-            dist_center = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= dist_center * 4.0
-            on_edge2 = (nc[0] == 0 or nc[0] == width - 1
-                        or nc[1] == 0 or nc[1] == height - 1)
-            if on_edge2:
-                score -= 25.0
-                if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 40.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.
