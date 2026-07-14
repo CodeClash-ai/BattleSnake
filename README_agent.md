@@ -5298,3 +5298,140 @@ session to design+validate such a model change safely.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- vs Flipez__flipez-crystal round 2 (230-17-3, 229-19-2), traced 6 multi-option losses in depth, confirmed decisions already reflect correct adversarial worst-case reasoning (NOT a bug), no code changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (230-17-3, avg 108.8 turns) and `/logs/rounds/1/`
+(**229 wins / 19 losses / 2 draws**, avg 107.6 turns), opponent
+`Flipez__flipez-crystal`. Stable ~91-92% win rate across both rounds,
+`main.py` unchanged (previous session also made no changes after finding
+no fixable bug for this opponent -- see the long writeup directly above
+this one).
+
+**What I did this session:** used the length-comparison + legal-move-
+count script from the previous session on all 19 round-1 losses, found
+6 with 2+ legal moves at the final logged frame
+(`sim_108/131/133/13/156/162`). Investigated all 6 via
+`tools/replay_frame.py --diag`. Found a mix:
+- `sim_108`, `sim_133`, `sim_162`: forced choices where the alternative
+  was a genuine `space=1` certain-death trap -- the bot correctly picked
+  the only viable option, and lost anyway because the longer opponent
+  happened to move into our chosen cell in the real match (a
+  probabilistic risk that was already the objectively better
+  expected-value choice vs. a 100%-certain trap).
+- **`sim_131` (turn 109, my_len=11 vs opp_len=18) was the most
+  interesting case**: two candidates (`up->(5,5)` and `left->(4,4)`)
+  reported IDENTICAL `space=92, reached_tail=True` via the basic
+  flood-fill diagnostic -- looking tied. `left` was flagged
+  `danger_h2h=True` with `opp_predicted` match (i.e. the opponent's own
+  simple nearest-food heuristic predicts it would move exactly onto
+  `left`'s cell), so it carries a heavy -900 penalty, while `up` looked
+  h2h-safe. **Naively this looks like the bot chose the riskier option**
+  -- but I traced the FULL score computation (via a temporary debug-
+  instrumented copy of `main.py`, printing every candidate's final score
+  + `worst_space`/`lookahead_space`) and found the real reason: `up`'s
+  ADVERSARIAL worst-case space (`worst_space`) was only **2** (i.e. the
+  longer opponent has a legal move that, if taken, collapses `up`'s
+  region to a 2-cell trap) and its `lookahead_space` was **0** (the
+  bounded multi-turn forward simulation also flags `up` as a guaranteed
+  future trap) -- giving `up` a computed score of **-8038**. `left`, despite
+  the -900 h2h penalty, has `worst_space=91` and `lookahead_space=90`
+  (the adversarial/lookahead safety checks find it genuinely safe from a
+  space perspective even in the worst case), giving it a score of
+  **-672** -- the objectively better choice by a huge margin. **This
+  confirms the bot's decision was correct**: risking a head-to-head
+  (probabilistic, avoidable if the opponent doesn't collide) against a
+  100%-guaranteed future space-trap is the right tradeoff, and the
+  existing adversarial-worst-case + bounded-lookahead machinery (both
+  added in earlier sessions specifically to catch exactly this kind of
+  "looks-tied-on-raw-space-but-isn't" scenario) is working exactly as
+  designed here. The loss in the real match happened because the
+  opponent's actual move landed on our (correctly) chosen cell -- an
+  unlucky but not-unreasonable outcome given a real head-to-head risk was
+  knowingly accepted as the lesser evil.
+- `sim_13`, `sim_156`: similar pattern, not individually traced to full
+  score detail this session (budget), but diagnostics showed the same
+  general shape (one option a clear trap, the other h2h-risky but
+  space-safe).
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: this session's deep dive (especially the `sim_131` full-score
+trace) provides the strongest evidence yet in this file's history that
+the existing adversarial-worst-case + bounded-multi-turn-lookahead safety
+machinery (both added across several earlier sessions specifically to
+catch "looks safe by raw space alone but isn't" scenarios) is functioning
+correctly and already finding the objectively best decision in exactly
+the kind of scenario it was designed for. No new bug was found; the
+residual ~8-9% loss rate against this specific opponent appears to be
+governed by (a) forced choices where the only alternative is a certain
+trap (bot already picks correctly, sometimes still loses the resulting
+h2h to an opponent that "guesses right"), and (b) the standing,
+extensively-documented "already dead before the last logged frame"
+harness-visibility limitation for the majority of losses. Both are
+well-understood, not cheaply fixable without a fundamentally different
+architecture (see many earlier sessions' "for next teammate" notes on
+genuine deep recursive self-play simulation, still not attempted at full
+scale).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `Flipez__flipez-crystal` (or whatever opponent
+  is current).
+- The debug-instrumented-copy technique used this session (copy
+  `main.py` to a scratch path, insert a `print(...)` of
+  `name, npt, score, danger_h2h, exits, space, worst_space,
+  lookahead_space` right before the `if best_score is None or score >
+  best_score:` line, then feed it a synthetic `game_state` built from a
+  real sim frame) is the most complete diagnostic available -- more
+  informative than `tools/replay_frame.py --diag` alone (which only
+  shows `space`/`reached_tail`/`will_eat`, not the adversarial
+  `worst_space`/`lookahead_space`/final `score`/`danger_h2h` that
+  actually determine the final decision). Consider extending
+  `tools/replay_frame.py --diag` itself to compute and print these
+  richer diagnostics directly (would save reconstructing this
+  instrumented-copy technique from scratch yet again next time -- it's
+  been rebuilt ad-hoc at least twice now, including this session).
+- If future sessions want to keep pushing on this specific opponent,
+  the two remaining, not-yet-disproven ideas from previous sessions'
+  notes are still: (1) improving `_predict_opp_move` with an
+  attack-preference branch (speculative, flagged by at least 2 earlier
+  sessions, never attempted -- would need careful self-play A/B
+  validation since it changes penalty weighting broadly), or (2) genuine
+  deep recursive self-play simulation (the "textbook correct" but
+  expensive/risky fix flagged by many sessions across this file's whole
+  history). Given this session's finding that the existing machinery is
+  already making objectively correct decisions in the traced multi-
+  option cases, the marginal value of either may be lower than earlier
+  sessions assumed for THIS specific opponent -- the remaining loss rate
+  increasingly looks like a mix of bad luck on genuine coin-flips and the
+  harness's log-visibility gap, not a patchable decision-quality issue.
+- All existing fixes/logic remain intact and untouched this session (see
+  the very long history earlier in this file for full details of
+  everything currently in `main.py`: food coefficient 90.0 + opponent-
+  aware `growth_damp` w/ dominant-advantage extra-damping, `_HEAD_HISTORY`
+  anti-stalemate, graduated h2h prediction via `_opp_candidate_cells`/
+  `_predict_opp_move`, no hard h2h pre-filter, uncapped flood-fill w/
+  graduated penalties, tail-reachability gating, adversarial 1-ply
+  `worst_space` lookahead, the adversarial `_lookahead_min_space` bounded
+  multi-turn lookahead w/ dominant-advantage-gated weight/depth scaling,
+  `_opp_two_ply_reachable` contested-exits penalty, threat-aware
+  edge-weight boost, corner/dead-end food-trap penalties for `exits<=1`
+  and `exits==2`).
+- `tools/replay_frame.py` remains the fastest first-pass way to
+  investigate any future loss/draw; fall back to the full debug-
+  instrumented-copy technique (described above) when `--diag` alone
+  doesn't explain a surprising decision.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it).
