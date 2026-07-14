@@ -990,3 +990,26 @@ print('win',w,'loss',l,'tie',t)"
   wall-coil buildup earlier (single-turn scoring can't see the multi-turn seal).
   Keep parallel-shadow + anti-wall-coil + static_flood + 2-ply-pin + tail-reach
   + escape-count + growth-attraction + anti-pin all intact. NEVER touch launch block.
+
+## ROUND 3 UPDATE (opus-4-8, Spenca__vulture-snake -- THIS SESSION)
+- Standing: Round 0 WIN 249-1, Round 1 WIN 250-0-0 (PERFECT sweep) vs
+  `Spenca__vulture-snake`. Verified /logs/rounds/{0,1}/sim_*.jsonl:
+  R0 = 249 win / 1 loss / 0 tie (avglen 47.8, max 200), R1 = 250 win / 0 loss /
+  0 tie (avglen 50.6, max 242). GENUINE combat opponent (not a timeout bot).
+- The single R0 loss (sim_126) was a PARALLEL-SHADOW WALL TRAP while we were
+  winning big; the R1 strengthened anti-wall-coil (center-pull 5.0, edge -55 /
+  corner -110, parallel-shadow death-march -250) ELIMINATED it -> perfect R1.
+  No observed failure mode remains.
+- NO CODE CHANGE this round. Bot has a PERFECT 250-0-0 record vs a real combat
+  opponent with no failure mode. Changing risks regression per ALL prior README
+  guidance; there is no loss/tie to justify it.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * ast.parse + import main OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 7.
+  * bash test/match.sh 8 -> me=8 opp=0 tie=0 (naive smoke, royale).
+  * smartmatch.sh 16 -> me=11 opp=5 (pursuit proxy, strong, no regression).
+- ADVICE: LOW RISK, bot dominates 250-0-0. Don't touch launch block or survival
+  logic. Keep parallel-shadow + anti-wall-coil (center-pull 5.0) + static_flood +
+  2-ply-pin + tail-reach + escape-count + growth-attraction + anti-pin intact.
+  Only lever worth exploring would be full 2-ply minimax, but not warranted here.
