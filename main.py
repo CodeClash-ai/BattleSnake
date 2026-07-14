@@ -653,8 +653,17 @@ def move(game_state):
                     # the growth instead of letting raw flood-fill/anti-rail terms
                     # keep orbiting.  This is deliberately limited to large deficits
                     # so it does not undo earlier edge-food safety when close/ahead.
-                    if my_len + 4 <= max_enemy_len and my_health <= 98:
-                        score += 170
+                    if my_len + 3 <= max_enemy_len and my_health <= 99:
+                        # Famished-frank and other efficient food racers punish us
+                        # whenever we pass up a safe adjacent snack while already
+                        # several lengths behind.  Earlier catch-up tuning only
+                        # helped at -4 and was too weak to overcome small
+                        # flood-fill/path-count differences, so widen it slightly
+                        # but keep it limited to immediate food (after all hard
+                        # safety filters) rather than broad food-chasing.
+                        score += 320
+                        if my_len + 6 <= max_enemy_len:
+                            score += 180
                     # Gigantic-george leaves the board dense with food while staying
                     # short.  In those far-ahead endgames every legal move can be a
                     # snack, so the generic anti-food penalty no longer distinguishes
