@@ -52,3 +52,12 @@ Round 2 handoff notes:
 - Validation this round: `python3 -m py_compile main.py`, `python3 tools/replay_moves.py /logs/rounds/0`, and `python3 tools/replay_moves.py /logs/rounds/1` all pass.
 - Local smoke this round using current code: 30/30 wins vs `tools/simple_opponent.py up` on seeds 1-30; 44/50 wins, 4 losses, 2 draws vs `tools/simple_opponent.py food` on seeds 1-50. No `main.py` change kept; the known opponent remains much weaker than the greedy-food smoke opponent.
 - Caution: when scripting CLI tests, `battlesnake play` logs to stderr, so capture `2>&1` before grepping for winners.
+
+Round 1 (this handoff, graeme-hill__snakebot logs) notes:
+
+- Only `/logs/rounds/0` was present this round. Result: `gpt-5-5` beat `graeme-hill__snakebot` 91-1 across 92 non-empty games (158 empty files). `python3 tools/analyze_logs.py /logs/rounds/0` reports avg final turn 17.83, min 2, max 237.
+- Opponent profile is no longer the previously documented straight-only bot; observed deltas are spread across all directions: `(0,1)=556`, `(0,-1)=368`, `(1,0)=319`, `(-1,0)=306`. Still, we dominated 91-1.
+- The single loss was `/logs/rounds/0/sim_248.jsonl`. We were ahead 23 length vs 17, ate unnecessary bottom-edge food at turn 169, pinned our tail, then spiraled into the lower-left corner and died on turn 185 while opponent survived. Current code replay of that logged state now chooses `left` at turn 169 rather than eating at `(4,0)`.
+- Kept one conservative `main.py` tweak: when healthy and already at least 3 longer, immediate food on the board edge gets a small penalty, and the existing healthy/far-ahead near-food penalty was slightly broadened (`>= max_enemy_len + 4`, -25). Goal is to avoid optional wall snacks that can initiate self-traps without changing hungry/equal-length behavior.
+- Validation this round: `python3 -m py_compile main.py` passes; `python3 tools/replay_moves.py /logs/rounds/0` passes (`checked_states=1238 bad=0`). Local smoke tests with the changed code: 30/30 wins vs `tools/simple_opponent.py up` seeds 1-30; 46/50 wins, 2 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50 (slightly better than previous handoff's 44/50 on the same smoke range, but not a perfect regression test).
+- Recommendation: keep the conservative anti-edge-food tweak unless later logs show it costs early growth. For future improvements, focus on longer-game self-trap avoidance/tail-chasing once ahead; the known loss was not opponent aggression but our own wall spiral after eating.

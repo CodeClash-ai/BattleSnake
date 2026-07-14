@@ -318,9 +318,16 @@ def move(game_state):
                 # head-to-head odds against more cautious snakes.
                 if food_dist == 0 and area >= my_len + 3:
                     score += 55
+                    # Edge food can be a trap when we are already safely ahead:
+                    # eating pins our tail for a turn and can start a wall spiral.
+                    # Keep taking these when hungry or needing length, but do not
+                    # let a healthy, longer snake chase unnecessary wall snacks.
+                    if (my_health > 75 and my_len >= max_enemy_len + 3
+                            and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                        score -= 45
                 # Do not bloat forever when healthy and already far ahead.
-                if my_health > 80 and my_len > max_enemy_len + 4 and food_dist <= 1:
-                    score -= 20
+                if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
+                    score -= 25
 
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
