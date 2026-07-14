@@ -315,21 +315,21 @@ def move(game_state):
                     # into a shorter head's possible square at only +3, then get
                     # mirrored into our own body/rail pocket.  Treat these as
                     # mildly bad unless area/food clearly require the chase.
-                    score -= 45
+                    score -= 90
                 elif my_len <= max_enemy_len + 4:
                     # Battlejake-style survivor losses often begin at only +4: we
                     # are long enough to win a direct head-to-head, but stepping into
                     # the shorter head's possible square lets it mirror beside our
                     # body and close a pocket.  Make these optional chase moves
                     # mildly unattractive unless area/food clearly demand them.
-                    score -= 60
+                    score -= 150
                 else:
                     # When we are already far ahead, do not enter even a shorter
                     # snake's possible head square just to chase it.  Amphibious
                     # Arthur's rare wins often start with us shadowing a much
                     # smaller head into a cramped pocket; outliving in open space
                     # is safer than forcing a nonessential head-to-head.
-                    score -= 170
+                    score -= 240
             # Prefer cells with multiple exits (less likely to enter a cul-de-sac).
             exits = 0
             for d2 in MOVES.values():
@@ -495,10 +495,24 @@ def move(game_state):
                             score -= 650
                         elif exits <= 1:
                             score -= 250
+                            # At a comfortable +5 lead, Battlejake-style survivors
+                            # often win by mirroring while our snake takes a one-exit
+                            # no-tail corridor with deceptively large flood-fill.
+                            # Survival is better than pressure; avoid these optional
+                            # noose throats when healthy.
+                            if my_health > 70 and my_len >= max_enemy_len + 5:
+                                score -= 700
                         else:
                             score -= 80
                         if far_ahead_cruise:
                             score -= 520
+                            # Battlejake-style mirrored survivor endgames often show
+                            # us far ahead, healthy, and choosing a one-exit/no-tail
+                            # continuation because its raw flood-fill is large.  That
+                            # space is usually behind a noose throat; prefer a smaller
+                            # route that stays connected to the moving tail.
+                            if exits <= 1:
+                                score -= 900
                 elif my_health > 55 and my_len >= 14 and area < my_len * 3 and n not in food:
                     # In close-length long games, survival often depends on staying
                     # connected to our own tail rather than maximizing raw area.

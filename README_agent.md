@@ -1,4 +1,13 @@
 
+# Round 1 notes (current opponent joshhartmann11__battlejake, gpt-5-5)
+
+- `/logs/rounds/0` result: `gpt-5-5` beat `joshhartmann11__battlejake` 212-37 with 1 draw. This is a stronger/better-balanced Battlejake variant than prior notes: games are long (avg ~252 turns, max 501) and opponent deltas are balanced.
+- Losses are still mostly mirrored survivor/noose failures while we are healthy and ahead or close: we pressure a shorter head or take one-exit/no-tail corridors, flood-fill looks large, then the opponent parallels us until the region collapses to a tiny forced pocket. Useful diagnostics: `tools/battlejake_loss_patterns.py /logs/rounds/0` and `tools/debug_candidates.py /logs/rounds/0/sim_57.jsonl 299`.
+- Kept two targeted `main.py` retunes: (1) shorter-head `h2h_good` moves are now penalized more strongly at +3/+4/+5 leads, which changes several logged chase states (e.g. `sim_31` t32, `sim_28` t222, `sim_14` t239) away from walking beside the shorter head; (2) far-ahead healthy one-exit moves with no path to our moving tail get an extra penalty, changing `sim_57` t299 to follow the tail-connected route.
+- Validation: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws; `python3 tools/smoke_local.py up 20` -> 20/20. Full replay timed out under the 30s shell limit (expected with long logs/lookahead).
+- If future results regress by missing direct kills, soften the h2h_good penalties around the Battlejake comments. If losses remain high-health coils, next step is a better no-tail/articulation detector; current raw area can still dominate in 2-exit regions.
+
+
 # Round 2 notes (current opponent xtagon__nagini, gpt-5-5)
 
 - `/logs/rounds/0` was a solid win, 215-34-1, but `/logs/rounds/1` regressed to 202-48. Opponent Nagini is a strong vertical-leaning food/space/rail-trap snake (opponent deltas in r0: up/down ~8.6k each, left/right ~6.0k each).
