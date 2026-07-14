@@ -334,6 +334,43 @@ def move(game_state):
             if future == 0:
                 score -= 500
 
+            # Avoid one-turn-ahead head traps against equal/longer snakes.
+            # The immediate head-to-head filter above is not enough near edges:
+            # a tempting food/corner move can leave only exits that a longer
+            # enemy can cover on its next move.  Penalize candidates where a
+            # plausible enemy step would make all of our next continuations
+            # losing head-to-heads.  Keep it gated to healthy, close-length
+            # situations so starvation escapes and clear length leads are not
+            # over-constrained.
+            if my_health > 50 and my_len <= max_enemy_len + 1:
+                my_next_len = my_len + (1 if n in food else 0)
+                continuations = []
+                for d2 in MOVES.values():
+                    nn = add(n, d2)
+                    if inside(nn, w, h) and nn not in sim_blocked:
+                        continuations.append(nn)
+                worst_safe = None
+                for s, opts in enemy_nexts:
+                    elen = s.get("length", len(s.get("body", [])))
+                    if elen < my_next_len or dist(n, pt(s["head"])) > 5:
+                        continue
+                    for eo in opts:
+                        if dist(n, eo) > 2:
+                            continue
+                        next_danger = {eo}
+                        for ed in MOVES.values():
+                            en = add(eo, ed)
+                            if inside(en, w, h):
+                                next_danger.add(en)
+                        safe_after = sum(1 for c in continuations if c not in next_danger)
+                        worst_safe = safe_after if worst_safe is None else min(worst_safe, safe_after)
+                if worst_safe == 0 and continuations:
+                    score -= 220
+                    if n[0] in (0, w - 1) or n[1] in (0, h - 1):
+                        score -= 120
+                elif worst_safe == 1 and len(continuations) <= 2:
+                    score -= 55
+
             # Shallow self-avoidance lookahead for long, healthy games.  This is
             # intentionally only a tie-breaker unless a move has almost no
             # continuations; it targets late losses where flood-fill space stayed
@@ -400,9 +437,17 @@ def move(game_state):
                     # eating pins our tail for a turn and can start a wall spiral.
                     # Keep taking these when hungry or needing length, but do not
                     # let a healthy, longer snake chase unnecessary wall snacks.
-                    if (my_health > 75 and my_len >= max_enemy_len + 3
-                            and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                    edge_food = (n[0] in (0, w - 1) or n[1] in (0, h - 1))
+                    if (my_health > 75 and my_len >= max_enemy_len + 3 and edge_food):
                         score -= 45
+                    # Do not grab optional rail food when a longer/equal enemy is
+                    # already close enough to force the next exit.  Several Xe__since
+                    # losses were healthy top/bottom-edge snacks that immediately
+                    # became losing head-to-head races; if we need food urgently this
+                    # stays disabled by the health gate below.
+                    if (edge_food and my_health > 55 and my_len + 1 <= max_enemy_len
+                            and enemy_heads and min(dist(n, eh) for eh in enemy_heads) <= 4):
+                        score -= 230
                 # Do not bloat forever when healthy and already far ahead.
                 if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
                     score -= 25
