@@ -281,6 +281,7 @@ def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
         head = my_body[0]
         best_c = None
         best_sp = -1
+        best_metric = None
         for dx, dy in DIRS.values():
             npt = (head[0] + dx, head[1] + dy)
             if not _in_bounds(npt, width, height):
@@ -288,7 +289,28 @@ def _lookahead_min_space(my_body, opp_bodies, food_cells, width, height, depth):
             if npt in blocked:
                 continue
             sp, _ = _flood_fill(npt, blocked, width, height)
-            if sp > best_sp:
+            # Tiebreaker refinement: the pure space-maximizing proxy for
+            # our own future self was found (real match analysis, see
+            # README_agent.md, opponent MorganConrad__tantilla) to
+            # sometimes pick an escape path the REAL bot's full scoring
+            # function would not actually take (e.g. sim_104.jsonl turn
+            # 168 reported lookahead_space=60 via this proxy but the real
+            # bot's subsequent decisions collapsed to 0 the very next
+            # turn) -- because the real bot also avoids low-exit
+            # (<=1-2 open neighbor) cells, not just raw space. Add a
+            # small exits-based nudge so the proxy more closely emulates
+            # that behavior on near-tied candidates, without changing
+            # its priority ordering when one candidate has meaningfully
+            # more raw space (the nudge is capped at +/-1.5, far smaller
+            # than a 1-cell space difference of 1.0 * many).
+            exits = 0
+            for edx, edy in DIRS.values():
+                ept = (npt[0] + edx, npt[1] + edy)
+                if _in_bounds(ept, width, height) and ept not in blocked:
+                    exits += 1
+            metric = sp + 0.5 * min(exits, 3)
+            if metric > (best_metric if best_metric is not None else -1):
+                best_metric = metric
                 best_sp = sp
                 best_c = npt
         if best_c is None:

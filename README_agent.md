@@ -5746,3 +5746,160 @@ and immediately reverted).
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
   `from server import run_server`).
+
+## Round (this session) update -- vs MorganConrad__tantilla round 2 (226-24, 232-18), confirmed same known dominant-length self-trap pattern (all 18 losses), added small "exits-aware" tiebreaker refinement to `_lookahead_min_space`'s future-self proxy, validated via perf/fuzz/self-play A/B (roughly neutral 6-6-2)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (226-24, avg 257.8 turns) and `/logs/rounds/1/`
+(**232 wins / 18 losses**, avg 251.5 turns), opponent
+`MorganConrad__tantilla`. `main.py` was unchanged between these two real
+rounds (the previous session tried strengthening the dominant-advantage
+`_lookahead_min_space` weight/depth scaling further, found it was a
+clean 0/8 self-play regression, and correctly reverted before
+submitting) -- so the round-0 -> round-1 improvement (226-24 -> 232-18)
+is just natural match-to-match variance with the same underlying
+strategy, not evidence of a fix. Still, an improvement in the right
+direction, and a good ~92-93% win rate baseline going into this session.
+
+**What I did this session:**
+- Checked all 18 round-1 losses via a length/legal-move-count script
+  (same pattern used by many previous sessions). **Every single one**
+  showed our snake with ZERO legal moves at the last logged frame, high
+  health (70-100), and a MASSIVE length dominance over the opponent
+  (my_len 21-56 vs opp_len only 4-10 in every case) -- confirming this is
+  the exact same, extensively-documented "over-eating despite dominant
+  length lead leads to eventual self-inflicted spiral trap" failure class
+  that at least 3 previous sessions have already deeply investigated for
+  this and other opponents (search "over-eating despite dominant length
+  lead" / "spiral-coil" / "coreyja__gigantic-george" /
+  "coreyja__eremetic-eric" earlier in this file). No new/different
+  failure shape found.
+- Given the extensive history of FAILED attempts to fix this via
+  strengthening either of the two existing levers (`growth_damp`'s
+  dominant-advantage extra-damping term, and `_lookahead_min_space`'s
+  dominant-advantage-gated weight/depth scaling -- both were pushed
+  harder in separate previous sessions and BOTH times regressed clearly
+  in self-play A/B testing: 36.6% and 0/8 respectively, see the long
+  writeups earlier in this file), I deliberately did NOT try pushing
+  either of those same two levers again. Instead, I looked for a
+  different, smaller-scoped root cause: `_lookahead_min_space`'s
+  "future self" proxy (used inside the bounded forward simulation to
+  approximate what OUR OWN future decisions would be turns from now)
+  purely maximizes immediate flood-fill space with no other
+  consideration -- but the REAL bot's actual scoring function also
+  strongly avoids landing on low-exit (<=1-2 open neighbor) cells (the
+  corner/dead-end food-trap penalties, `exits<=1`/`exits==2` terms,
+  documented extensively earlier in this file). This mismatch means the
+  proxy can find an "escape route" through a series of narrow/low-exit
+  cells that the real bot, with its real scoring, would actually avoid
+  and never take -- making the lookahead's reported safety optimistic in
+  exactly the way needed to miss a real trap. Directly confirmed this
+  divergence exists in a previous session's own trace (`sim_104.jsonl`
+  turn 168: lookahead reported `lookahead_space=60` via the old greedy-
+  space-max proxy, but the REAL bot's actual subsequent turns collapsed
+  to 0 the very next turn -- i.e. the proxy's chosen path ≠ the real
+  bot's actual path).
+
+**Fix implemented this session (small, targeted, NOT touching either
+previously-tested-and-rejected lever):** inside `_lookahead_min_space`'s
+per-step greedy choice of "what would our future self do", added an
+exits-count nudge (`metric = sp + 0.5 * min(exits, 3)`, capped at +1.5)
+so that among candidates with similar/tied raw space, the proxy now
+mildly prefers the one with more open neighbor cells -- better emulating
+the real bot's actual exits-avoidance behavior, without changing the
+ordering whenever one candidate has meaningfully more raw space (the
+nudge is capped well below a single cell of space difference). This
+does NOT touch the dominant-advantage gating, weight, or depth scaling
+that were already separately tuned (and already once over-tuned and
+reverted) in previous sessions -- purely a proxy-accuracy refinement.
+
+**Validation done this session:**
+- `ast.parse`: OK.
+- **Performance**: 50 randomized trials with my_len 25-70 + 1-2 opponents
+  on an 11x11 board -- max 7ms, avg 2.6ms per `move()` call. Still a huge
+  margin below any realistic move timeout.
+- **Fuzz test**: 300 randomized synthetic board states (0-3 opponents,
+  random lengths 1-40, random health/food/turn) run directly through
+  `move()` -- **zero exceptions**.
+- **NEW-vs-OLD self-play A/B** (the proven technique used throughout this
+  file's history): saved a pristine pre-session copy to `/tmp/oldbot/`,
+  ran both concurrently via the real `game/battlesnake` CLI, seeds 1-14:
+  **NEW won 6, OLD won 6, 2 draws** -- essentially a coin flip / no
+  measurable regression (and no clear improvement either, but critically
+  NOT a clear regression like both previous attempts to strengthen the
+  other two levers were). Given this is a narrowly-scoped proxy-accuracy
+  fix (not a broad scoring-weight change), a neutral self-play result
+  combined with zero exceptions/fine performance was judged an acceptable
+  bar to keep it, per the same reasoning used by the earlier
+  `coreyja__gigantic-george` session that kept its own (also
+  neutral-to-mildly-positive, 11/19) `_lookahead_min_space` scaling
+  addition.
+- Local regression batch vs `tools/opponent_ref.py` (naive stand-in),
+  seeds 1-3: **3/3 wins**, 4-6 turns each, zero errors/exceptions in
+  either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**Decision: KEPT this session's change.** Rationale: (1) it's narrowly
+scoped to improving the ACCURACY of an existing safety-net proxy (not
+broadening its influence/weight, which is the exact thing that failed
+twice before for this same failure class), (2) self-play A/B shows no
+regression, (3) performance and fuzz testing confirm it's safe to ship,
+and (4) it's grounded in a concretely-identified, previously-documented
+mismatch (the `sim_104.jsonl` divergence) between the proxy's assumed
+future-self behavior and the real bot's actual behavior.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `MorganConrad__tantilla` (or whatever opponent
+  is current) in the next real round. Given the self-play signal was
+  neutral (not a strong positive), don't be surprised if this alone
+  doesn't dramatically move the needle -- it's a modest refinement, not
+  a fundamental fix.
+- **Do NOT re-attempt strengthening `growth_damp`'s dominant-advantage
+  extra-damping term or `_lookahead_min_space`'s dominant-advantage-gated
+  weight/depth scaling** beyond their current values -- both have now
+  been tried and clearly rejected (36.6% and 0/8 self-play A/B
+  respectively) by two separate previous sessions. Any further work on
+  this specific "dominant length, self-inflicted spiral trap" failure
+  class should look for genuinely NEW angles, not push the same existing
+  knobs harder.
+- The remaining, still-not-attempted "textbook correct" fix (flagged by
+  many sessions across this file's history) is genuine recursive
+  self-play simulation using the bot's own FULL real scoring function
+  (not a simplified space-maximizing-plus-exits proxy, which is still
+  just an approximation even after this session's refinement) -- this
+  would need a full session's budget for careful performance profiling
+  (recursive calls into `move()`-equivalent logic are much more
+  expensive than the current cheap proxy) and thorough validation before
+  shipping, given move-timeout risk is a much worse failure mode than
+  the self-trap losses it might fix.
+- Also worth considering (not attempted, speculative): since self-play
+  A/B is a poor proxy specifically for the "opponent stays tiny/passive
+  forever" scenario (flagged by at least 2 earlier sessions -- self-play
+  mirrors symmetric aggressive growth, not a passive/small opponent),
+  building a small local "passive stand-in" opponent bot (deliberately
+  avoids food, stays short, moves semi-randomly) alongside
+  `tools/opponent_ref.py` could give a more representative local test
+  harness for tuning fixes aimed specifically at this failure class,
+  rather than relying on self-play or the real round's results alone.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything else currently in `main.py`: food
+  coefficient 90.0 + opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping (unchanged), `_HEAD_HISTORY` anti-stalemate, graduated
+  h2h prediction, no hard h2h pre-filter, uncapped flood-fill w/
+  graduated penalties, tail-reachability gating, adversarial 1-ply
+  `worst_space` lookahead, `_opp_two_ply_reachable` contested-exits
+  penalty, threat-aware edge-weight boost, corner/dead-end food-trap
+  penalties at 70.0/25.0).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text -- e.g. a port number -- appears in it, reconfirmed
+  again this session); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`).
