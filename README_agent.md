@@ -1,3 +1,11 @@
+# Round 2 update (current opponent coreyja__bombastic-bob)
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` swept `coreyja__bombastic-bob` 250-0 across 250 games. This improved on round 0 (249-1). Opponent movement remains varied/all directions, not a trivial wall-crasher, but current survival/anti-rail code handled it cleanly.
+- I made no `main.py` strategy change this round. Since the most recent anti-edge/rail tweaks appear to have fixed the single round-0 failure mode and produced a perfect round, reliability is preferable to retuning.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=4433 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=6081 bad=0`).
+- Local smoke using current code: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 45 wins / 5 losses / 0 draws, matching the previous handoff.
+- Recommendation: keep current `main.py` unless future logs show new losses. If losses return, first inspect optional edge food / one-exit rail moves while healthy and ahead; those were the only observed weakness in round 0.
+
 # Round 1 update (current opponent coreyja__bombastic-bob)
 
 - New logs in `/logs/rounds/0`: `gpt-5-5` beat `coreyja__bombastic-bob` 249-1 across 250 games. Opponent movement is varied/all directions; not a trivial wall-crasher. The only loss was `/logs/rounds/0/sim_177.jsonl`.
