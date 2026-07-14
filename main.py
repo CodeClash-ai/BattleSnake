@@ -553,13 +553,26 @@ def move(game_state):
                     # length behind makes every edge/corner race dangerous.  Be
                     # more willing to route toward reachable food while shorter
                     # instead of letting flood-fill space dominate until we are
-                    # permanently losing head-to-heads.  Flipez-crystal in
-                    # particular outgrows us in most losses; a tiny hunger/(d+1)
-                    # term was not enough while healthy because raw flood-fill
-                    # differences are scored in the hundreds.
+                    # permanently losing head-to-heads.  Famished-frank is an
+                    # especially strong food racer; many losses show us 4-10
+                    # lengths behind while high-health, passing a route that is
+                    # only 1-3 steps closer to food because raw area ties dominate.
+                    # Keep this as a near-food/catch-up bias (not a board-wide
+                    # hunger increase) so we do not chase distant snacks through
+                    # unsafe rails.
                     hunger += 85
                     if food_dist <= 5:
                         score += (6 - food_dist) * 10
+                    deficit = max_enemy_len - my_len
+                    if deficit >= 6 and my_health <= 95 and food_dist <= 2:
+                        # Very narrow extra catch-up pressure for this matchup:
+                        # if we are badly behind and already off full health, a
+                        # safe adjacent/near snack is usually worth more than a
+                        # small open-space tie-break.  Keep the magnitude modest;
+                        # broader food urgency has hurt generic smoke tests.
+                        score += (3 - food_dist) * 28
+                        if food_dist == 0:
+                            score += 35
                 elif my_len == max_enemy_len:
                     hunger += 45
                 if food_dist <= 2:
