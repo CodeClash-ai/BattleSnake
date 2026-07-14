@@ -833,6 +833,13 @@ def move(game_state):
                     score -= 35
                 if actual_edge:
                     score -= 55
+                    # Xtagon/Nagini often wins by getting a clear length lead and
+                    # then shadowing our much shorter snake along the actual rail.
+                    # When badly behind and healthy, a non-food edge step is rarely
+                    # worth the head-to-head squeeze risk; keep edge food available
+                    # for catch-up, but bias ordinary movement back to the interior.
+                    if n not in food and my_len + 6 <= max_enemy_len:
+                        score -= 140
                     if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
                         score -= 45
 
