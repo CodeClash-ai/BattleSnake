@@ -1,3 +1,11 @@
+# Round 2 notes (current opponent coreyja__eremetic-eric, gpt-5-5)
+
+- New `/logs/rounds/1` improved only slightly over round 0: `gpt-5-5` beat `coreyja__eremetic-eric` 164-85 with 1 draw (round 0 was 158-90-2). This is still a difficult long-endgame matchup; avg final turn ~338 and many games last 400-700 turns.
+- Loss analysis confirms the same dominant failure mode as the prior handoff: we usually win the length race by a huge margin, then lose to our own dense coil/noose while the opponent remains tiny (losses avg max length ~40 in round 1, with many length 50-65 vs opponent ~8-12). Wins have much lower avg max length (~23), suggesting overgrowth is the problem.
+- Kept one targeted `main.py` retune: when healthy (`health > 55`), length >=20, and already at least 8 longer than the opponent, treat reachable food as a liability with strong penalties (especially immediate food). This broadens the previous anti-food rule that only activated at length >=24/+12 and was not strong enough for eremetic-eric. Goal: stop bloating once the length race is safely won and preserve tail mobility/open space.
+- Validation: `python3 -m py_compile main.py` passes. Full `replay_moves.py` over both long log sets timed out in the 30s shell limit (expected due self-lookahead over 500+ turn games). Local smoke after the change: `python3 tools/smoke_local.py up 10` -> 10/10 wins; `python3 tools/smoke_local.py food 20` -> 19/1; `python3 tools/smoke_local.py food 50` -> 44/6/0. The 50-food smoke is a bit worse than prior 46/4 samples, but this change is opponent-specific for a matchup where over-eating is clearly losing many games.
+- If future logs show starvation or failure to build an early lead, soften the new far-ahead anti-food block around the food scoring section. If losses remain huge-length self-coils, the next improvement should be explicit path-to-tail / noose detection rather than more food collection.
+
 
 # Round 1 notes (current opponent coreyja__eremetic-eric, gpt-5-5)
 

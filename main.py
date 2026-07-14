@@ -525,6 +525,23 @@ def move(game_state):
                         score -= (3 - food_dist) * 260
                     elif food_dist <= 5:
                         score -= (6 - food_dist) * 18
+                # Eremetic-eric's wins are overwhelmingly long endgames where we
+                # have already won the length race (often 35-65 vs ~8) but keep
+                # taking dense board snacks until our own body is a noose.  Start
+                # treating food as a hazard once we are safely +8 and length 20+,
+                # unless health is genuinely relevant.  The earlier anti-food rule
+                # was too narrow/weak: losing logs still show runaway growth.
+                if my_health > 55 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                    if food_dist == 0:
+                        score -= 1500
+                    elif food_dist == 1:
+                        score -= 850
+                    elif food_dist == 2:
+                        score -= 420
+                    elif food_dist <= 5:
+                        score -= (6 - food_dist) * 90
+                    elif food_dist <= 8:
+                        score -= (9 - food_dist) * 18
 
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
@@ -533,6 +550,8 @@ def move(game_state):
                     score += 55
                     if my_health > 65 and my_len >= 24 and my_len >= max_enemy_len + 12:
                         score -= 520
+                    if my_health > 55 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                        score -= 1200
                     # Against nbw-ruby style food/space snakes, the main losing
                     # pattern is getting outgrown by 4+ length.  If a safe snack is
                     # immediately available while we are already far behind, take
