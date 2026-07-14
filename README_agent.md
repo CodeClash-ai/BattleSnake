@@ -1850,3 +1850,149 @@ speculative changes to be pure risk for likely-marginal-at-best upside.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- deep-dived remaining 5/250 losses vs ccSnake2018__ccsnake, confirmed genuine multi-ply gap, no code changes (budget-constrained, high-risk-to-fix-blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`ccSnake2018__ccsnake`**. Result:
+**243 wins / 5 losses / 2 draws** out of 250 real games (97.2% win rate).
+Turn counts min=24 max=214 avg=87.3 -- a genuinely competent, long-surviving
+opponent (consistent with the trend in recent sessions' opponents getting
+better over time; see the long history above in this file).
+
+**What I did this session:** Investigated all 5 real losses
+(`sim_143`, `sim_182`, `sim_188`, `sim_20`, `sim_64`) using the standard
+"replay the real losing sim frame's board state through `move()`/the
+scoring loop directly" methodology (documented extensively earlier in
+this file). Quick triage of the death-frame shape for all 5: in every
+single case, our snake (length 7-9) died with its head pinned in/near a
+**corner or wall edge** (e.g. `(0,0)`, `(10,10)`, `(10,2)`, `(0,9)`)
+while a longer opponent (length 10-16) was positioned immediately
+adjacent. This is the SAME general "cornered along a wall by a
+longer/shadowing opponent" failure class documented at length by several
+previous sessions in this file (see the "adversarial shadowing" and
+"hard-h2h-filter" writeups above) -- i.e. this is not a new class of bug,
+it's the same structural gap continuing to bite at a low, apparently
+near-floor rate.
+
+**Deep dive on `sim_182.jsonl` (turn 84-90), confirming the gap is
+GENUINELY multi-ply, not a scoring-weight tuning issue:** Built a
+synthetic `game_state` from the real turn-84 frame and dumped full
+per-candidate diagnostics (space/worst_space/reached_tail/danger_h2h) by
+copying the scoring loop standalone (see this session's trajectory for
+the exact script -- reusable pattern, same as documented by prior
+sessions). At turn 84, our snake had 3 legal moves (`up->(5,10)`,
+`down->(5,8)`, `right->(6,9)`), only pursuing the single food on the
+board at `(9,10)`:
+
+```
+up    (5,10): space=104 worst_space=103 reached_tail=True  danger_h2h=False
+down  (5,8):  space=2   worst_space=2   reached_tail=False danger_h2h=True
+right (6,9):  space=104 worst_space=103 reached_tail=True  danger_h2h=True (opp PREDICTED move!)
+```
+
+`up` and `right` are IDENTICAL on every space/tail metric (both 104/103/
+True) -- the only difference is `right` also happens to be the opponent's
+own predicted next move (a direct, immediate head-to-head risk, -900
+penalty), so the bot correctly avoids it and picks `up` instead. **This
+is the locally-optimal, correct decision** -- confirmed by re-running
+`main.move()` on this exact real frame 10x with different random seeds,
+always deterministically picks `up` (not a fluke/tie-break issue).
+However, picking `up` puts our snake onto the top wall (row y=10)
+corridor, and the SAME opponent then spends the next ~6 turns shadowing
+us exactly one row below (row y=9), moving in lockstep toward the same
+corner, until at turn 89 our only remaining legal move becomes forced
+into the corner cell `(10,10)`, which turns out to have zero exits the
+following turn (opponent seals it from below). Traced this turn-by-turn
+(turns 84-90 body positions) -- by turn 88, our snake ALREADY had only
+one legal move remaining (`right`) at every step, i.e. the corridor had
+already become a single-file forced march several turns before the
+actual death, and there was no way to "escape" once in it.
+
+**Why this is NOT a quick/safe fix:** the local (1-ply, and even the
+existing 1-ply-adversarial-worst_space) view at turn 84 genuinely sees no
+difference between `up` and `right` -- both report the exact same
+104-cell open flood-fill and both preserve tail-reachability. The actual
+danger (a longer opponent successfully shadowing us in parallel for
+MANY further turns, converging on a shared corner) is invisible to
+any single-snapshot or single-ply-adversarial metric; it only becomes
+apparent 4-6 turns later once the corridor has already narrowed to a
+single legal cell per turn. Properly detecting this ahead of time
+requires genuine multi-ply lookahead/simulation (simulate several turns
+of "our best response + opponent's predicted/adversarial response" and
+evaluate the resulting space several turns out, not just immediately
+after 1 move) -- exactly the improvement flagged as the natural next
+investment by at least 3 previous sessions in this file (see the
+"adversarial shadowing" and "investigated remaining 10/250 losses"
+write-ups above), including a note that a "depth-6 minimax 'guaranteed
+space' evaluator" was prototyped in an earlier session but never merged
+(check earlier trajectory logs if that's still findable, not present in
+current `main.py`).
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) the current win rate is already very high (97.2%,
+243/250), (2) the specific mechanism behind all 5 real losses this round
+is now clearly understood and is a genuine, structural 1-ply-vs-multi-ply
+limitation (not a tunable weight or an easy bug like several previous
+fixed issues in this file), (3) I had very little remaining step budget
+left this session by the time the deep-dive completed, and implementing
++ correctly validating real multi-ply lookahead (the actual fix this
+would need) is a substantial, risky change that could easily introduce
+new regressions (e.g. wrong pruning, performance/timeout issues, or
+subtly wrong opponent modeling) if rushed without thorough testing
+against real match data. Shipping an under-tested lookahead change with
+no budget left to verify it is worse than leaving a well-understood,
+already-97%-winning bot untouched.
+
+**For the next teammate (concrete, scoped plan for the actual fix, since
+the diagnosis is now solid):**
+1. The right fix is almost certainly: for each of our top 2-3 candidate
+   moves (by current 1-ply score), simulate forward N turns (try N=3-5)
+   using a simple greedy self-policy (reuse `move()`'s own scoring
+   recursively, or a cheaper approximation) combined with an adversarial
+   opponent model (use `_predict_opp_move` for "likely" continuation,
+   and/or `_opp_candidate_cells` worst-case for a stress test), then use
+   the resulting flood-fill space/reached_tail AT THAT FUTURE POINT
+   (not just immediately after 1 move) as the real safety signal. This
+   directly targets the `sim_182` mechanism: at turn 84, a 3-ply lookahead
+   simulating "opponent keeps shadowing" would reveal that `up`'s
+   corridor genuinely narrows to a forced single-file march by turn 87-88,
+   while `right` (even though locally h2h-risky RIGHT NOW) might reveal a
+   safer long-run trajectory -- or, more likely, reveal that NEITHER `up`
+   nor `right` is safe from this position and something even earlier
+   (e.g. not chasing the far corner food at all, given only 1 food was on
+   the board and health was high/non-urgent -- worth checking `you`
+   health at turn 84 in future analysis) would have been better.
+2. Performance: full BFS flood-fill on an 11x11 board is already cheap
+   (~121 cells); repeating it N=3-5 times per candidate per opponent
+   branch is still cheap (low hundreds of BFS calls per move at worst),
+   should be fine within typical Battlesnake move-time budgets (~500ms
+   per the ruleset `timeout` field seen in these logs), but MUST be
+   verified with real timing tests (`time` a `move()` call on a large
+   synthetic board) before shipping, since a slow move = an involuntary
+   forfeit/crash, which would be a much worse regression than the current
+   5/250 loss rate.
+3. Validate with the exact replay technique used this session (build a
+   synthetic `game_state` from `sim_182.jsonl` turn 84, feed it to the
+   NEW `move()`, and confirm it makes a different, verifiably-better
+   decision than `up`) BEFORE trusting any broader test batch.
+4. Also worth checking (deferred this session, not investigated): what
+   was our snake's health at turn 84 -- if health was high and only 1
+   food existed on the whole board, a simpler complementary heuristic
+   (don't chase the ONLY food on the board across a long, risky path when
+   health doesn't require it, i.e. weight food urgency by *path safety*
+   as well as *distance*, not just raw Manhattan distance) might be a
+   cheaper partial mitigation than full lookahead, worth exploring first
+   if lookahead proves too risky to implement in one session.
+5. Do NOT skip local validation: `tools/opponent_ref.py` is USELESS for
+   this (games end in ~5 turns). Use the real `sim_*.jsonl` replay
+   technique, and also run several long self-play games (200+ turns) to
+   check for new stalls/timeouts/regressions from any lookahead addition.
+
+**Housekeeping:** cleaned up all scratch scripts (none left as stray
+files; all diagnostics were run as one-off `python3 - <<EOF` commands,
+not saved to `tools/` this session -- consider saving a
+`tools/replay_frame.py` helper next session that takes a sim file +
+turn number and dumps this exact diagnostic table automatically, since
+this exact technique has now been reused manually across at least 5
+different sessions in this file's history).
