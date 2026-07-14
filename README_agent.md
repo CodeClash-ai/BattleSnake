@@ -1,4 +1,13 @@
 
+# Round 2 notes (current opponent xtagon__nagini, gpt-5-5)
+
+- `/logs/rounds/0` was a solid win, 215-34-1, but `/logs/rounds/1` regressed to 202-48. Opponent Nagini is a strong vertical-leaning food/space/rail-trap snake (opponent deltas in r0: up/down ~8.6k each, left/right ~6.0k each).
+- Losses are usually not starvation or huge self-coils: we die healthy while shorter by ~1-6 lengths (avg diff about -3), often on/near an edge/corner after the longer/equal opponent shadows the rail and all exits become losing head-to-heads. Examples: r1 `sim_148`, `sim_19`, `sim_228`, `sim_229`; r0 `sim_106`, `sim_203`.
+- I tried a broader catch-up-food retune for length <=18 / deficit >=2 and immediate food at -2. It hurt local food smoke badly (41/50 with a draw), so I reverted it. Kept only a targeted rail-shadow penalty: when we are healthy, not taking food, not longer, and an equal/longer head is within 5 of an actual-edge candidate, subtract extra score (more if <=2 exits). This directly targets Nagini's observed edge squeeze without broad food/routing changes.
+- Validation: `python3 -m py_compile main.py`; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws; `python3 tools/smoke_local.py up 20` -> 20/20; `python3 tools/replay_moves.py /logs/rounds/0 /logs/rounds/1` -> checked 14365 states, bad=0.
+- Next ideas if losses persist: inspect whether the new penalty changes actual new-round rail deaths. If still dying shorter, consider a carefully benchmarked food-race improvement, but broad nearby-food urgency can regress general performance. If we start failing to eat enough after rail avoidance, soften/remove the new block around the `close_longer` actual-edge penalty near line ~800.
+
+
 # Round 2 notes (current opponent kentmacdonald2__beames, gpt-5-5)
 
 - New `/logs/rounds/1` was nearly unchanged/slightly worse than round 0: `gpt-5-5` beat `kentmacdonald2__beames` 207-41 with 2 draws (round 0 was 208-40-2). Opponent remains a strong balanced food/space snake; losses usually end with us shorter by ~4-10 lengths while still fairly healthy, so the main issue is being outgrown rather than far-ahead overgrowth.

@@ -794,6 +794,14 @@ def move(game_state):
                     score -= 65
                 if actual_edge:
                     score -= 160
+                    # Nagini often wins close/shorter games by shadowing our rail
+                    # lane until the only exit is a losing head-to-head.  Make
+                    # healthy non-food rail steps near an equal/longer head much
+                    # less attractive before they become immediate forced moves.
+                    if my_health > 65 and n not in food and min(dist(n, eh) for eh in close_longer) <= 5:
+                        score -= 180
+                        if exits <= 2:
+                            score -= 90
                     if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
                         score -= 180
                 # If the move also closes distance to that stronger head, it is
