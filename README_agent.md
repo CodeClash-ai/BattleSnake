@@ -1523,3 +1523,40 @@ print('win',w,'loss',l,'tie',t)"
   longest-survivable-path metric (floods overcount through 1-wide channels). Keep
   universal-tail-region + dominance tail-follow + 2-ply-static + anti-serpentine +
   all existing anti-coil/anti-pin. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, jackisherwood__battlesnake-elon -- NEAR-EQUAL ANTI-COIL)
+- Standing: R0 WIN 239-10 (1 tie), R1 WIN 235-15 (0 ties). Losses rose 10->15
+  (the R1 "universal tail-region" term did not fully close the gap).
+- ANALYZED all 15 R1 losses (/tmp/analyze.py): 100% NEAR-EQUAL-LENGTH INTERIOR
+  self-coils. At death ml~ol (e.g. sim_131 27v27, sim_130 22v24, sim_16 18v19),
+  HIGH health (56-98, mostly 82-98), 14/15 INTERIOR, boxed in (0-1 safe nbrs).
+  Traced sim_131 t253-259: we SERPENTINE-weaved into a shrinking ~8-cell pocket
+  (R,D,R,U,U,L) and sealed ourselves at t259 (0 safe moves). Long endgames.
+- ROOT CAUSE: the strong anti-serpentine + tail-follow + 2-ply STATIC lookahead
+  only fired in the DOMINANCE band (my_len > _max_ol+3). The NEAR-EQUAL band
+  (my_len <= _max_ol+3) was only covered by the universal tail-region term
+  (+50/-350 + reg*10), which wasn't enough to break a forming multi-turn weave.
+- FIX (score_candidate, NEW "NEAR-EQUAL-LENGTH ANTI-COIL" block, right after the
+  universal tail-region block, gated not-hunted + health>=30 + my_len<=_max_ol+3):
+  a MILDER copy of the dominance anti-coil -- anti-serpentine (-30 per adj>=2,
+  -8 at adj==1), tail-following (-tail_dist*3), and a 2-ply STATIC lookahead
+  (best no-retreat region from a safe nbr of nc: -(my_len-best)*10 if <my_len,
+  -250 if <=4). Weights are lighter than the dominance branch so it never
+  overrides h2h/food; it just breaks the serpentine weave EARLY in the
+  near-equal band before the pocket seals.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 8-0 (& 5-0),
+  smartmatch 12-4 (strong, no regression), grow_solo 5/5 seeds SURVIVE 300t.
+  Mirror A/B vs baseline = 0-0-24 (all ties, deterministic symmetric -- noise,
+  ignore per prior notes). Frozen-opp livesim can't discriminate (both survive;
+  the recorded body is already coiled -- the fix matters in LIVE play by steering
+  off the weave many turns earlier, a known replay limitation).
+- Backup: main_round2_elon_r2_backup.py (pre-this-change, proven 235-15 code).
+- ADVICE FOR NEXT TEAMMATE: elon beats us ONLY by near-equal-length interior
+  self-coils in long endgames. The near-equal anti-coil covers the previously-
+  uncovered band. The DEEP remaining fix (all notes agree) = a real space-filling
+  / longest-survivable-path metric (static/time-aware floods overcount through
+  1-wide channels). Keep near-equal-anti-coil + universal-tail-region + dominance
+  tail-follow + 2-ply-static + anti-serpentine + all existing anti-coil/anti-pin.
+  Don't over-crank the near-equal weights (>~1.5x could distort real combat).
+  NEVER touch the launch block. Judge via solo_test + grow_solo + smartmatch.

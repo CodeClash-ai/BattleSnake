@@ -402,48 +402,6 @@ def _choose_move(game_state):
                 score -= (my_len - _reg_u) * 10.0
             if _reg_u <= 4:
                 score -= 250.0
-            # NEAR-EQUAL-LENGTH ANTI-COIL (fix vs jackisherwood__battlesnake-elon
-            # R1: 15 losses were near-equal-length INTERIOR self-coils, ml~ol,
-            # high health, boxed in via a multi-turn serpentine weave -- e.g.
-            # sim_131 t253-259 we snaked into a shrinking 8x pocket and sealed).
-            # The strong anti-serpentine + 2-ply static lookahead only fired in
-            # the DOMINANCE band (my_len > _max_ol+3). Apply a milder version to
-            # the NEAR-EQUAL band (my_len <= _max_ol+3) that the universal
-            # tail-region term alone did not catch. Gated to not-hunted + healthy
-            # so it never interferes with h2h combat or food when it matters.
-            if my_len <= _max_ol + 3:
-                # anti-serpentine: snugging 2+ own body cells = weaving a coil.
-                _own_ne = set(my_body[:-1])
-                _adj_ne = 0
-                for _anx, _any in DIRS.values():
-                    if (nc[0] + _anx, nc[1] + _any) in _own_ne:
-                        _adj_ne += 1
-                if _adj_ne >= 2:
-                    score -= (_adj_ne - 1) * 30.0
-                elif _adj_ne == 1:
-                    score -= 8.0
-                # tail-following: prefer moves that keep us near our own tail
-                # (the survivable space-filling loop) over drifting inward.
-                if my_tail is not None:
-                    _tdn = abs(nc[0] - my_tail[0]) + abs(nc[1] - my_tail[1])
-                    score -= _tdn * 3.0
-                # 2-ply static lookahead: best no-retreat region reachable from a
-                # safe neighbour of nc; if even the best is < our length we are
-                # funneling into a shrinking pocket 2 moves ahead (the coil).
-                _occ2n = set(my_body[:-1])
-                _occ2n.add(nc)
-                _best2n = 0
-                for _b2xn, _b2yn in DIRS.values():
-                    _nn2n = (nc[0] + _b2xn, nc[1] + _b2yn)
-                    if not in_bounds(_nn2n) or _nn2n in _occ2n:
-                        continue
-                    _s2n = _static_flood_from(_nn2n, _occ2n, limit=my_len + 4)
-                    if _s2n > _best2n:
-                        _best2n = _s2n
-                if _best2n < my_len:
-                    score -= (my_len - _best2n) * 10.0
-                if _best2n <= 4:
-                    score -= 250.0
 
         # Escape-count: how many of the new head's neighbours are still safe
         # to enter next turn (in bounds, not a body segment now, not a losing
