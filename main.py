@@ -42,9 +42,6 @@ def move(game_state):
                 safe_moves[d] = pos
 
         # 2. Avoid obstacle collisions (own body and other snakes)
-        # Note: A snake's tail segment will move out of the way on this turn, UNLESS they consumed food on the previous turn.
-        # However, to be absolutely safe, let's treat the entire body as an obstacle except maybe the tail if we want to be fancy.
-        # But for now, let's just avoid all segments to be extremely robust.
         obstacle_positions = set()
         for s in board["snakes"]:
             for seg in s["body"]:
@@ -116,8 +113,6 @@ def move(game_state):
             target = (width // 2, height // 2)
 
         # We will rank moves first by reachable area (avoiding traps), then by distance to target.
-        # Specifically: group choices by whether they have enough space (e.g., space >= my_length),
-        # or just maximize space if all have less.
         move_scores = []
         for d, pos in choices.items():
             space = get_reachable_area(pos)
@@ -125,17 +120,16 @@ def move(game_state):
             move_scores.append((d, space, dist))
 
         # Sort moves:
-        # 1. Primary key: Whether they have sufficient space (e.g., >= min(my_length, 15)). If yes, they are equal.
-        # 2. Secondary key: Manhattan distance to target (closer is better)
-        # 3. Tertiary key: Actual space (more is better, as a tie-breaker or fallback if space is insufficient)
         min_space_needed = min(my_length, 15)
         
         def rank_move(item):
             d, space, dist = item
-            has_enough_space = 1 if space >= min_space_needed else 0
-            # We want: has_enough_space (descending -> -has_enough_space),
-            # dist (ascending), space (descending -> -space)
-            return (-has_enough_space, dist, -space)
+            if space >= min_space_needed:
+                # Safe group: prioritize closeness to target
+                return (0, dist, -space)
+            else:
+                # Restricted group: prioritize survival (maximizing reachable space)
+                return (1, -space, dist)
 
         move_scores.sort(key=rank_move)
         best_move = move_scores[0][0]
