@@ -197,42 +197,11 @@ def _choose_move(game_state):
                 dq.append((nn, d + 1))
         return count
 
-    # Static flood-fill treating every current body cell as a permanent wall
-    # (no tail retreat). This models the worst case (we/opponents just ate and
-    # bodies don't shrink) and catches pockets that will seal us in as our body
-    # grows -- the multi-turn wall-hug coil deaths seen vs a real opponent.
-    static_blocked = set()
-    for s in snakes:
-        for seg in s["body"]:
-            static_blocked.add((seg["x"], seg["y"]))
-
-    def static_flood(start_cell, limit=None):
-        from collections import deque
-        seen = {start_cell}
-        dq = deque([start_cell])
-        count = 0
-        while dq:
-            cur = dq.popleft()
-            count += 1
-            if limit and count >= limit:
-                break
-            for ddx, ddy in DIRS.values():
-                nn = (cur[0] + ddx, cur[1] + ddy)
-                if nn in seen or not in_bounds(nn):
-                    continue
-                if nn in static_blocked:
-                    continue
-                seen.add(nn)
-                dq.append(nn)
-        return count
-
     # Build a blocked set for flood fill: bodies (excluding our tail which moves).
     def score_candidate(cand):
         name, nc, lose_h2h, h2h_len = cand
         # Time-aware reachable space from the new head cell.
         space = flood_fill(nc, None, limit=width * height)
-        # Growth-aware (static) space: worst case where no bodies retreat.
-        sspace = static_flood(nc, limit=width * height)
 
         score = 0.0
         # Heavily penalize potential losing head-to-heads.
@@ -244,18 +213,12 @@ def _choose_move(game_state):
                 score += 30.0
 
         # Space is critical: reward available room. Need at least my_len space.
-        score += space * 10.0
+        score += space * 8.0
         if space < my_len:
-            score -= (my_len - space) * 100.0
+            score -= (my_len - space) * 80.0
         # Extra danger: a very tight pocket (< half my length) is near-fatal.
         if space < my_len // 2 + 1:
             score -= 300.0
-        # Growth-aware pocket: if the static (no-retreat) reachable region is
-        # smaller than our length, this cell leads into a region that will seal
-        # us in as bodies grow. Penalize proportionally -- this is the key fix
-        # for the multi-turn wall-hug coil deaths (we were LONGER yet trapped).
-        if sspace < my_len:
-            score -= (my_len - sspace) * 6.0
         # Tail reachability: if we can reach our own tail cell from the new
         # head (time-aware), we can always chase our tail and never truly trap.
         # This is the key anti-coil heuristic that prevents sealing ourselves in.
@@ -288,14 +251,14 @@ def _choose_move(game_state):
         # along the bottom row (sim_152) and let us coil into a corner (sim_235).
         # Only a SMALL nudge toward the interior, and disabled when hungry so we
         # can still reach food located on an edge/corner (solo starve otherwise).
-        if my_health >= 25:
+        if my_health >= 40:
             on_edge = (nc[0] == 0 or nc[0] == width - 1
                        or nc[1] == 0 or nc[1] == height - 1)
             if on_edge:
-                score -= 8.0
+                score -= 6.0
                 # corner is worse (only two exits at most)
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 16.0
+                    score -= 10.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.

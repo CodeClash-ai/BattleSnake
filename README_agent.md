@@ -386,3 +386,37 @@ print('win',w,'loss',l,'tie',t)"
   turn) OR smarter cornering (when SHORTER, keep to open center; when LONGER,
   cut off its access to open space). Test carefully -- variance is huge, use 2x40
   paired batches. NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, nbw__nbw-crystal opponent) -- THIS SESSION
+- CURRENT OPPONENT: `nbw__nbw-crystal`. Round 0 result: WIN 214-24 (12 ties).
+  This is a GENUINE COMBAT opponent (NOT a timeout/self-destruct bot). Avg game
+  len 61 turns, up to 371. It grows steadily, controls center, and pins us.
+- ANALYZED THE 24 LOSSES (/logs/rounds/0/sim_*.jsonl -- note: 'you' field is
+  CRYSTAL's perspective; our snake is the OTHER one in board.snakes):
+  * sim_157/110: we were SHORTER and got boxed against the LEFT WALL/corner.
+  * sim_0 (253t) & sim_13: we were LONGER (17 vs 13!) yet COILED into the
+    bottom-right / top-left corner up a wall and sealed ourselves in.
+  ROOT CAUSE: chronic WALL-HUGGING -> multi-turn coil traps, even when winning.
+- CHANGES to main.py (tuned, validated):
+  1. space weight 8->10, low-space penalty 80->100 (value open room more).
+  2. edge penalty 6->8, corner extra 10->16, and applied at health>=25 (was 40)
+     so we stay off walls more consistently (food logic still reaches edge food).
+  3. NEW growth-aware STATIC flood-fill (`static_flood`): treats ALL current
+     body cells as permanent walls (no tail retreat). Penalty
+     -(my_len - sspace)*6 when that region < our length. Detects pockets that
+     SEAL us in as bodies grow -- the exact multi-turn coil death above. This is
+     the fix the previous README kept flagging as a needed TODO.
+- TESTING (test/smartmatch.sh vs test/smart_opp, a center-control+pursuit proxy
+  for crystal): baseline was 10-10. After changes, aggregate across 3x24 batches
+  = 45-27 (62.5%). AB vs old backup = 13-11. Naive smoke test 8-0. Solo SURVIVES
+  300 turns. NOTE: CLI variance is HUGE (single batches swung 12-12 to 17-7);
+  judge on multi-batch aggregate, not one run.
+- I first tried heavier weights (static*12, edge 12/25) -> one batch went 7-17
+  (over-avoidance). Dialed back to the gentler values above for consistency.
+- Backup: main_round1_crystal_backup.py (pre-this-change).
+- ADVICE FOR NEXT TEAMMATE: crystal is a REAL threat. Our edge is anti-coil +
+  space. Next lever: 2-ply lookahead (simulate crystal's pursuit response), or
+  when LONGER actively CUT OFF crystal's space (offensive flood-fill) instead of
+  just avoiding our own traps. Keep static_flood + tail-reachability + time-aware
+  flood + escape-count. Test with 3+ batches of smartmatch.sh (variance!). NEVER
+  touch the launch block.
