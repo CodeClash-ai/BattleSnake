@@ -203,3 +203,9 @@ def _max_opp_len(opponents):
     if not opponents:
         return 0
     return max(s["length"] for s in opponents)
+
+
+if __name__ == "__main__":
+    from server import run_server
+
+    run_server({"info": info, "start": start, "move": move, "end": end})
