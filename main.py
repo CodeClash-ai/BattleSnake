@@ -933,6 +933,29 @@ def move(game_state):
                         score -= 45
 
 
+            # Zakwht-2018 is a vertical/space survivor whose wins commonly come
+            # from high-health close-length rail squeezes: while we are equal or
+            # a little shorter, a tempting wall/edge-food move starts a long forced
+            # crawl and the opponent shadows the only exit.  Add a focused bias
+            # toward the adjacent interior lane in those healthy close races.  Keep
+            # it off when actually hungry and avoid making catch-up food impossible.
+            if my_health > 70 and my_len <= max_enemy_len and my_len + 2 >= max_enemy_len and enemy_heads:
+                actual_edge = n[0] in (0, w - 1) or n[1] in (0, h - 1)
+                near_corner = ((n[0] <= 1 or n[0] >= w - 2) and n[1] in (0, h - 1)) or \
+                              ((n[1] <= 1 or n[1] >= h - 2) and n[0] in (0, w - 1))
+                nearest_equal_longer = min((dist(n, eh) for eh in enemy_heads
+                                            if enemy_lengths.get(eh, 0) >= my_len),
+                                           default=99)
+                if (actual_edge and n not in food
+                        and (nearest_equal_longer <= 8 or exits <= 1 or near_corner)):
+                    score -= 90
+                    if exits <= 2:
+                        score -= 70
+                    if nearest_equal_longer <= 6:
+                        score -= 70
+                    if near_corner:
+                        score -= 60
+
             # Also avoid equal-length healthy rail shadows before they become
             # immediate head-to-head traps.  The Spenca round-1 loss had us run
             # along the bottom edge while an equal-length opponent paralleled a
