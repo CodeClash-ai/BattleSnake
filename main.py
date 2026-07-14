@@ -474,6 +474,15 @@ def move(game_state):
                     tail_dist = shortest(n, [tail_cell], tail_blocked, w, h, max_depth=w * h)
                     if tail_dist is None:
                         score -= 160
+                        # When we are not longer, a small region with no path back
+                        # to our moving tail is usually a losing pocket rather than
+                        # useful space.  This Flipez-crystal matchup's rare losses
+                        # often end with us stepping through a narrow top/edge pocket
+                        # while already shorter, then having only forced moves left.
+                        if my_len <= max_enemy_len and area <= my_len + 2:
+                            score -= 260
+                            if n[0] in (0, w - 1) or n[1] in (0, h - 1):
+                                score -= 90
                     else:
                         score += max(0, 12 - tail_dist) * 14
                         if n == my_body[-1]:
@@ -495,7 +504,10 @@ def move(game_state):
                     # length behind makes every edge/corner race dangerous.  Be
                     # more willing to route toward reachable food while shorter
                     # instead of letting flood-fill space dominate until we are
-                    # permanently losing head-to-heads.
+                    # permanently losing head-to-heads.  Flipez-crystal in
+                    # particular outgrows us in most losses; a tiny hunger/(d+1)
+                    # term was not enough while healthy because raw flood-fill
+                    # differences are scored in the hundreds.
                     hunger += 85
                     if food_dist <= 5:
                         score += (6 - food_dist) * 10
