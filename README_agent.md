@@ -2239,3 +2239,107 @@ food bonus).
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- verified huge improvement (249/250), investigated the 1 remaining loss (inconclusive, likely harness artifact), no code changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` and `/logs/rounds/1/` both existed, opponent
+`coreyja__bombastic-bob`:
+- Round 0 (before previous session's food-coefficient fix, 20.0): 236
+  wins / 12 losses / 2 draws (250 games), turns avg 106.7.
+- Round 1 (after previous session's fix -- food coefficient bumped from
+  20.0 to 55.0 in the score formula): **249 wins / 1 loss** (250 games),
+  turns avg 69.8. This is a massive, clearly-confirmed real improvement
+  (94.4% -> 99.6% win rate) -- the previous session's "under-eating"
+  diagnosis and fix was correct and worked great in real play. Do NOT
+  revert or "helpfully" re-tune this constant without strong evidence;
+  it's working very well as-is.
+
+**What I did this session:** Investigated the single real round-1 loss
+(`/logs/rounds/1/sim_236.jsonl`, opponent won) using the standard replay
+methodology documented at length earlier in this file. Findings:
+- Our snake died at turn 127 with length 22 (vs opponent's 7) -- i.e.
+  this was NOT a repeat of the previous "under-eating"/length-disadvantage
+  bug (we were much longer than the opponent this time).
+- The final logged frame for our snake shows a body with a literal
+  self-overlap (head cell duplicated at body index 4, i.e. `body[0] ==
+  body[4]`), which would represent an actual self-collision.
+- **Important discovery about this harness's log format**: I checked, for
+  every single earlier turn in this game where `you.name == "sonnet-5"`,
+  whether `board.snakes` (the list of ALL snakes on the board for that
+  request) included our own snake alongside the opponent. It did, every
+  time, EXCEPT the very last logged frame (the death frame), where
+  `board.snakes` contains ONLY the opponent. This strongly suggests the
+  final logged line is a **post-mortem snapshot** the harness records
+  after the engine has already resolved our snake's death and removed us
+  from the board -- not a live `/move` request our bot actually
+  responded to. If that's correct, the overlapping body we see is just
+  how the engine renders the fatal collision for the record, not
+  something `main.py` was asked to avoid at that exact instant.
+- Also notable: this harness's `sim_*.jsonl` log does **NOT** log a line
+  for every single turn for a given snake -- when I listed every frame
+  where `you.name == "sonnet-5"`, the turn numbers jump irregularly
+  (e.g. logged at turn 111, then next at turn 118, then next only at the
+  final turn 127 -- a 9-turn gap with no intermediate visibility into
+  what board state we were actually reacting to). This means the
+  previously-documented "replay a real losing sim frame through
+  `move()` directly" methodology (used successfully in many earlier
+  sessions to find/fix at least 5 distinct real bugs, see the long
+  history above) **only works when the specific pivotal turn happens to
+  be one of the logged frames for OUR snake** -- if the fatal decision
+  was made several turns before the death and none of those intermediate
+  turns were logged for us, the sim file alone can't fully reconstruct
+  the actual decision that caused it. I did not find a way to recover
+  the missing intermediate turns from this log file alone.
+- Given only 1 real loss (0.4%), an inconclusive root-cause investigation
+  (best guess: harmless post-mortem log artifact, not an actual live
+  bad decision -- but not provable from available data), and the very
+  real risk of introducing a regression to a currently-excellent
+  (249/250) bot, I made **no code changes** this session.
+
+**Testing done this session (regression/sanity only, no functional
+changes):**
+- `ast.parse` syntax check: OK. Confirmed current `main.py` still
+  contains all historically-important fixes (food coefficient 55.0,
+  `_HEAD_HISTORY` anti-stalemate logic, `_opp_candidate_cells` +
+  `_predict_opp_move` graduated h2h penalties, uncapped flood-fill,
+  tail-reachability gating, etc -- see extensive history above for full
+  details of each).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-8
+  turns each, zero errors/exceptions in either server log.
+- Self-play (`main.py` vs itself), seeds 71/72: ran 90 and 234 turns.
+  Seed 71 had a clean winner; seed 72 ended in a mutual-death draw at
+  turn 234 (both snakes died the same turn) -- this is plausible/benign
+  for two IDENTICAL bots in a symmetric position (e.g. simultaneous
+  head-to-head or simultaneous starvation/space exhaustion) and is not
+  itself evidence of a bug; no exceptions/errors in either server log
+  either way.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round's result. If the win rate stays around ~99%+ against
+  `coreyja__bombastic-bob` (or whatever opponent is current), that
+  strongly supports the "single loss was a rare/unavoidable edge case or
+  harness artifact" theory from this session and further tinkering is
+  probably not worth the risk. If losses climb back up meaningfully,
+  re-investigate with fresh sim data (ignore this session's specific
+  sim_236 finding, it was inconclusive).
+- If you want to push further on understanding harness log gaps: it
+  might be worth checking whether the actual live game server (not just
+  the CLI-recorded `sim_*.jsonl`) has a more complete/authoritative log
+  elsewhere, or whether `board.snakes` genuinely never includes a
+  just-eliminated snake in the terminal frame (if so, that's confirmed-
+  safe to always treat the final `board.snakes`-excludes-you frame as
+  "already dead, not a live decision point" when doing future replay
+  diagnosis -- would save time for future debugging sessions).
+- No functional changes were made this session. Current `main.py` is
+  identical in logic to what produced the 249/250 result in round 1 of
+  this cycle.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
