@@ -6529,3 +6529,108 @@ observed regression.
   `git diff`/`git status` only when just checking state, and use
   `git show HEAD:main.py > /tmp/oldbot/main.py` to get a pristine
   pre-session baseline copy without any stash risk at all.**
+
+## Round (this session) update -- vs coreyja__famished-frank (214-32-4), confirmed "under-eating" pattern recurred, bumped food coefficient 90->130, validated via 14-seed self-play A/B (8W-4L-2D)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`coreyja__famished-frank`**. Result:
+**214 wins / 32 losses / 4 draws** out of 250 real games (85.6% win
+rate). Turn counts min=11 max=418 avg=100.2.
+
+**Investigation:** used the standard length/legal-move-count script on
+all 32 losses. Only 7/32 had zero legal moves at the last logged frame
+(unlike most previous opponents' dominant sessions where ~90%+ of losses
+show that signature). Critically: **the OPPONENT was longer than us in
+30/32 losses** (`mine_longer` only 2/32) -- this is the "under-eating"/
+growth-rate-disadvantage failure class first found & fixed several
+sessions ago (search "under-eating" earlier in this file; food
+coefficient has already been bumped 20->55->90 across two earlier
+sessions for two different opponents that exhibited this same pattern).
+Spot-checked length growth over time in `sim_36.jsonl` (logged every 20
+turns): opponent consistently ~1-3 segments ahead of us throughout the
+whole game (e.g. turn 120: my_len=14 vs opp_len=16), with OUR health
+staying comfortably high (92-99) the whole time -- i.e. not a starvation
+issue, just genuinely slower growth than this specific opponent
+(fittingly named `famished-frank`, apparently a very food-aggressive
+bot).
+
+**Fix implemented this session:** bumped the food-attraction base
+coefficient from `90.0` to `130.0` (same single-constant lever as the
+two previous successful fixes for this exact failure class, see
+"under-eating" sections earlier in this file for the original
+methodology/rationale). No other change -- `growth_damp`, all hard safety
+tiers, `_lookahead_min_space`, etc. all untouched.
+
+**Validation done this session:**
+- `ast.parse`: OK. Confirmed via `diff` this is the ONLY change vs. the
+  pre-session `main.py` (single line).
+- **NEW-vs-OLD self-play A/B** (the proven technique used throughout this
+  file's history): saved pristine pre-session copy to `/tmp/oldbot/`, ran
+  both concurrently via the real `game/battlesnake` CLI, seeds 1-14, 11x11
+  standard: **NEW won 8, OLD won 4, 2 draws** (~66.7% win rate excluding
+  draws) -- a real positive signal, consistent in direction and magnitude
+  with the previous two successful food-coefficient bump sessions (which
+  saw 9/10 and 10/15 respectively). Games ranged 121-361 turns, zero
+  errors/exceptions in either server log.
+- Local regression batch vs `tools/opponent_ref.py` (naive stand-in),
+  seeds 1-3: **3/3 wins**, 4-6 turns each, zero errors/exceptions.
+- Spot-checked one of the 32 losses that still had legal moves at the
+  final frame (`sim_130.jsonl`, turn 416/418, my_len=37 vs opp_len=39):
+  via `tools/replay_frame.py --diag`, found `down`/`right` tied on space
+  (35) with `reached_tail=False` for both (near end of a very long game,
+  likely just the standard well-documented "already near-doomed, picking
+  the least-bad of tied options" pattern common across many previous
+  sessions' investigations, not a new distinct bug) -- did not pursue
+  further given limited remaining budget and this being right at the
+  tail end of an already-long game.
+- Cleaned up all background test server processes by PID afterward.
+
+**Decision: KEPT this session's change.** Rationale: (1) directly
+addresses a clearly-diagnosed, previously-proven-fixable failure class
+(under-eating/growth-rate-disadvantage) using the exact same lever that
+worked twice before for different opponents, (2) validated via a
+positive-leaning 14-seed self-play A/B (8-4-2), consistent with those
+prior successful fixes' own validation results, (3) zero exceptions or
+regressions observed in any test this session, and (4) it's a single,
+well-isolated constant change with no interaction with any of the
+several previously-tuned-and-rejected "dominant-length self-trap" levers
+(`growth_damp` advantage term, `_lookahead_min_space` scaling, etc. --
+all untouched).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `coreyja__famished-frank` (or whatever opponent
+  is current) in the next real round. If losses drop from 32 and the
+  opponent-longer-at-death pattern shrinks, this confirms the fix
+  (again). If losses persist with the same shape, consider bumping the
+  coefficient further (try 160-180) and re-validate with the same
+  NEW-vs-OLD self-play A/B technique (12-15+ seeds) before trusting a
+  further change -- this lever has a solid track record now (3 sessions,
+  3 positive validations) of being a safe, effective knob for this
+  specific failure class specifically, unlike the various "dominant-
+  length self-trap" levers (search "adv_scale" earlier in this file) that
+  have repeatedly backfired when pushed further.
+- If a future round shows a NEW failure mode (e.g. self-trap losses
+  climbing because we're now over-eating into cramped situations), that
+  would indicate 130 went too far -- dial back toward 90-110 and
+  re-validate.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything else currently in `main.py`: opponent-
+  aware `growth_damp` w/ dominant-advantage extra-damping, `_HEAD_HISTORY`
+  anti-stalemate, graduated h2h prediction, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, the adversarial
+  `_lookahead_min_space` bounded multi-turn lookahead (with its
+  food-eating-tail-freeze-artifact fix from an earlier session, and its
+  dominant-advantage-gated weight/depth scaling), `_opp_two_ply_reachable`
+  contested-exits penalty, threat-aware edge-weight boost, corner/
+  dead-end food-trap penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py`.
