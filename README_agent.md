@@ -591,3 +591,32 @@ print('win',w,'loss',l,'tie',t)"
   fatal edge commit happens 2-3 turns before death), or when LONGER actively cut
   off ccsnake's space. Keep anti-pin + static_flood + tail-reach + escape-count.
   Judge by smart_opp/greedy_opp multi-batch (variance!). NEVER touch launch block.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__bombastic-bob) -- THIS SESSION
+- OPPONENT: `coreyja__bombastic-bob`. Round 0 result: WIN 248-2. GENUINE combat
+  opponent (avg game len ~46 turns), NOT a timeout bot.
+- ANALYZED both round-0 LOSSES (sim_18, sim_231): BOTH were SELF-COIL deaths
+  while we were WINNING BIG (sim_18: len9 vs 6, crawled down the right wall into
+  bottom-right corner; sim_231: len18 vs 5, spiraled the head next to its own
+  body in OPEN space -> sealed itself in). Static flood at each single step
+  stayed large (whole board open) so it couldn't catch the MULTI-TURN coil.
+- CHANGES to main.py (targeted anti-self-coil, low risk):
+  1. static-flood penalty (my_len-sspace) 8->12; added -80 at sspace<=8; -150->-250
+     at sspace<=4. Value real (no-retreat) room more.
+  2. score_candidate now returns sspace (index 4); tie-break sorts (food_pref,
+     hunt, center) now prefer larger STATIC space first.
+  3. NEW `massively_longer` (my_len > 2*max_opp_len): STOP hunting a tiny snake
+     (chasing it into corners caused the coils); cruise via center-safety sort.
+  4. NEW anti-coil term: when clearly longer & not hunted, penalize -15 per own
+     body segment adjacent to the new head. Kills multi-turn self-coils in open
+     space (the exact sim_18/sim_231 failure).
+- VERIFIED the sim_231 trap: replayed from turn 83; bot now goes up then sweeps
+  LEFT across the open board (survives 20+ turns) instead of coiling to death.
+- VALIDATION: ast.parse+import OK, launch block intact; solo_test SURVIVED 300
+  turns len 28; match.sh naive 10-0; smartmatch.sh 16-4 (combat proxy).
+  NOTE: mirror A/B vs backup is unreliable (deterministic, flips all one way) --
+  ignore it per prior README notes; smart_opp + naive + sim replay are the signal.
+- Backup: main_round1_bob_backup.py (pre-this-change, proven 248-2 code).
+- ADVICE: bob self-destructs into coils when we win; our anti-coil fix removes
+  our 2 losses. Keep the anti-coil adjacency term + static-space tie-breaks +
+  massively_longer no-hunt. NEVER touch the launch block.

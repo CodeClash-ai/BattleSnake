@@ -288,13 +288,11 @@ def _choose_move(game_state):
         # us in as bodies grow. Penalize proportionally -- this is the key fix
         # for the multi-turn wall-hug coil deaths (we were LONGER yet trapped).
         if sspace < my_len:
-            score -= (my_len - sspace) * 12.0
+            score -= (my_len - sspace) * 8.0
         # Truly tiny static region = crawling into a pocket that seals us in as
         # bodies grow (sim_163: LONGER 15 vs 7 yet coiled into top-left corner).
         if sspace <= 4:
-            score -= 250.0
-        elif sspace <= 8:
-            score -= 80.0
+            score -= 150.0
         # Tail reachability: if we can reach our own tail cell from the new
         # head (time-aware), we can always chase our tail and never truly trap.
         # This is the key anti-coil heuristic that prevents sealing ourselves in.
@@ -381,19 +379,7 @@ def _choose_move(game_state):
             if nd == 0 and not (being_hunted and _on_edge_f):
                 score += 40.0   # landing on food = growth, extra reward when behind
 
-        # Anti-coil: when winning (clearly longer) and safe, penalize moves that
-        # snug the new head against our own body. Tight self-adjacency in open
-        # space builds multi-turn coils that eventually seal us in even while we
-        # dominate (sim_18: len9v6, sim_231: len18v5 -- both self-coil deaths).
-        if (not being_hunted) and my_len > _max_opp_len(opponents) + 1:
-            own_body = set(my_body[:-1])
-            adj_own = 0
-            for ax, ay in DIRS.values():
-                if (nc[0] + ax, nc[1] + ay) in own_body:
-                    adj_own += 1
-            score -= adj_own * 15.0
-
-        return score, space, name, nc, sspace
+        return score, space, name, nc
 
     scored = [score_candidate(c) for c in candidates]
     scored.sort(reverse=True)
@@ -423,26 +409,24 @@ def _choose_move(game_state):
             fd = food_dist(nc)
             # if enemy head is near AND we are on an edge heading toward it,
             # prefer more space over chasing the contested food.
-            return (fd, -s[4], -s[1])
+            return (fd, -s[1])
         best.sort(key=food_pref)
     else:
         # We are clearly longer than every opponent: hunt to force a
         # favorable head-to-head, while keeping space priority.
-        _mol = _max_opp_len(opponents)
-        clearly_longer = my_len > _mol + 1
-        massively_longer = my_len > _mol * 2  # don't chase a tiny snake into coils
-        if clearly_longer and not massively_longer and opponents:
+        clearly_longer = my_len > _max_opp_len(opponents) + 1
+        if clearly_longer and opponents:
             opp_heads = [(o["body"][0]["x"], o["body"][0]["y"]) for o in opponents]
 
             def opp_dist(nc):
                 return min(_manhattan(nc, oh) for oh in opp_heads)
 
             # Keep ample space, then close distance to the enemy head.
-            best.sort(key=lambda s: (-s[4], -s[1], opp_dist(s[3])))
+            best.sort(key=lambda s: (-s[1], opp_dist(s[3])))
         else:
             # Prefer more space, then move toward center for safety.
             center = (width // 2, height // 2)
-            best.sort(key=lambda s: (-s[4], -s[1], _manhattan(s[3], center)))
+            best.sort(key=lambda s: (-s[1], _manhattan(s[3], center)))
 
     return best[0][2]
 
