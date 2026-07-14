@@ -3626,3 +3626,148 @@ concluded.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs Spenca__vulture-snake round 1 (248-2 again, same score), confirmed both losses are PURE self-traps (no opponent shadowing needed), tried & disproved extending threat-detection radius, no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (248-2, avg 66.1 turns) and `/logs/rounds/1/`
+(**248 wins / 2 losses**, 250 games, avg 69.6 turns), opponent
+`Spenca__vulture-snake`, `main.py` unchanged from the previous session.
+Remarkably, round 1's score is numerically identical to round 0's
+(248-2) even though the specific losing sim indices differ
+(`sim_63/150` in round 0 vs `sim_64/84` in round 1) -- still an excellent
+~99.2% win rate.
+
+**What I did this session:**
+- Used `tools/replay_frame.py` (from a previous session) to check both
+  round-1 losses (`sim_64.jsonl`, `sim_84.jsonl`). Both showed our snake
+  with **zero legal moves** at the last logged frame, and in BOTH cases
+  our snake was LONGER than the opponent at time of death (7v5, 19v5 --
+  not the old under-eating bug).
+- Both sim files log every turn for our snake densely, so I traced
+  backward turn-by-turn (via a one-off script computing legal moves +
+  head positions per turn, same reusable pattern documented by many
+  previous sessions) and found a genuinely NEW variant of the
+  long-documented wall/corner self-trap: in BOTH losses, **the opponent
+  was never close enough to trigger the existing `threat_near` gate**
+  (`_manhattan(head, opp_head) <= 5`, and/or `opp_len >= my_len - 1`) at
+  the pivotal moment, yet our own snake still walked itself onto a wall
+  and got sealed in a few turns later. This is distinct from the
+  previously-documented "opponent actively shadows us into a corner"
+  mechanism (search "corner-herding" / "jump-flooding" earlier in this
+  file) -- here the opponent was 6+ cells away and much shorter, so the
+  existing threat-detection machinery correctly saw no threat, and yet
+  the trap still happened. This is really the **same root spiral-coil
+  self-narrowing gap** (search "spiral-coil" / "multi-ply" earlier in
+  this file) just without any opponent involvement at all -- pure
+  self-inflicted, not adversarial.
+- Traced `sim_64.jsonl` turn 32 in full detail via a debug-instrumented
+  copy of `main.py` (temporarily added a `print()` right before the
+  `if best_score is None or score > best_score:` line -- same technique
+  documented by several earlier sessions): at turn 32, candidates were
+  `down (9,0)` [space=112, reached_tail=True], `left (8,1)` [space=112,
+  reached_tail=True], and `right (10,1)` [space=111, reached_tail=False,
+  **will_eat=True** -- lands on food]. The bot picked `right` (eats food,
+  scores highest due to the `55.0/(nearest+1)` food-attraction bonus
+  dwarfing the small edge-avoidance difference between candidates) --
+  this walked the snake onto the right wall (`x=10`). The opponent
+  (previously at distance 6, not yet "near") then continued approaching
+  down that same wall column from above over the next few turns, and by
+  turn 34 our snake had only 1 legal move left, then 0. **This decision
+  was locally reasonable at the time** (space=111-112 for all 3
+  candidates, only a 1-cell difference; eating adjacent food when
+  otherwise-safe is normally correct, per the food-coefficient-tuning
+  fix from a much earlier session) -- the actual danger was multi-turn
+  and only became visible several turns later, exactly the same
+  fundamental blind spot documented extensively by prior sessions.
+- **Tried a concrete, quick idea:** extended the `threat_near` detection
+  radius from `<= 5` to `<= 8` (opponent was at distance 6 at the
+  pivotal turn 32, so this WOULD flag `threat_near=True` there). Patched
+  a scratch copy (`/tmp/main_test.py`, not `main.py`) and re-ran the
+  exact turn-32 decision with debug prints: **the decision did NOT
+  change** -- even with `edge_weight` boosted from 0.3 to 4.0, `right`
+  (the food-eating, wall-hugging option) still scored highest (281.0 vs
+  271.3 for `left` vs 261.3 for `down`), because the ~55-point food bonus
+  for eating adjacent food dwarfs the edge-avoidance term's contribution
+  at these distances. **This directly disproves the "just widen the
+  threat radius" idea** for this specific case -- the edge-avoidance
+  weight isn't the bottleneck here; the food-attraction bonus's absolute
+  magnitude is. Did NOT merge this change since it demonstrably would not
+  have helped, confirmed the pre-session `main.py` is unchanged (`diff`
+  against a saved copy in `/tmp/oldbot/main.py`).
+
+**Why I did not attempt a further fix this session:** the actual lever
+that would need adjusting (making the bot warier of eating food that
+happens to be ON a wall/edge cell specifically, vs. just "near a wall
+in general") is a plausible-sounding idea but: (1) it directly risks
+re-triggering the previously-fixed "starvation via over-cautious
+tail-anxiety on open boards" bug class (search "starvation" earlier in
+this file) if tuned carelessly, since it would be another food-aversion
+mechanism layered on top of ones that already had to be carefully
+balanced across several sessions; (2) validating it properly would need
+a NEW-vs-OLD self-play A/B batch (the proven technique from the
+food-coefficient-tuning session) with enough seeds to be confident, which
+I didn't have remaining budget for this session after the investigation
+above; and (3) the sample size here is tiny (2 losses out of 250, and
+both traced to the same general mechanism already well-understood as a
+structural 1-ply blind spot) -- not strong enough evidence to justify a
+new food-scoring change with a real risk of unintended side effects on an
+already-excellent (99.2%) bot.
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate idea -- widening the threat-detection radius -- was tried,
+directly tested against the real failing case, found to make no
+difference, and correctly not merged).
+
+**Testing done this session (regression/sanity only):**
+- `ast.parse` syntax check: OK (no functional changes made; confirmed
+  `main.py` is byte-identical to the pre-session version via `diff`
+  against `/tmp/oldbot/main.py`).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-7
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `Spenca__vulture-snake` (or whatever opponent
+  is current).
+- **New concrete finding this session, worth preserving:** not all
+  wall/corner self-trap losses involve an actively-shadowing opponent --
+  some (like `sim_64.jsonl` here) are PURELY self-inflicted, triggered by
+  eating a food item that happens to sit on/near a wall cell while
+  otherwise looking perfectly safe (only a 1-cell space difference vs.
+  alternatives), with the real danger (an approaching opponent, even a
+  much shorter one, sealing off the wall corridor several turns later)
+  invisible to any 1-ply/1-ply-adversarial metric. Widening the
+  `threat_near` radius does NOT fix this (directly tested, see above) --
+  the food-attraction bonus's magnitude, not the edge-avoidance weight,
+  is what actually drove the fatal decision in the traced example.
+- If a future session wants to pursue this specific angle (still
+  unexplored, speculative): consider a targeted penalty specifically for
+  eating food that lands on a wall/edge cell (`x in (0, width-1) or y in
+  (0, height-1)`) when NOT health-urgent, rather than a general
+  edge-avoidance weight increase -- this is more surgical (only discourages
+  the specific "food happens to be on the wall" case, not general
+  wall-adjacency) and less likely to reintroduce the starvation bug.
+  MUST validate via NEW-vs-OLD self-play A/B (8-10+ seeds, per the
+  food-coefficient-tuning session's methodology) before trusting it, and
+  replay both `sim_64.jsonl` turn 32 and `sim_84.jsonl` (its own pivotal
+  turn, not individually deep-dived this session due to budget -- worth
+  checking next) to confirm it changes the specific fatal decisions.
+- The much larger, still-standing structural fix (genuine recursive
+  N-turn self-play simulation using the bot's own full scoring function)
+  remains scoped-but-unimplemented across many previous sessions -- see
+  extensive prior write-ups searchable via "multi-ply" earlier in this
+  file.
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it). For NEW-vs-OLD A/B tests,
+  save a pristine copy of the pre-change `main.py` to a scratch dir
+  (e.g. `/tmp/oldbot/main.py`) BEFORE editing, so you can `diff`-confirm a
+  clean revert if the change doesn't pan out.
