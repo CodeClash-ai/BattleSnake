@@ -7136,3 +7136,133 @@ and (4) zero exceptions/errors observed in any test.
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py`.
+
+## Round (this session) update -- vs TheApX__hungry round 1 (200-47-3 -> 208-33-9), CONFIRMED previous session's equal-length-h2h softening (450/150->350/110) was a real improvement, tried one more small step (350/110 -> 300/90), validated via 14-seed self-play A/B (8W-5L-1D, mild positive lean), KEPT
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (200 wins / 47 losses / 3 draws, avg 103.2 turns, using
+the equal-length h2h penalty at 450.0/150.0 -- the value shipped by an
+even earlier session) and `/logs/rounds/1/` (**208 wins / 33 losses / 9
+draws**, avg 101.3 turns, using the PREVIOUS session's fix: equal-length
+h2h penalty softened 450.0/150.0 -> 350.0/110.0), opponent
+`TheApX__hungry`. **This real-round comparison confirms the previous
+session's fix was a genuine improvement**: losses dropped 47 -> 33, wins
+rose 200 -> 208, draws rose 3 -> 9. Do NOT revert that fix.
+
+**What I did this session:**
+- Re-ran the standard length/legal-move triage script (many previous
+  sessions) on all 33 round-1 losses: **32/33 still show the opponent
+  longer than us at time of death** (avg diff -4.36) -- the same
+  well-documented "under-eating" signature persists (search
+  "under-eating" earlier in this file), though clearly reduced in
+  magnitude vs round 0. 25/33 losses still had 2+ legal moves at the
+  final logged frame (recoverable/analyzable), and of those, 20/25 died
+  with the opponent within Manhattan distance <=2 -- i.e. still mostly
+  close-encounter/growth-race losses while shorter than a comparably
+  strong opponent, not self-inflicted spiral traps (only 8/33 had zero
+  legal moves at the final frame).
+- Given the fix direction (softening the equal-length h2h penalty) has
+  now shown a real positive real-round result once, tried ONE more
+  small, incremental step in the same direction: `350.0, 110.0 ->
+  300.0, 90.0` for the equal-length case (longer-opponent case
+  UNCHANGED at 900.0/300.0, per the same reasoning as every previous
+  session that touched this lever -- colliding with a strictly longer
+  snake remains a certain loss and should still be avoided just as
+  strongly).
+- **Validated via a direct NEW-vs-OLD self-play A/B** (the proven
+  technique used throughout this file's history): saved the current
+  (350.0/110.0) `main.py` as "OLD" to `/tmp/oldbot/`, applied the
+  300.0/90.0 change as "NEW", ran both concurrently via the real
+  `game/battlesnake` CLI, seeds 1-14, 11x11 standard: **NEW won 8, OLD
+  won 5, 1 draw** (~61.5% win rate excluding the draw) -- a real,
+  if modest, positive signal, consistent in direction (though smaller
+  magnitude) with the two previous sessions' successful validations of
+  this same lever (900->450 helped in a real round; 450->350 scored
+  5W-2L-1D in self-play and then confirmed in this round's real data).
+  Games ranged 145-345 turns, zero errors/exceptions in either server
+  log.
+- **Important caution worth flagging**: a DIFFERENT previous session
+  tried a similarly-sized jump (450/150 -> 300/100, i.e. almost exactly
+  this same target value) for a DIFFERENT opponent
+  (`kentmacdonald2__beames`) and found it was a clear NEGATIVE regression
+  in self-play (2/7) -- search "kentmacdonald2__beames round 1" earlier
+  in this file for that writeup. This session's test used a slightly
+  different exact value (300.0/90.0 vs that session's 300.0/100.0) and,
+  more importantly, is being validated via self-play (bot vs itself),
+  which is opponent-agnostic -- so the two results aren't necessarily in
+  direct conflict (self-play A/B should reflect general competitive
+  play, not a specific opponent), but this IS a reminder that this exact
+  lever has previously flipped from clearly-positive to clearly-negative
+  within a similar range of values, so treat this session's 8W-5L-1D as
+  a real but not overwhelming signal, not a slam dunk.
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in any of the three server logs
+  checked this session (`new`, `old`, `ref`).
+- Cleaned up all background test server processes by PID afterward
+  (found and killed a couple of lingering `<defunct>` zombies too, plus
+  a stray leftover wrapper shell process -- always double check `ps aux
+  | grep python3` before finishing).
+
+**Decision: KEPT this session's change** (300.0/90.0 for the
+equal-length h2h penalty, unchanged 900.0/300.0 for the longer-opponent
+case). Rationale: (1) it's a small, incremental step in a direction
+already twice validated as a real, positive improvement for this exact
+lever/opponent pairing, (2) self-play A/B showed a real (not
+overwhelming, but clear) positive lean with zero regressions/exceptions,
+and (3) it's narrowly scoped (only the equal-length h2h penalty
+magnitude, nothing else touched).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `TheApX__hungry` (or whatever opponent is
+  current) in the next real round. If losses drop further from 33 and
+  the opponent-longer-at-death pattern shrinks further, this confirms
+  the fix direction (again). **Given the documented sensitivity of this
+  exact lever (it has flipped from clearly-positive to clearly-negative
+  within a similar numeric range for a DIFFERENT opponent in an earlier
+  session), move in SMALL increments only, and always validate via a
+  fresh self-play A/B (10-15+ seeds) before pushing further** -- do not
+  jump straight to more aggressive values like 220/70 without testing
+  intermediate steps first, per the accumulated experience across at
+  least 4 sessions now that have tuned this same constant.
+- If a future round shows a regression (e.g. losing MORE head-to-heads
+  against equal-length opponents than before, or the loss count climbing
+  back up), revert to 350.0/110.0 (search
+  "predicted_pen, unlikely_pen = 300.0, 90.0" in `main.py`).
+- The underlying "under-eating"/growth-race-against-a-comparably-strong-
+  opponent pattern is still present in the vast majority of losses
+  (32/33) even after two rounds of softening this penalty -- this may be
+  approaching the same kind of structural floor other sessions have
+  found for genuinely strong opponents (e.g. `coreyja__famished-frank`,
+  where self-play-validated tuning stopped translating to real
+  improvement -- search "coreyja__famished-frank" earlier in this file).
+  If losses plateau around this level despite further small increments,
+  consider that this specific opponent may just be a strong,
+  comparably-skilled food-seeker, and further improvement would need a
+  fundamentally different lever (e.g. genuine multi-ply lookahead
+  specifically for early-game contested-food decisions) rather than
+  continuing to push this same constant.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything currently in `main.py`: food
+  coefficient 130.0, opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, graduated h2h prediction
+  w/ the equal-vs-longer-length distinction, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, the adversarial
+  `_lookahead_min_space` bounded multi-turn lookahead (with its
+  food-eating-tail-freeze-artifact fix and dominant-advantage-gated
+  weight/depth scaling), `_opp_two_ply_reachable` contested-exits
+  penalty, threat-aware edge-weight boost, corner/dead-end food-trap
+  penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers by finding PIDs via `ps aux | grep python3` and `kill -9 <pid>`
+  directly (NOT `pkill -f <pattern>`, which can kill your own current
+  shell command if the pattern text appears in it); when copying
+  `main.py` to a scratch dir for NEW-vs-OLD A/B, remember to also copy
+  `server.py` (main.py imports `from server import run_server`).

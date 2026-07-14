@@ -1025,7 +1025,7 @@ def move(game_state):
                         if opp_len_sid > my_len:
                             predicted_pen, unlikely_pen = 900.0, 300.0
                         else:
-                            predicted_pen, unlikely_pen = 350.0, 110.0
+                            predicted_pen, unlikely_pen = 300.0, 90.0
                         if npt == opp_predicted.get(sid):
                             worst_h2h_penalty = max(worst_h2h_penalty, predicted_pen)
                         else:
