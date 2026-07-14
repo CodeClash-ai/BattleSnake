@@ -592,6 +592,27 @@ def move(game_state):
                         score -= 80
 
 
+            # Also avoid equal-length healthy rail shadows before they become
+            # immediate head-to-head traps.  The Spenca round-1 loss had us run
+            # along the bottom edge while an equal-length opponent paralleled a
+            # few cells inside; by the time the enemy was adjacent, all exits
+            # were losing.  Bias off the actual rail earlier when an equal-or-
+            # longer head is within striking distance and food is not urgent.
+            if (my_health > 75 and my_len <= max_enemy_len and n not in food
+                    and (head[0] in (0, w - 1) or head[1] in (0, h - 1))
+                    and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                rail_shadow = [eh for eh in enemy_heads
+                               if enemy_lengths.get(eh, 0) >= my_len and dist(n, eh) <= 8]
+                if rail_shadow:
+                    score -= 170
+                    if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
+                        score -= 120
+                    cur_corner_lane = min(head[0], w - 1 - head[0]) if head[1] in (0, h - 1) else min(head[1], h - 1 - head[1])
+                    new_corner_lane = min(n[0], w - 1 - n[0]) if n[1] in (0, h - 1) else min(n[1], h - 1 - n[1])
+                    if new_corner_lane < cur_corner_lane:
+                        score -= 120
+
+
             # If we are clearly shorter but healthy, avoid continuing along an
             # outer rail toward a corner.  The Spenca/vulture loss was a classic
             # shadowed-rail squeeze: while 4 lengths behind, we moved down the
