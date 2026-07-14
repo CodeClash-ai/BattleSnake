@@ -474,17 +474,30 @@ def move(game_state):
                             score -= 250
                         else:
                             score -= 80
-                elif my_health > 65 and my_len >= 14 and area < my_len * 2 and n not in food:
+                elif my_health > 55 and my_len >= 14 and area < my_len * 3 and n not in food:
                     # In close-length long games, survival often depends on staying
                     # connected to our own tail rather than maximizing raw area.
-                    # This is intentionally limited to cramped, non-food moves so
-                    # it does not override early growth or open-board play.
+                    # Battlesnake-elon losses often show flood-fill areas of 2+
+                    # snake lengths after stepping through a coil throat, but no
+                    # route back to the moving tail; by the time area is tiny the
+                    # game is already forced.  Let this tail-connectivity check
+                    # look at moderately-sized regions too, while staying disabled
+                    # for food and short/open-board positions.
                     tail_cell = next_body[-1]
                     tail_blocked = set(sim_blocked)
                     tail_blocked.discard(tail_cell)
                     tail_dist = shortest(n, [tail_cell], tail_blocked, w, h, max_depth=w * h)
                     if tail_dist is None:
                         score -= 160
+                        # In roughly equal long endgames, no path to tail is a
+                        # strong noose signature even if raw flood-fill still looks
+                        # moderately large.  Penalize it enough to prefer a smaller
+                        # tail-connected corridor when both options are otherwise
+                        # safe; this targets the balanced battlesnake-elon losses.
+                        if my_len <= max_enemy_len + 4 and area <= my_len * 3:
+                            score -= 760
+                            if exits <= 1:
+                                score -= 160
                         # When we are not longer, a small region with no path back
                         # to our moving tail is usually a losing pocket rather than
                         # useful space.  This Flipez-crystal matchup's rare losses
