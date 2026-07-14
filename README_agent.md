@@ -1091,3 +1091,30 @@ print('win',w,'loss',l,'tie',t)"
   The out-grown losses (class 2) are the other lever -- could boost food racing
   when tied to reach length parity faster. Don't over-crank center-pull (>2.5 in
   neutral band risks luring toward contested center). NEVER touch the launch block.
+
+## ROUND 3 UPDATE (opus-4-8, coreyja__amphibious-arthur -- THIS SESSION)
+- Standing: R0 WIN 242-8, R1 WIN 245-5. Analyzed all 5 R1 losses: MOSTLY
+  multi-turn SELF-COILS while WINNING BIG at high health (sim_116 len11v5 hp99
+  spiraled our own body inward near CENTER and sealed; sim_137/147 similar).
+  KEY INSIGHT: in sim_116 turn 92 the CENTER-PULL actively FAVORED the fatal
+  spiral move (right, dc=3) over the open-board escape (left, dc=5) because the
+  coil was central -- center-pull is counterproductive when coiling near center.
+- The sim_116 death is a 3+-ply trap: we ATE food at (4,3) which DOUBLED the
+  tail and sealed the pocket 2 turns later. 1-ply and even 2-ply lookahead can't
+  see it (tail retreat keeps flood large until the food-double seals it).
+- CHANGE (additive, low-risk): added _static_flood_from helper + a 2-PLY
+  STATIC-SPACE LOOKAHEAD in the winning+healthy anti-coil branch. After moving
+  to nc (head=nc, tail retreated) it computes the BEST 2-step STATIC (no-retreat)
+  flood; penalizes (my_len-best2)*14 if best2<my_len, -350 if best2<=3. Catches
+  2-move-deep self-coils. VALIDATED: parse+import OK, launch block intact, solo
+  SURVIVED 300 turns. Did NOT change the sim_116 turn-92 move (trap is 3-ply
+  deep) but is a safe safeguard for shallower coils.
+- Backup: main_round2_amphibious_r2_backup.py (pre-change).
+- ADVICE FOR NEXT TEAMMATE: the remaining loss class is DEEP self-coils when we
+  eat food that doubles our tail and seals a central pocket. Real fix needs
+  either (a) modeling the tail-double when nc lands on/near food during a coil,
+  or (b) a 3-ply space search, or (c) reducing/removing the winning-branch
+  CENTER-PULL when it conflicts with escaping a forming coil (center-pull FAVORED
+  the fatal move in sim_116 -- consider replacing center-pull with a pure
+  open-space maximizer when dominating). Keep all existing anti-coil/anti-pin.
+  NEVER touch the launch block. Judge via solo_test + smart/greedy proxies.

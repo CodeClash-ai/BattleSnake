@@ -226,35 +226,6 @@ def _choose_move(game_state):
                 dq.append(nn)
         return count
 
-    # Standalone static flood from an arbitrary start with a caller-supplied
-    # blocked set (used by the 2-ply self-coil lookahead which simulates our
-    # body after a move). Same worst-case (no-retreat) model as static_flood.
-    def _static_flood_from(start_cell, blocked, limit=None):
-        from collections import deque
-        seen = {start_cell}
-        dq = deque([start_cell])
-        count = 0
-        while dq:
-            cur = dq.popleft()
-            count += 1
-            if limit and count >= limit:
-                break
-            for ddx, ddy in DIRS.values():
-                nn = (cur[0] + ddx, cur[1] + ddy)
-                if nn in seen or not in_bounds(nn):
-                    continue
-                if nn in blocked:
-                    continue
-                seen.add(nn)
-                dq.append(nn)
-        return count
-
-    # Opponent body cells (static, no retreat) for the 2-ply lookahead.
-    opp_bodies_static = set()
-    for s in opponents:
-        for seg in s["body"]:
-            opp_bodies_static.add((seg["x"], seg["y"]))
-
     # Build a blocked set for flood fill: bodies (excluding our tail which moves).
     # Anti-pin: when we are SHORTER than the nearest opponent, a longer snake
     # can pursue us and pin us to a wall/corner (round-1 crystal losses: sim_0,
@@ -539,38 +510,6 @@ def _choose_move(game_state):
                     score -= 55.0
                     if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
                         score -= 110.0
-
-            # 2-PLY STATIC-SPACE LOOKAHEAD (anti multi-turn self-coil, sim_116):
-            # When we dominate we still spiral our own body inward: each single
-            # move looks fine (tail retreats -> time-aware flood stays large) but
-            # two moves later the pocket seals. Here, after moving to nc (head=nc,
-            # tail retreated), simulate our body and for each safe follow-up cell
-            # compute the STATIC (no-retreat) flood; take the BEST. If even our
-            # best two-step static region is smaller than our length, this move
-            # is steering us into a coil that will seal -> penalize. This picks
-            # the OPEN-board escape over the food-pocket the center-pull favored.
-            body_after = set(my_body)
-            if my_body:
-                body_after.discard(my_body[-1])  # tail retreats
-            body_after.add(nc)
-            body_after.discard(nc)  # nc is the new head, treated as start below
-            occ_after = body_after | opp_bodies_static
-            best2 = 0
-            for _ndx, _ndy in DIRS.values():
-                _nn = (nc[0] + _ndx, nc[1] + _ndy)
-                if not in_bounds(_nn):
-                    continue
-                if _nn in occ_after or _nn == nc:
-                    continue
-                if enemy_next.get(_nn, 0) >= my_len:
-                    continue
-                _s2 = _static_flood_from(_nn, occ_after, limit=my_len + 3)
-                if _s2 > best2:
-                    best2 = _s2
-            if best2 < my_len:
-                score -= (my_len - best2) * 14.0
-            if best2 <= 3:
-                score -= 350.0
 
         # 2-PLY PIN LOOKAHEAD (the key fix vs jump-flooding, sim_141/92/232):
         # We repeatedly died by a longer pursuer cutting off our escapes so that
