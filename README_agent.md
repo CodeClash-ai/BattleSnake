@@ -2448,3 +2448,46 @@ print('win',w,'loss',l,'tie',t)"
   breakdown), /tmp/analyze2.py (short-edge gap dist), /tmp/timeline.py (crossover
   turn), /tmp/dbg2.py (per-candidate scores at a given sim turn -- USE THIS to
   debug why central moves score low). NEVER touch the launch block.
+
+## ROUND 3 UPDATE (opus-4-8, rdbrck__bountysnake2018 -- SURVIVABLE-SPACE SAFETY NET)
+- Standing: R0 LOSS 214-35, R1 LOSS 211-37, R2 LOSS 212-38. bountysnake is our
+  TOUGHEST opponent (~85% loss). Prior heuristic tweaks barely moved 35->37->38.
+- ANALYZED all 212 R2 losses (/tmp/analyze.py, /tmp/death.py, /tmp/timeline.py):
+  * 171/212 = BOXED IN (0 safe moves at death) = SPACE COLLAPSE / self-coil /
+    herded-seal. Only 41 had a safe move (forced h2h).
+  * median death turn 139 (LONG games), median hp 88 (NOT starvation).
+  * KEY: in 157/212 losses we LED on length then LOST the lead (median crossturn
+    58). In our LOSSES we are AHEAD mid-game (mean gap +0.9 t50, +1.2 t80) then
+    die LATE by self-sealing. So GROWTH is NOT the loss driver here -- LATE-GAME
+    SPACE PRESERVATION is. This differs from most prior opponents (length deficit).
+  * gap at death: -1:77, mostly shorter (131) but many equal/longer too.
+- ROOT CAUSE (all prior notes agree): time-aware/static floods OVERCOUNT space
+  through 1-wide channels & along walls (corridor clears as tail retreats), so the
+  heuristic score still picks moves that walk into a shrinking pocket -> boxed.
+- FIX (main.py, NEW "SURVIVABLE-SPACE SAFETY NET" right after scored.sort ~line
+  1230): compute the TRUE chokepoint-aware region (_open_region_quality) for EACH
+  candidate using body-after-move as walls (tail NOT retreating when landing on
+  food; opp bodies as obstacles). If the top-scoring move's region is fatally
+  small (< my_len) AND a candidate has clearly more room (>+1.5 quality), RESTRICT
+  the "best" set to the roomiest safe moves. A HARD guard against the 171 boxed
+  deaths that the soft score terms keep missing. Additive; only overrides when the
+  chosen move would seal us in and a roomier alternative exists.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, smartmatch 13-2-1,
+  spacematch 12-7-1 (space_opp = space-maximizer, closest proxy to bountysnake's
+  long-game space control), move() 2.3ms/call (zero timeout risk).
+  Synthetic near-seal test (/tmp/synth.py): bot correctly chooses OPEN board
+  ('up') over the sealed pocket ('down'). Mirror A/B all-ties (noise, ignore).
+- Backup: main_round3_bounty_r3_backup.py (this code); main_round2_bounty_r2_backup.py
+  (prior 212-38 code).
+- ADVICE FOR NEXT TEAMMATE: bountysnake beats us by herding us into space
+  collapse / self-seals in long endgames (171/212 boxed, mostly while we LED
+  earlier). The survivable-space safety net directly targets that with a TRUE
+  region metric (not the overcounting floods). If losses persist: (a) consider
+  making the guard STRICTER (cutoff, or apply even when region>=my_len but a
+  much larger alternative exists -- test carefully, don't over-restrict combat);
+  (b) the DEEP fix all notes flag = a real space-filling/Hamiltonian planner or
+  longest-survivable-path metric; (c) the 41 forced-h2h need better pin survival
+  (extend 2-ply pin lookahead). Keep survivable-space-net + all existing anti-
+  coil/anti-pin/growth. Use /tmp/death.py (boxed vs h2h) + /tmp/timeline.py
+  (crossover) to measure. NEVER touch the launch block.
