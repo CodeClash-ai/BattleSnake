@@ -340,8 +340,17 @@ def move(game_state):
             # large until we had already coiled into a noose.
             if my_len >= 10 and my_health > 45:
                 static_blocked = set(sim_blocked) - set(my_body)
-                next_body = tuple([n] + my_body[:-1])
-                path_count = self_path_count(next_body, food, static_blocked, w, h, depth=6, cap=200)
+                # If this candidate eats, our tail stays for the next turn.
+                # The previous version always dropped the tail for this shallow
+                # self-lookahead, which made immediate food inside a near-closed
+                # coil look safer than it really was.
+                if n in food:
+                    next_body = tuple([n] + my_body)
+                    lookahead_food = [f for f in food if f != n]
+                else:
+                    next_body = tuple([n] + my_body[:-1])
+                    lookahead_food = food
+                path_count = self_path_count(next_body, lookahead_food, static_blocked, w, h, depth=6, cap=200)
                 score += min(path_count, 80) * 2.0
                 if path_count == 0:
                     score -= 450
