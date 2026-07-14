@@ -1996,3 +1996,129 @@ not saved to `tools/` this session -- consider saving a
 turn number and dumps this exact diagnostic table automatically, since
 this exact technique has now been reused manually across at least 5
 different sessions in this file's history).
+
+## Round (this session) update -- FOUND & FIXED a real symmetric-orbit starvation-draw bug (8/250 draws in round 1 vs ccSnake2018)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` and `/logs/rounds/1/` both existed, opponent
+`ccSnake2018__ccsnake`:
+- Round 0: 243 wins / 5 losses / 2 draws (250 games), turns avg 87.3.
+- Round 1: 238 wins / 4 losses / **8 draws** (250 games), turns avg 80.7.
+
+Losses dropped slightly (5->4, both already deeply investigated by a
+previous session and judged to be a near-structural floor -- forced
+50/50s when cornered by a much longer opponent, see the long writeup
+above titled "investigated remaining 10/250 losses" for full details, not
+revisited this session). **Draws jumped 2->8**, which is what this
+session investigated.
+
+**Root cause, found by inspecting all 8 real draw sim files
+(`sim_115/124/165/247/47/51/85/95.jsonl`):** every single one showed the
+EXACT same shape: two length-4 snakes (us and the opponent, both still at
+their starting length the whole game) circling forever around the exact
+same 3x3 block of cells, with a single food item stuck dead-center,
+completely walled in on all 4 sides by the two snakes' own bodies (e.g.
+our body segments occupy 2 of the center cell's 4 neighbors, the
+opponent's body occupies the other 2, simultaneously, every single turn
+of the loop). Confirmed via replaying the exact real board states through
+`main.move()`/the scoring loop directly (see the historical methodology
+documented at length earlier in this file): the center food cell
+correctly reports `space=1` (a genuine, real 1-cell trap -- entering it
+is certain death, NOT a false-alarm bug) every single time either snake
+is adjacent to it, so avoiding it is the objectively correct move. But
+because BOTH snakes are running similar heuristics and mirror each
+other's avoidance turn after turn, they settle into a stable ~8-cell
+limit cycle around the trapped food forever, both slowly starving
+(health ticking 24->0) since the OLD code's "nearest food" distance
+calc used raw Manhattan distance to *any* food on the board, including
+ones that are currently fully unreachable/walled-off -- so the trapped
+center food kept "winning" as the nearest-food target turn after turn
+(distance 1-2 from within the loop) even though it could never actually
+be safely eaten, pulling the bot's attention away from farther-but-
+actually-reachable food elsewhere on the board (there were 5-14 other
+food items on the board in every single one of these draw games -- this
+was NOT a starved/empty-board scenario).
+
+**Fix implemented this session (two complementary layers):**
+1. **Reachability-aware nearest-food targeting:** `_flood_fill()` now has
+   an optional `return_visited=True` mode that also returns the full set
+   of cells reached by the BFS (already being computed anyway; just
+   exposing it). In the per-candidate scoring loop (which already runs
+   this flood-fill for every candidate to score reachable space), the
+   food-attraction/urgency term now only considers food cells that are
+   actually in that candidate's reachable set (`reachable_food = [f for f
+   in food if (f.x,f.y) in visited]`), falling back to the old
+   center-seeking behavior if none of the food is currently reachable.
+   This stops a walled-off food item from perpetually pulling the bot's
+   attention/scoring toward it when it can never actually be safely
+   eaten, and should make the bot path toward genuinely reachable food
+   elsewhere instead.
+2. **Anti-stalemate cycle-breaker (new, general-purpose safety net):**
+   added a small per-game head-position history (`_HEAD_HISTORY`, module-
+   level dict keyed by `game_state["game"]["id"]`, cleared in `end()`),
+   tracking the last 16 head positions. If we've only visited <= 5 unique
+   cells over the last 16 turns (`stuck`), add a strong (+120) bonus for
+   candidate moves that go to a cell OUTSIDE that recent set (and a small
+   -40 penalty for staying inside it), as long as the move is still
+   otherwise space-safe (`space >= my_len`) -- this directly and
+   generically breaks any kind of small repeating position loop (not just
+   the specific food-trap scenario above), which is a good defense-in-
+   depth in case reachability-aware targeting alone doesn't fully resolve
+   every instance of this class of stalemate (e.g. if a future opponent
+   creates a similar mutual-loop dynamic through some other mechanism).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed `sim_115.jsonl`'s exact turn-by-turn states from the real draw
+  game through the patched `move()` directly -- confirmed no exceptions,
+  decisions look reasonable (note: since these are FROZEN real states
+  from the unfixed run, testing this way can only confirm "no crash,
+  plausible decision," not fully re-derive the counterfactual multi-turn
+  outcome -- proper validation requires live sequential play, done next).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-9
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- **Self-play** (`main.py` vs itself, i.e. the exact symmetric scenario
+  that produces the bug), seeds 10/11/12: games ran **232, 248, and 359
+  turns**, and critically **all 3 ended with a decisive winner, zero
+  draws** -- consistent with the anti-stalemate fix actually working (a
+  30+/250 sample wasn't feasible in this session's remaining budget, but
+  0/3 draws in exactly the self-vs-self setting most likely to trigger
+  this bug is a good sign; previously ~8/250 -- roughly 3% -- of games
+  were draws of this exact flavor, so a 3-game sample isn't strongly
+  conclusive on its own but combined with the root-cause fix being
+  well-targeted and understood, this is reasonably solid evidence).
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real opponent in the next round. If
+  draws drop from 8 back toward 0-2 (matching round 0's baseline), that
+  confirms the fix. If draws persist, run more self-play games and watch
+  for `stuck=True` triggering (temporarily add a debug print) to see
+  whether the cycle-breaker fires as expected, or whether a genuinely
+  different symmetric stalemate shape needs separate handling.
+- The 4 remaining real losses (both round 0 and round 1) were already
+  deeply investigated by a previous session and found to be a
+  near-structural floor (forced 50/50s when cornered late-game by a much
+  longer opponent, requiring genuine multi-ply lookahead to meaningfully
+  improve further -- see the long "investigated remaining 10/250 losses"
+  writeup earlier in this file for the full analysis and concrete next
+  steps if you want to pursue that). NOT touched this session; this
+  session's fix targeted draws specifically, which is a distinct bug
+  class from those losses.
+- New `_HEAD_HISTORY` global dict is small (bounded to 16 entries per
+  active game id, cleared on `end()`) and should not leak memory across a
+  long match series, but if you notice unbounded growth in a very long
+  test run, double check `end()` is actually being called for every game
+  by the harness (I didn't independently verify this beyond code
+  inspection -- if the harness ever skips calling `/end`, consider adding
+  an LRU-style cap on `_HEAD_HISTORY`'s total number of tracked game ids
+  as a defensive fallback).
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).

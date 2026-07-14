@@ -35,6 +35,18 @@ DIRS = {
     "right": (1, 0),
 }
 
+# Per-game recent head-position history, used to detect and break out of
+# symmetric orbiting stalemates (e.g. two equal-length snakes circling a
+# mutually-unreachable central food forever, both slowly starving to a
+# draw -- see README_agent.md for the real-match analysis that found this
+# happening in 8/250 real games in one round). Keyed by game id so
+# multiple concurrent/sequential games in the same server process don't
+# interfere with each other. Cleared on `end()`.
+_HEAD_HISTORY = {}
+_HISTORY_LEN = 16
+_STUCK_UNIQUE_THRESHOLD = 5  # if <= this many unique cells in recent window
+
+
 
 def info():
     return {
@@ -51,6 +63,12 @@ def start(game_state):
 
 
 def end(game_state):
+    try:
+        gid = game_state.get("game", {}).get("id")
+        if gid in _HEAD_HISTORY:
+            del _HEAD_HISTORY[gid]
+    except Exception:
+        pass
     return None
 
 
@@ -107,7 +125,7 @@ def _occupied_cells(board, you_id):
     return blocked, heads, lengths, tails
 
 
-def _flood_fill(start, blocked, width, height, cap=None, target=None):
+def _flood_fill(start, blocked, width, height, cap=None, target=None, return_visited=False):
     """BFS from `start` over non-blocked in-bounds cells.
 
     Returns (count, reached_target):
@@ -120,6 +138,9 @@ def _flood_fill(start, blocked, width, height, cap=None, target=None):
                my tail" as a proxy for not being self-trapped later).
     """
     if start in blocked:
+        empty_visited = set()
+        if return_visited:
+            return 0, (target == start), empty_visited
         return 0, (target == start)
     if cap is None:
         cap = width * height + 1
@@ -148,6 +169,8 @@ def _flood_fill(start, blocked, width, height, cap=None, target=None):
             if count >= cap:
                 break
         frontier = nxt
+    if return_visited:
+        return count, reached_target, seen
     return count, reached_target
 
 
@@ -205,6 +228,27 @@ def move(game_state):
         health = you.get("health", 100)
 
         food = board.get("food", [])
+
+        # Track recent head positions to detect "stuck orbiting a small
+        # area" stalemates (a real observed failure mode: two equal-length
+        # snakes circling a mutually-unreachable central food forever,
+        # both slowly starving to a draw -- see README_agent.md). If we
+        # detect we've only visited a handful of unique cells over the
+        # last _HISTORY_LEN turns despite the board being wide open, add a
+        # bonus for candidate cells that are NOT in that recent set, to
+        # actively push the bot to break out of the loop and explore
+        # elsewhere (e.g. toward farther, actually-reachable food).
+        gid = None
+        try:
+            gid = game_state.get("game", {}).get("id")
+        except Exception:
+            gid = None
+        history = _HEAD_HISTORY.setdefault(gid, [])
+        history.append(head)
+        if len(history) > _HISTORY_LEN:
+            del history[: len(history) - _HISTORY_LEN]
+        recent_set = set(history)
+        stuck = len(history) >= _HISTORY_LEN and len(recent_set) <= _STUCK_UNIQUE_THRESHOLD
 
         blocked, heads, lengths, tails = _occupied_cells(board, my_id)
 
@@ -328,7 +372,9 @@ def move(game_state):
                 eff_blocked = blocked | {my_tail}
             else:
                 eff_blocked = blocked
-            space, reached_tail = _flood_fill(npt, eff_blocked, width, height, target=my_tail)
+            space, reached_tail, visited = _flood_fill(
+                npt, eff_blocked, width, height, target=my_tail, return_visited=True
+            )
 
             # Adversarial 1-ply lookahead: consider that a nearby
             # equal-or-longer opponent doesn't just sit still -- it will
@@ -445,8 +491,22 @@ def move(game_state):
             # eating even if it costs some space/tail-reachability safety
             # margin (as long as it doesn't walk us into < my_len space,
             # which is still hard-penalized above).
-            if food:
-                dists = [_manhattan(npt, (f["x"], f["y"])) for f in food]
+            # Only chase food that is actually reachable from this candidate
+            # cell right now (per this candidate's own flood-fill visited
+            # set) -- otherwise a food item that's fully walled off (e.g.
+            # boxed in on all 4 sides by our own and an opponent's body,
+            # a real scenario seen in real matches: two equal-length
+            # snakes circling a central food neither can safely reach,
+            # both slowly starving to a draw) still pulls our "nearest
+            # food" distance metric toward it forever, keeping us
+            # orbiting nearby it instead of pathing to a farther-but-
+            # actually-reachable food elsewhere. See README_agent.md for
+            # the real-match analysis (8 draws in one round all showed
+            # this exact mutual-orbit-around-unreachable-center-food
+            # deadlock).
+            reachable_food = [f for f in food if (f["x"], f["y"]) in visited]
+            if reachable_food:
+                dists = [_manhattan(npt, (f["x"], f["y"])) for f in reachable_food]
                 nearest = min(dists)
                 # Weight food urgency higher when health is low. Smooth,
                 # steep ramp: mild early on, very large once health is
@@ -470,6 +530,18 @@ def move(game_state):
             # Slight preference against hugging edges (more escape routes).
             edge_dist = min(npt[0], width - 1 - npt[0], npt[1], height - 1 - npt[1])
             score += 0.3 * edge_dist
+
+            # Anti-stalemate: if we've been stuck orbiting a tiny set of
+            # cells for a while (see `stuck` computed above), strongly
+            # reward moving to a cell outside that recent set -- breaks
+            # symmetric mutual-avoidance loops (e.g. circling a jointly-
+            # unreachable food with an equal-length opponent) instead of
+            # passively continuing the loop until starvation/draw.
+            if stuck and space >= my_len:
+                if npt not in recent_set:
+                    score += 120.0
+                else:
+                    score -= 40.0
 
             # Graduated head-to-head penalty: instead of a flat penalty for
             # any legal collision cell, weight by whether it matches our
