@@ -546,7 +546,7 @@ def move(game_state):
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
                 # head-to-head odds against more cautious snakes.
-                if food_dist == 0 and area >= my_len + 3:
+                if food_dist == 0:
                     score += 55
                     if my_health > 65 and my_len >= 24 and my_len >= max_enemy_len + 12:
                         score -= 520
@@ -560,6 +560,29 @@ def move(game_state):
                     # so it does not undo earlier edge-food safety when close/ahead.
                     if my_len + 5 <= max_enemy_len and my_health <= 95:
                         score += 80
+                    # Gigantic-george leaves the board dense with food while staying
+                    # short.  In those far-ahead endgames every legal move can be a
+                    # snack, so the generic anti-food penalty no longer distinguishes
+                    # a safe spacious bite from one that seals a tiny self-coil.
+                    # When already safely ahead and healthy, heavily prefer immediate
+                    # food that preserves real space/continuations; optional growth in
+                    # a pocket is the main way this matchup turns a huge lead into a
+                    # self-elimination.
+                    if my_health > 70 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                        if area < my_len:
+                            score -= (my_len - area) * 95
+                        if area < max(8, my_len // 2):
+                            score -= 260
+                        # path_count is available in the long/healthy lookahead block
+                        # above.  A zero-count eating move pins the tail and has no
+                        # short self-avoiding continuation, so avoid it unless forced.
+                        try:
+                            if path_count == 0:
+                                score -= 520
+                            elif path_count < 8:
+                                score -= (8 - path_count) * 45
+                        except UnboundLocalError:
+                            pass
                     # Edge food can be a trap when we are already safely ahead:
                     # eating pins our tail for a turn and can start a wall spiral.
                     # Keep taking these when hungry or needing length, but do not
