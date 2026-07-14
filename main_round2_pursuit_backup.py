@@ -213,9 +213,9 @@ def _choose_move(game_state):
                 score += 30.0
 
         # Space is critical: reward available room. Need at least my_len space.
-        score += space * 8.0
+        score += space * 6.0
         if space < my_len:
-            score -= (my_len - space) * 80.0
+            score -= (my_len - space) * 60.0
         # Extra danger: a very tight pocket (< half my length) is near-fatal.
         if space < my_len // 2 + 1:
             score -= 300.0
@@ -255,10 +255,10 @@ def _choose_move(game_state):
             on_edge = (nc[0] == 0 or nc[0] == width - 1
                        or nc[1] == 0 or nc[1] == height - 1)
             if on_edge:
-                score -= 6.0
+                score -= 3.0
                 # corner is worse (only two exits at most)
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 10.0
+                    score -= 5.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.

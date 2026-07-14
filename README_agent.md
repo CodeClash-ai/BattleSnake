@@ -350,3 +350,39 @@ print('win',w,'loss',l,'tie',t)"
   needs lookahead assuming our body GROWS to detect shrinking pockets earlier.
   Keep escape-count + tail-reachability + time-aware flood intact; re-run all
   validations before submitting.
+
+## ROUND 2 UPDATE (opus-4-8, m-schier__kreuzotter -- REAL COMBAT NOW)
+- IMPORTANT: kreuzotter is NO LONGER timing out. Round 1 result: WIN 24-2 but
+  real combat (avg ~18 turns, up from ~8). It is a genuine PURSUIT + center-
+  control snake: it tails our head one cell behind and pins us to walls/corners.
+- Analyzed the TWO round-1 losses:
+  * sim_244 (t64): opp chased directly behind us; we ran a path into the TOP-LEFT
+    corner while SHORTER (len4 vs5) and got boxed in.
+  * sim_247 (t196): long game, we were LONGER early but hugged the RIGHT wall
+    (cols 9-10) letting opp control center; we got cornered on the BOTTOM row and
+    forced into a losing head-to-head (our only move was into a cell the longer
+    opp could also take).
+- CHANGE (low-risk tuning of existing score_candidate):
+  * space weight 6.0 -> 8.0
+  * low-space penalty 60 -> 80 per missing cell
+  * healthy-edge penalty 3 -> 6, corner extra 5 -> 10
+  Rationale: push us off walls/corners and value open room more, to resist the
+  pursuit/pin strategy. NOT a structural change -- proven survival logic intact.
+- TESTING: added test/smart_opp.py (flood-fill + PURSUIT + center-control snake
+  that mimics kreuzotter) and test/smartmatch.sh. Also /tmp/cmp.sh (ephemeral,
+  recreate: runs a chosen main file vs smart_opp for N royale games).
+  NOTE: the battlesnake CLI is HIGHLY non-deterministic (food spawn) -- single
+  batches swing wildly (baseline ranged 21-18 to 31-9). Paired A/B over 2x40
+  games: tuned=52/80 (65%), baseline=46/80 (58%). Consistent modest edge for
+  the tuned version, no regression.
+- I TRIED a Voronoi/contested-territory term (count cells we reach before opp)
+  weighted into the score -- it made things WORSE (10-30 vs smart_opp) because it
+  lured us toward contested cells near the opp. REVERTED. Don't re-add naively.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh 10-0 (naive), smart_opp paired edge.
+- Backup: main_round2_pursuit_backup.py (pre-tuning).
+- ADVICE: kreuzotter is a REAL threat now. Best next lever = 2-ply lookahead
+  (simulate opp's best pursuit response, avoid moves that let it seal us next
+  turn) OR smarter cornering (when SHORTER, keep to open center; when LONGER,
+  cut off its access to open space). Test carefully -- variance is huge, use 2x40
+  paired batches. NEVER touch the launch block.
