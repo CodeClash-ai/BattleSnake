@@ -611,6 +611,34 @@ def move(game_state):
                     break
         edge_weight = 4.0 if threat_near else 0.3
 
+        # Dominant-advantage-gated deep-safety scaling: real match analysis
+        # (opponent coreyja__gigantic-george, see README_agent.md) found
+        # that essentially ALL 23 real losses in that round shared the
+        # same shape: our snake grew hugely dominant over a tiny, far,
+        # slow-growing opponent (my_len 3x-11x opp_len), health
+        # comfortable, and eventually spiral-coiled itself into a
+        # self-inflicted trap that a single-snapshot (even 1-ply-
+        # adversarial) flood-fill could not see coming. A previous
+        # session tried fixing this by damping FOOD-seeking urgency
+        # further in this scenario (stronger growth_damp) -- that was
+        # measurably WORSE in self-play A/B testing (only 36.6% win
+        # rate), likely because it makes the bot fall behind in close
+        # races where a temporary big lead is common and worth pressing.
+        # This is a different, more targeted lever: instead of eating
+        # LESS, look FARTHER AHEAD for self-trap safety once we're
+        # already dominantly ahead (a scenario where our own body -- not
+        # any opponent -- is the primary danger, so deeper lookahead is
+        # cheap and safe to spend on). This never discourages eating good
+        # food; it only makes the existing `_lookahead_min_space`
+        # supplementary safety tiebreaker weigh more heavily and look
+        # deeper once we have a large, dominant length advantage over the
+        # longest opponent, while leaving normal close-race dynamics
+        # (small/no advantage) completely unaffected.
+        advantage = my_len - max_opp_len
+        adv_scale = min(1.0, max(0.0, advantage - board_cells * 0.12) / (board_cells * 0.35))
+        lookahead_weight = 15.0 + 35.0 * adv_scale
+        lookahead_depth = 6 + int(round(6 * adv_scale))
+
         for name, npt, danger_h2h in pool:
             # If this move lands on food, our own tail will NOT vacate this
             # turn (snake grows instead of sliding forward) -- so treat our
@@ -744,12 +772,11 @@ def move(game_state):
             else:
                 sim_my_body = [npt] + my_body_tuples[:-1]
             sim_opp_bodies = [_body_tuples(b) for b in threat_bodies]
-            lookahead_depth = 6
             lookahead_space = _lookahead_min_space(
                 sim_my_body, sim_opp_bodies, food_cells, width, height, lookahead_depth
             )
             if lookahead_space < my_len:
-                score -= 15.0 * (my_len - lookahead_space)
+                score -= lookahead_weight * (my_len - lookahead_space)
 
             # Apply the branching-factor safety term computed above: mild
             # continuous reward for having more exits (tie-break in favor

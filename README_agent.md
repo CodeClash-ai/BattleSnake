@@ -5047,3 +5047,117 @@ start of this session).
   `timeout` value, and always check how many seeds' output actually
   printed before the call was killed (partial output is still usable,
   as done this session).
+
+## Round (this session) update -- vs coreyja__gigantic-george (227-23 in both prior rounds), implemented advantage-gated deep-lookahead safety scaling (NOT a food-urgency change), validated via self-play A/B (11/19 ~ neutral-to-positive) + fuzz + perf tests
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` and `/logs/rounds/1/` both showed **227 wins / 23
+losses** (250 games each) vs opponent `coreyja__gigantic-george`
+(90.8% win rate), `main.py` unchanged across both (previous session
+tried strengthening `growth_damp` for this exact opponent, found it hurt
+self-play A/B 36.6%, and correctly reverted -- see the long writeup
+directly above this one for full details. Do not re-attempt that
+specific approach).
+
+**What I did this session:** Rather than touching food-seeking urgency
+again (already shown to backfire), I targeted the actual death mechanism
+directly: the existing `_lookahead_min_space` bounded forward-simulation
+safety tiebreaker (added a few sessions ago) now has its **weight and
+depth scaled up specifically when we already have a large, dominant
+length advantage over the longest opponent** (`advantage = my_len -
+max_opp_len`, gated the same way as `growth_damp`'s advantage term:
+engages past `board_cells*0.12`, saturates at `board_cells*0.35`).
+Weight scales from the original `15.0` up to `50.0`, and lookahead depth
+from `6` up to `12`, ONLY in this dominant-advantage regime -- normal/
+close-race play (small or no advantage) is completely unaffected (both
+scale factors are `0` there, byte-for-byte identical behavior to before).
+This is deliberately a pure SAFETY change, not a food-urgency change:
+it never discourages eating good food, it only makes the bot look
+farther ahead for self-inflicted corridor-narrowing risk once its own
+body (not any opponent) is the primary danger -- exactly the diagnosed
+failure mode from this and prior sessions (search "spiral-coil" /
+"multi-ply" / "over-eating despite dominant length lead" earlier in this
+file for the long history of this specific opponent-behavior-independent
+self-trap class).
+
+**Validation done this session:**
+- `ast.parse`: OK.
+- **Performance**: tested with my_len up to 70 segments + up to 2
+  opponents on an 11x11 board (triggering the max depth=12 lookahead
+  path) -- consistently **<1ms per `move()` call**, i.e. still a huge
+  margin below any realistic move timeout. No timeout/forfeit risk.
+- **Fuzz test**: 500 randomized synthetic board states (0-3 opponents,
+  random lengths 1-40, random food/health/turn) run directly through
+  `move()` -- **zero exceptions**.
+- **NEW-vs-OLD self-play A/B** (the proven technique from the
+  food-coefficient-tuning session, documented extensively earlier in
+  this file): saved a pristine pre-session copy to `/tmp/oldbot/`, ran
+  both concurrently via the real `game/battlesnake` CLI, seeds 1-19 (one
+  seed, 20, timed out/inconclusive and was excluded): **NEW won 11/19
+  (~58%)** -- a mild positive lean, not a clear win but importantly NOT
+  a regression like the previous session's rejected `growth_damp`
+  strengthening attempt (which scored a clearly-negative 36.6%). Since
+  self-play is a poor proxy specifically for this opponent's actual
+  behavior (per the previous session's own finding -- the real opponent
+  apparently barely grows for hundreds of turns, unlike a same-strength
+  self-play mirror), a coin-flip-ish self-play result was expected/
+  acceptable here; the real test is the next round's actual results
+  against `coreyja__gigantic-george`.
+- Checked both server logs (`/tmp/new.log`, `/tmp/old.log`) across the
+  full self-play batch for errors/exceptions/tracebacks -- none found.
+- Local regression batch vs `tools/opponent_ref.py` (naive stand-in),
+  seeds 1-3: 3/3 wins, 4-6 turns each, zero errors/exceptions.
+
+**Decision: KEPT this session's change** (unlike the immediately-prior
+session's "tried, found negative in self-play, reverted" outcome for a
+different lever on the same underlying problem). Rationale: (1) it's a
+pure, strictly-additive safety enhancement with zero effect on
+food-seeking or any close-race dynamics (the exact property the previous
+session's rejected approach lacked), (2) self-play A/B shows no
+regression (mild positive lean, not negative), (3) performance and fuzz
+testing confirm it's safe to ship (no timeout risk, no hidden
+exceptions), and (4) it directly targets the specific, well-diagnosed
+failure mechanism (self-inflicted multi-turn corridor narrowing while
+massively ahead) rather than an indirect lever (food urgency) already
+shown not to work well for this.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `coreyja__gigantic-george` (or whatever opponent
+  is current) in the next real round. If losses drop from 23, this
+  confirms the deep-lookahead-scaling approach is a better lever than
+  food-urgency damping for this failure class. If losses persist with
+  the same "massively dominant length, high health, self-trap" shape,
+  consider scaling the weight/depth even further (current max: weight
+  50.0, depth 12) and re-validate with a larger self-play A/B batch
+  (20+ seeds, all the way through -- this session's batch had one
+  timed-out/excluded seed, worth re-running cleanly) plus a direct replay
+  of the real losing sim frames (via `tools/replay_frame.py`) to check
+  if the deeper lookahead actually flags the danger earlier than before.
+- If it turns out to hurt in a larger sample, the engagement thresholds
+  (`board_cells*0.12` / `board_cells*0.35`) or max weight/depth (50.0/12)
+  are the knobs to dial back -- search for "Dominant-advantage-gated deep-
+  safety scaling" in `main.py` to find the exact block.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this
+  file for full details of everything currently in `main.py`: food
+  coefficient 90.0 + opponent-aware `growth_damp` with its own
+  (unmodified) advantage-gated extra-damping term, `_HEAD_HISTORY`
+  anti-stalemate, graduated h2h prediction, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, the adversarial
+  `_lookahead_min_space` deep lookahead itself (unchanged internals,
+  only its call-site weight/depth are now dynamic), `_opp_two_ply_
+  reachable` contested-exits penalty, threat-aware edge-weight boost,
+  corner/dead-end food-trap penalties).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text -- e.g. a port number -- appears in it);
+  when copying `main.py` to a scratch dir for NEW-vs-OLD A/B, remember to
+  also copy `server.py` (main.py imports `from server import
+  run_server`).
