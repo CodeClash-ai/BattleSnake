@@ -5601,3 +5601,148 @@ trap penalties apparently have the same sensitivity).
   the pattern text appears in it); when copying `main.py` to a scratch
   dir for NEW-vs-OLD A/B, remember to also copy `server.py` (main.py
   imports `from server import run_server`).
+
+## Round (this session) update -- vs MorganConrad__tantilla (226-24), confirmed same known dominant-length self-trap pattern, tried strengthening the deep-lookahead scaling further, DISPROVEN via 8-seed self-play A/B (0/8), reverted -- no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`MorganConrad__tantilla`**. Result:
+**226 wins / 24 losses** out of 250 real games (90.4% win rate). Turn
+counts min=21 max=571 avg=257.8 -- long games.
+
+**Investigation of all 24 losses:** used `tools/replay_frame.py --last`
+on every loss. **Every single one** showed our snake with ZERO legal
+moves at the last logged frame, high health (79-100 in all but one), and
+a MASSIVE length dominance over the opponent: my_len 23-61 vs opp_len
+only 4-14 in every case. This is the exact same, extensively-documented
+"over-eating despite dominant length lead leads to eventual self-
+inflicted spiral trap" pattern found repeatedly across many previous
+sessions/opponents (search "over-eating despite dominant length lead" /
+"spiral-coil" / "coreyja__gigantic-george" / "coreyja__eremetic-eric"
+earlier in this file for the long history of this exact failure class).
+
+**Deep-traced `sim_104.jsonl`** (dense logging for our snake, turns
+1-173) turn-by-turn: our snake spent the whole game slowly spiraling
+around the board perimeter/interior (repeatedly walking clockwise/
+counter-clockwise loops while occasionally cutting inward to grab food),
+growing from length 3 to 27, until at turn 168 it had only ONE legal
+move (`up`, into cell `(0,1)`), and even the existing
+`_lookahead_min_space` bounded forward-simulation (with dominant-
+advantage-gated weight/depth scaling, added in an earlier session)
+reported `lookahead_space=60` for that exact forced move at turn 168 --
+looking totally safe -- only to collapse to `lookahead_space=0` at the
+very next turn (169). Confirmed via direct computation
+(`M._lookahead_min_space` call, see this session's trajectory) that even
+with `depth=10`, the lookahead's own simplified "greedy space-maximizing
+proxy for our future self" finds an escape route that the REAL bot
+(using its full, more complex scoring function) doesn't actually take in
+subsequent turns -- i.e. the proxy is measurably too optimistic here,
+reconfirming (with a fresh, very clean example) the long-standing
+concern flagged by several earlier sessions: a simplified lookahead
+proxy is not a perfect stand-in for the bot's own real future decisions,
+so it can miss danger that only the real (recursive) scoring function
+would see.
+
+**What I tried this session:** strengthened the existing dominant-
+advantage-gated `_lookahead_min_space` scaling (added by an earlier
+session for a similar opponent, `coreyja__gigantic-george`, and
+previously validated as mildly positive/neutral via an 11/19 self-play
+A/B) -- lowered the engagement threshold (`board_cells*0.12 ->
+board_cells*0.08`) and saturation point (`*0.35 -> *0.30`), and raised
+the max weight (`15+35*adv_scale -> 15+55*adv_scale`) and max depth
+(`6+6*adv_scale -> 6+10*adv_scale`), reasoning that a stronger/earlier-
+engaging version of the same (already-validated-safe) lever might catch
+more of these cases.
+
+**Validation result: STRONGLY NEGATIVE.** Ran a direct NEW-vs-OLD
+self-play A/B (the proven technique used successfully many times
+throughout this file's history) via the real `game/battlesnake` CLI,
+seeds 1-8, 11x11 standard: **OLD won ALL 8/8 games** (games ranging
+114-296 turns) -- an emphatic, unambiguous regression, not noise
+(compare to the much closer 11/19 result the ORIGINAL, milder version of
+this same lever got in an earlier session). **Reverted the change
+immediately** (confirmed via `diff` against `/tmp/oldbot/main.py`, a
+pristine pre-session copy, that `main.py` is now byte-identical to the
+start of this session). This is a valuable negative data point: the
+dominant-advantage-gated deep-lookahead lever, while safe/neutral at its
+original (milder) tuning, does NOT tolerate being pushed much further --
+likely because the extra weight/depth starts to meaningfully distort
+decisions even in normal (non-dominant-advantage) play once the
+engagement threshold is lowered, or because a much deeper simplified-
+proxy lookahead becomes increasingly inaccurate/misleading (per the
+`sim_104` finding above that even depth=10 can be fooled) while still
+carrying a large score weight, actively steering the bot into *worse*
+decisions in self-play rather than just "not helping."
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate strengthening of an existing, previously-validated lever
+was tried, found to be a clear regression via direct 8/8 self-play A/B,
+and immediately reverted).
+
+**Testing done this session (regression/sanity, post-revert):**
+- `ast.parse` syntax check: OK.
+- Confirmed via `diff` that `main.py` is byte-identical to the version at
+  the start of this session (matches `/tmp/oldbot/main.py`).
+- The 8-seed self-play A/B above already serves as validation for the
+  revert (reverting to "OLD" means reverting to the side that won 8/8).
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `MorganConrad__tantilla` (or whatever opponent
+  is current).
+- **Do NOT re-attempt strengthening the dominant-advantage-gated
+  `_lookahead_min_space` scaling** beyond its current values (engagement
+  at `board_cells*0.12`/saturation `*0.35`, weight `15+35*adv_scale`,
+  depth `6+6*adv_scale`) without MUCH more careful, incremental testing
+  (e.g. try only a small nudge, like `*0.11`/`40.0` instead of a big
+  jump, and validate with a larger seed count before trusting even a
+  small change) -- this session's attempt to push it further was a clean,
+  unambiguous 0/8 regression.
+- This is now the SECOND distinct lever (after the earlier session's
+  `growth_damp` advantage-term strengthening, which scored 36.6% in a
+  41-seed A/B) that looked good in theory (targeting the same real,
+  well-diagnosed "dominant length, self-inflicted spiral" failure class)
+  but measurably hurt self-play when pushed harder. This is a strong
+  signal that this specific failure class may be fundamentally resistant
+  to further tuning of EITHER existing lever (food-urgency damping, or
+  lookahead weight/depth scaling) without a qualitatively different
+  approach -- e.g. genuinely recursive self-play simulation using the
+  bot's own FULL scoring function (not a simplified greedy-space proxy,
+  which this session's `sim_104` trace directly demonstrates can still be
+  fooled even at depth=10), which remains the standing, not-yet-attempted
+  "textbook correct" fix flagged by many previous sessions (search
+  "multi-ply" earlier in this file) -- but implementing this safely would
+  need a full session's budget devoted to careful performance profiling
+  and thorough self-play validation, not a quick tuning tweak.
+- Given the repeated pattern of self-play A/B disagreeing with (or being
+  a poor proxy for) this specific "opponent stays tiny/slow forever"
+  failure class (flagged by at least 2 earlier sessions too), also
+  consider: building a crude LOCAL stand-in bot that deliberately stays
+  short/plays passively (rather than using `tools/opponent_ref.py`,
+  which self-destructs in ~5 turns, or self-play, which mirrors our own
+  aggressive growth) to get a more representative test harness for this
+  exact scenario before trying further tuning here.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything currently in `main.py`: food
+  coefficient 90.0 + opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, graduated h2h
+  prediction, no hard h2h pre-filter, uncapped flood-fill w/ graduated
+  penalties, tail-reachability gating, adversarial 1-ply `worst_space`
+  lookahead, the adversarial `_lookahead_min_space` bounded multi-turn
+  lookahead w/ its ORIGINAL (unchanged) dominant-advantage-gated
+  weight/depth scaling, `_opp_two_ply_reachable` contested-exits penalty,
+  threat-aware edge-weight boost, corner/dead-end food-trap penalties at
+  their original 70.0/25.0 values).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame; this session also reused the
+  direct `M._lookahead_min_space(...)` call pattern (see trajectory) to
+  inspect the lookahead's own predicted values turn-by-turn, which is a
+  good complementary technique when `--diag` alone isn't enough.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`).
