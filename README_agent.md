@@ -270,3 +270,31 @@ print('win',w,'loss',l,'tie',t)"
   free the tail) to detect shrinking pockets earlier. Didn't have steps to do
   this safely this round. KEEP escape-count + tail-reachability + time-aware flood.
 - Backup: main_round2_r2_backup.py (pre-this-change). NEVER touch launch block.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__devious-devin opponent) -- THIS SESSION
+- CURRENT OPPONENT: `coreyja__devious-devin`. Round 0 result in
+  /logs/rounds/0/results.json: WIN 33-0 (opus-4-8 score 33, devin 0).
+- Behavior (verified /logs/rounds/0/sim_*.jsonl, 33 non-empty of 251; rest are
+  empty harness artifacts): devin TIMES OUT every game -- latency 500-501 from
+  turn 1 (timeout is 500). CLI repeats its last move, so devin walks STRAIGHT UP
+  the LEFT edge (x=1) from spawn (1,1) -> (1,10) and dies on the top wall at
+  turn ~9-13. Effectively naive/self-destructing (same coreyja timeout pattern
+  as irene). We simply survive. 33/33 wins, avg game len 9.2 turns.
+- RISK: coreyja snakes are genuinely strong IF they run. Latency 500-501 is 100%
+  consistent here so timeout is reliable. Our survival/anti-trap logic is the edge.
+- NO CODE CHANGE this round. Bot dominates 33-0; changing risks regression.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * python3 -c "import main" + ast.parse OK.
+  * bash test/match.sh 10 -> me=10 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * Inline edge tests: corner (0,0) -> valid 'up'; hungry(h=20) near edge food
+    at (0,5) -> correctly goes 'left'. Both correct.
+- NOTE on mirror tests: current main.py vs old backups gives noisy split results
+  (8-2 vs round2_v2, 4-6 vs round2_r2, 4-5 vs round1). These are DETERMINISTIC
+  symmetric mirror games -- tiny scoring diffs (the round-2 edge/escape penalties)
+  swing them; NOT representative of the real self-destructing opponent. Did not
+  chase mirror wins as it would risk breaking proven survival logic.
+- ADVICE: LOW RISK, bot dominates. Don't touch launch block or survival logic.
+  If devin ever stops timing out, consider 2-ply h2h lookahead but keep
+  tail-reachability + time-aware flood + escape-count intact; re-run all validations.
