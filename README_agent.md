@@ -891,3 +891,43 @@ print('win',w,'loss',l,'tie',t)"
   our edge is growth parity + anti-pin/anti-coil (all intact). Only lever worth
   exploring would be full 2-ply minimax -- but not warranted here. Always re-run
   all validations before submitting.
+
+## ROUND 1 UPDATE (opus-4-8, rdbrck__btas opponent) -- THIS SESSION
+- OPPONENT: `rdbrck__btas`. Round 0 result: WIN 247-2 (1 tie). GENUINE combat
+  opponent (avg game len ~64 turns, max 277). NOT a timeout bot.
+- ANALYZED both losses (sim_156, sim_177) + the tie (sim_195):
+  * sim_156 (t153): we were LONGER (18 vs 9, 71hp) but had coiled up the RIGHT
+    wall (cols 8-9) into the top-right region. Head at (9,6) had ONE free
+    neighbour (10,6) -- and btas had run UP THE OUTER WALL (x=10) alongside us
+    and its BODY occupied (10,6), sealing our only exit. PARALLEL-SHADOW trap.
+  * sim_177 (t92): LONGER (15 vs 5, 90hp) yet crawled the BOTTOM row into the
+    bottom-right. Head (8,0) neighbours (9,0) and (8,1) were BOTH btas body --
+    it shadowed us along the wall and sealed us. Same parallel-shadow trap.
+  * sim_195 (t167): symmetric mutual H2H tie (unavoidable, per prior notes).
+  ROOT CAUSE: when we are MUCH LONGER, `being_hunted` is False (it requires an
+  opponent >= our length), so NEITHER the 2-ply pin lookahead NOR the anti-pin
+  edge penalties fire. We happily wall-hug while btas runs parallel on the outer
+  wall and seals us with its body -- we die while dominating.
+- FIX (score_candidate, new PARALLEL-SHADOW WALL TRAP block, fires regardless of
+  our length): when ANY opponent head is within manhattan 4 and our new head
+  lands on an EDGE, penalize -45 (corner extra -120); plus -150 if that edge
+  cell has <=1 non-losing escape (death-march down the wall). This pulls us OFF
+  walls into the open board when an opponent is close enough to shadow/seal us,
+  even when we're winning big. Verified on a synthetic bottom-wall scenario
+  (len 8 vs 4, opp dist 3): bot now chooses 'up' (interior) instead of 'right'
+  (continuing along the wall toward the opp). Replay of the recorded losses
+  shows no divergence because the recorded body is already coiled -- the fix
+  matters in LIVE play where an earlier off-wall choice changes the trajectory
+  (known replay limitation, per prior notes).
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 (naive smoke, royale).
+  * smartmatch.sh 16 -> me=14 opp=2 (pursuit proxy, strong, no regression).
+- Backup: main_round1_btas_backup.py (pre-this-change, proven 247-2 code).
+- ADVICE FOR NEXT TEAMMATE: btas beats us ONLY by parallel-shadow wall seals
+  when we dominate. The new off-wall-when-opp-close term removes that class.
+  Keep parallel-shadow + winning anti-wall-coil + static_flood + 2-ply-pin +
+  tail-reach + escape-count + growth-attraction + anti-pin. Don't over-crank the
+  edge penalties (a bigger version could starve edge food -- solo test caught
+  that historically). NEVER touch the launch block.

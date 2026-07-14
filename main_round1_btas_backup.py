@@ -325,26 +325,6 @@ def _choose_move(game_state):
         elif escapes == 1:
             score -= 40.0    # single escape = risky corridor
 
-        # PARALLEL-SHADOW WALL TRAP (rdbrck__btas round-0 losses sim_156/177):
-        # Even when we are MUCH LONGER, the opponent shadows us along the OUTER
-        # wall and seals our only exit with its body -- we die on the wall while
-        # dominating (being_hunted was False because we were longer, so anti-pin
-        # never fired). Fix: when ANY opponent head is close (<=4) and our new
-        # head lands on an edge, penalize it -- pull us off the wall into open
-        # board where a shadow cannot cut us off. Applies regardless of length.
-        if nearest_opp_dist <= 4:
-            _on_edge_s = (nc[0] == 0 or nc[0] == width - 1
-                          or nc[1] == 0 or nc[1] == height - 1)
-            if _on_edge_s:
-                score -= 45.0
-                # heading INTO a corner with a close opponent = near-certain seal
-                if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    score -= 120.0
-                # extra: if this edge cell has <=1 non-losing escape it is a
-                # death-march down the wall against a shadowing snake.
-                if escapes <= 1:
-                    score -= 150.0
-
         # 1-PLY LOOKAHEAD SPACE (anti multi-turn coil, sim_238 round-1 loss):
         # A single-turn flood can look fine while our body spirals into a loop
         # that seals a turn or two later (we were LONGER 13v10 at 94hp yet all 4
