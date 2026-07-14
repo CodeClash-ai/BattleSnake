@@ -1726,3 +1726,42 @@ print('win',w,'loss',l,'tie',t)"
   coil/anti-pin/dominance/growth. Don't over-crank q weight (>~3 distorts deep
   play, tested). NEVER touch the launch block. Judge via grow_solo A/B (moderate
   AND deep) + smart/greedy proxies (variance huge).
+
+## ROUND 1 UPDATE (opus-4-8, joshhartmann11__battlejake2019 -- THIS SESSION)
+- OPPONENT: `joshhartmann11__battlejake2019`. R0 result: WIN 213-37. GENUINE
+  combat opp (loss turns 54-403, high health 66-100). NOT a timeout bot.
+- ANALYZED all 37 losses (/tmp/analyze2.py, recreate from git): 36/37 were
+  SELF-COILS while we were LONGER (ml 6-35 vs ol 6-26) at HIGH health (mostly
+  82-100), boxed in (0 safe nbrs). 28/37 on an EDGE, lengths mostly MODERATE
+  (13-35, NOT the huge-dominance len-60+ regime). 1 loss (sim_231) was a rare
+  shorter-h2h. This is the classic near-equal/dominance wall self-coil class.
+- TRACED sim_186 (ml14 ol13, t198): at t185-187 we DOVE from the interior (5,2)
+  down to the bottom wall (5,0) chasing wall-adjacent food (8,0)/(10,0), ran
+  RIGHT along the bottom into the (10,0) corner (ate, len->15), then walked UP
+  the x=10 wall into a dead-end (10,3). Classic wall death-march started by
+  chasing EDGE food while at/above length parity.
+- ROOT CAUSE: food racing (my_len<=_max_ol+1) rewarded moving toward edge/corner
+  food even when we were AT/ABOVE parity and healthy. The dominance-food-zero
+  only fires at my_len>_max_ol+4 (huge), so the near-equal band (ml 1-6 > ol)
+  was uncovered and chased edge food into wall corridors.
+- FIX (main.py food block, LOW RISK, additive & gated):
+  * New `_suppress_edge_food = (my_len >= _max_ol and my_health >= 40)`.
+  * In FOOD RACING: when _suppress_edge_food and the food target is on an EDGE,
+    SKIP the racing reward; and if the new-head cell is itself an edge cell with
+    <=2 escapes, add -45 (discourage diving onto the wall). Only affects the
+    at-parity+/healthy/not-hunted case -- a starving (<40hp) or BEHIND snake
+    still races edge food normally (food-parity vs flipez/ccsnake untouched).
+- VERIFIED (frozen-opp livesim /tmp/livesim.py): from sim_186 t178-185 the new
+  bot now SURVIVES 50 steps (recorded game died t198). At t185 it no longer
+  dives to the bottom wall / no longer runs into the corner.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0.
+- Backup: main_round0_battlejake_backup.py (pre-this-change, proven 213-37 code).
+- ADVICE FOR NEXT TEAMMATE: battlejake beats us ONLY by our own wall self-coils
+  when at/above length parity (chasing edge food onto walls). The edge-food-
+  suppression targets that. The DEEPER remaining coils (interior, len 30+) still
+  need a true space-filling/longest-survivable-path metric (floods overcount
+  through 1-wide channels -- all prior notes agree). Keep _suppress_edge_food +
+  chokepoint-quality + near-equal-anti-coil + dominance tail-follow + all
+  existing anti-coil/anti-pin/growth. Use /tmp/livesim.py (frozen-opp forward
+  sim from a given sim turn) to verify wall-coil fixes. NEVER touch launch block.

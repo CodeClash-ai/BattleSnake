@@ -365,14 +365,6 @@ def _choose_move(game_state):
     # open interior space and never coil toward edge food when we're winning big.
     if my_len > _max_ol + 4 and my_health >= 40:
         _food_weight = 0.0
-    # BATTLEJAKE FIX (R0: 36/37 losses were self-coils while LONGER, mostly on
-    # edges, at high health, lengths 13-35 -- NOT the huge-dominance regime).
-    # Root cause: in the near-equal band (ml only 1-6 > ol) food racing pulled
-    # our head toward EDGE/corner food (e.g. sim_186 t190: chased food at (8,0)/
-    # (10,0) right along the bottom wall into the (10,3) dead-end death-march).
-    # When we are AT/ABOVE parity and healthy and not hunted, we do NOT need to
-    # race edge food; suppress the edge-food lure so we prefer open interior room.
-    _suppress_edge_food = (my_len >= _max_ol and my_health >= 40)
     # Distance to food from current head (baseline) for a directional bonus.
 
     def score_candidate(cand):
@@ -736,18 +728,6 @@ def _choose_move(game_state):
                                      and (f[1] in (0, height - 1)))
                         if _corner_f and escapes <= 1:
                             continue  # deep corner pin risk, skip
-                        _edge_f = (f[0] in (0, width - 1)
-                                   or f[1] in (0, height - 1))
-                        _nc_edge = (nc[0] == 0 or nc[0] == width - 1
-                                    or nc[1] == 0 or nc[1] == height - 1)
-                        # Don't race EDGE food into a wall corridor when we're at
-                        # parity+ and healthy: it starts the wall self-coil that
-                        # is 36/37 of our battlejake losses. Skip the reward AND
-                        # penalize entering an edge cell with a low escape count.
-                        if _suppress_edge_food and _edge_f:
-                            if _nc_edge and escapes <= 2:
-                                score -= 45.0
-                            continue
                         # reward getting closer; big bonus for landing on it
                         _race_w = 5.0 if _aggro else 3.0
                         score += (opp_fd - my_fd + 1) * _race_w
