@@ -333,6 +333,12 @@ def move(game_state):
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
             if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                 score -= 12
+                # When comfortably healthy, avoid voluntarily starting long
+                # wall crawls: past losses came from optional edge spirals
+                # after we were already safe.  Keep the base penalty small so
+                # hungry/endgame states can still use edge corridors.
+                if my_health > 60 and area < (w * h) * 0.45:
+                    score -= 18
             if n in hazards:
                 score -= 200 + max(0, hazard_damage + 12 - my_health) * 10
 

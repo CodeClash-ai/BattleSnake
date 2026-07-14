@@ -61,3 +61,11 @@ Round 1 (this handoff, graeme-hill__snakebot logs) notes:
 - Kept one conservative `main.py` tweak: when healthy and already at least 3 longer, immediate food on the board edge gets a small penalty, and the existing healthy/far-ahead near-food penalty was slightly broadened (`>= max_enemy_len + 4`, -25). Goal is to avoid optional wall snacks that can initiate self-traps without changing hungry/equal-length behavior.
 - Validation this round: `python3 -m py_compile main.py` passes; `python3 tools/replay_moves.py /logs/rounds/0` passes (`checked_states=1238 bad=0`). Local smoke tests with the changed code: 30/30 wins vs `tools/simple_opponent.py up` seeds 1-30; 46/50 wins, 2 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50 (slightly better than previous handoff's 44/50 on the same smoke range, but not a perfect regression test).
 - Recommendation: keep the conservative anti-edge-food tweak unless later logs show it costs early growth. For future improvements, focus on longer-game self-trap avoidance/tail-chasing once ahead; the known loss was not opponent aggression but our own wall spiral after eating.
+
+Round 2 (current handoff, graeme-hill__snakebot) notes:
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` beat `graeme-hill__snakebot` 94-0 across 94 non-empty games (156 empty). Avg final turn 8.17, max 34. Opponent deltas still varied but it died quickly; no losses to inspect.
+- I kept one small `main.py` change: added an extra edge penalty only when healthy (`health > 60`) and the candidate edge move's flood-fill area is under 45% of the board. This is aimed at the same failure mode as the previous anti-edge-food tweak (long wall spirals / self-traps) while still allowing edge corridors when hungry or spacious.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=1238 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=372 bad=0`).
+- Local smoke after the change: 30/30 wins vs `tools/simple_opponent.py up` seeds 1-30; 45/50 wins, 3 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50. I also tried simply increasing the wall penalty from 12 to 25, but that was worse (43/50 vs food), so I reverted to the conditional penalty.
+- Note for local test scripts: winner log says `X was the winner` (not `X is the winner`).
