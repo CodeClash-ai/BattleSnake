@@ -551,10 +551,15 @@ def move(game_state):
                     # growing from 7->8 versus 11->12 does not fix head-to-head risk
                     # and can pin our tail into a wall spiral.  Prefer waiting in the
                     # interior unless health is becoming relevant.
-                    if outer_food and my_health > 70 and my_len + 2 <= max_enemy_len:
-                        score -= 100
+                    if outer_food and my_health > 70 and my_len + 3 <= max_enemy_len:
+                        # Against strong food-racing opponents, being shorter is
+                        # itself dangerous; do not over-penalize useful outer-lane
+                        # growth unless we are badly behind and the snack is truly
+                        # optional.  Previous tuning for rail-shadow opponents was
+                        # too willing to give up catch-up food at only -2 length.
+                        score -= 45
                         if edge_food:
-                            score -= 80
+                            score -= 35
                 # Do not bloat forever when healthy and already far ahead.
                 if my_health > 80 and my_len >= max_enemy_len + 4 and food_dist <= 1:
                     score -= 25
@@ -619,15 +624,15 @@ def move(game_state):
             # repeatedly show us entering an edge with high health while the larger
             # snake shadows the adjacent lane; by the time it is close, all exits are
             # losing head-to-heads.
-            if my_health > 70 and my_len + 2 <= max_enemy_len and n not in hazards:
+            if my_health > 70 and my_len + 3 <= max_enemy_len and n not in hazards:
                 outer_ring = n[0] <= 1 or n[0] >= w - 2 or n[1] <= 1 or n[1] >= h - 2
                 actual_edge = n[0] in (0, w - 1) or n[1] in (0, h - 1)
                 if outer_ring:
-                    score -= 60
+                    score -= 35
                 if actual_edge:
-                    score -= 95
+                    score -= 55
                     if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
-                        score -= 80
+                        score -= 45
 
 
             # Also avoid equal-length healthy rail shadows before they become
