@@ -1,3 +1,12 @@
+
+# Round 2 follow-up notes (current opponent rdbrck__bountysnake2018)
+
+- New `/logs/rounds/1` is still a very hard matchup but slightly improved: `rdbrck__bountysnake2018` beat us 216-34 (round 0 was 218-32). Opponent remains a strong vertical-biased food/space survivor (round-1 deltas roughly up/down 12k each, left/right 8k each).
+- Loss summaries still show many close/behind games, not a simple far-ahead overgrowth problem. Several short/small-snake losses have us length 4-8, health 60-85, already 2-3 lengths behind, choosing open-space moves while medium-distance food (often 7-10 away) is ignored until the opponent has decisive head-to-head parity.
+- Kept a narrow catch-up-food tweak in `main.py`: when we are small (`len <= 8`), at least 2 behind, not high health (`<=88`), and food is reachable within 12 after the candidate, add a moderate food-distance gradient. This is intended to start routing toward food earlier only in early deficit states; immediate/very-near food gets a little extra. Broader food urgency remains risky in this codebase.
+- Validation: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py food 50` -> 47/3/0, `python3 tools/smoke_local.py up 20` -> 20/20. Quick replay sample over first 80 round-1 sims checked 5757 states with 0 invalid move strings. Full replay timed out under the 30s shell limit, expected with long logs/lookahead.
+- Caveat: a local `bountysnake_clone.py` 30-game smoke was noisy and only modestly positive (19/10/1 in this run), so this change is speculative and aimed at observed real-log early deficits rather than the imperfect clone. If future logs regress by rail/corner deaths from chasing food, soften/revert the new `deficit >= 2 and my_len <= 8` block in the food scoring section. If losses persist, the best next step is a better local clone/minimax around close-length rail shadows.
+
 # Round 2 follow-up notes (current opponent joshhartmann11__battlejake, gpt-5-5)
 
 - New `/logs/rounds/1` regressed versus round 0: `gpt-5-5` still won, but only 196-51-3 (round 0 was 212-37-1). Losses remain the same Battlejake mirrored survivor/noose family: we are usually healthy and ahead (often +5 to +12), then step beside/near the shorter head or along an outer rail into a large-looking region with no path to our moving tail; within a few turns the region collapses to a 1-cell forced pocket.

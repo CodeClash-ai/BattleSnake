@@ -659,6 +659,18 @@ def move(game_state):
                     if food_dist <= 5:
                         score += (6 - food_dist) * 10
                     deficit = max_enemy_len - my_len
+                    # rdbrck__bountysnake2018 is efficient enough that waiting until
+                    # a 4+ length deficit is too late: many losses start while we are
+                    # a tiny snake only 2-3 lengths behind, choosing open/away moves
+                    # over a reachable food route and then losing all head-to-head
+                    # parity.  Add an early small-snake catch-up gradient for medium
+                    # nearby food.  It is limited to short snakes and non-full health
+                    # so it should not undo long-game anti-coil/rail rules.
+                    if deficit >= 2 and my_len <= 8 and my_health <= 88 and food_dist <= 12:
+                        score += (13 - food_dist) * 24
+                        score -= food_dist * 6
+                        if food_dist <= 3:
+                            score += (4 - food_dist) * 35
                     # kentmacdonald2__beames is another efficient food/space snake:
                     # many losses have us still healthy but already 4-8 lengths down,
                     # especially in the early/mid game after we orbit open space while
