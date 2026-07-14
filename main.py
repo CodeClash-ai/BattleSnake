@@ -305,6 +305,14 @@ def move(game_state):
                 if my_health <= 20:
                     hunger += (21 - my_health) * 18
                 score += hunger / (food_dist + 1)
+                # In genuinely low-health endgames, area alone can otherwise
+                # dominate the score and make us drift parallel to reachable food.
+                # Add a direct distance pressure that only activates when the
+                # starvation clock is the main threat.
+                if my_health <= 30:
+                    score -= food_dist * (31 - my_health) * 6
+                    if food_dist + 1 <= my_health:
+                        score += 90 / (food_dist + 1)
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
                 # head-to-head odds against more cautious snakes.
