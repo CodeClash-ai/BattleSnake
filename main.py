@@ -883,27 +883,6 @@ def move(game_state):
                 safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
                 score -= 25.0 * safety_margin
 
-            # Food-on-wall penalty: eating food that sits ON the boundary
-            # wall itself (x==0/width-1 or y==0/height-1) commits our
-            # head to a wall cell regardless of the candidate's current
-            # `exits` count -- real-match analysis (sim_143.jsonl,
-            # opponent zakwht__zakwht-2018, round 0) found the bot eating
-            # wall-adjacent food turn after turn while walking itself
-            # along a wall (all candidates looked like a near-tie on raw
-            # space, e.g. 103 vs 104), with an approaching opponent
-            # sealing the corridor several turns later once the wall ran
-            # out -- a slow-motion variant of the same self-trap class,
-            # distinct from the low-exits case above (exits count looked
-            # fine at the pivotal turn). Small, health-gated nudge (NOT
-            # yet validated via NEW-vs-OLD self-play A/B -- see
-            # README_agent.md for caveats) to prefer eating equivalent
-            # food that is NOT on the wall when a safe alternative exists,
-            # fading to zero once health is low enough that any food is
-            # worth taking regardless of long-term position.
-            if will_eat and (npt[0] in (0, width - 1) or npt[1] in (0, height - 1)):
-                safety_margin = max(0.0, min(1.0, (health - 40.0) / 60.0))
-                score -= 55.0 * safety_margin
-
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong
             # signal we won't immediately self-trap. Penalize losing that

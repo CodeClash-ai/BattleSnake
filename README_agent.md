@@ -461,3 +461,65 @@ it regresses, the single line to look at is the new `if will_eat and
 immediately after the `exits==2` food-trap penalty in the scoring loop
 (easy to find via `grep -n "Food-on-wall penalty" main.py`) -- revert by
 deleting that block (and its `safety_margin` line) if so.
+
+**Session (round 2, opponent zakwht__zakwht-2018, round 0: 214W/36L
+85.6%, round 1: 194W/56L 77.6% -- REGRESSION detected):** Ran
+`tools/analyze_logs.py` first per instructions -- immediately noticed
+round 1's win rate dropped 8pp vs round 0 (85.6% -> 77.6%) against the
+SAME opponent, which is a red flag since this opponent's behavior
+presumably didn't change. Checked `git diff HEAD~1 HEAD -- main.py`:
+round 1's session shipped exactly one change, the "Food-on-wall penalty"
+block (`-55.0 * safety_margin` for `will_eat` candidates landing on a
+boundary wall cell) -- and that session's own commit notes explicitly
+flagged it as **NOT validated via NEW-vs-OLD self-play A/B**, only
+confirmed to flip one specific real-loss decision (`sim_143` turn 85).
+
+Ran the recommended-but-skipped validation this session: NEW (with the
+food-on-wall penalty, i.e. round-1-committed `main.py`) vs OLD (`git show
+HEAD~1:main.py`, i.e. round-0-committed baseline) head-to-head via the
+real `game/battlesnake` CLI, 35 seeds (1-20, then 21-35):
+**new_wins=10, old_wins=24, draws=1 (~28.6% for the new/penalized
+version)** -- a clear, consistent, non-noise-level regression, matching
+the real round 0->1 win-rate drop almost exactly. This confirms the
+food-on-wall penalty was a genuine net-negative change, not just
+opponent variance.
+
+**Action taken: REVERTED the food-on-wall penalty block entirely**
+(`main.py` is now byte-identical to `git show HEAD~1:main.py`, i.e. the
+round-0-committed version that scored 85.6%). Rationale for full revert
+rather than re-tuning the magnitude: the block's own stated purpose (bias
+away from wall-adjacent food when a non-wall alternative exists) is
+already substantially covered by the existing edge/corner avoidance bonus
+and the exits<=1/exits==2 food-trap penalties directly above it in the
+scoring loop -- the new term was apparently double-penalizing/over-
+correcting a case the existing terms already handle adequately, per this
+A/B result. Verified: `ast.parse` OK, `diff` against `HEAD~1:main.py`
+shows zero differences, 3/3 smoke-test wins vs `tools/opponent_ref.py`,
+no exceptions in any server log during the 35-game A/B or the smoke test.
+
+**Lesson reinforced for future sessions:** this is now the SECOND
+documented instance (see the 260/90 corner-food-trap-penalty revert
+mentioned in the "Validation methodology" section above) of an
+un-A/B-validated scoring change getting shipped and causing a real
+measurable regression the very next round. **Do not ship any scoring-
+weight change without running the NEW-vs-OLD self-play A/B first**, even
+under step-budget pressure at the end of a session -- an unvalidated
+change is worse than no change, since the "no functional changes" option
+is always safe and was explicitly available.
+
+**For next teammate:** (1) Re-run `tools/analyze_logs.py` once round 2's
+results land -- expect a return to something close to round 0's 85.6%
+now that the regression is reverted (if not, the regression had a
+different cause and needs fresh investigation via
+`tools/replay_frame.py --last` on round 2's losses). (2) `main.py` is
+now IDENTICAL to the round-0-committed version -- all the round-1
+session's diagnostic writeup (sim_143 turn 85, the specific wall-food
+mechanism) is still valid/interesting context if you want to design a
+BETTER-validated fix for that exact scenario, but any such fix must go
+through the A/B test above (or an equivalent one) before shipping this
+time. (3) The close-race "wall-hugging trap" investigations from the
+`tyrelh__tyrelh-python` sessions (search `sim_49`, `_lookahead_min_space`
+false-negative) are a separate, deeper, still-unfixed issue -- not
+addressed this session, still open for a future session with a full
+budget for careful implementation + perf profiling + multi-method
+validation.
