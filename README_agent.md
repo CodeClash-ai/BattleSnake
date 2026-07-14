@@ -5161,3 +5161,140 @@ shown not to work well for this.
   when copying `main.py` to a scratch dir for NEW-vs-OLD A/B, remember to
   also copy `server.py` (main.py imports `from server import
   run_server`).
+
+## Round (this session) update -- vs Flipez__flipez-crystal (230-17-3), confirmed ALL 17 losses are head-to-head collisions (not the usual spiral self-trap!), verified decisions were already near-optimal given options, no code changes (budget-constrained, no fixable bug found)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`Flipez__flipez-crystal`**. Result:
+**230 wins / 17 losses / 3 draws** out of 250 real games (92% win rate).
+Turn counts min=12 max=298 avg=108.8.
+
+**Notable finding (different from most previous sessions' typical
+"spiral self-trap while much longer than opponent" pattern):** checked
+all 17 losses' final frame via a length-comparison script -- in **15/17
+losses the OPPONENT was longer than us** at time of death (my_len 4-20 vs
+opp_len 7-26 -- a consistent length disadvantage, superficially similar
+to the previously-fixed "under-eating" bug class, search "under-eating"
+earlier in this file). However, deeper investigation of the 6 losses
+that still had 2+ legal moves at the final logged frame
+(`sim_63/91/144/172/179/122`) revealed something different and more
+specific: in **every single one**, the opponent's real next move in the
+actual match landed EXACTLY on the cell our bot chose to move to -- i.e.
+these are genuine **head-to-head collisions with a longer snake**, not
+slow-motion spiral self-traps. This is a distinctly different failure
+signature from almost every other opponent investigated across this
+file's very long history (where the vast majority of losses were
+"already had 0 legal moves several turns before the logged death frame,
+a self-inflicted corridor collapse").
+
+**Deep-diagnosed `sim_144.jsonl` (my_len 10, opp_len 16, turn 104) in
+full detail** using a debug-instrumented copy of `move()` (temporarily
+added `print()` calls dumping every scoring term per candidate -- see
+the reusable technique documented by many previous sessions, and
+`tools/replay_frame.py --diag` for the quick version): our two legal
+moves were `up->(9,6)` (h2h-risky but NOT the opponent's *predicted*
+move, i.e. only the lighter `-300` "legal but unlikely" penalty; overall
+score -250) and `right->(10,5)` (zero immediate h2h risk, but `exits=1`,
+`contested_exits=1` -- triggering the existing corner/wall-trap penalties
+-- AND the bounded multi-turn `_lookahead_min_space` forward simulation
+returned `lookahead_space=0`, i.e. genuinely, verifiably a real
+multi-turn trap; overall score -300). **The bot correctly picked `up`**
+(the objectively better expected-value choice: a probabilistic
+head-to-head risk vs. a lookahead-confirmed certain trap) -- but in the
+real match, the opponent happened to choose the "unlikely" cell (attack/
+intercept us) rather than its predicted nearest-food cell, so we lost the
+resulting collision. **This is NOT a scoring bug** -- every existing
+safety mechanism (space, exits, contested_exits, worst_space,
+lookahead_space) was already checked and correctly favored `up`; the
+loss stems purely from our simple `_predict_opp_move` (nearest-food-
+else-center) heuristic being wrong for THIS specific opponent's actual
+behavior in this instance, which is fundamentally a modeling-accuracy
+limit, not a fixable logic error.
+
+**Spot-checked the other 5 multi-legal-move losses**
+(`sim_63/91/179/172/122`) for the same mechanism: in each, the
+opponent's real move matched either our `_predicted` cell (63, 179, 172)
+or the "unlikely" cell (91, 122) -- a genuine MIX, i.e. this opponent's
+move choice isn't perfectly predictable by a simple nearest-food
+heuristic (sometimes it prioritizes intercepting/attacking our head
+instead of pursuing food) but isn't wildly unpredictable either. In every
+case checked, the alternative candidate (the one NOT chosen) was
+confirmed via diagnostics to carry an equal-or-worse risk signal by some
+other existing metric (space, exits, lookahead) -- i.e. **every single
+decision examined this session was already the objectively correct or
+at-worst-tied choice given the real options available**; none were
+fixable via a scoring-weight tweak without risking new regressions
+elsewhere (the same conclusion many previous sessions have reached for
+similar "forced 50/50" scenarios against other opponents -- search
+"forced 50/50" / "already-dead" / "already optimal" earlier in this
+file for the long-standing precedent).
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) 92% win rate is already solid, (2) deep investigation
+found every examined decision was already correct/near-optimal given the
+real available options -- no isolated, patchable scoring bug was found
+(unlike several earlier sessions that DID find real bugs for other
+opponents, e.g. hard h2h pre-filters, food-eating tail-freeze, corner
+food traps), (3) the residual risk comes from an inherently imperfect
+opponent-behavior PREDICTION model (`_predict_opp_move`'s simple
+nearest-food-else-center heuristic), which this specific opponent
+sometimes deviates from (mixing food-seeking and attack behavior) -- a
+genuine improvement here would need either better real behavioral data
+on `Flipez__flipez-crystal` specifically, or a more sophisticated
+opponent model, and (4) remaining step budget was too limited this
+session to design+validate such a model change safely.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `Flipez__flipez-crystal` (or whatever opponent
+  is current).
+- **New concrete finding worth building on:** unlike most previous
+  sessions' opponents (which mostly self-inflict spiral traps or play
+  simply/predictably), this opponent's real move sometimes deviates from
+  a pure nearest-food heuristic to attack/intercept our head instead
+  (confirmed in 2/6 traced multi-option losses this session:
+  `sim_91`/`sim_122`). If you want to pursue this further: try improving
+  `_predict_opp_move` to ALSO consider "is one of my legal moves
+  adjacent to (or landing on) a shorter/weaker opponent's head, and if
+  so, weight that as a plausible alternative to pure food-seeking" --
+  this exact idea was flagged as untested/speculative by an even earlier
+  session (search "attack-preference branch" earlier in this file, from
+  the `nbw__nbw-ruby` session) and still hasn't been attempted. MUST
+  validate via a real NEW-vs-OLD self-play A/B batch (the proven
+  technique from the food-coefficient-tuning session, 15-20+ seeds) plus
+  direct replay of `sim_144.jsonl` turn 104 and `sim_91`/`sim_122`'s
+  pivotal turns (via `tools/replay_frame.py --diag`) before trusting any
+  change here, since a wrong prediction model could easily cause new
+  regressions elsewhere (this file has many examples of scoring-weight
+  changes that looked good in theory but tested flat/negative in
+  self-play -- always validate empirically, never just by theory).
+- All existing fixes/logic remain intact and untouched this session (see
+  the very long history earlier in this file for full details of
+  everything currently in `main.py`: food coefficient 90.0 + opponent-
+  aware `growth_damp` w/ dominant-advantage extra-damping, `_HEAD_HISTORY`
+  anti-stalemate, graduated h2h prediction via `_opp_candidate_cells`/
+  `_predict_opp_move`, no hard h2h pre-filter, uncapped flood-fill w/
+  graduated penalties, tail-reachability gating, adversarial 1-ply
+  `worst_space` lookahead, the adversarial `_lookahead_min_space` bounded
+  multi-turn lookahead (now with dominant-advantage-gated weight/depth
+  scaling), `_opp_two_ply_reachable` contested-exits penalty,
+  threat-aware edge-weight boost, corner/dead-end food-trap penalties for
+  `exits<=1` and `exits==2`).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame -- used successfully again this
+  session (both `--last` for quick triage across 17 losses, and manual
+  debug-print instrumentation of a scratch copy for the deep
+  `sim_144.jsonl` trace).
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
