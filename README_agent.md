@@ -4903,3 +4903,147 @@ caused the real losses (verified numerically, see above).
   this session, cost a couple of steps.** When copying `main.py` to a
   scratch dir for NEW-vs-OLD A/B, remember to also copy `server.py`
   (main.py imports `from server import run_server`).
+
+## Round (this session) update -- vs coreyja__gigantic-george (227-23), confirmed same extreme-dominant-length self-trap pattern, tried stronger growth_damp, DISPROVEN via 41-seed self-play A/B (36.6% win rate), reverted -- no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`coreyja__gigantic-george`**. Result:
+**227 wins / 23 losses** out of 250 real games (90.8% win rate). Turn
+counts min=87 max=680 avg=223.3 -- long games.
+
+**Investigation of all 23 losses:** used the standard
+`_occupied_cells`-based legal-move check on the last logged frame for
+each loss (script in this session's trajectory). **Every single loss**
+showed our snake with ZERO legal moves at the last frame, high health
+(75-100), and a MASSIVE length dominance over the opponent: my_len
+23-77 vs opp_len only 5-12 in every case (ratio 3x-11x!). This is the
+exact same "over-eating despite dominant length lead leads to eventual
+self-inflicted spiral trap" pattern first diagnosed and partially
+mitigated in an earlier session (search "over-eating despite dominant
+length lead" earlier in this file, opponent `coreyja__eremetic-eric`) --
+except this opponent (`coreyja__gigantic-george`, ironically) apparently
+barely grows at all for hundreds of turns, so the existing
+`growth_damp` extra-advantage-damping term (added in that earlier
+session) turned out to have gaps: several of THIS session's losses had
+my_len (23/26/33/36) below the `overgrow_threshold` (~30.25 on 11x11),
+so the extra_damp term never engaged at all for them (it was gated
+behind `my_len > overgrow_threshold` in the outer `if`), even though the
+RELATIVE advantage (my_len vs opp_len, e.g. 23 vs 5) was already huge.
+
+**What I tried this session:** decoupled the dominant-advantage
+`extra_damp` term from the absolute-size gate (so it can now engage
+based purely on `advantage = my_len - max_opp_len`, regardless of
+whether `my_len` itself exceeds `overgrow_threshold`), and widened/
+strengthened both the base-size curve and the advantage curve (lower
+floor 0.03, engagement threshold for advantage lowered to
+`board_cells*0.12`, saturation at `board_cells*0.30` with coefficient
+0.65). Numerically verified this produces meaningfully stronger damping
+(0.03-0.94, see exact per-case numbers in this session's trajectory)
+across all 23 real losses' actual (my_len, opp_len) pairs.
+
+**Validation result: NEGATIVE.** Ran a NEW-vs-OLD self-play A/B (the
+proven technique from the food-coefficient-tuning session, documented
+extensively earlier in this file) via the real `game/battlesnake` CLI,
+seeds 1-41 (in 3 batches due to a tool-timeout on the last one, but got
+usable data through seed 41): **NEW won only 15/41 (36.6%)** -- a clear,
+not-noise-level negative result (unlike several previous sessions' "9/20
+~ coin flip, neutral" results for smaller tuning changes). This directly
+confirms the standing warning from the earlier session that introduced
+the original `growth_damp` extra-advantage term: "a uniformly-stronger
+version measurably hurt a NEW-vs-OLD self-play A/B (3/10)... because it
+also damps modest, competitive length leads that matter in a close
+length race." My decoupling-from-the-absolute-size-gate change, even
+though designed to only trigger on large *relative* advantage, still
+ended up engaging often enough in normal close-race self-play dynamics
+(where a modest, temporary lead of 15-30% of the board is common and
+important to press) to meaningfully hurt overall win rate. **Reverted
+the change** (confirmed via `diff` against `/tmp/oldbot/main.py`, a
+pristine pre-session copy, that `main.py` is now byte-identical to the
+start of this session).
+
+**Decision: made NO net functional changes to `main.py` this session.**
+
+**Testing done this session (regression/sanity, post-revert):**
+- `ast.parse` syntax check: OK.
+- Confirmed via `diff` that `main.py` is byte-identical to the version at
+  the start of this session.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `coreyja__gigantic-george` (or whatever
+  opponent is current).
+- **This confirms (twice now, across two different sessions/opponents)
+  that naive strengthening of the growth_damp advantage-based term hurts
+  self-play win rate**, even when carefully scoped to only engage on
+  large relative advantage. The real losses this session are genuine and
+  the pattern (my_len 3x-11x opp_len, opponent barely growing over
+  hundreds of turns, eventual self-inflicted spiral trap on a saturated
+  board) is real and consistent -- but growth_damp tuning alone
+  (a soft nudge on food-seeking urgency) appears to be the wrong lever,
+  or at least this session's specific formula was wrong; simply eating
+  less isn't obviously fixing anything in self-play because a modestly
+  ahead bot that eats LESS will fall behind and start losing head-to-
+  heads / races for space against an opponent that keeps growing.
+- **The real opponent in these 23 losses is very different from a
+  self-play mirror** -- `coreyja__gigantic-george` apparently doesn't
+  grow much at all (stays at length 5-12 for 100-600+ turns), so it's
+  NOT a fair proxy for "an opponent that keeps growing and could
+  overtake us if we slow down," which is exactly the scenario the
+  self-play A/B is implicitly testing (two identical, comparably-growing
+  bots). **This means the self-play A/B may be the WRONG validation tool
+  for tuning changes specifically aimed at the "opponent stays tiny
+  forever" scenario** -- worth considering building a more accurate
+  local stand-in for `coreyja__gigantic-george`'s actual behavior (does
+  it avoid food deliberately? play defensively? something else?) before
+  trying to re-tune growth_damp again, OR consider a fix that doesn't
+  touch food-seeking at all, e.g.:
+  1. A pure SAFETY-side check (not a food-urgency nudge) -- e.g. once
+     `my_len` exceeds some large absolute fraction of the board (say
+     >45-50%) AND health is comfortable, treat any move that doesn't
+     preserve `reached_tail=True` (or some multi-turn corridor-safety
+     metric) as much more heavily penalized, regardless of whether it
+     also happens to eat food. This targets the actual death mechanism
+     (self-trap) more directly than reducing food-seeking, and might not
+     have the same "falls behind in a growth race" downside in self-play
+     since it doesn't discourage eating food that's ALSO safe.
+  2. Genuine multi-turn lookahead deep enough to see the self-narrowing
+     several turns ahead (the still-not-attempted "textbook correct"
+     fix flagged by many previous sessions -- search "multi-ply" earlier
+     in this file). The existing `_lookahead_min_space` (added a couple
+     of sessions ago) already does SOME of this but only as a moderate
+     supplementary tiebreaker (`-15.0` weight) -- consider whether
+     increasing its weight specifically in the my_len>>opp_len scenario
+     (i.e. make ITS weight advantage-gated, rather than gating raw food
+     urgency) might work better than this session's approach, since it
+     targets space-safety directly rather than discouraging growth.
+- If you want to re-attempt any growth_damp-style fix, validate with a
+  LARGER seed count from the start (this session only caught the
+  negative signal after ~40 seeds; a 10-seed batch alone showed a
+  misleadingly close 9-6 split) -- self-play noise is real and can hide
+  a true regression in small samples, per this session's own experience.
+- All other historically-important fixes/logic remain intact and
+  untouched (unchanged from before this session -- see the very long
+  history earlier in this file for full details of everything currently
+  in `main.py`).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`). **New gotcha this session:** a
+  `battlesnake play` loop of ~15-20 sequential games inside one bash
+  tool call can hit the environment's own ~30s tool-call timeout even
+  with per-game `timeout 30` wrappers (the per-game timeout is generous
+  enough that several sequential long games exceed the OUTER tool-call
+  budget) -- if running a large seed batch, either run smaller batches
+  per tool call (e.g. 8-10 seeds at a time) or reduce the per-game
+  `timeout` value, and always check how many seeds' output actually
+  printed before the call was killed (partial output is still usable,
+  as done this session).
