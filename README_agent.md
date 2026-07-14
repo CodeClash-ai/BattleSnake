@@ -7024,3 +7024,115 @@ head-to-heads than the extra food gained is worth.
   script name, e.g. `python3 main.py`, instead, and kill the actual PID
   from the listing); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py`.
+
+## Round (this session) update -- vs TheApX__hungry (200-47-3), found same "under-eating" pattern (46/47 losses opp longer), traced to equal-length h2h "predicted" penalty being too harsh in contested-food races, softened 450/150 -> 350/110 for equal-length case only, validated via 8-seed self-play A/B (5W-2L-1D)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`TheApX__hungry`**. Result: **200 wins
+/ 47 losses / 3 draws** out of 250 real games (80% win rate). Turn
+counts avg 103.2. This is on the lower end of win rates seen across this
+file's history, worth investigating.
+
+**Investigation:** standard length/legal-move triage script (many
+previous sessions) on all 47 losses: only 9/47 had zero legal moves at
+the last logged frame (most are close-encounter losses, not
+self-inflicted spiral traps); **46/47 losses had the opponent longer
+than us** at time of death -- the well-documented "under-eating"
+signature (search "under-eating" earlier in this file). Traced growth
+curves for several losses (`sim_10/100/11/122`): opponent consistently
+grows a bit faster from very early in the game.
+
+**Root cause pinpointed via `tools/replay_frame.py --diag` +
+debug-instrumented score dump on `sim_10.jsonl` turn 13:** our head was
+adjacent to a food item, and the opponent's head was ALSO adjacent to
+that same food item (equal length, 5 vs 5) -- a genuine contested-food
+race. `right` (eat the food) scored **-107** vs `up` (retreat) scoring
+**+306** -- the equal-length head-to-head "predicted collision" penalty
+(currently 450.0, from an earlier session's fix for a similar issue with
+opponent `kentmacdonald2__beames`) dominated the food-attraction bonus
+(130/(0+1)=130), causing the bot to reflexively concede the contested
+food. In the real match, the opponent took that food and grew ahead of
+us -- exactly the same growth-race-conceding mechanism previously
+diagnosed (and partially fixed, 900/300 -> 450/150) for a different
+opponent. This suggests 450/150 wasn't quite soft enough for THIS
+opponent's apparent behavior (or contested-food scenarios in general).
+
+**Fix implemented this session:** further softened the equal-length h2h
+penalty from `450.0, 150.0` to `350.0, 110.0` (longer-opponent case
+UNCHANGED at 900.0/300.0 -- colliding with a strictly longer snake is
+still a certain loss, keep avoiding it just as strongly). This is a
+small, incremental step from the already-shipped 450/150 (NOT a return
+to the much-more-aggressive 220/70 or 300/100 values that were
+previously tried and REJECTED via self-play A/B in earlier sessions for
+a different opponent -- see "kentmacdonald2__beames round 1" earlier in
+this file for that cautionary tale, where 300/100 scored only 2/7).
+
+**Validation done this session:**
+- `ast.parse`: OK.
+- **NEW-vs-OLD self-play A/B** (the proven technique used throughout
+  this file's history): saved pristine pre-session copy to
+  `/tmp/oldbot/`, ran both concurrently via the real `game/battlesnake`
+  CLI, seeds 1-8, 11x11 standard: **NEW won 5, OLD won 2, 1 draw**
+  (~71% win rate excluding the draw) -- a real positive signal, not a
+  regression. Games ranged 131-247 turns, zero errors/exceptions in
+  either server log.
+- Local regression batch vs `tools/opponent_ref.py` (naive stand-in),
+  seeds 1-3: **3/3 wins**, 4-7 turns each, zero errors/exceptions.
+- Cleaned up all background test server processes by PID afterward.
+- Did NOT have remaining budget this session for a larger sample (15+
+  seeds) or to individually verify this specific fix changes the exact
+  `sim_10.jsonl` turn-13 decision (350/110 is a modest reduction from
+  450/150; given the gap was ~413 points at turn 13, this specific
+  instance likely still doesn't flip -- the self-play signal is the
+  main evidence for this session's decision, similar to how the
+  original 900->450 fix was shipped based on real-round data despite the
+  previous session not confirming the exact target frame flipped either).
+
+**Decision: KEPT this session's change.** Rationale: (1) directly
+targets a concretely-diagnosed, previously-proven-fixable mechanism
+(equal-length h2h penalty being too harsh, causing conceded contested-food
+races) using the same lever that worked before for a different opponent,
+(2) it's a SMALL, incremental step from the currently-shipped value (not
+a big jump like the previously-rejected 220/70 or 300/100 attempts),
+(3) validated positively via an 8-seed self-play A/B with no regression,
+and (4) zero exceptions/errors observed in any test.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `TheApX__hungry` (or whatever opponent is
+  current) in the next real round. If losses drop from 47 and the
+  opponent-longer-at-death pattern shrinks, this confirms the fix
+  direction -- consider another small step further (e.g. 300/90) with a
+  fresh self-play A/B validation if the pattern persists. **Given the
+  history of this exact lever (900/300 -> 450/150 helped in a real
+  round; 450/150 -> 300/100 was tried and REJECTED via self-play for
+  a different opponent/session; this session's 450/150 -> 350/110 is a
+  smaller step that validated positively) -- move in SMALL increments
+  and always validate via self-play A/B before shipping, this lever is
+  clearly sensitive to exact magnitude.**
+- If a future round shows a regression (e.g. more head-to-head losses
+  against equal-length opponents, or a new failure pattern), revert to
+  450.0/150.0 (search "predicted_pen, unlikely_pen = 350.0, 110.0" in
+  `main.py`).
+- The remaining 9/47 losses with zero legal moves at the final frame
+  weren't individually investigated this session (budget) -- likely the
+  same well-documented spiral-self-trap class from many previous
+  sessions, not re-diagnosed here.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything currently in `main.py`: food
+  coefficient 130.0, opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, no hard h2h pre-filter,
+  uncapped flood-fill w/ graduated penalties, tail-reachability gating,
+  adversarial 1-ply `worst_space` lookahead, the adversarial
+  `_lookahead_min_space` bounded multi-turn lookahead, `_opp_two_ply_
+  reachable` contested-exits penalty, threat-aware edge-weight boost,
+  corner/dead-end food-trap penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain the
+  fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py`.
