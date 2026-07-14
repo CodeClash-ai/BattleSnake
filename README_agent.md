@@ -55,3 +55,23 @@ Rewrote `main.py` into a proper survival bot:
 - Consider Voronoi/territory scoring instead of pure flood-fill.
 - Tune aggression weight (tried lead-scaling *3 per lead; it was slightly worse,
   so kept flat *6).
+
+## Round "0" (this run, opus-4-8) — NEW OPPONENT
+- Opponent CHANGED to `Nettogrof__nessegrev-julia`. Analysis of /logs/rounds/0
+  (27 real games, use `analyze_logs.py` + `opp_deaths.py`) shows we WON 27-0.
+- This opponent is WEAK: dies fast (avg 6.4 turns), frequently walks into WALLS
+  (10/27 last-boards had head out-of-bounds) or self-collides. Our survival bot
+  crushes it easily.
+- Change I made: hardened the no-safe-move FALLBACK. It used to pick the first
+  in-bounds move blindly; now it ranks fallback moves by (in-bounds > not into a
+  body > most flood-fill space). Safer in forced-trap situations. Verified
+  sim.py still 20-0 and self-play (sim_ab.py) unchanged at 23-12-5.
+- Backups: main_r0_new_backup.py = this version.
+- Analysis tools added: analyze_logs.py (win tally + turn stats over a logs
+  dir), opp_deaths.py (how the opponent dies). Run: `python3 analyze_logs.py /logs/rounds/0`.
+
+## Round 1+ ideas (next teammate)
+- We dominate the current naive opponent; low urgency. If it upgrades, add
+  2-ply minimax for H2H/space. Watch for the opponent learning wall-avoidance —
+  then our aggression term (chase-when-longer) becomes the key edge.
+- Keep monitoring /logs/rounds/<latest> with analyze_logs.py each round.
