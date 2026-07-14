@@ -1487,3 +1487,39 @@ print('win',w,'loss',l,'tie',t)"
   safe cells (space>=my_len) and zeroed on edges when hunted. Keep all existing
   anti-coil/anti-pin/parallel-shadow/dominance logic intact. Judge via
   /tmp/abg.sh (greedy_opp) MULTI-BATCH (variance huge). NEVER touch launch block.
+
+## ROUND 1 UPDATE (opus-4-8, jackisherwood__battlesnake-elon -- THIS SESSION)
+- OPPONENT: `jackisherwood__battlesnake-elon`. R0 result: WIN 239-10 (1 tie).
+  GENUINE combat opp, LONG games (avg 204 turns, max 399). It stays alive and
+  OUTLASTS us in long endgames.
+- ANALYZED all 10 losses (/tmp/analyze3.py): 100% DOMINANCE / NEAR-EQUAL SELF-COIL.
+  At death we were LONGER-or-EQUAL (ml 21-32 vs ol 19-30), HIGH health (70-100),
+  BOXED IN (0-1 safe nbrs), mostly INTERIOR (7/10). We seal ourselves in; elon
+  survives. KEY: unlike eremetic/george (we were HUGELY longer, my_len>_max_ol+3),
+  here we were NEAR-EQUAL length (ml~ol) -> the strong dominance tail-following /
+  tail-reachable-region block DIDN'T FIRE (gated my_len>_max_ol+3). This near-equal
+  band was only covered by the time-aware floods, which OVERCOUNT through 1-wide
+  channels and via tail retreat, missing the multi-turn interior coil.
+- FIX (score_candidate, after the existing time-aware tail-reach check ~line 375):
+  NEW UNIVERSAL TAIL-REACHABLE-REGION safeguard for EVERY length band. Gated to
+  (not being_hunted) + health>=30. Uses STATIC (body-after-move as permanent
+  walls) _region_and_tail: +50 if the future tail cell stays reachable (survivable
+  space-filling loop), -350 if severed (coil death); -(my_len-reg)*10 if the static
+  region < our length; -250 if region<=4. This is the true survival metric applied
+  to the near-equal band that was uncovered.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, smartmatch 10-6.
+  * spacematch (space_opp = strong space-maximizer proxy, survives long like elon):
+    NEW 15-8-1 vs BASELINE 15-9-0 = WASH (no regression; additive safeguard).
+  * grow_solo (nfood=20,500t): 8/12 vs baseline 9/12 -- within variance (that test
+    forces len 40-70, a different regime than the len 21-32 real losses; deaths at
+    len 49-58 either way). The change targets the near-equal INTERIOR coil in LIVE
+    play, which replays can't show (recorded body already coiled, per prior notes).
+- Backup: main_round0_elon_backup.py (pre-this-change, proven 239-10 code).
+- ADVICE FOR NEXT TEAMMATE: elon beats us ONLY by our own near-equal-length
+  interior self-coils in long endgames. The universal tail-region safeguard covers
+  the previously-uncovered ml~ol band. The DEEP remaining fix (all authors' notes
+  agree) = a real space-filling / Hamiltonian-cycle path planner or a true
+  longest-survivable-path metric (floods overcount through 1-wide channels). Keep
+  universal-tail-region + dominance tail-follow + 2-ply-static + anti-serpentine +
+  all existing anti-coil/anti-pin. NEVER touch the launch block.

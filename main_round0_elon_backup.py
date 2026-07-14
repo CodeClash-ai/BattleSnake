@@ -374,35 +374,6 @@ def _choose_move(game_state):
         else:
             score -= 200.0
 
-        # UNIVERSAL TAIL-REACHABLE-REGION (fix vs jackisherwood__battlesnake-elon
-        # R0 losses: 10 DOMINANCE / near-equal-length SELF-COILs -- ml 21-32 vs
-        # ol 19-30, high health, boxed in, mostly INTERIOR). The strong dominance
-        # tail-following block only fired at my_len > _max_ol+3, so the NEAR-EQUAL
-        # length band (ml~ol) was uncovered and only had the time-aware checks,
-        # which OVERCOUNT through 1-wide channels and via tail retreat. Here we use
-        # the STATIC (body-after-move as permanent walls) region + true tail
-        # reachability -- the real survival metric -- for EVERY length band. Gated
-        # to not-being-hunted + healthy so it never interferes with h2h combat or
-        # starving-food logic. This steers us off a forming coil (interior OR wall)
-        # many turns before it seals, independent of length.
-        if (not being_hunted) and my_health >= 30 and my_tail is not None \
-                and len(my_body) >= 2:
-            _occ_u = set(my_body[:-1])   # body after move: old tail vacates
-            _occ_u.add(nc)
-            _future_tail_u = my_body[-2]  # cell the tail retreats to
-            _reg_u, _tail_ok_u = _region_and_tail(
-                nc, _occ_u, _future_tail_u, limit=None)
-            if _tail_ok_u:
-                score += 50.0             # stays on a survivable space-filling loop
-            else:
-                score -= 350.0            # severs the loop -> multi-turn coil death
-            # Prefer moves that keep a static region at least as large as we are;
-            # a region smaller than our length is a pocket that seals as we grow.
-            if _reg_u < my_len:
-                score -= (my_len - _reg_u) * 10.0
-            if _reg_u <= 4:
-                score -= 250.0
-
         # Escape-count: how many of the new head's neighbours are still safe
         # to enter next turn (in bounds, not a body segment now, not a losing
         # head-to-head)?  Moving into a cell with 0-1 escapes is how we walked
