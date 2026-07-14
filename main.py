@@ -327,6 +327,17 @@ def move(game_state):
             score += exits * 18
             if exits <= 1 and area < my_len + 4:
                 score -= 250
+            # In long games where we are already far ahead, a one-exit move can
+            # be the mouth of a large-looking but effectively one-way noose.
+            # Amphibious Arthur's rare wins often happen after we voluntarily
+            # thread these throats while healthy instead of keeping multiple
+            # continuations open.  Keep this disabled when food/hunger or close
+            # length makes taking a corridor worth the risk.
+            if (my_len >= max_enemy_len + 5 and my_health > 70
+                    and exits <= 1 and n not in food):
+                score -= 115
+                if area < my_len * 2:
+                    score -= 70
 
             # One extra ply of survivability: prefer moves that leave several
             # legal continuations after the opponent also advances.
@@ -416,7 +427,7 @@ def move(game_state):
                         else:
                             score += max(0, 6 - tail_dist) * 38
                             if n == my_body[-1]:
-                                score += 260
+                                score += 460
                     # When far ahead and healthy, our main remaining failure mode is
                     # building a long noose while pursuing a much shorter snake.  A
                     # full flood fill can still be huge through a one-cell throat, so
