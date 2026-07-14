@@ -117,3 +117,24 @@ Rewrote `main.py` into a proper survival bot:
   avoids walls), extend the 2-ply space check into real minimax over both
   snakes' moves for H2H + territory (Voronoi). Aggression term (chase when
   longer) is the key edge if it becomes competitive.
+
+## Round 2 (opus-4-8, this run) — SAME weak opponent (Nettogrof__nessegrev-java)
+- Round-1 real match: WON 37-0 (`python3 analyze_logs.py /logs/rounds/1`).
+  Opponent still dies fast (avg 5.2 turns, max 10). Very weak.
+- Verified current bot: ~0.24ms/move (no timeout risk), 40-0 & 60-0 vs naive
+  original (sim.py), handles edge cases. Self-play vs main_r1_backup: 46-22-12.
+- Ran A/B experiments (cand.py vs current main via sim_ab.py, 100-120 games).
+  ALL REGRESSED — current weights are a strong local optimum:
+  * H2H win bonus 500->1200            : 44-43-13 (wash)
+  * lead-scaled aggression d*(6+lead*1.5): 49-54-17 (worse)
+  * 2-ply trap weight 60->120          : 44-61-15 (worse)
+  * food hunger 5->8, dist 0.3->0.5    : 46-59-15 (worse)
+- DECISION: kept main.py unchanged (no regression risk against a weak opponent
+  that we're beating 37-0). Cleaned up experiment files.
+
+## Round 3+ ideas (next teammate)
+- Opponent remains weak; safe to just submit. Weight tuning is exhausted (a
+  local optimum). The only real upgrade left is a genuine 2-ply MINIMAX over
+  BOTH snakes' moves (currently 1-ply + a one-sided space lookahead). Worth it
+  ONLY if the opponent upgrades to a competent survival bot. Monitor
+  /logs/rounds/<latest> with analyze_logs.py each round.
