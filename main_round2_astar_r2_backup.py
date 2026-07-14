@@ -678,39 +678,6 @@ def _choose_move(game_state):
             elif worst_safe == 1:
                 score -= 120.0   # only one escape after opp's best cut
 
-        # OFFENSIVE SPACE-DENIAL (fix vs OliverMKing__astar-snake): when we are
-        # clearly longer and healthy, actively finish the kill by keeping the
-        # opponent confined to a SMALL reachable region. Analysis of round-1
-        # losses (e.g. sim_10, 430 turns) showed we repeatedly TRAPPED the
-        # opponent (their space dropped to 2-10) but let them ESCAPE and later
-        # got outmaneuvered in a 400+ turn endgame we then LOST. Rewarding moves
-        # that reduce the nearest opponent's reachable space converts a dominant
-        # position into an actual win instead of a drawn-out endgame. This uses a
-        # STATIC (no-retreat) flood from the opponent head, treating our body
-        # (after moving to nc) as walls -- so a move that seals off the opp's
-        # escape scores higher. Gated to clearly-longer + healthy so it never
-        # overrides our own survival (space/coil/pin terms already applied above).
-        if (not being_hunted) and my_len > _max_ol + 1 and my_health >= 25 and opponents:
-            # nearest opponent
-            _tgt = min(opponents, key=lambda s: _manhattan(head, (s["body"][0]["x"], s["body"][0]["y"])))
-            _oh = (_tgt["body"][0]["x"], _tgt["body"][0]["y"])
-            if _manhattan(head, _oh) <= 8:
-                # our body after moving to nc: old body (tail retreats) + new head
-                _ob = set(my_body)
-                if my_body:
-                    _ob.discard(my_body[-1])
-                _ob.add(nc)
-                _walls = _ob | opp_bodies_static
-                _walls.discard(_oh)  # opp head is the flood start, not a wall
-                _oppspace = _static_flood_from(_oh, _walls, limit=width * height)
-                # smaller opp space = better for us. Reward the squeeze.
-                if _oppspace < my_len:
-                    score += (my_len - _oppspace) * 3.0
-                if _oppspace <= 4:
-                    score += 120.0   # opp nearly sealed -> press hard
-                elif _oppspace <= 8:
-                    score += 50.0
-
         return score, space, name, nc, sspace
 
     scored = [score_candidate(c) for c in candidates]

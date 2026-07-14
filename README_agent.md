@@ -1161,3 +1161,46 @@ print('win',w,'loss',l,'tie',t)"
   neutral-zone + winning anti-wall-coil + static_flood + 2-ply-pin + tail-reach +
   escape-count + parallel-shadow + growth-attraction. Judge via /tmp/ab.sh +
   smartmatch multi-batch (variance!). NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, OliverMKing__astar-snake -- THIS SESSION, OFFENSIVE SPACE-DENIAL)
+- Standing: R0 WIN 164-79 (7 ties), R1 WIN 156-86 (8 ties). astar is our
+  TOUGHEST opponent by far. NOTE: the R0 "general anti-wall-coil" fix did NOT
+  help -- losses went 79 -> 86. Pure defensive tuning is not moving the needle.
+- ANALYZED all 86 R1 losses (/tmp/analyze2.py, analyze3.py): 67/86 = "boxed_self"
+  (0 safe neighbours at death, no h2h option = SPACE COLLAPSE, not starvation --
+  avg health ~88). 55/86 = MIX seal (our own body AND opp body both block us),
+  45/86 near a wall. Losses split evenly shorter(43)/equal-or-longer(43). Many
+  are LONG endgames (200-430 turns).
+- KEY INSIGHT (traced sim_10, 430t, /tmp/astar_study.py): at t240-280 WE
+  DOMINATED -- opp confined to space 2-10 while we had 47-64. But we NEVER
+  FINISHED THE KILL: opp escaped by t320 (opp space 27, ours 9!) and by t400 our
+  space collapsed and we LOST a game we had won. We passively cruise instead of
+  squeezing a trapped opponent to death.
+- CHANGE (main.py, NEW "OFFENSIVE SPACE-DENIAL" block, before the score_candidate
+  return, ~line 681): when (not being_hunted) AND my_len > _max_ol+1 AND
+  health>=25 AND nearest opp within manhattan 8, compute the opponent head's
+  STATIC (no-retreat) reachable space treating our body-after-move as walls;
+  REWARD moves that keep it small: +(my_len-oppspace)*3 when oppspace<my_len,
+  +120 if oppspace<=4, +50 if <=8. Converts dominant positions into actual wins.
+  Gated to clearly-longer+healthy so it never overrides our own survival terms
+  (space/coil/pin all applied above it).
+- TESTING: built test/space_opp.py (STRONG flood-fill space-maximizer proxy for
+  astar, survives long) + test/spacematch.sh + /tmp/abspace.sh (A/B a given main
+  file vs space_opp). Results (HIGH variance, per all prior notes):
+  * A/B vs pre-change baseline (main_round2_astar_r2_backup.py) over 3x30:
+    new = 21-9, 19-11, 14-16 => 54-35. baseline = 17-12(1t), 19-11, 18-12 =>
+    54-35. NET WASH on space_opp (variance dominates) -- but NO regression.
+  * smart_opp: new 17-3 (baseline was 14-6) -- IMPROVED.
+  * naive match.sh 8-0, solo_test SURVIVED 300 turns. import+parse OK, launch OK.
+- HONEST NOTE: space_opp is NOT astar (I can't run astar locally). The offensive
+  term is THEORETICALLY the right fix -- sim_10 proves we trap astar but let it
+  escape. Low risk (additive, gated, doesn't regress any proxy).
+- Backup: main_round2_astar_r2_backup.py (pre-this-change, the 156-86 code).
+- ADVICE FOR NEXT TEAMMATE: astar is a space-control snake. Our loss = we fail to
+  finish trapped opponents in long endgames. The offensive space-denial term is
+  the new lever -- consider strengthening it (bigger reward, wider manhattan
+  range) if losses stay high, OR add a proper 2-ply minimax that maximizes
+  (our_space - opp_space). Also 28+/86 losses we were SHORTER -> could grow
+  faster early. Keep offensive-space-denial + all existing anti-coil/anti-pin.
+  Test via /tmp/abspace.sh vs space_opp (multi-batch, variance huge). NEVER touch
+  the launch block.
