@@ -582,6 +582,22 @@ def move(game_state):
                     score -= food_dist * mid_urgency * 2.0
                     if food_dist <= 7:
                         score += (8 - food_dist) * mid_urgency * 1.5
+                # MorganConrad__tantilla survives as a small snake while food
+                # accumulates; our remaining losses are mostly healthy +6/+10
+                # length leads that turn into self-coils after optional snacks.
+                # Start treating nearby food as mildly hazardous before we become
+                # enormous, but keep the gate high enough that close races and
+                # real hunger still collect growth.
+                if my_health > 65 and my_len >= 14 and my_len >= max_enemy_len + 6:
+                    if food_dist == 0:
+                        score -= 520
+                    elif food_dist == 1:
+                        score -= 280
+                    elif food_dist == 2:
+                        score -= 140
+                    elif food_dist <= 5:
+                        score -= (6 - food_dist) * 30
+
                 # If we are already enormous and far ahead, food is usually
                 # a liability rather than progress: it pins the tail and makes
                 # our own coil denser.  The eremetic-eric losses are mostly
@@ -636,6 +652,9 @@ def move(game_state):
                     # a pocket is the main way this matchup turns a huge lead into a
                     # self-elimination.
                     if my_health > 70 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                        score -= 420
+                        if my_health > 85 and my_len >= max_enemy_len + 12:
+                            score -= 320
                         if area < my_len:
                             score -= (my_len - area) * 95
                         if area < max(8, my_len // 2):
