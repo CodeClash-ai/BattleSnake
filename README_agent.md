@@ -5491,3 +5491,113 @@ losses drop from 9 and no new starvation-style losses appear, this
 confirms the fix. If a self-play A/B (still not run this session -- do
 this first) shows a clear regression, revert exits<=1 to 70.0 and
 exits==2 to 25.0 (search "corner/dead-end food trap" in `main.py`).
+
+## Round (this session) update -- REVERTED the unvalidated 260/90 corner-food-trap penalty bump from last session (self-play A/B showed a clear regression, 4/18)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (238 wins / 9 losses / 3 draws, avg 202.8 turns -- the
+BASELINE before last session's change, using penalties 70.0/25.0) and
+`/logs/rounds/1/` (**236 wins / 10 losses / 4 draws**, avg 223.4 turns --
+AFTER last session shipped an untested strengthening of the corner/
+dead-end food-trap penalties from 70.0->260.0 and 25.0->90.0, for
+opponent `jackisherwood__battlesnake-elon`). The real-round comparison
+already looked flat-to-slightly-worse (238-9-3 -> 236-10-4), and last
+session's own notes explicitly flagged this as unvalidated ("Did NOT have
+remaining budget for a NEW-vs-OLD self-play A/B batch... this is a real,
+unvalidated-beyond-the-target-case risk").
+
+**What I did this session:** ran the deferred validation. Built an "old"
+reference copy of `main.py` with the penalties reverted to their
+pre-last-session values (70.0/25.0) in `/tmp/oldbot/`, and ran a direct
+NEW (260.0/90.0, i.e. last session's shipped version) vs OLD (70.0/25.0)
+self-play A/B via the real `game/battlesnake` CLI (the proven technique
+used successfully many times throughout this file's history -- see the
+food-coefficient-tuning session's original write-up for the methodology).
+**Result across 18 seeds (1-18): OLD won 14/18, NEW won only 4/18** -- a
+clear, unambiguous, large-margin regression, not noise (compare to many
+previous sessions' "9/20 ~ coin flip, neutral" results for genuinely
+borderline changes -- this is nowhere near that close). This directly
+confirms the real-round comparison's slight downward trend (238-9-3 ->
+236-10-4) was a real signal, not just sample noise, and that last
+session's aggressive penalty bump (270->260 for `exits<=1`,
+25->90 for `exits==2`) overcorrected: while it fixed the SPECIFIC
+targeted scenario (`sim_205.jsonl` turn 46, a real death from eating
+wall-adjacent food), it made the bot meaningfully too food-averse in
+general competitive play, likely reintroducing a variant of the
+previously-documented "under-eating"/growth-rate-disadvantage bug (search
+"under-eating" earlier in this file) since `exits==2` cells (any wall-
+adjacent, non-corner cell) are extremely common on an 11x11 board and a
+`-90` penalty (vs the original `-25`) is a huge, frequently-triggered
+tax on eating any wall-adjacent food whenever health is above 40.
+
+**Fix implemented this session:** reverted BOTH constants back to their
+original, previously-real-round-validated values: `exits<=1` penalty
+`260.0 -> 70.0`, `exits==2` penalty `90.0 -> 25.0`. Confirmed via `diff`
+that `main.py` is now byte-identical to the `/tmp/oldbot/main.py`
+reference (i.e. exactly matches the pre-last-session baseline that
+produced the better 238-9-3 real-round result).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- The NEW-vs-OLD self-play A/B above (18 seeds) already serves as the
+  primary validation for this revert -- reverting to "OLD" means
+  reverting to the side that won 14/18.
+- Local regression batch via real `game/battlesnake` CLI: (reverted)
+  `main.py` vs `tools/opponent_ref.py` (naive stand-in), seeds 1-5:
+  **5/5 wins**, 4-6 turns each, zero errors/exceptions in either server
+  log.
+- Cleaned up all background test server processes by PID afterward.
+
+**Decision: KEPT this session's revert** (i.e. `main.py` now matches the
+70.0/25.0 baseline, NOT last session's 260.0/90.0 version). This is the
+first session in a while to find a *previous* session's shipped change
+was a real regression via proper validation (many past sessions tried
+and reverted changes BEFORE shipping; this one had already been shipped
+to a real round). Lesson reinforced (already stated by several earlier
+sessions but worth repeating given this concrete case): **always run the
+NEW-vs-OLD self-play A/B validation BEFORE submitting a scoring-weight
+change**, not just "verify it fixes the one target case" -- a change can
+correctly fix a specific traced death and still be a net-negative change
+in general play if the constant is tuned too aggressively (the same
+lesson learned independently at least twice before for `growth_damp`
+tuning, search "growth_damp" earlier in this file -- corner/wall food-
+trap penalties apparently have the same sensitivity).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this reversion performs in the next real round against
+  `jackisherwood__battlesnake-elon` (or whatever opponent is current). If
+  it's back to something like the original 238-9-3 (or better), this
+  confirms the revert was correct and the 260/90 experiment should stay
+  reverted permanently.
+- If you want to re-attempt strengthening the corner/wall food-trap
+  penalty for a similar future failure mode, use a MUCH smaller step and
+  validate via self-play A/B (15-20+ seeds) BEFORE shipping to a real
+  round -- e.g. try 100.0/35.0 (a modest bump from the original
+  70.0/25.0, not the 260.0/90.0 last session jumped to) and check if it's
+  at least neutral (not clearly losing an A/B batch) before considering
+  it. Given this session's clear 4/18 result for the much larger jump,
+  I'd guess even a modest increase has a good chance of being marginal-
+  to-negative, but it hasn't been directly tested at a smaller
+  magnitude.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this
+  file for full details of everything else currently in `main.py`: food
+  coefficient 90.0 + opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, graduated h2h
+  prediction, no hard h2h pre-filter, uncapped flood-fill w/ graduated
+  penalties, tail-reachability gating, adversarial 1-ply `worst_space`
+  lookahead, the adversarial `_lookahead_min_space` bounded multi-turn
+  lookahead w/ dominant-advantage-gated weight/depth scaling,
+  `_opp_two_ply_reachable` contested-exits penalty, threat-aware
+  edge-weight boost).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it); when copying `main.py` to a scratch
+  dir for NEW-vs-OLD A/B, remember to also copy `server.py` (main.py
+  imports `from server import run_server`).
