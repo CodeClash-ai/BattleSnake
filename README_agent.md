@@ -1639,3 +1639,46 @@ print('win',w,'loss',l,'tie',t)"
   penalty in the branch caused wall/self flips; tested, reverted). Keep the
   boosted weights + all existing anti-coil/anti-pin/parallel-shadow/growth.
   NEVER touch the launch block. Judge via grow_solo A/B + smartmatch (variance).
+
+## ROUND 1 UPDATE (opus-4-8, ChaelCodes__cornelius -- THIS SESSION)
+- OPPONENT: `ChaelCodes__cornelius`. Round 0 result: WIN 218-31 (1 tie).
+  GENUINE combat opponent, LONG endgames (loss turns 66-445, high health 82-100).
+- ANALYZED all 31 losses (/tmp/analyze2.py + analyze3.py, recreate from git):
+  * 23/31 = SELF-COIL (0 safe nbrs, 0 h2h at death) -- mostly NEAR-EQUAL length
+    (ml~ol), high health, LONG games, boxed in interior/edge. Traced sim_218
+    (ml20 ol19, t214): we weaved DOWN into the bottom-left region, ate food at
+    the wall (len 19->20 doubling the tail) and sealed the pocket. Classic
+    near-equal / dominance interior+wall self-coil (same class as elon/eremetic/
+    tantilla).
+  * 8/31 = H2H losses, MOSTLY when SHORTER (cornelius out-grew us).
+- CHANGE (low risk, tuning of EXISTING NEAR-EQUAL-LENGTH ANTI-COIL block only,
+  gated not-hunted + health>=30 + my_len<=_max_ol+3, so combat/food untouched):
+  * anti-serpentine adj>=2: 30 -> 45 per extra adjacency; adj==1: 8 -> 12
+  * tail-following _tdn weight: 3 -> 5
+  * 2-ply STATIC lookahead limit: my_len+4 -> my_len+12 (so a truly open region
+    is distinguished from a shrinking pocket even for a longer near-equal snake),
+    sub-length penalty (my_len-best2): 10 -> 16, tiny-region penalty 250 -> 300.
+  Rationale: the near-equal band was the dominant loss class; the milder existing
+  weights weren't enough to break the multi-turn serpentine weave before the
+  pocket seals. Stronger tail-follow + anti-serpentine + deeper lookahead steers
+  us off the coil EARLIER.
+- VERIFIED (frozen-opp livesim, /tmp/test_early.py): starting BEFORE the coil
+  commits (t189/t194 for sim_218; t309/t314 for sim_157; etc.) the new bot
+  SURVIVES 40 steps where the recorded game died. NOTE: replays starting AFTER
+  the coil is already committed (~22 turns back) do NOT diverge (recorded body
+  already coiled -- known replay limitation, per all prior notes). The fix
+  matters in LIVE play by steering off the weave many turns earlier.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0,
+  smartmatch 11-5-0 then 11-4-1 (strong combat, no regression),
+  grow_solo 5/8 (25food/500t, unchanged from baseline -- those failures are
+  len 69-96 DEEP dominance coils outside the near-equal band this change touches).
+- Backup: main_round0_cornelius_backup.py (pre-this-change, proven 218-31 code).
+- ADVICE FOR NEXT TEAMMATE: cornelius beats us mostly by our own near-equal-length
+  self-coils in long endgames (23/31), plus 8 h2h when SHORTER. Growth weights
+  are already aggressive (behind up to 13.4, tied 5.5) -- don't over-crank (pin
+  risk). The DEEP remaining fix (all notes agree) = a real space-filling /
+  longest-survivable-path metric (static/time-aware floods overcount through
+  1-wide channels). Keep the boosted near-equal anti-coil + all existing
+  anti-coil/anti-pin/dominance/growth logic. Judge via smartmatch (variance!)
+  + solo/grow_solo. NEVER touch the launch block.
