@@ -141,6 +141,52 @@ def shortest(start, goals, blocked, w, h, max_depth=200):
     return None
 
 
+
+def self_path_count(body, food, static_blocked, w, h, depth=6, cap=200):
+    """Count short self-avoiding continuations after a candidate move.
+
+    Flood fill sees eventual space, but long snakes can still coil into a local
+    one-way noose while the tail is several turns away.  This shallow search
+    treats other snakes as static obstacles and simulates our own tail movement,
+    giving a cheap mobility tie-breaker in long/healthy games.
+    """
+    food = frozenset(food)
+    static_blocked = frozenset(static_blocked)
+    cache = {}
+
+    def rec(cur_body, cur_food, d):
+        if d <= 0:
+            return 1
+        key = (cur_body, cur_food, d)
+        old = cache.get(key)
+        if old is not None:
+            return old
+        head = cur_body[0]
+        neck = cur_body[1] if len(cur_body) > 1 else None
+        total = 0
+        for delta in MOVES.values():
+            n = add(head, delta)
+            if not inside(n, w, h) or n in static_blocked:
+                continue
+            if n == neck and len(set(cur_body[:3])) > 1:
+                continue
+            grow = n in cur_food
+            occupied = set(cur_body if grow else cur_body[:-1])
+            if n in occupied:
+                continue
+            nf = cur_food
+            if grow:
+                nf = frozenset(x for x in cur_food if x != n)
+            nb = (n,) + (cur_body if grow else cur_body[:-1])
+            total += rec(nb, nf, d - 1)
+            if total >= cap:
+                total = cap
+                break
+        cache[key] = total
+        return total
+
+    return rec(tuple(body), food, depth)
+
 def _fallback_legal(game_state):
     """Last-ditch legal-ish move; used only if scoring fails."""
     board = game_state["board"]
@@ -261,7 +307,12 @@ def move(game_state):
                 # already safely ahead there is little need to dive into the
                 # squares around its head; doing so can pull us into cramped
                 # chase patterns.  Keep a larger bonus only when length is close.
-                score += 40 if my_len <= max_enemy_len + 3 else 12
+                if my_len <= max_enemy_len + 3:
+                    score += 40
+                elif my_len <= max_enemy_len + 6:
+                    score += 12
+                else:
+                    score -= 50
             # Prefer cells with multiple exits (less likely to enter a cul-de-sac).
             exits = 0
             for d2 in MOVES.values():
@@ -282,6 +333,20 @@ def move(game_state):
             score += future * 10
             if future == 0:
                 score -= 500
+
+            # Shallow self-avoidance lookahead for long, healthy games.  This is
+            # intentionally only a tie-breaker unless a move has almost no
+            # continuations; it targets late losses where flood-fill space stayed
+            # large until we had already coiled into a noose.
+            if my_len >= 10 and my_health > 45:
+                static_blocked = set(sim_blocked) - set(my_body)
+                next_body = tuple([n] + my_body[:-1])
+                path_count = self_path_count(next_body, food, static_blocked, w, h, depth=6, cap=200)
+                score += min(path_count, 80) * 2.0
+                if path_count == 0:
+                    score -= 450
+                elif path_count < 8:
+                    score -= (8 - path_count) * 120
 
             # Voronoi-style space ownership versus equal/longer opponents.
             scary_heads = [pt(s["head"]) for s in enemies if s.get("length", len(s.get("body", []))) >= my_len]
@@ -350,7 +415,12 @@ def move(game_state):
             if enemy_heads:
                 nearest_enemy = min(dist(n, eh) for eh in enemy_heads)
                 if my_len > max_enemy_len:
-                    score += max(0, 7 - nearest_enemy) * 3
+                    if my_len <= max_enemy_len + 6:
+                        score += max(0, 7 - nearest_enemy) * 3
+                    else:
+                        # When far ahead, do not keep chasing a smaller head into
+                        # cramped coils; simply outlive it in open space.
+                        score += max(0, 5 - nearest_enemy) * 0.5
                 else:
                     score += min(nearest_enemy, 6) * 4
 

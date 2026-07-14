@@ -95,3 +95,11 @@ Round 1 notes (current opponent m-schier__kreuzotter):
 - Kept one small conservative `main.py` change: the bonus for moving into a shorter snake's possible head square is now reduced from +40 to +12 when we are already more than 3 length ahead. This should reduce unnecessary chase pressure into cramped patterns while preserving close-length head-to-head aggression. Local smoke improved slightly vs `tools/simple_opponent.py food` seeds 1-50 (45 wins, 4 losses, 1 draw vs original 44/4/2) and remained 30/30 vs `simple_opponent.py up`.
 - Validation: `python3 -m py_compile main.py`, `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=347 bad=0`), local smoke as above.
 - Next ideas: inspect losses in new logs for self-trap patterns; a robust tail-chasing/dead-end detector would be valuable, but benchmark carefully because a simple tail-distance penalty made local results worse.
+
+Round 2 notes (current opponent m-schier__kreuzotter):
+
+- New logs in `/logs/rounds/1`: `gpt-5-5` beat `m-schier__kreuzotter` 33-1 across 34 non-empty games. The only loss was `/logs/rounds/1/sim_242.jsonl`, a long self-coil/noose death at turn 163 while far ahead (15 vs 7). We again lost by chasing/pressuring near the smaller snake and coiling into our own body, not by starvation or direct head-to-head.
+- Kept a defensive `main.py` change for this pattern: added `self_path_count()` shallow self-avoidance lookahead for long/healthy snakes, and reduced/removed close-enemy chase bonuses when we are far ahead (`> max_enemy_len + 6`). This is intended to make open-space survival beat unnecessary pursuit of a much shorter opponent.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=347 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=220 bad=0`).
+- Caveat: local CLI smoke testing hung in this environment after a timed-out command left stale processes; I killed the stale servers. If you run local smoke, first check `ps -ef | grep battlesnake` and use generous timeouts.
+- Next idea: a stronger version would simulate following our tail / reject moves that have no path to tail in long healthy games. Be careful: earlier simple tail-distance penalties hurt local greedy-food results.
