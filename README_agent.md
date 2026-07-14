@@ -362,3 +362,45 @@ Rewrote `main.py` into a proper survival bot:
   tail-reachability anti-coil). Worth it ONLY if the opponent upgrades to a real
   survival bot (survives >20 turns, grows). Always validate self-play deltas vs
   a mirror baseline (sim_ab.py has a ~10-game positional bias favoring B).
+
+## Round 2 (opus-4-8, this run) — m-schier__kreuzotter GOT STRONGER
+- Round-1 real match: WON 33-3 (`analyze_logs.py /logs/rounds/1`). This is the
+  SAME opponent name (kreuzotter) but it is now COMPETENT: it survives long
+  games. Our 3 LOSSES (sim_190 t248 len21, sim_192 t144 len16, sim_194 t102
+  len10) were ALL long-game SELF-TRAPS along the walls — NOT starvation, NOT
+  H2H. We wall-hugged into thin corridors that collapsed until the head had no
+  legal move.
+- ROOT CAUSE (found by replaying frames): our AGGRESSION term (chase opp head
+  when longer) pulled us TOWARD the opponent along the bottom/side wall, and
+  flood-fill scored the wall-corridor and the open region EQUALLY (both ~85
+  cells) because the corridor only collapses 3+ steps ahead as our own body
+  snakes through it. Tie-break went to the wall (toward opp) and killed us.
+- FIXES applied to main.py (backup: main_r2_pre_corridorfix_backup.py):
+  1. GATED AGGRESSION: disable the chase-when-longer pull when `overgrown`
+     (my_len>=18 and lead>=5). At that size we already win; chasing = pure
+     wall-corridor self-trap risk.
+  2. DEEP-SPACE term (`_deep_space` helper): best flood-fill reachable ONE more
+     step ahead. Weighted +40, penalty if < my_len. Helps break space ties
+     toward genuinely open moves.
+  3. PERIMETER PENALTY (my_len>=12): penalize edge/corner cells by
+     on_edge*my_len*1.5 so a long snake avoids building wall corridors.
+- VALIDATION: sim.py 20-0 & 30-0 vs naive. Self-play new-vs-prev = 26-41-13
+  (80 games) which is IDENTICAL to the mirror baseline (prev-vs-prev =
+  26-41-13) => STRENGTH-NEUTRAL, NO regression (sim_ab.py has a strong ~60%
+  positional bias favoring B — ALWAYS compare to a mirror). Max move time
+  1.34ms, zero crashes replaying all 3 loss games + wins.
+- CAVEAT: the fixes did NOT flip the exact t236 decision in sim_190 (the
+  collapse is >3 steps deep, beyond flood-fill horizon). They should prevent
+  us from ENTERING those wall positions earlier via gated aggression +
+  perimeter penalty, but this is not proven to convert all 3 losses. The
+  robust fix remains a real multi-step space simulation (see below).
+
+## Round 3+ ideas (next teammate) — IMPORTANT, opponent is now competent
+- kreuzotter now survives long games and BEAT us 3x via making us self-trap on
+  walls. The heuristic flood-fill CANNOT see corridor collapse >3 steps ahead.
+  The real fix is a genuine MULTI-STEP self-simulation: simulate our own body
+  advancing N steps down each candidate and take the move that maximizes
+  guaranteed survivable space (or a space-filling / Hamiltonian-ish endgame
+  that follows the tail without coiling). Worth investing steps here now that
+  losses are real. Validate ALWAYS vs the mirror baseline (sim_ab positional
+  bias ~60% favors B).

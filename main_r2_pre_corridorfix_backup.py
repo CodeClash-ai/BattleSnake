@@ -93,24 +93,6 @@ def _reachable(start, goal, blocked, w, h):
     return False
 
 
-
-def _deep_space(np, blocked, w, h, my_len):
-    """Estimate worst-case reachable space 2 steps ahead. For each free
-    neighbor of np, flood-fill and take the MAX (best continuation). This
-    catches corridors that look big now but collapse after one more move:
-    an open region keeps a large best-child space, a corridor shrinks fast."""
-    best_child = 0
-    for dx, dy in DIRS.values():
-        nn = (np[0] + dx, np[1] + dy)
-        if not _in_bounds(nn, w, h) or nn in blocked:
-            continue
-        b2 = set(blocked); b2.add(np)
-        sp = _flood_fill(nn, b2, w, h, my_len * 4 + 20)
-        if sp > best_child:
-            best_child = sp
-    return best_child
-
-
 def move(game_state):
     try:
         board = game_state["board"]
@@ -183,16 +165,6 @@ def move(game_state):
             if space < my_len:
                 score -= (my_len - space) * 200
 
-            # Corridor-awareness: the best space reachable one more step ahead.
-            # An open region keeps a large deep_space; a wall-hugging corridor
-            # that will collapse shrinks quickly. Weight this so a tie on raw
-            # flood-fill space is broken toward the genuinely open move (this
-            # fixes long-game wall-corridor self-traps).
-            deep = _deep_space(np, blocked, w, h, my_len)
-            score += deep * 40
-            if deep < my_len:
-                score -= (my_len - deep) * 150
-
             # Tail-reachability: if from the new head we can still reach our
             # own tail cell, we are guaranteed not to be trapped (we can always
             # follow our tail). Strongly reward this, especially when long.
@@ -240,12 +212,9 @@ def move(game_state):
             if opp_heads:
                 nearest_opp = min(opp_heads, key=lambda oh: _manhattan(head, oh[0]))
                 ohead, olen = nearest_opp
-                longest_opp_a = max((ol for _, ol in opp_heads), default=0)
-                overgrown_a = my_len >= 18 and (my_len - longest_opp_a) >= 5
-                if my_len > olen and not overgrown_a:
+                if my_len > olen:
                     d = _manhattan(np, ohead)
                     # Reward getting closer; stronger when we have big space.
-                    # Only mild so it never overrides survival/space terms.
                     score -= d * 6.0
                 elif my_len <= olen:
                     # Keep a little distance from a dangerous equal/longer snake.
@@ -275,16 +244,6 @@ def move(game_state):
             # Slight preference for staying near center (mobility).
             cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
             score -= (abs(np[0] - cx) + abs(np[1] - cy)) * 0.5
-
-            # Perimeter avoidance (scales with length): when we are long,
-            # hugging the walls/edges builds thin corridors that collapse and
-            # self-trap us in the endgame. Penalize edge and (worse) corner
-            # cells proportionally to our length so the effect only matters
-            # once the snake is big enough for coiling to be dangerous.
-            if my_len >= 12:
-                on_edge = (np[0] == 0 or np[0] == w - 1) + (np[1] == 0 or np[1] == h - 1)
-                if on_edge:
-                    score -= on_edge * my_len * 1.5
 
             if score > best_score:
                 best_score = score
