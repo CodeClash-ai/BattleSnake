@@ -3517,3 +3517,112 @@ to help, so reverting was the correct, low-risk call.
   (e.g. `/tmp/oldbot/main.py`) BEFORE editing, so you can `diff`-confirm a
   clean revert if the change doesn't pan out (did this successfully this
   session).
+
+## Round (this session) update -- ground truth check vs Spenca__vulture-snake (248-2), confirmed both losses are the SAME known tied-candidate spiral-trap gap, no code changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`Spenca__vulture-snake`**. Result:
+**248 wins / 2 losses** out of 250 real games (99.2% win rate). Turn
+counts min=6 max=212 avg=66.1 -- a competent, long-surviving opponent.
+
+**What I did this session:**
+- Used `tools/replay_frame.py` (added by a previous session -- still the
+  fastest way to investigate a loss, confirmed working great again) to
+  check both losses (`sim_63.jsonl`, `sim_150.jsonl`).
+- Both showed **zero legal moves at the last logged frame** (my_len 15
+  vs opp 9 in `sim_63`; my_len 6 vs opp 5 in `sim_150` -- NOT the old
+  under-eating bug in either case, our snake was equal-or-longer).
+- Both sim files log every turn for our snake densely, so I traced
+  backward turn-by-turn using `_occupied_cells`/`_flood_fill` directly
+  (see the one-off script in this session's trajectory, same pattern as
+  many previous sessions -- build synthetic per-turn state, compute legal
+  moves, and for the turns with >1 legal candidate, dump
+  `space`/`reached_tail`/`will_eat` per candidate via
+  `tools/replay_frame.py --diag`):
+  - `sim_150.jsonl` turn 19 (head `(9,10)`, 2 legal candidates `down`/
+    `right`): **both reported identical `space=5, reached_tail=False`**
+    -- a genuine tie with zero information to discriminate. One turn
+    later (turn 20) both remaining candidates were already `space=1`/`2`
+    (already-doomed). So the actual fatal geometry was set even before
+    turn 19 and isn't resolvable from this frame's diagnostics at all.
+  - `sim_63.jsonl` turn 83 (head `(2,9)`, 2 legal candidates `up`/
+    `right`): **both reported identical `space=100, reached_tail=True`**
+    -- again a genuine tie on every existing metric, even though `right`
+    (`(3,9)`) was 1 cell closer to the opponent's head `(4,9)` than `up`
+    (`(2,10)`) was. One turn later (turn 84) both remaining candidates
+    were already `space=2` (already-doomed corridor).
+- This is the SAME extensively-documented "single-snapshot (even
+  1-ply-adversarial) flood-fill can't distinguish two candidates that
+  share (almost) the same large connected region, even though one of
+  them is actually heading into a region that narrows fatally a few
+  turns later" structural gap that many, many previous sessions have
+  already found, deeply investigated, and repeatedly declined to
+  "cheaply" fix (search "spiral-coil" / "multi-ply" / "corridor shape" /
+  "tied-candidate" earlier in this file for the full history across at
+  least 8 different opponents now, including two previous sessions that
+  specifically tried and DISPROVED a "corridor shape" degree-based
+  metric as a fix for this exact tied-candidate scenario -- see the
+  `rdbrck__btas` session write-up above for why a whole-flood-fill-region
+  metric mathematically can't discriminate between two candidates that
+  share almost the same region).
+- Did NOT attempt a new fix this session: both already-tried standing
+  ideas (pure space-maximizing lookahead, whole-region corridor-shape
+  metric) have been directly disproven on real data by previous sessions
+  for this exact failure pattern, and the only remaining candidate idea
+  (genuine recursive N-turn self-play simulation using the bot's own full
+  scoring function, or a *bounded-radius* corridor-shape variant scoped
+  to just the first few BFS layers near each candidate rather than the
+  whole region) is a substantial, higher-risk undertaking that previous
+  sessions have consistently judged unsafe to implement+validate within
+  a single limited-budget session. With only 99.2% at stake and no new
+  concrete angle discovered this session, I made the same call as most
+  prior sessions facing this exact situation.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) win rate is already excellent (99.2%, 248/250), (2) both
+losses are confirmed instances of the same long-documented structural
+gap with two previously-tried-and-disproven candidate fixes and one
+remaining candidate fix (bounded-radius corridor shape, or full
+recursive N-turn self-play) that's too large/risky to implement and
+thoroughly validate with the remaining budget this session, and (3) no
+new information or angle was discovered this session that would change
+the risk/reward calculus from what many previous sessions have already
+concluded.
+
+**Testing done this session (regression/sanity only):**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Self-play (`main.py` vs itself), seed 999: ran 143 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `Spenca__vulture-snake` (or whatever opponent
+  is current -- always verify, don't trust names in old prose).
+- The one genuinely NEW, still-unexplored idea worth trying if a future
+  session has a full budget: a **bounded-radius** corridor-shape metric
+  (only look at BFS layers within, say, 6-8 steps of each candidate, not
+  the full reachable region) -- this could theoretically differ between
+  two candidates 1 step apart in a way the whole-region version (already
+  disproven by two previous sessions) fundamentally cannot, since nearby
+  small-radius neighborhoods around `up` vs `right` from the same head
+  ARE meaningfully different even when the full reachable region is
+  identical. Validate directly against `sim_63.jsonl` turn 83 and
+  `sim_150.jsonl` turn 19 (both now well-characterized, tied-on-every-
+  existing-metric real examples, easy to re-check via
+  `tools/replay_frame.py --diag`) before trusting it in real play, and
+  also run the NEW-vs-OLD self-play A/B technique (documented in detail
+  in the food-coefficient-tuning session's write-up earlier in this
+  file) for at least 8-10 seeds before considering it validated.
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first, as done again successfully this
+  session.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
