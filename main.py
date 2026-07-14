@@ -409,7 +409,7 @@ def move(game_state):
             # intentionally only a tie-breaker unless a move has almost no
             # continuations; it targets late losses where flood-fill space stayed
             # large until we had already coiled into a noose.
-            if my_len >= 10 and my_health > 45:
+            if my_len >= 8 and my_health > 45:
                 static_blocked = set(sim_blocked) - set(my_body)
                 # If this candidate eats, our tail stays for the next turn.
                 # The previous version always dropped the tail for this shallow
