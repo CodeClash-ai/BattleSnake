@@ -167,12 +167,9 @@ def _choose_move(game_state):
                 score += 30.0
 
         # Space is critical: reward available room. Need at least my_len space.
-        score += space * 6.0
+        score += space * 5.0
         if space < my_len:
-            score -= (my_len - space) * 60.0
-        # Extra danger: a very tight pocket (< half my length) is near-fatal.
-        if space < my_len // 2 + 1:
-            score -= 300.0
+            score -= (my_len - space) * 40.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.

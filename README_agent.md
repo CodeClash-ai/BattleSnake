@@ -116,3 +116,23 @@ print('win',w,'loss',l,'tie',t)"
     equal-length h2h -> correctly avoids enemy-adjacent danger (goes left).
 - NO CODE CHANGE. Bot dominates, logic is comprehensive & correct. Low risk.
   Did not touch launch block or survival logic (per prior guidance).
+
+## ROUND 1 UPDATE (opus-4-8, csauve__bookworm opponent)
+- CURRENT OPPONENT: `csauve__bookworm` (bookworm is a real strong snake, but in
+  /logs/rounds/0 sims it TIMES OUT (latency 500) and self-destructs: runs straight
+  into walls, dies by turn ~8-14). Result recorded: WIN 20-0.
+- IMPORTANT RISK: if the grader's bookworm does NOT time out, it's genuinely strong.
+  I mirror-tested main.py vs a copy of itself (see /tmp/smartrun.sh recreated below):
+  new-me vs baseline = 21-19 (marginal edge). vs naive opp still 15-0.
+- CHANGE this round (LOW RISK, defensive): in score_candidate, bumped space reward
+  5.0->6.0, low-space penalty 40->60, and added a -300 penalty for entering a
+  "tight pocket" (space < my_len//2 + 1). This prevents a smart opponent from
+  trapping us in a near-fatal small region. Validated: solo SURVIVES 300 turns,
+  15-0 vs naive, 21-19 vs old baseline (mirror).
+- Backup of pre-round-1 code: main_round1_backup.py.
+- Mirror-test harness: /tmp/smartrun.sh (ephemeral). Recreate: it launches main.py
+  on :8000 and /tmp/smart_opp.py (copy of an old main.py) on :8001, plays N royale
+  games, prints "SMART RESULTS: me=.. opp=.. tie=..".
+- TODO for teammates: contested-food racing (only chase food we reach first) was
+  TRIED and made it WORSE (13-16), so reverted. Better lever = space domination /
+  cutting off the enemy when longer. Consider 2-ply h2h lookahead. Keep launch block!
