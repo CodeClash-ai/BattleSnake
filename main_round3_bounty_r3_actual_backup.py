@@ -737,7 +737,7 @@ def _choose_move(game_state):
         # keep escape routes and cannot be sealed against a wall.
         if being_hunted:
             dist_center = abs(nc[0] - cx) + abs(nc[1] - cy)
-            score -= dist_center * 4.0
+            score -= dist_center * 5.0
             on_edge2 = (nc[0] == 0 or nc[0] == width - 1
                         or nc[1] == 0 or nc[1] == height - 1)
             if on_edge2:
@@ -1229,55 +1229,49 @@ def _choose_move(game_state):
     scored = [score_candidate(c) for c in candidates]
     scored.sort(reverse=True)
 
-    # ---- SOFT SURVIVABLE-SPACE SAFETY NET (anti-boxed-in, gentle) ----
-    # The largest loss class vs strong space-control opponents (bountysnake) is
-    # being BOXED IN in long endgames: the heuristic score picks a move that
-    # walks into a shrinking pocket because time-aware/static floods OVERCOUNT
-    # space through 1-wide channels. Here we compute the TRUE chokepoint-aware
-    # region for the top candidates and, ONLY when the top-scoring move's true
-    # region is fatally small (< my_len) AND another candidate has a much larger
-    # region (>= my_len OR at least +4 quality) AND that alternative is not a
-    # losing head-to-head, we DEMOTE the small-region move below the roomier one.
-    # This is a SOFT nudge (re-orders only in the fatal-pocket case) rather than
-    # the aggressive hard filter tried in R3 (which over-restricted combat).
-    try:
-        def _true_region(nc):
-            occ = set(my_body)
-            if my_body and nc not in _food_cells:
-                occ.discard(my_body[-1])
-            for _ob in opp_bodies_static:
-                occ.add(_ob)
-            occ.discard(nc)
-            return _open_region_quality(nc, occ, limit=None)
+    # ---- SURVIVABLE-SPACE SAFETY NET (anti-boxed-in) ----
+    # The dominant loss class vs bountysnake (171/212 losses) is being BOXED IN
+    # (0 safe moves) after self-coiling / getting herded onto walls -- usually
+    # while we were AHEAD on length. The heuristic score can still pick a move
+    # that walks into a shrinking pocket because the time-aware/static floods
+    # overcount space through 1-wide channels. Here we compute the TRUE
+    # chokepoint-aware reachable region for EACH candidate (body-after-move as
+    # walls, with the tail NOT retreating when we land on food) and use it as a
+    # HARD guard: never pick a fatally-small-region move if a much roomier
+    # alternative exists.
+    def _true_region(nc):
+        occ = set(my_body)
+        # tail retreats unless we eat (land on food) -> body doubles/keeps tail
+        if my_body and nc not in _food_cells:
+            occ.discard(my_body[-1])
+        occ.add(nc)
+        # opponent bodies are obstacles too (static; conservative)
+        for _ob in opp_bodies_static:
+            occ.add(_ob)
+        occ.discard(nc)
+        return _open_region_quality(nc, occ, limit=None)
 
-        if len(scored) >= 2:
-            _top = scored[0]
-            _top_nc = _top[3]
-            _top_reg = _true_region(_top_nc)
-            if _top_reg < float(my_len):
-                # find the roomiest non-losing-h2h alternative
-                _cand_lose = {c[1]: c[2] for c in candidates}
-                _best_alt = None
-                _best_alt_reg = _top_reg
-                for _s in scored[1:]:
-                    _nc = _s[3]
-                    if _cand_lose.get(_nc, False):
-                        continue
-                    _r = _true_region(_nc)
-                    if _r > _best_alt_reg + 1e-9:
-                        _best_alt_reg = _r
-                        _best_alt = _s
-                if _best_alt is not None and (
-                    _best_alt_reg >= float(my_len) or _best_alt_reg >= _top_reg + 4.0
-                ):
-                    # promote the roomier alternative to the front
-                    scored.remove(_best_alt)
-                    scored.insert(0, _best_alt)
-    except Exception:
-        pass
+    _regions = {}
+    for _s in scored:
+        _nc = _s[3]
+        _regions[_nc] = _true_region(_nc)
 
+    # Best region available across all safe candidates.
+    _max_reg = max(_regions.values()) if _regions else 0.0
+
+    # Filter the top-score set: if the highest-scoring move is in a fatally small
+    # region (< my_len, i.e. it will seal us in) but a candidate has clearly more
+    # room, restrict "best" to only moves whose region is within reach of the max.
     best_score = scored[0][0]
     best = [s for s in scored if s[0] >= best_score - 1e-9]
+    _need = float(my_len)
+    _best_top_reg = max((_regions[s[3]] for s in best), default=0.0)
+    if _best_top_reg < _need and _max_reg > _best_top_reg + 1.5:
+        # The top move seals us in; prefer the roomiest safe move(s) instead.
+        _cutoff = _max_reg - 1.5
+        _roomy = [s for s in scored if _regions[s[3]] >= _cutoff]
+        if _roomy:
+            best = _roomy
 
     # Among the best-scoring safe moves, pick by food strategy.
     food = [(f["x"], f["y"]) for f in board["food"]]

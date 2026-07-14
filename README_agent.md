@@ -2491,3 +2491,40 @@ print('win',w,'loss',l,'tie',t)"
   (extend 2-ply pin lookahead). Keep survivable-space-net + all existing anti-
   coil/anti-pin/growth. Use /tmp/death.py (boxed vs h2h) + /tmp/timeline.py
   (crossover) to measure. NEVER touch the launch block.
+
+## ROUND 4 UPDATE (opus-4-8, rdbrck__bountysnake2018 -- SOFT SURVIVABLE-SPACE NET)
+- Standing: R0 LOSS 214-35, R1 LOSS 211-37, R2 LOSS 212-38, R3 LOSS 224-26.
+  bountysnake is our TOUGHEST opponent (~89% loss). R3's aggressive changes
+  (center-pull 4->5 AND a HARD survivable-space filter) made it WORSE (38->26).
+- ACTION: REVERTED main.py to the R2 baseline (main_round2_bounty_r2_backup.py,
+  the 212-38 code) -- R3's hard filter over-restricted combat.
+- ANALYZED all 224 R3 losses (/tmp/deep.py + /tmp/h2hcheck.py, recreate from git):
+  124 BOXED (0 safe moves = space collapse/self-coil/herded-seal), 100 had a
+  move. Of the 100: 60 forced-h2h (only losing-h2h cells left, gap -1), 40 had a
+  truly safe move (fatal commit 1 turn earlier). We LEAD mid-game (gap +1 at
+  t50/t80) then die LATE. Death gap -1. 152 edge / 38 corner / 34 interior.
+- CHANGE (SOFT survivable-space net, replacing R3's hard filter): after
+  scored.sort, compute the TRUE chokepoint-aware region (_open_region_quality,
+  body-after-move as walls, tail not retreating on food) for the top candidates.
+  ONLY when the top-scoring move's true region is fatally small (< my_len) AND a
+  non-losing-h2h alternative has a MUCH larger region (>= my_len OR +4 quality),
+  DEMOTE the small-region move below the roomier one. This is a gentle re-order
+  (fatal-pocket case only), NOT R3's aggressive hard filter that over-restricted.
+  Wrapped in try/except (safe). Targets the 124 boxed deaths.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, move() 1.97ms/call.
+  * space_opp (spacematch.sh, closest proxy to bountysnake's space control):
+    NEW 11-9 + 13-7 = 24-16 (60%). BASELINE (R2) was 10-10. Modest improvement.
+  * smart_opp (smartmatch.sh): 15-5 (strong, no regression).
+  Mirror A/B is all-ties (deterministic, grep broken -- IGNORE per all prior notes).
+- Backups: main_round2_bounty_r2_backup.py (the R2 212-38 code = current base),
+  main_round3_bounty_r3_actual_backup.py (the WORSE 224-26 R3 code -- do NOT use).
+- ADVICE FOR NEXT TEAMMATE: bountysnake herds us into space collapse (124/224
+  boxed) + wins gap=-1 forced-h2h (60/224). The soft space-net targets boxing.
+  DEEP fix (all notes agree) = a real space-filling / longest-survivable-path
+  metric or Hamiltonian planner (floods overcount through 1-wide channels/along
+  walls via tail retreat). For the 60 forced-h2h, growth-cranking has REPEATEDLY
+  FAILED (R0 tied-food bump RAISED losses) -- try a full 2-ply/3-ply MINIMAX on
+  the hunter instead. If the soft net regresses, revert to R2 baseline. Use
+  /tmp/deep.py (loss-mechanism breakdown) + /tmp/h2hcheck.py (forced-h2h vs
+  boxed). NEVER touch the launch block. Judge via space/smart proxies (variance).
