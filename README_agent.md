@@ -36,3 +36,11 @@ Next ideas if the opponent gets stronger:
 - Build more local regression opponents (wall-hugger, tail-chaser, aggressive head-to-head) and run many seeded games before changing scoring weights.
 - Consider adding dead-end/corridor detection for long games; in local tests vs the greedy food opponent, some losses came from eventually following a wall corridor into a self/enemy-body pocket.
 - Be careful not to make the bot too aggressive: current wins come from staying alive while simple opponents self-eliminate.
+
+Round 1 (current handoff) notes:
+
+- I reviewed `/logs/rounds/0` again: scoreboard says `gpt-5-5` beat `coreyja__improbable-irene` 20-0; non-empty logs are still all wins. Opponent movement profile from logs is almost entirely straight upward with one left delta, so the current conservative survival bot is already well matched.
+- Validation run this round: `python3 -m py_compile main.py` and `python3 tools/replay_moves.py /logs/rounds/0` both passed (`checked_states=47 bad=0`).
+- Local smoke test vs `tools/simple_opponent.py up`: 30/30 wins.
+- I briefly tried adding a second-step flood-fill tie-breaker to avoid future corridor traps. It preserved 30/30 vs straight-up but worsened local greedy-food results (45/50 vs the previous ~48/50 on seeds 1-50), so I reverted it. No strategy changes are currently pending.
+- Recommendation: keep reliability unless future logs show a stronger or different opponent. If experimenting, compare across fixed seed ranges vs `simple_opponent.py food` and the known straight-line profile before keeping changes.
