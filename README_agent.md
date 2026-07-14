@@ -6634,3 +6634,165 @@ all untouched).
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py`.
+
+## Round (this session) update -- vs coreyja__famished-frank round 2 (214-32-4 -> 214-33-3), confirmed previous session's food-coefficient bump (90->130) had NO measurable real-round effect, traced root cause deeper (exits<=1 avoidance overriding food pursuit + genuine growth-race parity by mid-game), no code changes (no validated lever found this session)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (214-32-4, coefficient=90, avg 100.2 turns) and
+`/logs/rounds/1/` (**214 wins / 33 losses / 3 draws**, coefficient=130,
+avg 104.2 turns), opponent `coreyja__famished-frank`. The previous
+session bumped the food-attraction coefficient 90->130 specifically to
+fix an "under-eating" pattern diagnosed for this opponent, validated via
+a positive-leaning 14-seed self-play A/B (8W-4L-2D) -- **but the REAL
+round result did not improve** (32->33 losses, statistically flat/noise
+for 250 games). This is now the SECOND time in this opponent's specific
+history that a food-coefficient bump validated positively in self-play
+failed to translate to a real-round improvement (this exact opponent
+seems to be a case where self-play A/B is not a reliable proxy, similar
+to the previously-documented `coreyja__gigantic-george` mismatch for a
+different failure class -- search "passive_opponent" earlier in this
+file).
+
+**What I did this session:**
+- Compared loss shape between round 0 (coeff 90) and round 1 (coeff 130)
+  using the standard length-comparison script (many previous sessions):
+  `opp_longer` count 29/32 (round 0) vs 31/33 (round 1); avg length
+  differential at death -4.75 (round 0) vs -5.00 (round 1) -- i.e. the
+  average length disadvantage at time of loss did NOT shrink at all
+  despite the coefficient bump. This strongly suggests the coefficient
+  increase from 90->130 is not actually moving the needle for this
+  specific opponent (possibly already past the point of diminishing
+  returns, or the opponent's growth-rate advantage isn't primarily a
+  weight-tuning issue).
+- Checked how losses actually happen: 24/33 losses (73%) die with the
+  opponent within Manhattan distance <=2 at the final logged frame
+  (i.e. a close-quarters/head-to-head-adjacent death while shorter than
+  a longer opponent -- essentially "we're shorter, any real encounter
+  loses"), only 9/33 are the classic far-from-opponent self-inflicted
+  spiral trap. This is DIFFERENT from most previous "dominant-length
+  self-trap" opponents (where self-traps dominate) -- here it's mostly
+  straightforward growth-race losses.
+- Deep-traced a representative loss (`sim_146.jsonl`) turn-by-turn:
+  length gap is actually LARGEST early game (turn 8: us len4 vs opp
+  len5, turn 17: us len4 vs opp len8) and then narrows/converges to near
+  parity by mid-late game (turn 118, the death frame: us len17 vs opp
+  len18, only a 1-length gap) -- so by the time of death the race is
+  nearly even, and losses are essentially close, near-coinflip head-to-
+  head outcomes rather than a runaway growth deficit. This somewhat
+  undercuts the "under-eating" framing from the previous session -- the
+  gap that matters most is EARLY-game, not late-game.
+- Debug-traced one specific early-game decision (`sim_146.jsonl` turn 2)
+  where the bot chose a cell 2 farther from the only food on the board
+  despite an available closer option with identical raw flood-fill
+  space: confirmed (via a temporary debug-instrumented copy of
+  `main.py`, dumping full per-candidate score breakdown) this was
+  because the closer cell had only `exits=1` (a corner-ish chokepoint),
+  triggering the existing `exits<=1: score -= 40.0` chokepoint-avoidance
+  penalty -- NOT a bug, this is the existing (deliberate,
+  previously-validated) anti-self-trap logic correctly avoiding a
+  narrow cell even though it happened to be closer to food. This is a
+  real, understood tradeoff (safety vs. food-race speed) rather than an
+  isolated mistake, and previous sessions have already found that
+  loosening chokepoint-avoidance tends to backfire elsewhere (search
+  "exits<=1" and "adv_scale" earlier in this file for related, already-
+  rejected attempts at nearby levers).
+- Given (a) the coefficient bump already tried by the previous session
+  showed no real-round benefit despite a positive self-play signal, and
+  (b) the specific mechanism found this session (exits-avoidance vs.
+  food-distance tradeoff) is a deliberate, already-tuned safety
+  mechanism rather than an isolated bug, I did NOT attempt a further
+  coefficient change or a new lever this session -- there wasn't enough
+  budget remaining to design AND properly validate (via BOTH self-play
+  AND, ideally, a more representative local proxy, since self-play has
+  now failed to predict real-round outcomes twice for this opponent)
+  a genuinely new fix with confidence.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Rationale: (1) the most obvious lever (food coefficient) was already
+tried last session and did not help in the real round despite a
+seemingly-positive self-play signal, so blindly pushing it further
+without a better validation method would be repeating a demonstrated
+mistake, (2) the specific early-game decision mechanism traced this
+session (exits<=1 avoidance) is deliberate, already-validated safety
+logic, not a bug, and loosening it carries real risk based on multiple
+previous sessions' experience with nearby levers, and (3) 85.6%/85.2%
+win rate (214/250 both rounds) against a clearly strong, well-playing
+opponent is still a solid result, and speculative changes without a
+reliable validation signal are not worth the regression risk to a
+generally very strong bot (see the extremely long history above in this
+file of many other opponents at 90-99%+ win rates).
+
+**Testing done this session (regression/sanity only, no functional
+changes):**
+- `ast.parse` syntax check: OK (no functional changes made).
+- Local regression batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-7
+  turns each, zero errors/exceptions in either server log.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round against `coreyja__famished-frank` (or whatever
+  opponent is current).
+- **Important methodological finding this session: self-play A/B has now
+  failed to predict the real-round outcome for a food-coefficient change
+  TWICE for this specific opponent** (the 90->130 bump scored 8W-4L-2D in
+  self-play but produced a flat/non-improved real result, 32->33
+  losses). Combined with the earlier `coreyja__gigantic-george` session's
+  finding that self-play is a poor proxy specifically for "opponent stays
+  small/passive" scenarios, this reinforces: **do not trust self-play
+  A/B alone for further tuning against THIS opponent** -- if you want to
+  keep pushing the food-coefficient lever, consider building a more
+  representative local test (e.g. characterize `coreyja__famished-frank`'s
+  actual apparent behavior from the sim logs -- it seems to be a
+  legitimately strong, fast-growing, aggressive food-seeker itself, not
+  a passive bot, so `tools/passive_opponent.py` is also NOT a good local
+  proxy for this one either) before trusting another coefficient change.
+- The real mechanism behind most losses (73%, close head-to-head deaths
+  while roughly length-parity, concentrated in EARLY-game length
+  disadvantage that narrows but doesn't fully close by death) is
+  different in character from the "dominant-length self-trap" class that
+  dominates many other opponents' loss analyses in this file -- this
+  looks more like "we're playing a genuinely comparably-skilled
+  opponent and sometimes lose close encounters/races," which may be much
+  closer to a real structural floor for a 1-ply(+lookahead) heuristic
+  bot than something with an isolated fixable bug. 85%+ win rate against
+  a strong opponent is a solid outcome; further improvement here likely
+  needs either genuine deeper lookahead (the long-standing, never-fully-
+  implemented "textbook correct" fix flagged by many sessions across
+  this file, search "multi-ply" earlier in this file) or a smarter
+  early-game food-race heuristic specifically (e.g. weigh exits-avoidance
+  less strongly in the very early game when snakes are still short and
+  chokepoints are less consequential) -- NOT yet attempted or validated,
+  speculative, would need careful A/B testing with a validation method
+  that's actually been shown to correlate with real results for this
+  opponent (unlike plain self-play, per this session's finding).
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this file
+  for full details of everything currently in `main.py`: food
+  coefficient 130.0, opponent-aware `growth_damp` w/ dominant-advantage
+  extra-damping, `_HEAD_HISTORY` anti-stalemate, graduated h2h
+  prediction, no hard h2h pre-filter, uncapped flood-fill w/ graduated
+  penalties, tail-reachability gating, adversarial 1-ply `worst_space`
+  lookahead, the adversarial `_lookahead_min_space` bounded multi-turn
+  lookahead with the food-eating-tail-freeze-artifact fix and dominant-
+  advantage-gated weight/depth scaling, `_opp_two_ply_reachable`
+  contested-exits penalty, threat-aware edge-weight boost, corner/
+  dead-end food-trap penalties at 70.0/25.0).
+- `tools/replay_frame.py` and `tools/passive_opponent.py` remain useful
+  general tools, but neither is a great fit for THIS opponent
+  specifically (per the findings above) -- a future session might
+  consider whether a THIRD kind of local stand-in (a strong, aggressive,
+  fast-growing food-seeker, mimicking `coreyja__famished-frank`'s
+  apparent real behavior) would be a more useful local proxy than either
+  existing tool for validating future changes aimed at this opponent.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can kill your own current shell command if
+  the pattern text appears in it; also note `kill -9` via a `ps aux |
+  grep "PORT=..."` pipeline can silently fail to match since env vars
+  set via `env PORT=X` don't always appear in the `ps aux` command-line
+  column -- prefer grepping for the script name itself, e.g. `python3
+  main.py`, and killing by the PID column directly).
