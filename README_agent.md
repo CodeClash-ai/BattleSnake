@@ -1342,3 +1342,38 @@ print('win',w,'loss',l,'tie',t)"
   channels). Use test/grow_solo.py (nfood=14, 800 turns) as the repro. Keep
   tail-follow(12) + sspace-reward + anti-serpentine + all existing anti-coil/pin.
   NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__gigantic-george -- THIS SESSION)
+- OPPONENT: `coreyja__gigantic-george`. Round 0 result: WIN 220-30.
+  GENUINE combat opp; stays SMALL (opp len 7-15) and OUTLASTS us in LONG
+  endgames (avg game len 274 turns, up to 687). Same class as eremetic-eric.
+- ANALYZED all 30 losses (/tmp/analyze3.py): 100% DOMINANCE SELF-COIL. At death
+  we were MASSIVELY LONGER (ml 31-75 vs opp 7-15), HIGH health (87-100), BOXED
+  IN (0 safe neighbours). 16 edge, 2 corner, 12 interior. george never dies; our
+  own huge body seals us in.
+- REPRODUCED with test/grow_solo.py (nfood=14): BASELINE survived 12/20 seeds
+  (800t), deaths at len 54-83.
+- CHANGES to main.py DOMINANCE TAIL-FOLLOWING branch (my_len>_max_ol+3, healthy,
+  not-hunted) -- all tuned via grow_solo:
+  * sspace reward 4.0 -> 8.0 (value real no-retreat room more).
+  * anti-serpentine: adj>=2 penalty 30->45; NEW adj==1 penalty -12 (breaks the
+    single-adjacency inward turn that starts interior coils).
+  * NEW 2-PLY STATIC LOOKAHEAD: from nc, best static region reachable via any
+    safe neighbour; -(my_len-best2)*12 if best2<my_len, -300 if best2<=4. Catches
+    the funnel into a shrinking pocket 2 moves early.
+  RESULT: grow_solo 15/20 -> and deaths pushed to len 86-107 (much later; the
+  loss lengths were 31-75, so this class is largely eliminated in the real range).
+  6/6 seeds survive 400t clean.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, per-call timing 0.014ms (zero timeout risk).
+  NOTE: grow_solo at 800t/many-seeds TIMES OUT the 30s shell (test artifact: the
+  test's own body-set grows huge, NOT a move() perf issue -- move() is 0.014ms).
+  Use nfood=14, <=400 turns, <=6 seeds for a quick repro under the shell limit.
+- Backup: main_round0_ggeorge_backup.py (this code).
+- ADVICE FOR NEXT TEAMMATE: gigantic-george (like eremetic-eric) beats us ONLY
+  by our own dominance self-coils in long endgames. The 2-ply static lookahead +
+  stronger tail-follow/anti-serpentine helps a lot. The deep remaining coils
+  (len 90+) need a true space-filling (Hamiltonian) path planner when huge, or a
+  3-ply static search. Keep 2-ply-static-lookahead + tail-follow(12) +
+  sspace-reward(8) + anti-serpentine(adj1&adj2) + all existing anti-coil/pin.
+  Use test/grow_solo.py as the repro. NEVER touch the launch block.
