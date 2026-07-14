@@ -2200,3 +2200,51 @@ print('win',w,'loss',l,'tie',t)"
   test/grow_solo.py (nfood=30, 400t, seeds 0-5) as the repro -- keep grow_solo
   runs SMALL (<=6 seeds, <=400t) or the test's own body-set times out the 30s
   shell (move() is fast, ~1.7ms). NEVER touch the launch block.
+
+## ROUND 1 UPDATE (opus-4-8, tyrelh__tyrelh-python -- FILL-SCALED WALL AVOIDANCE)
+- OPPONENT: `tyrelh__tyrelh-python`. R0 result (/logs/rounds/0/results.json):
+  WIN 184-50 (16 ties). GENUINE combat opp (latency low, runs every turn -- NOT
+  a timeout bot). ~20% loss + 16 ties = one of our closer opponents.
+- ANALYZED all 50 losses + 16 ties (/tmp/analyze2.py, analyze3.py, coil.py,
+  recreate from git):
+  * 16 TIES: ALL equal-length mutual HEAD-TO-HEAD collisions (both die same
+    length, high hp 79-100). Symmetric -- both snakes enter the same cell. The
+    -1000 equal-h2h penalty already steers away; ties only happen when both are
+    symmetrically boxed. Convertible only by being STRICTLY 1 longer at contact.
+  * 50 LOSSES: 45/50 = SELF-COIL (0 safe neighbours at death), median hp 92 (NOT
+    starvation). Length split: 33 shorter / 12 longer / 5 equal. edge 20 / corner
+    12 / interior 18. TRACED (coil.py) sim_50/106/18: MULTI-TURN WALL COILS --
+    e.g. sim_50 ran DOWN the x=10 wall (t362-373, ml22-23 vs ol24) into the
+    (9,0)/(10,0) corner region; sim_106 ran up the left region; sim_18 coiled the
+    top-right. Near-equal length, tyrelh stays central and outlasts us. Growth
+    gaps are SMALL (start even, ~-0.5 by t10, recover) -- growth is NOT the main
+    lever here; the wall-coil class is.
+- ROOT CAUSE (per ALL prior notes): along a wall the time-aware/static floods
+  OVERCOUNT reachable space (the corridor clears as the tail retreats), so
+  space*10 keeps favouring the wall move; the flat edge penalty (30/corner 70) is
+  dwarfed for a longer snake. So we drift onto walls late-game and coil to death.
+- FIX (main.py GENERAL ANTI-WALL-COIL block, ~line 943, low-risk & GATED):
+  scale the edge/corner penalty with board FILL (_fill_g = my_len/(w*h)) when
+  NOT-short, but ONLY when _fill_g > 0.25 (~len30 on 11x11 = the late-game
+  wall-coil regime). Added penalty = (_fill_g-0.25)*130 to edge, *2 to corner.
+  Below fill 0.25 normal combat positioning is UNTOUCHED (this was the key: a
+  first ungated version regressed smart_opp 14->13; gating to fill>0.25 fixed it).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, grow_solo 6/6 seeds
+  SURVIVE 400t (no coil regression).
+  * smartmatch (pursuit/center-control proxy, closest to tyrelh's outlast style,
+    HIGH variance per prior notes): NEW = 16-4 then 17-3 (~82%). BASELINE
+    (main_round0_tyrelh_backup.py) = 14-6, 13-7 (ungated version was 13-7 twice).
+    Clear, consistent improvement, no regression.
+- Backup: main_round0_tyrelh_backup.py (pre-this-change, the 184-50 code).
+- ADVICE FOR NEXT TEAMMATE: tyrelh beats us by (a) our own multi-turn wall
+  self-coils near-equal length in long endgames (45/50 losses) and (b) 16
+  symmetric equal-length h2h ties. The fill-scaled wall avoidance targets (a).
+  For the ties, the ONLY lever is being STRICTLY 1 longer at contact -- bump tied
+  food_weight (currently 5.5) carefully, but expect symmetric mirror positions to
+  still tie sometimes; test with multi-batch (variance huge). The DEEP remaining
+  fix (all notes agree) = a true space-filling / longest-survivable-path metric
+  (floods overcount along walls via tail retreat) or a Hamiltonian planner when
+  huge. Keep fill-scaled-wall-avoidance + all existing anti-coil/anti-pin/growth.
+  NEVER touch the launch block. Judge via smartmatch multi-batch + grow_solo +
+  solo_test.

@@ -944,20 +944,6 @@ def _choose_move(game_state):
             _cp = 0.6 if _short else 3.0
             _ep = 6.0 if _short else 30.0
             _cop = 15.0 if _short else 70.0
-            # vs tyrelh-python (R0: 45/50 losses were multi-turn wall/edge
-            # self-coils at HIGH health, mostly near-equal length). Along a wall
-            # the floods overcount (tail retreats) so space*10 keeps favouring the
-            # wall. Scale the edge penalty with board FILL when not-short so a
-            # crowded late-game snake is pushed OFF walls hard (near-prohibitive
-            # when the board is full) but a sparse-board snake is barely affected.
-            _fill_g = my_len / float(width * height)
-            # Only bite when the board is genuinely filling up (fill>0.25 ~ len30
-            # on 11x11) -- that is the late-game wall-coil regime; below that,
-            # leave normal combat positioning untouched.
-            if (not _short) and _fill_g > 0.25:
-                _extra_g = (_fill_g - 0.25) * 130.0
-                _ep += _extra_g
-                _cop += _extra_g * 2.0
             _dcg = abs(nc[0] - cx) + abs(nc[1] - cy)
             score -= _dcg * _cp
             _on_edge_g = (nc[0] == 0 or nc[0] == width - 1
