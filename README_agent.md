@@ -842,3 +842,95 @@ term, per the previous session's own suggestion (search
 prior session's writeup above). (3) `/tmp/triage5.py`'s corner-vs-
 non-corner self-trap breakdown logic is worth promoting into `tools/` if
 this opponent recurs again next round.
+
+**Session (round 5 -- FINAL scheduled round vs rdbrck__bountysnake2018,
+elo #14 -- history: r0 28%, r1 17.2%, r2 23.6%, r3 25.6% (Voronoi signal
+shipped), r4 22.8% (Voronoi validated 9/2/2 via self-play A/B, no
+functional change) -- this opponent has been our hardest matchup by a
+wide margin across all 5 rounds, never exceeding ~28%):** Ran
+`tools/analyze_logs.py` first per instructions -- confirmed the 22.8%-
+25.6% range has been stable/noisy across rounds 2-4 with no main.py
+changes between rounds 3 and 4 (25.6%->22.8% swing with IDENTICAL code
+-- useful data point: this establishes the real-round noise floor is at
+least ~3pp for 250 games, consistent with the binomial std-dev
+(~2.7%) at p=0.25,n=250. **Any future A/B or tuning decision for this
+opponent should be judged against this noise floor, not just "did the
+number go up".**
+
+**Profiled `move()` timing** (previously never explicitly measured in
+this file's history): synthetic random-state test, 20 calls, snake
+lengths 3-40, `max=25ms, avg=20ms` -- vs `game_state`'s own declared
+`timeout: 500` (ms) in the ruleset settings seen in real sim logs. **We
+are using under 5% of the available per-move time budget.** This is a
+significant, previously-undocumented finding: there is roughly 20x
+headroom before any real timeout-forfeit risk, meaning the project's
+repeatedly-stated caution about "recursive scoring is much more
+expensive, profile carefully" is true in principle but in practice we
+have a LOT of room to spend before it becomes a real constraint. Worth
+recording explicitly for the next teammate attempting the long-flagged
+"genuine recursive N-turn self-play using the bot's own full scoring
+function" idea (see "big remaining unsolved failure class" section) --
+performance is very unlikely to be the blocker; getting the SIMULATED
+POLICY accurate (matching the real bot's actual future decisions,
+per the `sim_49`/`sim_59` false-negative diagnoses from 2 sessions ago)
+is the harder, still-unsolved part.
+
+**Attempted one concrete tuning experiment**, per round 4's own explicit
+suggestion: raised the Voronoi territory-control penalty weight from
+-12.0/cell to -20.0/cell (single-line `sed` change, see round 4's notes
+for the exact command). Ran a 12-seed NEW(w20)-vs-OLD(w12, i.e. current
+committed) self-play A/B via the real `game/battlesnake` CLI (2 batches
+of 6 to stay under the tool call time limit, per round 4's
+documented gotcha): **old=7, new=5 (41.7% for the w20 variant)** --
+inconclusive/mildly negative, well within the noise floor established
+above (12 games is an even smaller sample than the round-4 62.5%-on-8-
+games figure, and both are consistent with "no real effect either
+way"). **Did NOT ship this change** -- `main.py` is byte-identical to
+the round-4-committed version (confirmed via `git status`/`git diff`,
+zero diff).
+
+**Also verified no other regressions**: `ast.parse` OK, 200-iteration
+random-fuzz `move()` smoke test (1-4 snakes, varied lengths/health/food,
+11x11 board) -- 0 exceptions. 3/3 smoke-test wins vs
+`tools/opponent_ref.py`, no exceptions in either server log.
+
+**Rationale for shipping NO functional change this session** (this being
+the scheduled FINAL round vs this specific opponent, so arguably the
+last chance to move the needle on this exact matchup): given (a) the
+established ~3pp+ real-round noise floor swamps any signal a small
+local A/B batch (8-16 seeds) can reliably distinguish for marginal
+weight tweaks like this one, (b) this exact lever (Voronoi weight) has
+now been tested at three magnitudes across sessions (12 shipped/
+validated positive at 69% on 13 seeds, 20 now tested inconclusive/
+negative at 42% on 12 seeds) with no clear monotonic trend, (c) this
+project's own extensively-documented history shows shipping unvalidated
+or weakly-validated scoring changes has caused real, measurable
+regressions TWICE before (see food-on-wall-penalty and 260/90 corner-
+bump reverts above) -- the expected value of shipping this specific
+weak-negative-signal change is clearly below zero. Per the task's own
+stated tip #3, keeping the already-committed, already-more-thoroughly-
+validated (round 4's 69%-on-13-seeds) w12 Voronoi version is the correct
+call here, not chasing one more untested tweak under time pressure just
+because it's the last round.
+
+**For next teammate (if this opponent recurs in a future cycle, or for
+general project health):** (1) The self-play-A/B validation methodology
+itself may be hitting diminishing returns for this specific opponent /
+these specific remaining levers -- small (12-16 seed) batches can no
+longer reliably distinguish real improvements from noise for weight
+tweaks in the +/-belt already explored (8-25 range for lookahead
+depth/weight, 12-20 for Voronoi weight). If pursuing this class of fix
+further, budget for MUCH larger batches (40-60+ seeds) or a
+fundamentally different validation signal (e.g. directly instrumenting
+`exclusive_space` vs `lookahead_space` divergence timing on the
+concrete `sim_59.jsonl` turns 150-190 trajectory flagged 2 sessions ago
+-- this was never actually checked despite being explicitly
+recommended). (2) The measured ~20x move-time headroom (see above) is
+new, useful context for anyone attempting the still-never-tried
+"genuine recursive self-play using the real scoring function" idea --
+performance is very unlikely to be the limiting factor; getting the
+simulated policy to actually match real future decisions is. (3) All
+prior sessions' diagnosis that this opponent wins via slow territory
+attrition in close-length races (not dominant-length self-traps, not
+literal corners specifically) still stands -- see round 3/4 notes above
+for the full `sim_59` mechanistic writeup if picking this back up.
