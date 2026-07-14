@@ -416,6 +416,15 @@ def move(game_state):
                     score -= 450
                 elif path_count < 8:
                     score -= (8 - path_count) * 120
+                # Gigantic-george endgames are won positions until we enter a
+                # short forced sequence in our own coil.  If we are healthy and
+                # far ahead, a non-food move with almost no self-avoiding
+                # continuations is usually a noose throat, not a useful attack.
+                if (my_health > 70 and my_len >= max_enemy_len + 8
+                        and n not in food and path_count < 4):
+                    score -= 2400
+                    if n[0] in (0, w - 1) or n[1] in (0, h - 1):
+                        score -= 500
 
                 # In late, already-long games the remaining safe region can be a
                 # narrow pocket even though the flood-fill score still looks nonzero.
@@ -444,7 +453,16 @@ def move(game_state):
                     elif tail_dist is not None:
                         score += max(0, 18 - tail_dist) * 4
                     else:
-                        score -= 40
+                        # No path to our moving tail while far ahead is the common
+                        # signature of the losses versus gigantic-george: the raw
+                        # flood-fill may count a pocket that is large enough for a
+                        # few turns but not enough to unwind a long snake.
+                        if area < my_len * 2:
+                            score -= 650
+                        elif exits <= 1:
+                            score -= 250
+                        else:
+                            score -= 80
                 elif my_health > 65 and my_len >= 14 and area < my_len * 2 and n not in food:
                     # In close-length long games, survival often depends on staying
                     # connected to our own tail rather than maximizing raw area.

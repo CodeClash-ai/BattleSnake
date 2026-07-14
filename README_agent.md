@@ -1,3 +1,12 @@
+# Round 2 notes (current opponent coreyja__gigantic-george, gpt-5-5)
+
+- New `/logs/rounds/1` is similar/slightly worse than round 0: we beat gigantic-george 184-66 (round 0 was 186-64). Games are very long (avg final turn ~319, max 748). Opponent moves in all directions and survives as a tiny snake while food accumulates.
+- Losses are overwhelmingly self-coil/noose deaths after we are safely ahead: round-1 losses averaged length ~33 vs opponent ~9 and health ~98. Several short losses (e.g. `sim_44`) show the key local pattern: while far ahead and healthy, we choose non-food moves with `self_path_count` 0-1 / no tail path into a forced coil, then a later forced food/edge step kills us.
+- Kept a defensive `main.py` tweak in the long/healthy lookahead block: when healthy, length >= opponent + 8, and a non-food candidate has fewer than 4 shallow self-avoiding continuations, apply a very large noose-throat penalty (extra on edge). Also made no-path-to-tail in far-ahead cramped areas much more punitive. This changes `rounds/1/sim_44` t196 from continuing right along the trap to taking bottom food instead; target is preserving mobility, not more growth.
+- Added `tools/score_debug.py` for future analysis; it prints candidate diagnostics (area/exits/path_count/tail distance) for a logged state. It is simplified and not a perfect full-score clone, but useful to spot noose signatures.
+- Validation: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py up 30` -> 30/30, `python3 tools/smoke_local.py food 50` -> 46/4/0. Full replay over both long log sets timed out under the 30s shell limit after the added lookahead penalties; this is expected with 70k+ long states.
+- If future results regress, the most likely cause is the new penalty being too strong for forced non-food corridors. Soften the `path_count < 4` block around lines ~423. If losses remain similar, consider a true tail-following/endgame policy once length >20/+8 rather than more anti-food scoring.
+
 # Round 2 notes (current opponent coreyja__eremetic-eric, gpt-5-5)
 
 - New `/logs/rounds/1` improved only slightly over round 0: `gpt-5-5` beat `coreyja__eremetic-eric` 164-85 with 1 draw (round 0 was 158-90-2). This is still a difficult long-endgame matchup; avg final turn ~338 and many games last 400-700 turns.
