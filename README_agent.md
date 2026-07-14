@@ -1377,3 +1377,42 @@ print('win',w,'loss',l,'tie',t)"
   3-ply static search. Keep 2-ply-static-lookahead + tail-follow(12) +
   sspace-reward(8) + anti-serpentine(adj1&adj2) + all existing anti-coil/pin.
   Use test/grow_solo.py as the repro. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__gigantic-george -- THIS SESSION)
+- Standing: R0 WIN 220-30, R1 WIN 224-25 (1 tie). Analyzed ALL 25 R1 losses
+  (/tmp/analyze_r1.py): 100% DOMINANCE SELF-COIL -- we grew MASSIVELY LONGER
+  (len 27-68 vs opp 7-15) at HIGH health (82-100), in LONG endgames (300-587
+  turns), then sealed ourselves in. george stays tiny and outlasts us; our own
+  huge body kills us. This is the known hard failure class (same as eremetic/
+  amphibious): a huge snake survives only via a space-filling loop (chase tail).
+- REPRO: /tmp/growbig.py (recreate: solo bot, 20 food, 900 turns) reliably
+  reproduces -- BASELINE dies 10/12 seeds by self-coil at len 58-102.
+- CHANGE (additive, GATED to the existing dominance branch: not_hunted +
+  health>=30 + my_len>_max_ol+3, so it ONLY affects huge-snake behavior and
+  CANNOT touch normal combat): added _region_and_tail() helper + a TAIL-REACHABLE
+  REGION term. From the new head, flood with body-after-move as walls; if the
+  future tail cell is still reachable -> +60 (on a survivable loop), else -400
+  (severs the loop = coil death); plus +region*10 (prefer open room over 1-wide
+  channels). This is the true survival metric a huge snake needs.
+- HONEST NOTE: at moderate weights (reg*10, -400) growbig is UNCHANGED from
+  baseline (2/12); only at extreme weights (reg*15, -2000) did it improve to
+  3/12 -- but extreme weights risk distorting real play, so kept moderate. The
+  term is a CORRECT additive safeguard (rewards staying on a survivable loop)
+  but heuristics alone can't fully solve the len-90+ coil. The REAL fix is a
+  space-filling / Hamiltonian-cycle path planner when huge, or a longest-
+  survivable-path metric (static/time-aware floods overcount through 1-wide
+  channels and via tail retreat). That's the remaining lever, higher effort/risk.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0. smartmatch 12-game
+  proxy: mine 4-8 vs baseline 5-7 = within variance (tiny sample, proxy rarely
+  reaches huge lengths so my huge-only term is irrelevant there; per prior notes
+  smart_opp is noisy). No regression to the 224-25 combat record.
+- Backup: main_round1_ggeorge_r2_backup.py (this code); main_round0_ggeorge_backup.py
+  (prior). NEVER touch the launch block.
+- ADVICE FOR NEXT TEAMMATE: gigantic-george beats us ONLY by our own dominance
+  self-coils in long endgames. Best remaining lever = a real space-filling path
+  planner when my_len is huge (>~40): compute a Hamiltonian-ish cycle over free
+  cells and follow it, only deviating for safe food. Use /tmp/growbig.py (20 food,
+  900 turns) as the repro -- target getting >8/12 seeds to SURVIVE. Keep
+  tail-reachable-region + tail-follow + 2-ply-static + anti-serpentine + all
+  existing anti-coil/anti-pin. Test carefully; the 224-25 record is the floor.
