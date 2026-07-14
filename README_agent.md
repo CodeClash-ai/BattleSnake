@@ -2842,3 +2842,133 @@ data):**
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs zacpez__scape-goat (246-4, then 249-1), traced the 1 real loss to the SAME known modest-length spiral-trap gap, no code changes (budget-constrained, high risk to fix blind)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (246 wins / 4 losses, 250 games, opponent
+`zacpez__scape-goat`, avg 87.8 turns) and `/logs/rounds/1/` (**249 wins /
+1 loss**, 250 games, avg 88.7 turns) -- i.e. the previous session's
+(no-code-change) hypothesis that the 4 round-0 losses were rare/marginal
+edge cases was borne out: round 1, with byte-identical `main.py`, dropped
+to just 1 loss out of 250 (99.6% win rate). This is already an excellent
+result.
+
+**What I did this session:** traced the single round-1 loss
+(`/logs/rounds/1/sim_21.jsonl`) using the standard real-frame-replay
+methodology (documented extensively earlier in this file). Found our
+snake died at turn 98->99 with **zero legal moves** (confirmed directly:
+`_occupied_cells` blocks all 4 neighbors of our head at that exact
+frame). Backtracked turn-by-turn from turn 70 to 98 (see the
+per-turn `legal moves` dump in this session's trajectory) and found the
+corridor had already collapsed to a **single legal move every turn from
+turn 92 through 97** (a long single-file forced march), with the actual
+fatal commitment happening sometime before turn 92 while walking through
+a region our own body had recently occupied -- this is the SAME
+"single-snapshot flood-fill can't see multi-turn self-narrowing"
+structural gap documented at exhausting length by many previous sessions
+in this file (search "spiral-coil" / "multi-ply" earlier in this file for
+the full history across at least 4 different opponents).
+
+**New data point worth flagging for future sessions:** unlike several
+previous instances of this bug (which involved snakes occupying 19-26%+
+of the board, triggering the existing `growth_damp` mitigation at the
+25%-of-board-cells threshold), THIS instance happened at a much MORE
+modest length: our snake was only **16-18 segments long on an 11x11
+board (13-15% of board cells)** the entire time this corridor formed
+(turns 70-98) -- well below the `overgrow_threshold = board_cells * 0.25`
+(~30 cells) that gates the existing growth-damping mitigation. So
+`growth_damp` was not (and could not have been) engaged here; this
+confirms the spiral-self-trap risk is NOT purely a function of "snake is
+occupying a large fraction of the board" -- it can also arise from
+transient corridor-shaped self-occupancy at much more modest lengths,
+purely from *how* the body happens to be laid out on a small 11x11 board.
+This means widening/tightening the `growth_damp` threshold would NOT have
+prevented this specific loss, and isn't a promising direction to pursue
+further for this failure mode.
+
+**Why I did NOT attempt a fix this session:** the existing codebase
+already has substantial machinery aimed at exactly this problem class
+(uncapped BFS flood-fill, tail-reachability gating, a 1-ply adversarial
+`worst_space` lookahead vs equal/longer opponents, an immediate
+single-cell `exits`/branching-factor penalty, 2-ply opponent-reachability
+contested-exit checks, and `growth_damp`) -- I read through all of it
+this session and confirmed it's sound and well-tested (see the many
+"Fix implemented" writeups earlier in this file for each piece's origin
+story). A previous session already prototyped and *disproved* the most
+obvious next idea (a pure space-maximizing N-step forward self-simulation
+lookahead) against a very similar real case -- it found long escape
+routes for both branches of a real fatal decision, i.e. it would NOT have
+flagged the trap either. I did not have enough remaining budget this
+session to design, implement, AND thoroughly validate a genuinely
+different approach (e.g. recursively simulating the bot's own FULL
+scoring function several turns deep, or a corridor/degree-based "shape"
+heuristic over the whole flood-fill visited region rather than just the
+immediate candidate cell) with confidence it wouldn't regress a
+currently-excellent (99.6% win rate) bot. Given only 1/250 real losses
+and no quick, safely-validatable fix available, I judged shipping
+something under-tested to be worse than leaving it alone.
+
+**Decision: made NO functional changes to `main.py` this session.**
+Verified via `ast.parse` (OK) and fresh regression tests: local batch vs
+`tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-8
+turns each, zero errors/exceptions in either server log; one 192-turn
+self-play game (`main.py` vs itself, seed 501) completed cleanly with a
+decisive winner and zero exceptions in either server log.
+
+**For next teammate (concrete next steps, now with a second confirmed
+concrete data point for this failure class):**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round. If the win rate against `zacpez__scape-goat` (or
+  whatever opponent is current) stays at/above ~99%, this remains a very
+  low-priority, hard-to-fix-safely edge case not worth further risk. If
+  losses climb notably, re-investigate with fresh sim data.
+- If you want to seriously pursue a fix for this failure class (now
+  documented across at least 2 different opponents with 2 concrete,
+  fully-traced real examples -- see this session's `sim_21.jsonl` turn
+  70-98 trace above, and the earlier session's `sim_192.jsonl` turn 115
+  trace further up this file), the two most promising *unexplored*
+  approaches are still:
+  1. A "corridor shape" metric over the FULL flood-fill visited region
+     (not just the immediate candidate cell's `exits`): e.g. compute, for
+     every cell in `visited`, its degree (number of free neighbors within
+     `eff_blocked`), and derive a ratio like
+     `low_degree_cells / len(visited)` (cells with degree <= 2, i.e.
+     corridor-like) vs "room-like" cells (degree >= 3). A candidate whose
+     reachable region is mostly a single winding corridor (high
+     low-degree ratio) is intrinsically riskier than one whose region is
+     mostly open rooms, even with identical total `space`. This is cheap
+     (`O(len(visited) * 4)`, at most ~484 extra neighbor checks per
+     candidate on an 11x11 board) and untested so far -- worth
+     prototyping and validating directly against BOTH `sim_21.jsonl`
+     turn ~80-90 AND `sim_192.jsonl` turn 115 (build synthetic states,
+     dump the new metric per candidate, check whether it would have
+     flagged the eventually-fatal branch earlier than the existing
+     metrics do) before trusting it in real play.
+  2. Recursive full-scoring-function self-simulation N turns deep
+     (more expensive/complex, but the "textbook correct" fix) -- see the
+     detailed scoped-but-unimplemented plans in the "investigated
+     remaining 10/250 losses" and "deep-dived remaining 5/250 losses"
+     sections earlier in this file for guidance on validation/performance
+     concerns before attempting this.
+- Replay/debug harness pattern used again this session (still not saved
+  as a standalone `tools/` script despite at least 3 earlier sessions
+  suggesting it -- genuinely worth finally writing
+  `tools/replay_frame.py` next session if there's spare budget, since
+  this exact snippet keeps getting rewritten from scratch):
+  ```python
+  import json, sys; sys.path.insert(0, '.')
+  import main as M
+  frames = [json.loads(l) for l in open('/logs/rounds/1/sim_21.jsonl') if l.strip() and 'board' in json.loads(l)]
+  ours = [f for f in frames if any(s['name'] == 'sonnet-5' for s in f['board']['snakes'])]
+  fr = next(f for f in ours if f['turn'] == 98)
+  you = next(s for s in fr['board']['snakes'] if s['name'] == 'sonnet-5')
+  state = {'game': {'id': 'dbg', 'timeout': 500}, 'turn': fr['turn'], 'board': fr['board'], 'you': you}
+  print(M.move(state))
+  ```
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
