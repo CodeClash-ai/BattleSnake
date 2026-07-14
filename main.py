@@ -750,16 +750,60 @@ def move(game_state):
                         if hyp_space < worst_space:
                             worst_space = hyp_space
 
+            # Bounded multi-turn forward-simulation lookahead, computed
+            # HERE (before the hard space-penalty tiers below) so that a
+            # more-accurate multi-turn signal can correct a specific,
+            # well-diagnosed artifact of the immediate 1-ply flood-fill:
+            # when a candidate eats food, our tail is (correctly) treated
+            # as still-occupied for THIS turn's BFS (see the food-eating
+            # tail-freeze fix earlier in this history), which can make an
+            # otherwise-safe move look like a severe trap (space far below
+            # my_len) purely because of that one-turn freeze -- even though
+            # a few turns later, once the tail actually vacates, the real
+            # reachable space is much larger. Real match evidence (see
+            # README_agent.md, opponent joshhartmann11__battlejake2019,
+            # `tools/passive_opponent.py` seed 4 turn 404): a candidate
+            # with 1-ply space=7 (below my_len=39, triggering the harshest
+            # -1000/cell penalty) was reported by the lookahead as
+            # min-space=21 over the next 6-20 turns -- i.e. actually SAFER
+            # long-run than two alternatives whose 1-ply space looked huge
+            # (48) but which the lookahead correctly flagged as collapsing
+            # to 0 within a few turns. Since the hard penalty tier ran
+            # first (before the lookahead was even computed), that
+            # artifact could never be corrected. Fix: compute the
+            # lookahead first, and ONLY when `will_eat` is true (the
+            # specific, narrowly-scoped scenario where the 1-ply reading is
+            # a known, understood artifact -- not a general override),
+            # use `effective_space = max(space, lookahead_space)` for the
+            # hard/soft space-safety tiers and the space bonus below. This
+            # can only ever help a food-eating candidate that the deeper
+            # lookahead finds safer than the immediate snapshot suggests;
+            # it never masks a real trap for non-food moves, and never
+            # lowers `effective_space` below the already-computed `space`.
+            my_body_tuples = _body_tuples(you["body"])
+            if will_eat:
+                sim_my_body = [npt] + my_body_tuples
+            else:
+                sim_my_body = [npt] + my_body_tuples[:-1]
+            sim_opp_bodies = [_body_tuples(b) for b in threat_bodies]
+            lookahead_space = _lookahead_min_space(
+                sim_my_body, sim_opp_bodies, food_cells, width, height, lookahead_depth
+            )
+            effective_space = max(space, lookahead_space) if will_eat else space
+
             score = 0.0
             # Space safety: heavily penalize tight spaces relative to our
-            # length (getting trapped = death).
-            if space < my_len:
-                score -= 1000.0 * (my_len - space)
-            elif space < my_len * 1.5:
+            # length (getting trapped = death). Uses `effective_space`
+            # (see above) so a food-eating candidate isn't unfairly
+            # nuked by a one-turn tail-freeze artifact that the deeper
+            # lookahead shows isn't a real trap.
+            if effective_space < my_len:
+                score -= 1000.0 * (my_len - effective_space)
+            elif effective_space < my_len * 1.5:
                 # Still risky-ish: comfortably more than our length is
                 # much safer than "just barely" enough, especially since
                 # our own tail continues occupying space as we move.
-                score -= 20.0 * (my_len * 1.5 - space)
+                score -= 20.0 * (my_len * 1.5 - effective_space)
             score += min(space, width * height) * 2.0
 
             # Penalize moves whose safety depends on a threatening
@@ -777,26 +821,15 @@ def move(game_state):
                 score -= 800.0 * (my_len - worst_space)
             score -= 8.0 * max(0, space - worst_space)
 
-            # Bounded multi-turn forward-simulation lookahead (see
-            # `_lookahead_min_space` docstring above for full rationale
-            # and the extensive prior-session history this is built on).
-            # This is a SUPPLEMENTARY, moderate-weight tiebreaker signal
-            # layered on top of (never replacing) the hard 1-ply and
-            # 1-ply-adversarial safety checks above -- it only matters
-            # when those checks leave multiple candidates looking equally
-            # safe (a real, repeatedly-documented scenario: two options
-            # tied on space/reached_tail at the pivotal turn, one of which
-            # turns out to lead into a corridor that a moving opponent (or
-            # our own advancing body) narrows fatally a few turns later).
-            my_body_tuples = _body_tuples(you["body"])
-            if will_eat:
-                sim_my_body = [npt] + my_body_tuples
-            else:
-                sim_my_body = [npt] + my_body_tuples[:-1]
-            sim_opp_bodies = [_body_tuples(b) for b in threat_bodies]
-            lookahead_space = _lookahead_min_space(
-                sim_my_body, sim_opp_bodies, food_cells, width, height, lookahead_depth
-            )
+            # Bounded multi-turn forward-simulation lookahead: supplementary,
+            # moderate-weight tiebreaker (already computed above, before
+            # the hard space-penalty tiers -- see the detailed comment
+            # there for full rationale and history). Still apply its own
+            # smaller penalty term here too (on top of whatever it already
+            # contributed via `effective_space` above), so a candidate
+            # with a middling lookahead_space (not quite triggering the
+            # hard tier via effective_space, but still lower than ideal)
+            # is still nudged appropriately.
             if lookahead_space < my_len:
                 score -= lookahead_weight * (my_len - lookahead_space)
 

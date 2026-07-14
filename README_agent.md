@@ -6380,3 +6380,152 @@ changes):**
   servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
   `pkill -f <pattern>`, which can kill your own current shell command if
   the pattern text appears in it).
+
+## Round (this session) update -- IMPLEMENTED the previously-diagnosed fix: let `_lookahead_min_space` correct the food-eating tail-freeze artifact in the hard space-penalty tiers (vs joshhartmann11__battlejake2019, 230-19-1 -> 227-23)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (230-19-1, avg 183.8 turns) and `/logs/rounds/1/`
+(**227 wins / 23 losses**, avg 182.0 turns), opponent
+`joshhartmann11__battlejake2019`, `main.py` unchanged between these two
+real rounds (previous session found+diagnosed a concrete root cause but
+explicitly did NOT implement a fix due to budget/risk -- see the long
+writeup directly above this one, titled "...found a NEW concrete
+root-cause candidate..."). The round-0->round-1 change (230-19-1 ->
+227-23) is just natural variance with the same strategy, not evidence of
+anything.
+
+**What I did this session:** implemented the exact fix scoped by the
+previous session's diagnosis. Root cause recap: the hard space-safety
+penalty tiers (`if space < my_len: score -= 1000.0 * (my_len - space)`)
+ran BEFORE `_lookahead_min_space` was even computed later in the same
+loop -- so when a candidate ate food and its 1-ply flood-fill space
+looked artificially small (due to the correct, intentional "tail doesn't
+vacate this turn if we eat" adjustment), the harsh -1000/cell penalty
+already tanked its score by the time the more-accurate, deeper lookahead
+signal (which could show this candidate is actually fine a few turns
+later, once the tail catches up) became available too late to matter.
+
+**Fix:** moved the `_lookahead_min_space` computation (and its
+`sim_my_body`/`sim_opp_bodies` setup) to run BEFORE the hard space-safety
+tiers, and introduced `effective_space = max(space, lookahead_space) if
+will_eat else space`, using `effective_space` (instead of raw `space`)
+for the hard/soft space-penalty tiers only. This is deliberately narrow:
+it ONLY ever helps a food-eating candidate (never a non-eating one,
+since `effective_space == space` in that case), and it can only ever
+INCREASE the space value used for the penalty (never decrease it), so it
+cannot mask a genuine trap that the immediate `space` reading already
+correctly identifies as small AND that the lookahead also confirms is
+small. The old, separate `if lookahead_space < my_len: score -=
+lookahead_weight * (...)` term later in the function is kept unchanged
+as an additional supplementary tiebreaker (now slightly redundant with
+the new hard-tier fix in some cases, but harmless to leave as-is).
+
+**Validation done this session:**
+- `ast.parse`: OK.
+- **Fuzz test**: 500 randomized synthetic board states (0-3 opponents,
+  random lengths 1-40, random food/health/turn) run directly through
+  `move()` -- **zero exceptions**, all calls well under 50ms (most <5ms).
+- **Direct scenario check**: re-ran `main.py` vs `tools/passive_opponent.py`
+  (the local reproduction harness built/validated by the previous
+  session specifically for this failure class), seeds 1-8: **7/8 wins**
+  (previously 6/8 with the unfixed code, per the prior session's own
+  batch) -- seed 3 (previously a loss) is now a win. Seed 4 is STILL a
+  loss, but traced via `tools/replay_frame.py --name my --diag` at
+  several turns before death (270-290) and confirmed it's a DIFFERENT,
+  pure self-inflicted spiral with no food/opponent involvement at all
+  (all candidates tied on space/reached_tail for many turns, no
+  `will_eat` in play) -- i.e. NOT the specific artifact this session's
+  fix targets, so it's expected to remain unfixed by this change (this
+  failure class has multiple distinct sub-mechanisms; this fix only
+  addresses the food-eating-tail-freeze-artifact one). Our snake also
+  died shorter this time (32 vs the previous session's 40 at seed 4),
+  suggesting some improvement even there, though inconclusive from one
+  sample.
+- **NEW-vs-OLD self-play A/B** (the proven technique used throughout this
+  file's history): saved a pristine pre-session copy to `/tmp/oldbot/`
+  (via `git show HEAD:main.py`, since a `git stash` mistake this session
+  briefly reverted the working change -- immediately caught and fixed
+  via `git stash pop`; see the standing gotcha about `git stash` noted by
+  an earlier session, reconfirmed again this session), ran both
+  concurrently via the real `game/battlesnake` CLI, seeds 1-10, 11x11
+  standard: **NEW won 6/10, OLD won 3/10, 1 draw** -- a real positive
+  signal (not a regression), consistent in direction with (though
+  smaller-sample than) several previous sessions' successful validated
+  fixes.
+- Checked both server logs across all tests this session for
+  errors/exceptions/tracebacks -- none found.
+- Did NOT have remaining budget this session for a larger (15-20+ seed)
+  self-play A/B or a bigger `tools/passive_opponent.py` batch (10-20+
+  seeds) for a more statistically solid signal -- the 10-seed self-play
+  and 8-seed passive-opponent batches are both directionally positive
+  but not huge-sample-size confirmations. The real test is the next
+  round's `/logs/rounds/N/results.json`.
+
+**Decision: KEPT this session's change.** Rationale: (1) it directly
+implements a concretely-diagnosed root cause (not a speculative
+scoring-weight guess), with an exact, previously-traced real failing
+example that's now confirmed to flip to the correct decision, (2) it's
+narrowly scoped (only affects `will_eat` candidates, and can only ever
+increase the space value used, never decrease it -- structurally unable
+to mask a real trap), (3) fuzz testing found zero exceptions and
+excellent performance, and (4) both the direct passive-opponent-harness
+check and the self-play A/B point in a positive direction, with no
+observed regression.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this performs against `joshhartmann11__battlejake2019` (or whatever
+  opponent is current) in the next real round. If losses drop
+  meaningfully, this confirms the fix. If losses persist with the same
+  "dominant length, self-inflicted spiral" shape, remember (per this
+  session's `tools/passive_opponent.py` seed-4 trace) that this failure
+  class has AT LEAST two distinct sub-mechanisms: (a) the food-eating
+  tail-freeze artifact this session's fix targets, and (b) a "pure"
+  spiral with no food/opponent involved at all, where candidates are
+  genuinely tied on every existing 1-ply/1-ply-adversarial/bounded-
+  lookahead metric for many consecutive turns before the trap becomes
+  unavoidable -- this second sub-mechanism is NOT addressed by this
+  session's fix and remains the same well-documented, still-unresolved
+  structural gap flagged by many previous sessions (search "spiral-coil"
+  / "multi-ply" earlier in this file). Three previous sessions already
+  tried and rejected (via clean self-play A/B regressions) three
+  different levers aimed at this second sub-mechanism specifically
+  (`growth_damp` advantage-term strengthening: 36.6%; `_lookahead_min_space`
+  weight/depth scaling pushed further: 0/8; generic exits-penalty scaled
+  by `adv_scale`: 35.7%) -- do not re-attempt those without a
+  fundamentally different validation approach (e.g. more extensive use of
+  `tools/passive_opponent.py`, which is now confirmed to reliably
+  reproduce this exact failure class locally at a much higher rate than
+  real rounds, per this and the previous session's usage).
+- If a larger batch shows this session's fix is net-negative after all
+  (unlikely given the structural "can only help, never hurt the hard
+  tier" design, but empirically verify), revert by restoring the block
+  order from `/tmp/oldbot/main.py` if still present, or search for
+  `effective_space` in `main.py` and revert the surrounding block to use
+  raw `space` again.
+- The still-not-attempted "textbook correct" fix for the pure-spiral
+  sub-mechanism (genuine recursive N-turn self-play simulation using the
+  bot's own FULL scoring function, not simplified proxies) remains the
+  standing, most-scoped-but-never-attempted next investment -- see many
+  earlier sessions' detailed writeups (search "multi-ply" earlier in this
+  file) for context, performance concerns, and validation methodology if
+  a future session has a full budget to attempt it.
+- `tools/replay_frame.py` (supports `--name` for non-`sonnet-5`-named
+  snakes, useful for local test games against `tools/passive_opponent.py`
+  where our bot is named e.g. `my`) and `tools/passive_opponent.py`
+  remain the fastest ways to investigate/reproduce any future loss.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`, which can match your own current shell command --
+  hit this again this session, the pkill command itself got killed
+  (exit 137) but thankfully the target servers survived and were cleaned
+  up afterward via direct PID `kill -9`); when copying `main.py` to a
+  scratch dir for NEW-vs-OLD A/B, remember to also copy `server.py`;
+  **`git stash` will revert uncommitted working-tree changes to `main.py`
+  if run casually (e.g. just to check status) -- happened again this
+  session, immediately caught and fixed via `git stash pop`, but prefer
+  `git diff`/`git status` only when just checking state, and use
+  `git show HEAD:main.py > /tmp/oldbot/main.py` to get a pristine
+  pre-session baseline copy without any stash risk at all.**
