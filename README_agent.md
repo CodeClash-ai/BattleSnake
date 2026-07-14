@@ -977,3 +977,101 @@ reference bot once the easy bugs are fixed.
   and `kill -9 <pid>` directly (NOT `pkill -f <pattern>`, which can match
   and kill your own current shell command if the pattern text appears in
   it -- confirmed multiple times across sessions now).
+
+## Round (this session) update -- ground truth re-verified, no changes needed
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/` contained only `/logs/rounds/0/`, opponent
+`coreyja__devious-devin` (yet another new opponent name, as usual --
+opponent identity keeps changing session to session, don't trust old
+prose about names/rounds elsewhere in this file). Result: **perfect 20-0
+sweep** for `sonnet-5`. Turn counts min=3 max=11 avg=7.3 -- opponent
+self-destructs almost immediately every real game, consistent with the
+long-standing pattern across nearly every session in this file's history.
+
+**What I did this session:**
+- Ran `tools/analyze_logs.py` for ground truth (above).
+- Read all of `main.py` (329 lines) end-to-end. Confirmed all the
+  historically-important fixes documented earlier in this file are still
+  present and intact:
+  - safe-move filtering w/ tail-vacate-aware collision checks + H2H
+    avoidance vs equal/longer opposing snakes,
+  - **uncapped** BFS flood-fill space scoring w/ graduated penalty
+    (hard penalty if `space < my_len`, soft penalty if `< 1.5x my_len`),
+  - the "food-eating freezes tail" fix (treats own tail cell as still
+    blocked in a candidate's flood-fill if that candidate move lands on
+    food), which fixed a real self-trap death from an earlier session,
+  - the "open_threshold" gating on the tail-reachability bonus/penalty
+    (only a big +15/-60 swing when space is actually tight, tiny +3/0
+    tie-break when space is comfortably large) -- this fixed the
+    starvation bug from an earlier session where the bot avoided all
+    nearby food forever on wide-open boards to preserve tail-reachability.
+  - smooth health-based food urgency ramp + explicit "eat right now"
+    bonus at low health.
+  No bugs found; `ast.parse` succeeds cleanly.
+- Ran a real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in reference bot), seeds 1-5:
+  **5/5 wins**, games ending in 4-7 turns -- matches the real round-0 log
+  distribution (avg 7.3 turns) closely.
+- Ran 3 real self-play games (`main.py` vs itself), seeds 41/42/43: ran
+  256, 242, and 158 turns respectively, all completed cleanly with a
+  determined winner and **zero exceptions/errors** in any server log
+  (`grep -iE "error|exception|traceback"` on all logs came back empty).
+  This exercises the long-game / big-snake / starvation-avoidance /
+  self-trap-avoidance code paths (where all the historical bugs were
+  found and fixed) with no regressions observed.
+- Cleaned up all background test server processes by PID afterward (not
+  `pkill -f`, per the standing gotcha documented earlier in this file).
+- **Decision: made NO functional changes to `main.py` this session.**
+  Rationale (consistent with the large majority of prior sessions in this
+  file): the only real round played so far this cycle is a perfect sweep
+  (20/20) against the actual current opponent, and fresh local testing
+  this session (naive-opponent smoke test + three long self-play games up
+  to 256 turns) found zero bugs, crashes, exceptions, or obviously-wrong
+  decisions. There is no concrete observed failure mode in real match
+  data to fix right now; the last two real bugs found in this codebase's
+  history (self-trap-from-eating-food and starvation-from-tail-anxiety,
+  both documented in detail earlier in this file) were both found via
+  replaying REAL losing `sim_*.jsonl` frames through `main.move()`
+  directly, not through generic local smoke testing -- there are no
+  losing sim files to replay this session since the result is a clean
+  sweep, so there's nothing concrete to chase. Speculative changes here
+  would be pure risk for no measurable upside.
+
+**Suggestions for next teammate (same core guidance as essentially every
+prior session, still valid and still the fastest path to real
+improvements):**
+- Always start with `python3 tools/analyze_logs.py` for real ground
+  truth; ignore stale round-number/opponent-name claims in old prose
+  elsewhere in this file (opponent identity has changed on nearly every
+  single session so far -- full list accumulated across this file's
+  history: pambrose-kotlin-style reference, `Nettogrof__nessegrev-julia`,
+  `Nettogrof__nessegrev-java`, `csauve__bookworm`,
+  `coreyja__improbable-irene`, `graeme-hill__snakebot`, and now
+  `coreyja__devious-devin`).
+- **If a real loss ever shows up** in a future `results.json`, the most
+  effective methodology (proven at least twice now, see the detailed
+  "Fix implemented in main.py this session" sections earlier in this
+  file) is: find the losing `sim_*.jsonl`, build a synthetic
+  `game_state` from a specific frame (set `you` to our snake's own dict
+  from `board.snakes`, keep the rest of the board state as-is), call
+  `main.move(state)` directly, and compare/trace against what actually
+  happened -- this finds the exact turn+reason far faster than generic
+  local smoke testing against `tools/opponent_ref.py` (which ends games
+  in ~5 turns and is blind to health/starvation/long-game self-trap bugs
+  by construction).
+- The bot remains purely greedy/1-ply heuristic. This continues to be
+  sufficient because no real opponent encountered across the entire
+  history of this file has ever survived long enough / played well enough
+  to expose a weakness beyond the two already-fixed bugs (self-trap via
+  food-eating tail-freeze, and starvation via over-cautious tail-anxiety
+  on open boards). If a future opponent starts playing competently and
+  losses start appearing in real match data, that's the trigger to invest
+  in short lookahead (2-3 ply minimax/expectimax) -- not needed yet.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers by finding PIDs via
+  `ps aux | grep -E "main.py|opponent_ref"` and `kill -9 <pid>` directly
+  (NOT `pkill -f <pattern>`, which can match and kill your own current
+  shell command if the pattern text appears in it).
