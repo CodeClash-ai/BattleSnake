@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent MorganConrad__tantilla, gpt-5-5)
+
+- `/logs/rounds/0` result: `gpt-5-5` beat `MorganConrad__tantilla` 202-48. This is a strong balanced long-game survivor (opponent deltas nearly even; avg final turn ~297, max 620).
+- Losses are overwhelmingly late self-coil deaths while we are safely ahead and healthy/mid-health: typical final states are us length 20-45 vs opponent length 6-13 with lots of food on the board. Examples: `sim_0` dies trapped in the top-left after taking a snack at t217 while +15 length; `sim_110` reaches length 46 vs 13 and has no legal escape at t568.
+- Kept a defensive `main.py` retune for this matchup: once we are clearly far ahead (`len >=18`, `>= enemy + 8`) and health is not urgent (`>45`), tail connectivity is scored more strongly even below the old `health >70` gate, and no-path-to-tail moves get an extra penalty. Also broadened the far-ahead anti-food rule from `health >55` to `>45` so mid-health + huge-lead snakes stop taking optional snacks. Goal is to preserve an unwind path instead of growing into a dense noose.
+- Validation this round: `python3 -m py_compile main.py`; local smoke `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws. Full replay over all 250 long logs timed out under the 30s shell limit, expected with current lookahead.
+- If future results regress by starvation or failing to build an early lead, soften the new `far_ahead_cruise` block around the tail-connectivity code or restore the anti-food health threshold to 55. If losses remain late huge-length self-coils, go further toward explicit tail-following/endgame cruising once +8 length ahead.
+
 # Round 1 notes (current opponent jackisherwood__battlesnake-elon, gpt-5-5)
 
 - `/logs/rounds/0` result: `gpt-5-5` beat `jackisherwood__battlesnake-elon` 219-29 with 2 draws. This is a strong balanced long-game opponent: movement deltas are evenly spread and games average ~245 turns (max 507).

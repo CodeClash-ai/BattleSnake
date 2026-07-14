@@ -443,7 +443,8 @@ def move(game_state):
                 # cramped pockets; this helps avoid dying in our own coil while far
                 # ahead of a weaker opponent.  The gate keeps it as a defensive
                 # endgame rule rather than a general food/tail-chasing habit.
-                if my_body and my_len >= max_enemy_len + 3 and my_health > 70:
+                far_ahead_cruise = (my_len >= 18 and my_len >= max_enemy_len + 8 and my_health > 45)
+                if my_body and ((my_len >= max_enemy_len + 3 and my_health > 70) or far_ahead_cruise):
                     tail_cell = next_body[-1]
                     tail_blocked = set(sim_blocked)
                     tail_blocked.discard(tail_cell)
@@ -463,6 +464,16 @@ def move(game_state):
                     # with a clear length lead.
                     elif tail_dist is not None:
                         score += max(0, 18 - tail_dist) * 4
+                        # Against this round's balanced survivor, many losses are
+                        # not from the opponent attacking but from our long, healthy
+                        # snake coiling after a huge length lead.  Once we are safely
+                        # ahead, make tail connectivity a real survival objective even
+                        # at mid health; food is abundant and preserving an unwind path
+                        # is worth more than marginal area/exits.
+                        if far_ahead_cruise:
+                            score += max(0, 26 - tail_dist) * 10
+                            if tail_dist > my_len:
+                                score -= min(350, (tail_dist - my_len) * 18)
                     else:
                         # No path to our moving tail while far ahead is the common
                         # signature of the losses versus gigantic-george: the raw
@@ -474,6 +485,8 @@ def move(game_state):
                             score -= 250
                         else:
                             score -= 80
+                        if far_ahead_cruise:
+                            score -= 520
                 elif my_health > 55 and my_len >= 14 and area < my_len * 3 and n not in food:
                     # In close-length long games, survival often depends on staying
                     # connected to our own tail rather than maximizing raw area.
@@ -585,7 +598,7 @@ def move(game_state):
                 # treating food as a hazard once we are safely +8 and length 20+,
                 # unless health is genuinely relevant.  The earlier anti-food rule
                 # was too narrow/weak: losing logs still show runaway growth.
-                if my_health > 55 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                if my_health > 45 and my_len >= 20 and my_len >= max_enemy_len + 8:
                     if food_dist == 0:
                         score -= 1500
                     elif food_dist == 1:
@@ -604,7 +617,7 @@ def move(game_state):
                     score += 55
                     if my_health > 65 and my_len >= 24 and my_len >= max_enemy_len + 12:
                         score -= 520
-                    if my_health > 55 and my_len >= 20 and my_len >= max_enemy_len + 8:
+                    if my_health > 45 and my_len >= 20 and my_len >= max_enemy_len + 8:
                         score -= 1200
                     # Against nbw-ruby style food/space snakes, the main losing
                     # pattern is getting outgrown by 4+ (including this Flipez-crystal matchup) length.  If a safe snack is
