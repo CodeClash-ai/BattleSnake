@@ -1,6 +1,12 @@
 import json
 
-path = "/workspace/parse_crash_2.py"
-# let's look at sim_14 manually if it existed.
-# Oh, it was sim_13.jsonl, sim_15.jsonl etc.
-# Let's inspect sim_102.jsonl
+path = "/logs/rounds/0/sim_14.jsonl"
+with open(path) as f:
+    for line in f:
+        try:
+            d = json.loads(line)
+            print(f"Turn {d.get('turn')}:")
+            for s in d["board"]["snakes"]:
+                print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']}")
+        except:
+            pass

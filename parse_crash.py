@@ -1,31 +1,63 @@
 import json
 import glob
 
-# Analyze crashes in Round 1
-sim_files = glob.glob("/logs/rounds/1/*.jsonl")
+sim_files = glob.glob("/logs/rounds/0/*.jsonl")
 
 for path in sim_files:
     with open(path) as f:
-        lines = [json.loads(line) for line in f if line.strip()]
+        lines = f.readlines()
     if not lines:
         continue
-    board_lines = [line for line in lines if "board" in line]
-    if not board_lines:
-        continue
-    last_turn = board_lines[-1]
-    alive_names = [s["name"] for s in last_turn["board"]["snakes"]]
-    if "gemini-3-5-flash" not in alive_names:
-        for idx in range(len(board_lines) - 1):
-            curr_names = [s["name"] for s in board_lines[idx]["board"]["snakes"]]
-            next_names = [s["name"] for s in board_lines[idx+1]["board"]["snakes"]]
-            if "gemini-3-5-flash" in curr_names and "gemini-3-5-flash" not in next_names:
-                gemini_snake = next(s for s in board_lines[idx]["board"]["snakes"] if s["name"] == "gemini-3-5-flash")
-                turn = board_lines[idx]["turn"]
-                print(f"File {path.split('/')[-1]} Turn {turn} death: len={gemini_snake['length']} health={gemini_snake['health']} head={gemini_snake['head']}")
-                # Print last 2 turns in detail
-                for j in range(max(0, idx-1), min(idx+2, len(board_lines))):
-                    t_data = board_lines[j]
-                    print(f"  Turn {t_data['turn']}:")
-                    for s in t_data["board"]["snakes"]:
-                        print(f"    {s['name']}: head={s['head']} len={s['length']} health={s['health']} body={s['body']}")
+    label = path.split("/")[-1]
+    
+    # We want to inspect why gemini died. Let's find the turn where gemini had no moves or crashed, etc.
+    # We can parse the log lines.
+    for idx, line in enumerate(lines):
+        try:
+            data = json.loads(line)
+        except Exception:
+            continue
+        if "board" not in data:
+            continue
+        turn = data.get("turn")
+        snakes = data["board"].get("snakes", [])
+        names = [s["name"] for s in snakes]
+        
+        # Check if gemini is in this turn, but gone in the next turn
+        if "gemini-3-5-flash" in names:
+            # Let's see if the next turn exists and does not contain gemini
+            next_turn_has_gemini = False
+            if idx + 1 < len(lines):
+                try:
+                    next_data = json.loads(lines[idx+1])
+                    if "board" in next_data:
+                        next_names = [s["name"] for s in next_data["board"].get("snakes", [])]
+                        if "gemini-3-5-flash" in next_names:
+                            next_turn_has_gemini = True
+                except:
+                    pass
+            else:
+                # Last line of the file, meaning gemini lived till the end or game ended
+                next_turn_has_gemini = True
+            
+            if not next_turn_has_gemini:
+                # Gemini died after this turn! Let's examine what happened.
+                print(f"--- Gemini died after Turn {turn} in {label} ---")
+                my_snake = [s for s in snakes if s["name"] == "gemini-3-5-flash"][0]
+                opp_snakes = [s for s in snakes if s["name"] != "gemini-3-5-flash"]
+                print(f"My head: {my_snake['head']}, length: {my_snake['length']}, health: {my_snake['health']}")
+                print(f"My body: {my_snake['body']}")
+                for os in opp_snakes:
+                    print(f"Opponent {os['name']} head: {os['head']}, length: {os['length']}, health: {os['health']}")
+                    print(f"Opponent body: {os['body']}")
+                
+                # Let's see what the actual next turn contains if it exists
+                if idx + 1 < len(lines):
+                    try:
+                        next_data = json.loads(lines[idx+1])
+                        print(f"Next turn {next_data.get('turn')} snakes:")
+                        for s in next_data["board"].get("snakes", []):
+                            print(f"  {s['name']} head: {s['head']}")
+                    except Exception as e:
+                        print("Could not parse next turn:", e)
                 break

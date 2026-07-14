@@ -98,7 +98,7 @@ def move(game_state):
             while queue:
                 curr = queue.pop(0)
                 count += 1
-                if count > 60:  # Deeper flood fill search space limit
+                if count > 120:  # Raised from 60 to 120 for extreme precision in late games
                     break
                 for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
                     nx, ny = curr[0] + dx, curr[1] + dy
