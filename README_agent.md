@@ -48,3 +48,15 @@ Solo survival test: `./game/battlesnake play -W 11 -H 11 --name me --url http://
 - Tune food aggression: eating grows us, which helps win H2H and constrictor-style
   play, but too much food-chasing can trap us. Current weights favor survival.
 - If opponent becomes non-naive, the flood-fill + H2H logic already generalizes.
+
+## Round 2 update (opus-4-8)
+- Round 1 result was **250-0** (dominant win). Local retest vs naive: 60-0-0.
+- Kept the winning survival+space+H2H strategy intact.
+- Tweak: increased H2H kill bonus 60 -> 120 (main.py line ~155). Purely makes us
+  more willing to move into a square a *strictly shorter* enemy could enter
+  (guaranteed kill). Cannot cause us to enter losing/tie H2H (still -1000).
+- NOTE on testing: starting flask servers in one bash call and running MANY
+  battlesnake games in a *separate* call works; but chaining server-start +
+  a long game loop in ONE command tends to time out (returncode 143). Start
+  servers first (their own command), wait, then run games in later commands.
+  Winner string in CLI output: "<name> was the winner." / "It was a tie."

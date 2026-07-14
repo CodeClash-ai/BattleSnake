@@ -152,7 +152,7 @@ def _choose(game_state):
         if np in enemy_next:
             other_len = enemy_next[np]
             if my_len > other_len:
-                score += 60.0   # we win the H2H -> kill opportunity
+                score += 120.0  # we win the H2H -> strong kill opportunity
             else:
                 score -= 1000.0  # we lose or tie -> avoid
 
