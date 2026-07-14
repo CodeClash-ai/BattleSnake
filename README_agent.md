@@ -1,60 +1,68 @@
 # Agent Notes (opus-4-8 BattleSnake)
 
-## !!! CRITICAL LESSON FROM ROUND 1 (READ THIS) !!!
-Round 1 scored **0 vs 250 (LOSS)** even though local sims showed wins.
-Reason: `main.py` was MISSING the `if __name__ == "__main__"` block that starts
-the flask server. Grader flags this INVALID:
-  "main.py must keep its `if __name__ == \"__main__\"` block that starts the
-   server, or the bot fails to launch."
-=> Local sims (test/match.sh) DON'T catch this (they start server manually).
-   ALWAYS verify main.py ends with:
-     if __name__ == "__main__":
-         from server import run_server
-         run_server({"info": info, "start": start, "move": move, "end": end})
+## !!! CRITICAL LESSON (READ THIS FIRST) !!!
+main.py MUST end with the launch block or the grader marks the bot INVALID
+(scores 0). Local sims DON'T catch this. ALWAYS verify main.py ends with:
+    if __name__ == "__main__":
+        from server import run_server
+        run_server({"info": info, "start": start, "move": move, "end": end})
 
 ## RESULTS SO FAR
-- Round 1: LOSS 0-250 (missing launch block bug, now fixed).
-- Round 2: WIN 250-0 (250/250 sims won). Launch block restored.
-- Round 3: kept winning strategy, added a small "hunt when clearly longer"
-  tiebreaker. Local match.sh 30 => me=30 opp=0 tie=0. Games end in ~2-7 turns
-  because opponent self-destructs (no collision avoidance).
+- Round 0 (in /logs/rounds/0): WIN 20-0 vs `Nettogrof__nessegrev-julia`.
+  Analyzed sims: 20 wins / 0 loss / 0 tie. All valid.
+- Our bot survives; opponent self-destructs.
+
+## CURRENT OPPONENT: `Nettogrof__nessegrev-julia`
+Observed behavior (from /logs/rounds/0/sim_*.jsonl): NAIVE. Its snake runs
+straight along an edge (e.g. top row y=9) moving right until it hits the wall
+at x=10 (board width 11) and dies. No collision avoidance. Games end in ~3-13
+turns because the opponent kills itself. We simply need to survive.
+NOTE: earlier README mentioned pambrose SimpleSnake -- that was a DIFFERENT
+opponent from a prior scenario. test/opponent.py is still the pambrose port
+(also naive, also self-destructs) so match.sh remains a valid smoke test.
 
 ## VALIDATION CHECKLIST before submitting (do EVERY round)
 1. `tail -4 main.py` shows the `if __name__ == "__main__"` block.
-2. `python -c "import main"` succeeds (no import errors).
-3. `python -c "import ast; ast.parse(open('main.py').read())"` parses.
-4. `bash test/match.sh 20` wins comfortably.
+2. `python3 -c "import main"` succeeds.
+3. `python3 -c "import ast; ast.parse(open('main.py').read())"` parses.
+4. `bash test/match.sh 20` -> me=20 opp=0 (smoke test vs naive opp).
+5. `python3 test/solo_test.py` (recreate below) -> SURVIVED 300 turns.
 
-## Opponent
-`pambrose__pambrose-kotlin` = naive SimpleSnake: chases FARTHEST food,
-x-dominates-y, NO collision avoidance -> self-destructs almost immediately.
-Copy in test/opponent.py. Our bot just needs to survive & it wins fast.
-
-## Strategy in main.py (survival-first)
+## Strategy in main.py (survival-first) -- WORKING, DON'T REGRESS
 - Full collision avoidance (walls, bodies, self); tails free unless just ate.
 - Head-to-head: avoid cells enemy head could enter unless strictly longer.
 - Flood-fill space eval to avoid self-trapping (penalize space < my_len).
 - Food: chase nearest when hungry (<60) or not clearly longer.
-- NEW (r3): when clearly longer than every opponent and not chasing food,
-  keep space priority but move toward enemy head to force winning h2h.
+- Hunt enemy head when clearly longer (force winning h2h), keeping space first.
 - try/except returns "up" fallback.
+- Verified: survives 300-turn solo game without self-trapping, manages health.
 
 ## Test harness (test/)
-- test/opponent.py = naive opponent strategy.
-- test/match.sh N = N local games (me :8000 vs opp :8001) via game/battlesnake.
-  Prints "RESULTS: me=X opp=Y tie=Z".
-- main_original_backup.py = original naive main.py (HAS launch block, ref).
-- /tmp is ephemeral; backups there won't persist across rounds.
+- test/opponent.py = naive pambrose port (smoke test opponent).
+- test/match.sh N = N local games (me :8000 vs opp :8001). Prints RESULTS line.
+- main_original_backup.py = original naive main.py reference (has launch block).
+
+## Solo survival test (recreate in /tmp, ephemeral)
+Simulates our bot alone for 300 turns to prove it doesn't self-trap.
+See git history / this README for the script if /tmp is wiped. It builds a
+solo game_state, calls main.move, applies the move, checks wall/self collision
+and health, expects "SURVIVED all 300 turns".
 
 ## Log analysis one-liner (win/loss over sim logs)
-python3 -c "import json,glob; w=l=t=0
-[ (lambda d: (globals().update()) ) for _ in []]"  # see below
-# Simpler: each /logs/rounds/N/sim_*.jsonl last line has winnerName / isDraw.
-# Count with: for f in sims: last=json.loads(open(f).readlines()[-1]);
-#   isDraw -> tie; winnerName=='opus-4-8' -> win; else loss.
+python3 -c "import json,glob
+w=l=t=0
+for f in glob.glob('/logs/rounds/0/sim_*.jsonl'):
+    ls=open(f).readlines()
+    if not ls: continue
+    d=json.loads(ls[-1])
+    if d.get('isDraw'): t+=1
+    elif 'opus' in str(d.get('winnerName','')): w+=1
+    else: l+=1
+print('win',w,'loss',l,'tie',t)"
 
-## Ideas for future teammates
-- Opponent is static/naive; bot dominates. Low risk. DON'T touch launch block.
-- If opponent ever changes to be smarter, current flood-fill + h2h + hunt is a
-  reasonable base. Could add 2-ply lookahead if needed, but keep it simple &
-  never regress the survival logic.
+## Advice for future teammates
+- Bot is winning comfortably vs a naive opponent. LOW RISK. Tip: don't touch
+  the launch block, don't regress survival logic.
+- If the opponent ever becomes smarter, current flood-fill + h2h + hunt is a
+  solid base. Could add 2-ply lookahead, but keep survival logic intact and
+  always re-run match.sh + solo test before submitting.
