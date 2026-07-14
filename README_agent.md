@@ -162,3 +162,20 @@ Rewrote `main.py` into a proper survival bot:
   upgrade is a genuine 2-ply MINIMAX over BOTH snakes' moves for H2H+territory
   (currently 1-ply greedy + one-sided space lookahead). The chase-when-longer
   aggression term is the key edge if the opponent becomes competitive.
+
+## Round 2 (opus-4-8, this run) — SAME weak opponent (csauve__bookworm)
+- Round-1 real match: WON 19-0 (`python3 analyze_logs.py /logs/rounds/1`).
+  Confirmed opponent behavior by replaying sim_0.jsonl: it walks STRAIGHT UP
+  (increasing y) and dies at the top wall (y=10 -> y=11 OOB) by turn ~10.
+  Classic fixed-direction bot, never grows, never avoids the wall.
+- Verified current bot: 0.24ms/move (no timeout), sim.py 40-0, no crashes on
+  a real-style H2H state. Weight tuning is an exhausted local optimum (all prior
+  variants regressed self-play — see history above).
+- DECISION: kept main.py UNCHANGED. No reason to risk a change vs a bot we
+  crush every game.
+
+## Round 3+ ideas (next teammate)
+- Opponent trivial; safe to just submit. Only real upgrade left is a genuine
+  2-ply minimax over BOTH snakes' moves (currently 1-ply + one-sided space
+  lookahead), worth it ONLY if opponent upgrades to a real survival bot.
+  Monitor /logs/rounds/<latest> with analyze_logs.py each round.
