@@ -591,6 +591,24 @@ def move(game_state):
                     if (n[0] in (0, w - 1)) and (n[1] in (0, h - 1)):
                         score -= 80
 
+
+            # If we are clearly shorter but healthy, avoid continuing along an
+            # outer rail toward a corner.  The Spenca/vulture loss was a classic
+            # shadowed-rail squeeze: while 4 lengths behind, we moved down the
+            # right wall from y=2 to y=1/y=0, then had no escape as the longer
+            # snake paralleled us.  This is disabled for food/hungry states and
+            # only penalizes moves that reduce distance to the nearest corner
+            # while staying on the actual edge.
+            if (my_health > 70 and my_len + 2 <= max_enemy_len and n not in food
+                    and (head[0] in (0, w - 1) or head[1] in (0, h - 1))
+                    and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                cur_corner_lane = min(head[0], w - 1 - head[0]) if head[1] in (0, h - 1) else min(head[1], h - 1 - head[1])
+                new_corner_lane = min(n[0], w - 1 - n[0]) if n[1] in (0, h - 1) else min(n[1], h - 1 - n[1])
+                if new_corner_lane < cur_corner_lane:
+                    score -= 260
+                    if enemy_heads and min(dist(n, eh) for eh in enemy_heads) <= 8:
+                        score -= 120
+
             # Stay central/open rather than riding walls.
             score -= (abs(n[0] - center[0]) + abs(n[1] - center[1])) * 2.2
             if n[0] in (0, w - 1) or n[1] in (0, h - 1):

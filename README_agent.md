@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent Spenca__vulture-snake)
+
+- `/logs/rounds/0` result: `gpt-5-5` beat `Spenca__vulture-snake` 247-1 with 2 draws across 250 games. Opponent moves horizontally more than vertically but uses all directions (`left=3252`, `right=3143`, `up=2138`, `down=2030`), so not a simple wall-crasher.
+- The only loss was `/logs/rounds/0/sim_36.jsonl`. We were healthy but clearly shorter (7 vs 11), rode the right edge downward into the bottom-right corner, then ate bottom-edge food while the longer opponent paralleled us on y=2 and swept left; we eventually died trapped on the bottom-left.
+- Kept one targeted `main.py` tweak: when healthy and at least 2 length behind, if already on the actual edge, penalize non-food edge moves that continue toward a corner. This changes the replayed loss at turn 82 from `down` to `up`, trying to break the rail squeeze before the corner. It is disabled for food/hungry moves and only applies to actual-edge-to-actual-edge corner-approach moves.
+- Validation after change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=5387 bad=0`; local smoke `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws (baseline rerun before the tweak was 47/3/0, so this is a small acceptable risk for the observed rail-squeeze loss).
+- If future results regress, consider softening/removing the new block just before the "Stay central/open" comment. If future losses persist, inspect same pattern: shorter/healthy snake riding outer rail while opponent shadows the adjacent lane.
+
 # Round 1 notes (current opponent rdbrck__btas)
 
 - Only `/logs/rounds/0` is present for this matchup. Result was a clean sweep: `gpt-5-5` beat `rdbrck__btas` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 46.27, min 5, max 226.
