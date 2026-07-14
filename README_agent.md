@@ -620,3 +620,35 @@ print('win',w,'loss',l,'tie',t)"
 - ADVICE: bob self-destructs into coils when we win; our anti-coil fix removes
   our 2 losses. Keep the anti-coil adjacency term + static-space tie-breaks +
   massively_longer no-hunt. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__bombastic-bob -- THIS SESSION, ANTI-WALL-COIL)
+- Standing: Round 0 WIN 248-2, Round 1 WIN 246-4 vs coreyja__bombastic-bob.
+  bob is a GENUINE combat opponent (runs, ~46-turn games), not a timeout bot.
+- ANALYZED all 4 round-1 losses (sim_201/206/225/4): ALL were WALL-COIL self-
+  deaths while we were MUCH LONGER at HIGH health (len 9v3, 11v5, 15v6, 14v5).
+  We crawled along a wall into a corner over many turns and sealed ourselves in.
+  Static flood stays LARGE on a wall (tail retreats), so the round-1 anti-coil
+  (self-adjacency -15) + small -8 edge nudge weren't enough to leave the wall.
+  e.g. sim_225: by turn 65 we'd coiled our whole body into cols x=9,10 (right
+  wall) and the head was boxed by turn 72.
+- FIX (score_candidate, in the "clearly longer & not hunted" anti-coil block):
+  * self-adjacency penalty 15 -> 22.
+  * NEW: when winning (my_len > max_opp+1) AND healthy (>=30hp) AND not hunted,
+    pull toward center (dist_center * 2.5) and add edge -30 / corner extra -60.
+    This makes us LEAVE walls early instead of coiling into a corner while
+    dominating. Only active when winning+healthy, so it never blocks edge food
+    when hungry or center-fleeing when hunted.
+- VERIFIED: replayed all 4 losing games -- new bot steers toward the interior
+  many turns earlier (diverges from old at turns ~22-40). Forward-simulated
+  sim_225 from turn 55: new bot SURVIVES to turn 94 (old died turn 72).
+- TESTING (variance huge; proxies are the signal, mirror A/B is all-ties = noise):
+  * smart_opp (smartmatch.sh 24): 16-8, 18-6, 16-8 => consistent ~66-75%.
+  * greedy_opp (greedymatch.sh 20): 11-9.
+  * naive match.sh 10 -> 10-0. solo_test -> SURVIVED 300 turns.
+  * ast.parse + import OK; launch block intact.
+- Backup: main_round2_bob_r2_backup.py (pre-this-change, proven 246-4 code).
+- ADVICE: bob loses ONLY by our self-coils when we dominate; anti-wall-coil
+  removes them. Keep the center-pull + edge penalty (winning+healthy branch) +
+  self-adjacency 22 + static_flood + tail-reach + escape-count + anti-pin.
+  Don't over-crank (a bigger center weight risks luring into contested center).
+  NEVER touch the launch block. Judge via smart/greedy proxies + sim replays.
