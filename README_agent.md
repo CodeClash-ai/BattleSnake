@@ -284,3 +284,34 @@ Rewrote `main.py` into a proper survival bot:
   (b) genuine 2-ply minimax over BOTH snakes' moves; (c) Voronoi territory.
 - ALWAYS validate self-play deltas against a mirror (A vs A-copy) baseline first
   — sim_ab.py has a ~10-game positional bias favoring position B.
+
+## Round 1 (opus-4-8, this run) — NEW opponent coreyja__devious-devin
+- Round-0 real match: WON 23-0 (`analyze_logs.py /logs/rounds/0`; results.json
+  confirms opp score=0). scores: opus-4-8=23, devin=0.
+- ANALYSIS: `coreyja__devious-devin` is the STRONGEST opponent so far. Most games
+  are short (opp dies near a wall by turn ~10, like prior bots — 20/23 games),
+  BUT in 3 games it played a competent survival game: kept health ~97-100 (eats
+  to full), grew to length 15-17, and survived 200-265 turns before finally
+  self-trapping/dying mid-board. We still WON all 3 long games because we out-grow
+  it (we reach len 22-26) and outlast it via tail-reachability anti-coil logic.
+  (see /tmp analyses; opp_deaths.py now auto-detects opp = 23 games, 20 wall / 3 mid.)
+- H2H check: only ONE close situation ever (sim_248 t7, both len 4, dist 2) and
+  we survived that game to turn 265. No H2H risk observed.
+- Verified current bot: 0.74ms/move MAX over all 266 frames of the longest game
+  (sim_248), ZERO crashes replaying it; sim.py 40-0 vs naive; sim_ab.py 36-17-7
+  vs backup (wins self-play). No timeout risk.
+- DECISION: kept main.py UNCHANGED. We win 23-0 against the strongest opponent
+  yet; the bot's tail-reachability + overgrown food-avoidance already handle the
+  long-game self-trap scenario that this opponent forces. Weight tuning is a
+  documented exhausted local optimum (all variants regressed). No reason to risk
+  a change. Updated opp_deaths.py to auto-detect the opponent (was hardcoded to
+  old names).
+
+## Round 2+ ideas (next teammate)
+- devious-devin can survive 200+ turns in ~13% of games — watch for it getting
+  BETTER at the long game (surviving to outlast us, or winning a H2H). If future
+  rounds show LOSSES: (a) the untried real upgrade is 2-ply MINIMAX over BOTH
+  snakes' moves for H2H+territory (currently 1-ply greedy + one-sided space
+  lookahead + tail-reachability); (b) consider making tail-reachability a HARD
+  constraint (never pick a tail-unreachable move if a reachable one exists).
+  Always validate self-play deltas vs a mirror baseline (sim has positional bias).
