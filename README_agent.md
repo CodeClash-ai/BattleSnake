@@ -1272,3 +1272,41 @@ print('win',w,'loss',l,'tie',t)"
   static_flood + 2-ply-pin + offensive-space-denial + anti-pin + parallel-shadow
   + growth-attraction all intact. NEVER touch the launch block. Judge via
   solo_test + smartmatch multi-batch (variance huge).
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__eremetic-eric -- THIS SESSION)
+- OPPONENT: `coreyja__eremetic-eric`. Round 0 result: WIN 236-14. GENUINE combat
+  opponent that stays SMALL (len 7-12) and just SURVIVES while we grow HUGE.
+- ANALYZED all 14 losses (/tmp/analyze3.py): ALL were LONG endgames (300-565
+  turns) where WE self-eliminated. At death we were MASSIVELY LONGER (len 37-61
+  vs opp 7-12) at HIGH health (82-100hp) with 0 safe neighbours = DOMINANCE
+  SELF-COIL. Our huge body fills the board and we seal ourselves in.
+- ROOT CAUSE (traced sim_129, /tmp/trace2.py + /tmp/replay3.py): we coiled the
+  x=9 column then ran DOWN the x=10 wall corridor into the (0,0) corner. From
+  ~t291 every move had only 1 safe cell = a WALL DEATH-MARCH. The trap forms
+  many turns earlier when we drift onto the wall. Existing anti-wall-coil terms
+  fire but are DWARFED by space*10 when we are huge (my_len=30+), and the flat
+  escape==1 penalty (-40) is tiny relative to a big snake's score.
+- FIX (score_candidate, new DOMINANCE CORRIDOR AVOIDANCE block, after the
+  escape-count block ~line 365): when (not being_hunted) AND my_health>=30 AND
+  my_len > _max_ol+3 (we dominate), scale the low-escape corridor penalty with
+  length: escapes<=1 -> -(my_len-6)*4.0, AND add +space*3.0 so a huge snake
+  strongly prefers the OPEN-interior move over continuing down a wall. Gated so
+  it never blocks fighting/food when it matters.
+- VERIFIED: synthetic dominant-near-wall (/tmp/synth.py, len20 head(9,5), opp
+  tiny+far) -> bot now chooses UP (interior) instead of RIGHT (into wall). Live
+  forward-sim of sim_129 from t275/280/285 (opp frozen) -> SURVIVES 60 steps
+  (no longer walks into the coil).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 6-0, spacematch 9-7, smartmatch
+  11-5 (no regression). Grow-solo stress test (/tmp/growsolo.py, 6 food, 600
+  turns) -> new bot SURVIVES full 600 turns reaching len 44-47 (the failure-mode
+  lengths) with NO self-coil; identical/near-identical to baseline (no regress).
+- Backup: main_round1_eremetic_backup.py (pre-this-change, proven 236-14 code).
+- ADVICE FOR NEXT TEAMMATE: eremetic-eric beats us ONLY by our own dominance
+  self-coils in long endgames (it stays tiny and outlasts us). The dominance-
+  corridor term targets that class. Remaining deeper lever = a true longest-
+  survivable-path / connectivity metric (static flood overcounts through 1-wide
+  channels and via tail retreat on walls) or a 3-ply space search to detect the
+  multi-turn wall coil even earlier. Keep dominance-corridor + all existing anti-
+  coil/anti-pin/parallel-shadow/growth intact. Judge via grow-solo + smart/space
+  proxies (variance huge). NEVER touch the launch block.

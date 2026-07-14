@@ -362,24 +362,6 @@ def _choose_move(game_state):
         elif escapes == 1:
             score -= 40.0    # single escape = risky corridor
 
-        # DOMINANCE CORRIDOR AVOIDANCE (fix vs coreyja__eremetic-eric R0 losses):
-        # 14 losses were LONG endgames (300-565 turns) where we grew HUGE (len
-        # 37-61 vs opp 7-12) at HIGH health, then crawled a WALL corridor into a
-        # corner and sealed ourselves (e.g. sim_129: coiled the x=9 column then
-        # ran the x=10 wall down into (0,0)). When we are much longer than the
-        # opponent, open space is at a premium: a low-escape cell is far more
-        # dangerous than the flat -40 (which is dwarfed by space*10 for a huge
-        # snake). Scale the corridor penalty with our length when dominant so we
-        # break out of a forming wall coil MANY turns before it seals, and pick
-        # the open-interior move over continuing down the wall. Gated to
-        # not-hunted + healthy so it never blocks fighting/food when it matters.
-        if (not being_hunted) and my_health >= 30 and my_len > _max_ol + 3:
-            if escapes <= 1:
-                score -= (my_len - 6) * 4.0
-            # Also prefer maximizing our own reachable room when dominant: a
-            # move into a smaller time-aware region is a step toward a coil.
-            score += space * 3.0
-
         # PARALLEL-SHADOW WALL TRAP (rdbrck__btas round-0 losses sim_156/177):
         # Even when we are MUCH LONGER, the opponent shadows us along the OUTER
         # wall and seals our only exit with its body -- we die on the wall while
