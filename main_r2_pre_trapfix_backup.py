@@ -72,27 +72,6 @@ def _flood_fill(start, blocked, w, h, limit):
     return count
 
 
-def _reachable(start, goal, blocked, w, h):
-    """True if goal is reachable from start via free cells (BFS)."""
-    if start == goal:
-        return True
-    if start in blocked or not _in_bounds(start, w, h):
-        return False
-    seen = {start}
-    stack = [start]
-    while stack:
-        cx, cy = stack.pop()
-        for dx, dy in DIRS.values():
-            npp = (cx + dx, cy + dy)
-            if npp == goal:
-                return True
-            if npp in seen or not _in_bounds(npp, w, h) or npp in blocked:
-                continue
-            seen.add(npp)
-            stack.append(npp)
-    return False
-
-
 def move(game_state):
     try:
         board = game_state["board"]
@@ -165,22 +144,6 @@ def move(game_state):
             if space < my_len:
                 score -= (my_len - space) * 200
 
-            # Tail-reachability: if from the new head we can still reach our
-            # own tail cell, we are guaranteed not to be trapped (we can always
-            # follow our tail). Strongly reward this, especially when long.
-            # Recompute a flood fill that treats our tail as a target.
-            my_tail = me_body[-1]
-            # tail becomes free next turn unless we just grew; treat it as a
-            # reachable goal cell.
-            reach_blocked = set(occupied)
-            reach_blocked.add(head)
-            reach_blocked.discard(my_tail)
-            if _reachable(np, my_tail, reach_blocked, w, h):
-                score += 300 + my_len * 8
-            else:
-                # Cannot reach tail: high risk of self-trap when long.
-                score -= my_len * 12
-
             # Food seeking. Unchanged from the proven bot EXCEPT we stop
             # chasing food once we are extremely long with a decisive length
             # lead (>=25 and >=8 longer than the opponent). This prevents the
@@ -190,7 +153,7 @@ def move(game_state):
             if food:
                 nearest = min(_manhattan(np, f) for f in food)
                 longest_opp = max((ol for _, ol in opp_heads), default=0)
-                overgrown = my_len >= 18 and (my_len - longest_opp) >= 5
+                overgrown = my_len >= 25 and (my_len - longest_opp) >= 8
                 hunger = 0.0
                 if my_health < 40:
                     hunger = (50 - my_health) * 3.0

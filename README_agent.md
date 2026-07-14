@@ -246,3 +246,41 @@ Rewrote `main.py` into a proper survival bot:
   minimax over BOTH snakes' moves; (c) endgame tail-chasing to avoid corners.
 - Watch sim POSITIONAL BIAS: always compare A-vs-B against a mirror A-vs-Acopy
   baseline before trusting a self-play delta. Don't tune on raw self-play numbers.
+
+## Round 2 (opus-4-8, this run) — graeme-hill__snakebot (STRONG opponent)
+- Round-1 real match: WON 99-2 (`analyze_logs.py /logs/rounds/1`). This is the
+  competent survival opponent (survives long games). Our 2 LOSSES were BOTH
+  long self-traps (sim_213 t251 len28, sim_216 t334 len29): we coiled our own
+  body against the left wall / a corner and had NO legal move. Health was high
+  (98/43) — NOT starvation. Classic over-growth + coiling self-trap.
+- ROOT CAUSE: at length ~28 our body fills a whole region; the 1-ply flood-fill
+  said "space exists" each step but every move tightened the coil until the head
+  had all 4 neighbors blocked. The 2-ply space check + overgrown(25/lead8)
+  food-avoidance were TOO LATE (only kicked in at len 25).
+- FIXES applied to main.py (backup: main_r2_pre_trapfix_backup.py):
+  1. TAIL-REACHABILITY term (the big one): after flood-fill, BFS-check whether
+     from the new head we can still reach our own tail cell (tail treated as a
+     free goal since it moves next turn). If yes: score += 300 + my_len*8. If
+     NO: score -= my_len*12. Being able to reach your tail ~guarantees you can
+     always follow it and never trap yourself — the standard anti-coil heuristic.
+     Added helper `_reachable(start, goal, blocked, w, h)`.
+  2. Lowered overgrown threshold 25->18 and lead 8->5 so we STOP chasing food
+     (and start avoiding it) much earlier, before the coil gets dangerous.
+- VALIDATION (crucial — sim has positional bias, always compare to mirror):
+  * mirror baseline (prefix vs prefix-copy)  : 38-49-13 (100 games)
+  * NEW main vs prefix                        : 38-49-13 (100 games) => IDENTICAL
+    => the change is STRENGTH-NEUTRAL in general (short) self-play, i.e. NO
+    regression. It only changes behavior in the rare LONG endgame (the exact
+    scenario that lost us games). Replaying the loss game, moves diverge from
+    turn 126 (len 18) onward — earlier food-avoidance + tail-safety kick in.
+  * still 40-0 vs naive original (sim.py); 0.37 ms/move (no timeout); edge
+    cases (solo/corner) sane; no crashes replaying all 252 loss frames.
+- CONFIDENCE: this should convert most of those 2 long-game losses into wins
+  without risking the 99 we already win. Tail-reachability is the key upgrade.
+
+## Round 3+ ideas (next teammate)
+- If graeme-hill STILL beats us in long games: (a) make tail-reachability a HARD
+  constraint (never pick a tail-unreachable move if a reachable one exists);
+  (b) genuine 2-ply minimax over BOTH snakes' moves; (c) Voronoi territory.
+- ALWAYS validate self-play deltas against a mirror (A vs A-copy) baseline first
+  — sim_ab.py has a ~10-game positional bias favoring position B.
