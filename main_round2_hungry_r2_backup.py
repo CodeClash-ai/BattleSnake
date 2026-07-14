@@ -724,35 +724,7 @@ def _choose_move(game_state):
                           or nc[1] == 0 or nc[1] == height - 1)
             if being_hunted and _on_edge_f:
                 _fw = 0.0
-            # vs TheApX__hungry (R1: 37/39 losses we were SHORTER, fell behind
-            # turns 5-10). Traced sim_9 t8: we were TIED (len4) with food at (5,5)
-            # a 2-2 TIE race vs the opp -- arriving together = equal-length mutual
-            # death, correctly avoided, but then we had no clear alternate target
-            # and wandered while the opp grabbed (5,5) then more food uncontested.
-            # FIX: when TIED-or-SHORTER, exclude food we can only reach in a
-            # LOSING/MUTUAL-death tie race (opp arrives <= us AND opp is >= our
-            # length) from the nearest-food pull, so our head redirects toward an
-            # alternate food we can actually win. Keep such food if it is the ONLY
-            # food (fall back to the plain nearest).
-            _cand_food = _food_cells
-            if my_len <= _max_ol:
-                _winnable = []
-                for f in _food_cells:
-                    _mf = _manhattan(nc, f)
-                    _of = 999
-                    for opp in opponents:
-                        oh = (opp["body"][0]["x"], opp["body"][0]["y"])
-                        _ol2 = len(opp["body"])
-                        _od = _manhattan(oh, f)
-                        # a food is un-winnable if a >= length opp reaches it no
-                        # later than us (tie => mutual death, sooner => opp eats it)
-                        if _od <= _mf and _ol2 >= my_len:
-                            _of = min(_of, _od)
-                    if _of == 999:
-                        _winnable.append(f)
-                if _winnable:
-                    _cand_food = _winnable
-            nd = min(_manhattan(nc, f) for f in _cand_food)
+            nd = min(_manhattan(nc, f) for f in _food_cells)
             score -= nd * _fw
             if nd == 0 and not (being_hunted and _on_edge_f):
                 score += 40.0   # landing on food = growth, extra reward when behind

@@ -1999,3 +1999,38 @@ print('win',w,'loss',l,'tie',t)"
   (pin risk -- gated to safe cells space>=my_len, zeroed on edges when hunted).
   Keep widened-stretch(_sm=2) + all existing anti-coil/anti-pin/growth. NEVER
   touch the launch block. Judge via greedy_opp A/B multi-batch (variance huge).
+
+## ROUND 2 UPDATE (opus-4-8, TheApX__hungry -- WINNABLE-FOOD REDIRECT)
+- Standing: R0 WIN 191-57 (2t), R1 WIN 210-39 (1t). The R0 widened-stretch race
+  cut losses 57->39. hungry OUT-GROWS us: 37/39 R1 losses we were SHORTER at
+  death (2 equal, 0 longer), high health (NOT starvation), gap up to -15.
+- ANALYZED (/tmp/analyze3.py, gaps.py -- NOTE: in these sim logs the `you` field
+  is HUNGRY's perspective; OUR snake is the one named 'opus-4-8'): we START EVEN
+  (turn 5 gap 0) but fall behind by turn 10 (30/39 behind) and it compounds
+  (-0.9 t10, -1.5 t20, -2.6 t50). Pure length-deficit -> forced h2h / pins.
+- TRACED sim_9 t8: we were TIED (len4) with food (5,5) a 2-2 TIE race vs opp;
+  arriving together = equal-length MUTUAL DEATH (correctly avoided via -1000
+  h2h), BUT then we had no clear alternate target and WANDERED while opp grabbed
+  (5,5), then (0,7), then (7,7) uncontested -> pulled ahead permanently.
+- FIX (score_candidate general food-attraction, ~line 727, low-risk & gated):
+  when TIED-or-SHORTER (my_len <= _max_ol), exclude food we can only reach in a
+  LOSING/MUTUAL-death race (a >= length opp reaches it no later than us) from the
+  nearest-food pull, so our head redirects toward an alternate WINNABLE food and
+  keeps growing. Falls back to plain nearest food if NONE is winnable. Does NOT
+  touch the longer-snake anti-coil / dominance logic (only fires tied-or-shorter).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0.
+  * greedy_opp (aggressive-grower proxy for hungry, greedymatch.sh 24, HIGH
+    variance per all prior notes): NEW aggregate 17-7 + 12-11 = 29-18 (~62%);
+    BASELINE (main_round2_hungry_r2_backup.py) 16-7-1 + 11-13 = 27-20-1 (~57%).
+    Modest consistent edge, no regression. Mirror A/B all-ties (ignore).
+- Backup: main_round2_hungry_r2_backup.py (pre-this-change, the 210-39 code).
+- ADVICE FOR NEXT TEAMMATE: hungry OUT-GROWS us then wins length contacts
+  (37/39 losses SHORTER). Growth parity is THE lever. Much deficit is POSITIONAL
+  (opp spawns with a straighter path to the center food (5,5); racing it head-on
+  = mutual death). The winnable-food redirect helps us keep growing instead of
+  wandering. Remaining levers: (a) smarter OPENING food target (pick food we
+  provably win from spawn); (b) extend 2-ply pin lookahead to survive length h2h
+  when 1 short; (c) contest lose-by-3 food ONLY with escape>=2 (pin risk). Keep
+  winnable-food-redirect + widened-stretch(_sm=2) + all existing anti-coil/anti-
+  pin/growth. NEVER touch the launch block. Judge via greedy_opp A/B multi-batch.
