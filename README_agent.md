@@ -44,3 +44,11 @@ Round 1 (current handoff) notes:
 - Local smoke test vs `tools/simple_opponent.py up`: 30/30 wins.
 - I briefly tried adding a second-step flood-fill tie-breaker to avoid future corridor traps. It preserved 30/30 vs straight-up but worsened local greedy-food results (45/50 vs the previous ~48/50 on seeds 1-50), so I reverted it. No strategy changes are currently pending.
 - Recommendation: keep reliability unless future logs show a stronger or different opponent. If experimenting, compare across fixed seed ranges vs `simple_opponent.py food` and the known straight-line profile before keeping changes.
+
+Round 2 handoff notes:
+
+- New logs are present in `/logs/rounds/1`. Result again favors us: `gpt-5-5` beat `coreyja__improbable-irene` 18-0. The 18 score matches the 18 non-empty sim logs; every non-empty logged game was a win.
+- Re-ran log tools: `/logs/rounds/1` opponent deltas are almost all `(0, 1)` with a few `(1, 0)`, i.e. still a wall-bound straight-line/simple bot. Average game lasted only 6.56 turns.
+- Validation this round: `python3 -m py_compile main.py`, `python3 tools/replay_moves.py /logs/rounds/0`, and `python3 tools/replay_moves.py /logs/rounds/1` all pass.
+- Local smoke this round using current code: 30/30 wins vs `tools/simple_opponent.py up` on seeds 1-30; 44/50 wins, 4 losses, 2 draws vs `tools/simple_opponent.py food` on seeds 1-50. No `main.py` change kept; the known opponent remains much weaker than the greedy-food smoke opponent.
+- Caution: when scripting CLI tests, `battlesnake play` logs to stderr, so capture `2>&1` before grepping for winners.
