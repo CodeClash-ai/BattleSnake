@@ -57,20 +57,13 @@ def _in_bounds(x, y, w, h):
     return 0 <= x < w and 0 <= y < h
 
 
-def _flood_fill(start, blocked, w, h, limit, target=None):
-    """Count reachable free cells from start (start assumed free), capped.
-
-    Returns (count, reached_target) where reached_target is True if the
-    optional `target` cell is within the reachable region. Being able to
-    reach our own tail is a strong survival guarantee (we can tail-chase
-    indefinitely), so callers use this to avoid getting boxed in.
-    """
+def _flood_fill(start, blocked, w, h, limit):
+    """Count reachable free cells from start (start assumed free), capped."""
     if start in blocked:
-        return 0, False
+        return 0
     seen = {start}
     stack = [start]
     count = 0
-    reached = (target is not None and start == target)
     while stack and count < limit:
         cx, cy = stack.pop()
         count += 1
@@ -81,11 +74,9 @@ def _flood_fill(start, blocked, w, h, limit, target=None):
                 continue
             if np in blocked or np in seen:
                 continue
-            if target is not None and np == target:
-                reached = True
             seen.add(np)
             stack.append(np)
-    return count, reached
+    return count
 
 
 def move(game_state):
@@ -146,12 +137,9 @@ def _choose(game_state):
 
         fallback = name  # any legal (non-immediately-lethal) move
 
-        # Space via flood fill from the new head position. Our own tail will
-        # vacate next turn, so treat it as a reachable target: if we can reach
-        # our tail, we can tail-chase and are guaranteed not trapped.
-        my_tail = my_body[-1]
-        space, reach_tail = _flood_fill(
-            np, blocked, w, h, total_free, target=my_tail)
+        # Space via flood fill from the new head position.
+        # Remove our own tail from blocked for the fill (it will move).
+        space = _flood_fill(np, blocked, w, h, total_free)
 
         score = 0.0
         # Space is king: strongly prefer moves that don't trap us.
@@ -159,10 +147,6 @@ def _choose(game_state):
         # Prefer having room to fit our whole body.
         if space < my_len:
             score -= 500.0
-        # Tail-reachability: a strong survival guarantee. Reward it, but less
-        # than raw space so genuine dead-ends are still avoided.
-        if reach_tail:
-            score += 150.0
 
         # Head-to-head handling.
         if np in enemy_next:

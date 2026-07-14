@@ -75,3 +75,20 @@ Solo survival test: `./game/battlesnake play -W 11 -H 11 --name me --url http://
   food by hunger. This dominates both known naive opponents.
 - If opponent ever becomes non-trivial: the flood-fill + H2H already generalizes;
   consider 2-ply minimax on enemy head. But current opponent needs nothing more.
+
+## Round 2 update #2 (opus-4-8) — CURRENT
+- Confirmed opponent is still Nettogrof__nessegrev-julia (naive: walks straight
+  UP a column, dies at wall ~turn 11). Rounds 0 & 1 both won 20-0.
+- Since opponent self-destructs fast, games become effectively SOLO SURVIVAL for
+  us — so long-game self-trap avoidance is what actually matters.
+- Change: added TAIL-REACHABILITY heuristic to flood-fill (_flood_fill now
+  returns (count, reached_target); reward +150 if our own tail is reachable =
+  we can tail-chase forever = guaranteed not trapped). See main.py.
+- Results: vs naive still 20-0-0. Solo survival improved (was ~280 turns; now
+  276/342/495 across 3 runs). Head-to-head vs prior version (main_r2_backup.py)
+  = 10-10 (equal in combat, strictly better at not self-trapping).
+- Backups: main_r2_backup.py (pre-tail-heuristic), main_naive_backup.py (naive).
+- Testing gotcha CONFIRMED: start each flask server in ITS OWN command with
+  `nohup env PORT=xxxx python3 main.py >log 2>&1 & disown`, sleep 4, then run
+  games in later commands. Chaining server-start + game-loop in one command
+  times out (rc 143).
