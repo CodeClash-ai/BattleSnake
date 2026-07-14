@@ -217,9 +217,24 @@ def move(game_state):
         # dead-end corridors/corners on long games (see round-0 loss
         # analysis in README_agent.md).
         my_tail = tails.get(my_id)
+        food_cells = {(f["x"], f["y"]) for f in food}
 
         for name, npt, danger_h2h in pool:
-            space, reached_tail = _flood_fill(npt, blocked, width, height, target=my_tail)
+            # If this move lands on food, our own tail will NOT vacate this
+            # turn (snake grows instead of sliding forward) -- so treat our
+            # tail cell as still blocked for this candidate's flood-fill,
+            # otherwise we overestimate reachable space / wrongly think we
+            # can still path back to our tail immediately. Missing this
+            # caused a real self-trap death (see README_agent.md): the bot
+            # picked a food cell believing it had plenty of room + a clear
+            # tail-path, but eating froze the tail and the room collapsed
+            # the very next turn.
+            will_eat = npt in food_cells
+            if will_eat and my_tail is not None and my_tail not in blocked:
+                eff_blocked = blocked | {my_tail}
+            else:
+                eff_blocked = blocked
+            space, reached_tail = _flood_fill(npt, eff_blocked, width, height, target=my_tail)
 
             score = 0.0
             # Space safety: heavily penalize tight spaces relative to our

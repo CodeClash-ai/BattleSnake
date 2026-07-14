@@ -764,3 +764,90 @@ still valid):**
   numbers each batch; clean up test servers with `kill -9 <pid>` found
   via `ps aux` (NOT `pkill -f <pattern>`, which can match and kill your
   own current shell command if the pattern text appears in it).
+
+## Round (this session) update -- FOUND & FIXED a real self-trap bug (food-eating tail-freeze)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent `graeme-hill__snakebot`, result **83 wins /
+4 losses** out of 87 real games. Turn counts min=3 max=278 avg=25.3 (much
+longer games than most previous sessions' opponents).
+
+**Root cause of all 4 losses (sim_172/175/232/245.jsonl), found by replaying
+real match states directly through `main.move()`:** All 4 losses were very
+long games where our snake grew huge (30-36 length on an 11x11 board) and
+died coiled in a self-made pocket. Traced `sim_172.jsonl` turn-by-turn by
+feeding the *actual logged board states* into `main.move()` (confirmed it
+reproduces the exact same losing move sequence as the real game -- see the
+one-off script used this session, not saved as a file, but the technique
+is: load a `sim_*.jsonl`, for each frame set `state["you"]` to our snake's
+own dict from `board.snakes`, call `main.move(state)`, compare to what
+actually happened next frame).
+
+Found the *exact* turn where things went wrong: at turn 254, our snake had
+3 tied-looking safe options (up/down/left), all reporting `space=35,
+reached_tail=True` under the old flood-fill. It picked `left`, which
+happened to land on a **food cell**. But eating food means the snake
+**grows instead of its tail vacating** that turn -- and the old
+`_flood_fill` call for scoring candidates always treated our own tail cell
+as free/vacating (via `_occupied_cells`'s "did I eat last turn" check),
+regardless of whether *this candidate move itself* would cause eating.
+This let the bot believe "eating this food is totally safe, I can still
+reach my tail" when in fact eating froze the tail in place and collapsed
+its real reachable space from 35 down to ~23 the very next turn, which
+then forced a series of single-option corridors ending in a dead corner
+cell 21 turns later (turn 277 in the real log).
+
+**Fix implemented in `main.py` this session (small, targeted):** in the
+per-candidate scoring loop, added a check: if a candidate cell `npt` is a
+food cell, treat our own tail cell as *still blocked* for that candidate's
+flood-fill (`eff_blocked = blocked | {my_tail}`), since it won't actually
+vacate this turn. This makes the space/reached-tail scoring correctly
+reflect the real post-eating board and rank that option much lower
+(hard `space < my_len` penalty + `-60` no-tail-reach penalty instead of
+`+15`) whenever eating would meaningfully shrink our free space. Verified
+by directly re-running the exact same turn-254 board state from
+`sim_172.jsonl` through the patched `move()`: it now picks `down` (a
+different branch that keeps `space=35, reached_tail=True` *without*
+eating) instead of the fatal `left`/food branch. This is a minimal,
+well-isolated change -- only affects scoring of candidates that land on
+food cells, doesn't touch anything else.
+
+**Testing done:**
+- `ast.parse` syntax check: OK.
+- Replayed the losing `sim_172.jsonl` states through both the old and new
+  `move()` logic side-by-side (see above) -- confirmed the new code
+  changes the pivotal turn-254 decision away from the food cell that led
+  to death.
+- Local batch vs `tools/opponent_ref.py` (naive stand-in), seeds 1-5:
+  **5/5 wins**, 4-6 turns each, no errors/exceptions in either server log
+  -- confirms no regression/crash from the change on the common/easy case.
+- Did NOT have time this session to run a full long multi-hundred-turn
+  self-play regression batch to double check the fix doesn't introduce a
+  *different* subtle issue elsewhere (e.g. becoming overly food-averse in
+  some edge case) -- **recommended next step for next teammate**: run
+  several self-play games (`main.py` vs itself) for 100+ turns and check
+  for exceptions/weird stalling, and if possible replay `sim_175.jsonl`,
+  `sim_232.jsonl`, `sim_245.jsonl` (the other 3 real losses from this
+  session's round) through the new code the same way to see if this same
+  fix also resolves those (likely, since all 4 were long-game self-traps,
+  but not yet individually confirmed).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix actually performed in the next real round.
+- If losses persist, use the exact replay-through-`move()` technique
+  documented above (it's very effective -- found this bug directly from
+  real match data in a handful of steps) on the new losing sim files.
+- Other candidate follow-up hardening ideas (not yet implemented,
+  speculative): the same "will this move cause MY tail to freeze" logic
+  could be extended to *opponent* snakes when checking head-to-head/
+  space-sharing risk (if an opponent is adjacent to food, they may also
+  grow and not vacate their tail -- currently only accounted for via the
+  post-hoc "did they eat last turn" check on the CURRENT frame, not
+  predictively for opponents' upcoming moves). Low priority since our own
+  eating was the actual observed failure mode, not opponents'.
+- Server-testing gotchas (reconfirmed working this session): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use `ps aux | grep <pattern> | grep -v grep | awk
+  '{print $2}' | xargs -r kill -9` to clean up (avoid `pkill -f`, which
+  can match and kill your own current shell command).
