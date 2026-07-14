@@ -851,3 +851,129 @@ food cells, doesn't touch anything else.
   + `disown -a`; use `ps aux | grep <pattern> | grep -v grep | awk
   '{print $2}' | xargs -r kill -9` to clean up (avoid `pkill -f`, which
   can match and kill your own current shell command).
+
+## Round (this session) update -- FOUND & FIXED a major starvation bug (4/5 losses)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:** both
+`/logs/rounds/0/` and `/logs/rounds/1/` existed, opponent
+`graeme-hill__snakebot`:
+- Round 0: 83 wins / 4 losses (87 real games), turns min=3 max=278 avg=25.3.
+- Round 1: 82 wins / 5 losses (87 real games), turns min=3 max=239 avg=17.3.
+
+**Root cause investigation (this session):** grouped losses by checking
+our snake's health history in each losing `sim_*.jsonl`
+(`/logs/rounds/1/sim_{213,214,216,227,231}.jsonl` were the 5 round-1
+losses). **4 of 5** round-1 losses were pure **starvation** deaths: health
+ticked steadily 10->9->...->1->0 with our snake's length stuck flat for
+80-200+ turns despite being on a wide-open board with abundant food and no
+opponent nearby. Replayed the exact logged board state at intermediate
+turns directly through `main.move()` (technique: build a synthetic
+`game_state` from the sim frame's `board` + our own snake dict as `you`,
+call `main.move(state)` directly, print per-candidate diagnostics) and
+found the bug in `sim_213.jsonl` turn 50: head at `(7,7)`, health 52,
+**food directly adjacent** at `(7,6)`, 113+ open cells everywhere -- and
+the bot chose to walk AWAY from the food anyway.
+
+**Exact mechanism:** the old scoring had a flat `+15` bonus / `-60`
+penalty for whether a candidate move preserved "can I still BFS-path back
+to my own tail" (`reached_tail`), applied unconditionally once
+`my_len >= 4`, with NO regard for how much open space was actually
+available. Eating food freezes your tail in place for that turn (doesn't
+vacate), so almost any adjacent-food move loses `reached_tail` for one
+turn -- even in a 113-open-cell board where this is obviously irrelevant.
+That flat -60/+15 swing (75 points) dwarfed the food-attraction bonus
+(capped at ~60 even at critical health), so the bot reliably preferred
+"walk in a small loop forever, keep `reached_tail=True`" over "eat the
+food right next to me," turn after turn, until it starved to death. This
+is exactly the kind of failure the game's realistic long-running matches
+exposed that short local smoke tests (naive-opponent 5-turn blowouts)
+never would have caught -- **local testing against `opponent_ref.py` was
+totally blind to this bug** since those games end almost instantly, well
+before health ever gets low. Lesson for future sessions: replaying REAL
+match sim files (especially long/losing ones) through `main.move()`
+directly is far more valuable than local smoke tests against the naive
+reference bot once the easy bugs are fixed.
+
+**Fix implemented in `main.py` this session:**
+1. The tail-reachability bonus/penalty is now gated by an
+   `open_threshold = max(my_len * 4, 24)`: if post-move reachable `space`
+   is at/above that threshold (comfortably open board), the bonus/penalty
+   collapses to a tiny `+3`/`0` tie-break instead of the old flat
+   `+15`/`-60` -- losing tail-reachability for one turn on a wide-open
+   board is a non-issue and should not scare the bot away from food.
+   Below the threshold (actually tight/cramped situations -- the
+   scenario this penalty was originally added for, per earlier session
+   notes in this file), the original `+15`/`-60` behavior is preserved
+   unchanged, since THAT fix (from an earlier session, for real
+   self-trap corner-death losses) is still valid and still needed.
+2. Food urgency now ramps up smoothly and much more steeply as health
+   drops (`urgency = 1.0 + 8.0 * ((60 - health)/60)**2` below 60 health,
+   vs. the old flat 1.5x/3x step function), plus a new explicit bonus
+   (`+40 * (60-health)/60`) specifically for a candidate move that eats
+   food *this turn* (`nearest == 0`) once health <= 60 -- makes
+   "immediately eat adjacent food" dominate over "stay in a safe loop"
+   once health is a real concern, without needing to touch the hard
+   space-safety penalties (space < my_len is still hard-blocked exactly
+   as before -- this fix does NOT make the bot eat into real death
+   traps, only removes the *false* trap signal on open boards).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed `sim_213.jsonl` turn 50 (the exact bug instance) through the
+  patched `move()`: now correctly returns `down` (eats the adjacent food)
+  instead of the old `right` (walks away). Verified across several other
+  turns (14/20/30/50/70/90) in the same losing game -- bot now reliably
+  eats nearby food at low/medium health instead of avoiding it.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py`, seeds 1-8: **8/8 wins**, 4-7 turns each, zero
+  errors/exceptions in server logs (unchanged from before -- confirms no
+  regression on the easy case).
+- Self-play (`main.py` vs itself), 5 total games across two batches
+  (seeds 11/22/33/44/99): games ran 54-266 turns, all completed cleanly
+  with a winner, **zero exceptions** in any server log. Explicitly
+  checked the health/length of the final frame of one long self-play game
+  (seed 99, 98 turns) -- loser died at health 82/92 (i.e. a real collision
+  death, NOT starvation), confirming the new urgency curve doesn't cause
+  any new pathological "eats too aggressively into danger" behavior in
+  normal competitive play.
+- Did NOT do a full forward re-simulation of the real opponent
+  (`graeme-hill__snakebot`)'s actual behavior against the new bot (no
+  local reimplementation of that specific opponent exists yet -- only
+  `tools/opponent_ref.py`, which models an older/different/naive
+  opponent and is a weak proxy). The real validation will be
+  `/logs/rounds/2/results.json` after this session's submission.
+
+**For next teammate:**
+- First: run `python3 tools/analyze_logs.py` for real ground truth on how
+  this fix performed against the real opponent in the next round. If
+  round-2 losses/turn-counts drop significantly vs round 1 (82-5, avg 17.3
+  turns) that's strong confirmation the starvation bug was the main
+  problem. Round 0's 4 losses (`sim_172/175/232/245.jsonl`) were a
+  *different*, already-fixed issue (real cramped self-traps in very long
+  big-snake games -- see the much earlier "Fix implemented in main.py this
+  round" section in this file); if losses of THAT flavor reappear, that's
+  unrelated to this session's fix and needs separate investigation.
+- If starvation losses somehow still occur, check whether the
+  `open_threshold` gating logic needs tuning (e.g. maybe it should also
+  consider distance-to-food, not just space; or the low-health urgency
+  curve needs to be even steeper), and re-run the same
+  replay-through-`move()` diagnostic technique documented above (extend
+  the one-off script in this session's trajectory: build synthetic
+  `game_state` from a sim frame + call `main.move()` directly + print
+  per-candidate `space`/`reached_tail`/scores) on the new losing sim
+  files to pinpoint exactly where the decision goes wrong, the same way
+  this bug was found.
+- General methodology reminder (now proven twice): local smoke tests vs.
+  `tools/opponent_ref.py` (games ending in ~5 turns) are USELESS for
+  catching health/starvation/long-game bugs since health never gets low
+  in those games. Always additionally spot-check real losing
+  `sim_*.jsonl` files from actual rounds by replaying specific frames
+  through `main.move()` directly -- this is dramatically more effective
+  than blind local batch testing for finding real bugs.
+- Server-testing gotchas (all reconfirmed working this session): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers by finding PIDs via `ps aux`
+  and `kill -9 <pid>` directly (NOT `pkill -f <pattern>`, which can match
+  and kill your own current shell command if the pattern text appears in
+  it -- confirmed multiple times across sessions now).

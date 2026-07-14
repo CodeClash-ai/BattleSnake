@@ -251,24 +251,55 @@ def move(game_state):
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong
             # signal we won't immediately self-trap. Penalize losing that
-            # property, especially once we're reasonably long.
+            # property, especially once we're reasonably long -- BUT only
+            # strongly when space is actually tight. On a wide-open board
+            # (space is many multiples of our length), temporarily losing
+            # tail-reachability for one turn (e.g. because eating food
+            # freezes the tail this turn) is a non-issue and should NOT
+            # be treated the same as a real cramped self-trap risk.
+            # Historical bug: a flat -60 penalty here made the bot refuse
+            # to eat ANY food whenever eating cost "tail reachability",
+            # even with 100+ open cells available, causing it to circle
+            # forever avoiding food and starve to death in real matches
+            # (see README_agent.md for the sim_213/216/231/214/227
+            # starvation-loss analysis this round). Fix: scale the
+            # penalty/bonus down to ~0 once space is comfortably large
+            # relative to our length.
+            open_threshold = max(my_len * 4, 24)
             if my_tail is not None and my_len >= 4:
-                if reached_tail:
-                    score += 15.0
+                if space >= open_threshold:
+                    # Plenty of room either way; tiny tie-break only.
+                    score += 3.0 if reached_tail else 0.0
                 else:
-                    score -= 60.0
+                    if reached_tail:
+                        score += 15.0
+                    else:
+                        score -= 60.0
 
-            # Food attraction.
+            # Food attraction. Urgency scales smoothly and aggressively as
+            # health drops -- starving to death is a *guaranteed* loss, so
+            # once health is critically low we should strongly prefer
+            # eating even if it costs some space/tail-reachability safety
+            # margin (as long as it doesn't walk us into < my_len space,
+            # which is still hard-penalized above).
             if food:
                 dists = [_manhattan(npt, (f["x"], f["y"])) for f in food]
                 nearest = min(dists)
-                # Weight food urgency higher when health is low.
-                urgency = 1.0
-                if health <= 40:
-                    urgency = 3.0
-                elif health <= 70:
-                    urgency = 1.5
+                # Weight food urgency higher when health is low. Smooth,
+                # steep ramp: mild early on, very large once health is
+                # critically low (guaranteed starvation otherwise).
+                if health <= 60:
+                    urgency = 1.0 + 8.0 * ((60 - health) / 60.0) ** 2
+                else:
+                    urgency = 1.0
                 score += urgency * (20.0 / (nearest + 1))
+                # Extra flat bonus for a move that eats RIGHT NOW when
+                # health is getting low -- guarantees survival progress
+                # instead of just "closer is better", which matters once
+                # nearest==0 vs nearest==1 should be a much bigger gap
+                # than the 1/(n+1) curve alone provides at low health.
+                if nearest == 0 and health <= 60:
+                    score += 40.0 * ((60 - health) / 60.0)
             else:
                 cx, cy = (width - 1) / 2.0, (height - 1) / 2.0
                 score -= 0.1 * _manhattan(npt, (cx, cy))
