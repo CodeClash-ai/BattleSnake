@@ -771,3 +771,74 @@ scenario (I did not have budget left to check this directly -- the
 `/tmp/dbgmain.py`/`/tmp/dbg_replay.py` debug-print technique, described
 above and in the archive, is the fastest way to check by adding
 `exclusive_space` to the printed fields).
+
+**Session (round 4, opponent still rdbrck__bountysnake2018 -- rounds so
+far: 0:28%, 1:17.2%, 2:23.6%, 3:25.6% after Voronoi territory-control
+signal shipped last session; this opponent remains our hardest matchup
+by a wide margin across 4 rounds now):** Ran `tools/analyze_logs.py`
+first. Confirmed round 3's win rate (25.6%) is a mild improvement over
+round 2 (23.6%), consistent with the previous session's own
+under-validated 62.5% self-play signal for the new
+`_voronoi_exclusive_space` additive penalty (weight -12.0/cell,
+`main.py` search "Voronoi territory-control safety signal").
+
+Re-triaged round 3's 186 losses with a fresh script (`/tmp/triage5.py`,
+not yet promoted to `tools/` -- worth doing next session if this
+opponent recurs): 150/186 (80.6%) still end at ZERO legal moves for us
+(self-trap signature), but only 54/150 of those are literal head-in-
+corner cells -- the other 96 are self-traps in non-corner pockets
+(against own body / opponent body forming a dead-end elsewhere on the
+board), so "corner" framing from 2 sessions ago is only part of the
+picture. Median `my_len - max_opp_len` at death is still only +4 (NOT
+the classic dominant-length pattern), confirming (yet again) this is a
+close, comparable-length race where our snake gets slowly out-
+territoried, not overgrown -- the failure class the Voronoi signal was
+specifically built to target.
+
+**Ran the validation the previous session explicitly flagged as
+skipped-but-recommended**: NEW (current, with Voronoi, `git show
+5438c5b:main.py`) vs OLD (pre-Voronoi, `git show ca1495f:main.py`)
+self-play A/B via the real `game/battlesnake` CLI. Only got 13/16 seeds
+to finish before a tool-call timeout (25s/game budget vs a 30s command
+limit -- **next session: run games in smaller batches, e.g. 5-8 per bash
+call, to avoid this**): **new=9, old=2, draw=2** -- a clear, reasonably
+convincing positive result (69% decisive win rate for the Voronoi
+version), corroborating the previous session's smaller/less-confident
+62.5% figure and the real round 2->3 improvement. **Conclusion: the
+Voronoi signal is a validated real improvement, keep it as-is.**
+
+Attempted one further tuning step (raise Voronoi weight -12.0 -> -20.0,
+per the previous session's own suggested next experiment) and got as
+far as building a clean `/tmp/w20bot/` copy + confirming `ast.parse`
+OK, but ran out of step budget to actually A/B it properly before this
+session's limit -- **did NOT ship the weight-20 variant, reverted
+`main.py` back to the exact byte-identical round-3-committed version**
+(confirmed via `cp /tmp/main_w12.py main.py` where `/tmp/main_w12.py`
+was saved as a pristine pre-experiment copy). No functional changes
+shipped this session -- this was purely a validation-only session,
+which per this file's own stated risk tolerance is the correct call
+given the tiny remaining step budget left after the A/B run.
+
+**For next teammate:** (1) Re-run `tools/analyze_logs.py` on round 4's
+real results first. If win rate holds ~25% or improves, the Voronoi
+signal is confirmed net-positive twice now (self-play A/B + real round
+delta) -- worth trying the weight-20 (or even weight-25/30) variant next,
+since the mechanism direction is now well-validated, just not the exact
+magnitude. Build it via:
+```
+sed -i 's/score -= 12.0 \* (my_len - exclusive_space)/score -= 20.0 * (my_len - exclusive_space)/' main.py
+```
+then self-play A/B new(w20) vs old(w12, i.e. current committed) for
+15-20 seeds in SMALL batches (5-8 games per bash call, ~25s each --
+learned the hard way this session that 16 games in one call exceeds the
+tool's 30s-per-call limit and silently truncates the batch).
+(2) The non-corner self-trap majority (96/150) suggests the Voronoi
+signal's `-12.0` weight might still be too weak to flip these specific
+decisions early enough -- if weight tuning plateaus, consider instead
+folding `exclusive_space` into the HARD tier gating (alongside
+`effective_space`/`worst_space`) rather than as a small separate additive
+term, per the previous session's own suggestion (search
+"using `exclusive_space` inside the existing hard-tier gating" in the
+prior session's writeup above). (3) `/tmp/triage5.py`'s corner-vs-
+non-corner self-trap breakdown logic is worth promoting into `tools/` if
+this opponent recurs again next round.
