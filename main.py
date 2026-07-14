@@ -956,6 +956,37 @@ def move(game_state):
                     if near_corner:
                         score -= 60
 
+            # Zakwht round-1 losses are dominated by close/equal-length rail
+            # squeezes: we are healthy, only tied or 1-2 behind, and choose a
+            # one-exit actual-edge step while the opponent shadows an adjacent
+            # lane.  Keep this narrow (non-food, actual rail, close-length) so
+            # normal food racing is not over-constrained.
+            if (my_health > 70 and my_len <= max_enemy_len + 1 and n not in food
+                    and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                near_corner = ((n[0] <= 1 or n[0] >= w - 2) and n[1] in (0, h - 1)) or \
+                              ((n[1] <= 1 or n[1] >= h - 2) and n[0] in (0, w - 1))
+                nearest_equal_longer = min((dist(n, eh) for eh in enemy_heads
+                                            if enemy_lengths.get(eh, 0) >= my_len),
+                                           default=99)
+                if exits <= 1 and nearest_equal_longer <= 8:
+                    score -= 170
+                    if near_corner:
+                        score -= 90
+                    if nearest_equal_longer <= 5:
+                        score -= 55
+                    try:
+                        if path_count < 8:
+                            score -= (8 - path_count) * 25
+                    except UnboundLocalError:
+                        pass
+                # If we are already on a contested rail with only one/two exits,
+                # prefer the rail option that at least heads toward food/opening.
+                # Several Zakwht losses had equal scores between continuing along
+                # the wall away from food and turning along the adjacent wall; the
+                # former was then shadowed into a corner.
+                if exits <= 2 and nearest_equal_longer <= 4 and food_dist is not None:
+                    score -= min(food_dist, 15) * 3
+
             # Also avoid equal-length healthy rail shadows before they become
             # immediate head-to-head traps.  The Spenca round-1 loss had us run
             # along the bottom edge while an equal-length opponent paralleled a
