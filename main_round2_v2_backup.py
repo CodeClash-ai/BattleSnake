@@ -125,83 +125,37 @@ def _choose_move(game_state):
                 return name
         return "up"
 
-    # Time-aware flood fill. We BFS outward from the new head; a body segment
-    # is only an obstacle while it is still there. My own tail (and the tails
-    # of others) retreat over time, so a cell occupied by segment i (0=head)
-    # of a snake of length L becomes free after (L - i) turns. This lets us
-    # tell a survivable coil apart from a true trap (a coil we can follow our
-    # own retreating tail through).
-    # Build a map: cell -> earliest turn it becomes free (0 = free now).
-    def _build_clear_times():
-        clear = {}
-        for s in snakes:
-            body = [(seg["x"], seg["y"]) for seg in s["body"]]
-            L = len(body)
-            extra = 1 if s["health"] == 100 else 0  # just ate: tail lingers 1 turn
-            for i, seg in enumerate(body):
-                # segment i vacates after (L - i) steps (tail i=L-1 -> 1 step)
-                free_at = (L - i) + extra
-                if seg in clear:
-                    clear[seg] = min(clear[seg], free_at)
-                else:
-                    clear[seg] = free_at
-        return clear
-
-    clear_times = _build_clear_times()
-
-    my_tail = my_body[-1] if len(my_body) > 1 else None
-
-    def _can_reach(start_cell, target):
-        # Time-aware BFS: can we reach `target` from `start_cell`?
-        from collections import deque
-        if start_cell == target:
-            return True
-        seen = {start_cell}
-        dq = deque([(start_cell, 1)])
-        while dq:
-            cur, d = dq.popleft()
-            for ddx, ddy in DIRS.values():
-                nn = (cur[0] + ddx, cur[1] + ddy)
-                if nn == target:
-                    return True
-                if nn in seen or not in_bounds(nn):
-                    continue
-                ct = clear_times.get(nn)
-                if ct is not None and ct > d:
-                    continue
-                seen.add(nn)
-                dq.append((nn, d + 1))
-        return False
-
+    # Flood-fill reachable free space from a cell, to avoid trapping ourselves.
     def flood_fill(start_cell, blocked_set, limit=None):
-        # Distance-limited BFS respecting time-clearing of body cells.
-        # A cell is enterable at distance d if it is in bounds and either not a
-        # body cell, or its clear time <= d (the occupying segment has moved).
-        from collections import deque
-        seen = {start_cell}
-        dq = deque([(start_cell, 1)])
+        seen = set()
+        stack = [start_cell]
+        seen.add(start_cell)
         count = 0
-        while dq:
-            cur, d = dq.popleft()
+        while stack:
+            cur = stack.pop()
             count += 1
             if limit and count >= limit:
                 break
             for ddx, ddy in DIRS.values():
                 nn = (cur[0] + ddx, cur[1] + ddy)
-                if nn in seen or not in_bounds(nn):
+                if nn in seen:
                     continue
-                ct = clear_times.get(nn)
-                if ct is not None and ct > d:
-                    continue  # still occupied when we would arrive
+                if not in_bounds(nn):
+                    continue
+                if nn in blocked_set:
+                    continue
                 seen.add(nn)
-                dq.append((nn, d + 1))
+                stack.append(nn)
         return count
 
     # Build a blocked set for flood fill: bodies (excluding our tail which moves).
     def score_candidate(cand):
         name, nc, lose_h2h, h2h_len = cand
-        # Time-aware reachable space from the new head cell.
-        space = flood_fill(nc, None, limit=width * height)
+        # blocked set for flood fill from nc: all occupied cells + our new head.
+        blocked = set(occupied)
+        blocked.add(nc)
+        # our tail cell frees up (already excluded from occupied unless ate)
+        space = flood_fill(nc, blocked, limit=width * height)
 
         score = 0.0
         # Heavily penalize potential losing head-to-heads.
@@ -219,13 +173,6 @@ def _choose_move(game_state):
         # Extra danger: a very tight pocket (< half my length) is near-fatal.
         if space < my_len // 2 + 1:
             score -= 300.0
-        # Tail reachability: if we can reach our own tail cell from the new
-        # head (time-aware), we can always chase our tail and never truly trap.
-        # This is the key anti-coil heuristic that prevents sealing ourselves in.
-        if my_tail is not None and _can_reach(nc, my_tail):
-            score += 200.0
-        else:
-            score -= 200.0
 
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.

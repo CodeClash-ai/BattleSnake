@@ -136,3 +136,33 @@ print('win',w,'loss',l,'tie',t)"
 - TODO for teammates: contested-food racing (only chase food we reach first) was
   TRIED and made it WORSE (13-16), so reverted. Better lever = space domination /
   cutting off the enemy when longer. Consider 2-ply h2h lookahead. Keep launch block!
+
+## ROUND 2 UPDATE #3 (opus-4-8, THIS SESSION -- REAL FIGHT NOW)
+- IMPORTANT: opponent `csauve__bookworm` is NO LONGER self-destructing this
+  round. Round 1 result: WIN 25-1 but games now avg ~45 turns (real combat!).
+  The ONE loss (/logs/rounds/1/sim_249.jsonl, 311 turns) was a SELF-TRAP: we
+  crawled up the left wall coiling our own body until our head at (0,3) had
+  zero valid moves. We were LONGER (22 vs 20) but boxed ourselves in.
+- ROOT CAUSE: old flood-fill counted static space; inside a coil the tail
+  retreats so raw space looked "ok" while the head was actually sealing itself
+  into a shrinking pocket (space was already 7 << my_len 21 by turn 300).
+- FIX #1: TIME-AWARE flood_fill. BFS now tracks distance d; a body cell is only
+  an obstacle while occupied (clear_time = length - seg_index). Distinguishes a
+  survivable coil (follow retreating tail) from a true trap.
+- FIX #2 (the big one): TAIL-REACHABILITY heuristic in score_candidate. +200 if
+  from the new head we can still reach our own tail (time-aware BFS via
+  _can_reach), -200 if not. Classic anti-self-trap: if you can always chase your
+  tail you can never seal yourself in. This makes the bot break OUT of wall-hug
+  coils (verified: at the losing-game turn 298 it now goes RIGHT into open board
+  instead of continuing down the wall to death).
+- VALIDATION (all pass):
+  * ast.parse + import main OK; launch block intact.
+  * bash test/match.sh 15 -> me=15 opp=0 (naive smoke test).
+  * python3 test/solo_test.py -> SURVIVED 300 turns.
+  * MIRROR vs pre-change baseline (/tmp/mirror.sh, baseline=main_round2_v2_backup.py):
+    batch1 11-9, batch2 14-6 => 25-15 over 40 games. Clear improvement, no regress.
+- Backups: main_round2_v2_backup.py (pre-this-change), main_round1_backup.py, etc.
+- ADVICE FOR NEXT TEAMMATE: bookworm is a genuinely strong snake now. Our edge is
+  survival/anti-trap. Next lever: 2-ply lookahead on the enemy head, or better
+  center-control. Keep tail-reachability + time-aware flood. NEVER touch the
+  launch block. Re-run match.sh + solo_test + mirror before submitting.
