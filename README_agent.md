@@ -751,3 +751,32 @@ print('win',w,'loss',l,'tie',t)"
   behind) so we WIN h2h instead of only avoiding it; (2) extend the pin lookahead
   to full 2-ply minimax if steps allow. Keep 2-ply-pin + anti-pin + static_flood
   + tail-reach + escape-count + growth-attraction. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__jump-flooding -- THIS SESSION)
+- Standing: Round 0 WIN 244-4 (2 ties), Round 1 WIN 216-8 (26 TIES).
+- ANALYZED all 8 losses + ties (/logs/rounds/1/sim_*.jsonl): SAME root cause.
+  In EVERY loss/tie we were EQUAL-or-SHORTER (len 4-5) and got PINNED in a
+  CORNER ((0,0),(10,0),(1,0)) with the opp diagonally adjacent -> forced h2h.
+  Shorter => loss; equal => mutual-h2h TIE (that is why 26 ties). Traced sim_40:
+  we FLED contested food at turn 8, then wall-hugged the left column at len 4
+  for ~15 turns (walked PAST food at (1,10)!) and got cornered at (0,0)/turn 25.
+  ROOT CAUSE: we stay too SHORT (never grow) + we walk INTO corners when hunted.
+- FIX #1 (FOOD RACING, score_candidate food block): when my_len <= max_opp+1
+  and not a losing h2h, strongly reward moving toward any food we reach STRICTLY
+  before the nearest opponent (uncontested race we win: my_fd < opp_fd-1).
+  +3.0 per margin cell, +45 for landing. Allows edge food if we clearly win the
+  race and it's not a deep corner (escapes>=2). Stops us starving on walls.
+- FIX #2 (CORNER DEATH avoidance): when being_hunted, entering a CORNER cell
+  penalty 80 -> 250 (near-prohibitive). Verified sim_40 turn 23: bot now goes
+  UP toward open board instead of DOWN into the (0,0) death corner.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns, match.sh naive 8-0.
+  smart_opp (pursuit proxy): 16-4 + 11-9 = 27-13 (~67%). greedy_opp 12-7-1.
+  NOTE: mirror A/B (/tmp/ab.sh) gave 0-30 = winner-name grep is broken for
+  mirror games AND mirror is deterministic (README says ignore mirror A/B).
+- Backup: main_round2_jumpflooding_r2_backup.py (pre-this-change, 216-8 code).
+- ADVICE: jump-flooding pins us in corners when we're short. Grow (food racing)
+  + never enter corners when hunted. Next lever = full 2-ply minimax or grow to
+  length parity even faster (contest more food). Keep 2-ply-pin + anti-pin +
+  static_flood + tail-reach + escape-count + food-racing + corner-death. NEVER
+  touch the launch block. Judge via smart/greedy proxies + sim replays (variance).

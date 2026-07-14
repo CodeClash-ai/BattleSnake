@@ -349,11 +349,7 @@ def _choose_move(game_state):
             if on_edge2:
                 score -= 35.0
                 if (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1)):
-                    # Entering a CORNER while a longer/equal snake hunts us is
-                    # almost always death (sim_40/102/23/110: pinned at (0,0),
-                    # (10,0), (1,0)). Make it prohibitive unless there is truly
-                    # no other option (the -1000 losing-h2h dominates anyway).
-                    score -= 250.0
+                    score -= 80.0
             # Being pinned: if the pursuing opponent is BEHIND us relative to
             # the wall we're heading toward, moving further along/into the wall
             # lets it seal us. Penalize cells whose safe-escape count is low
@@ -386,34 +382,6 @@ def _choose_move(game_state):
             score -= nd * _fw
             if nd == 0 and not (being_hunted and _on_edge_f):
                 score += 40.0   # landing on food = growth, extra reward when behind
-
-            # FOOD RACING (fix vs jump-flooding, sim_40): when we are NOT clearly
-            # longer, we must GROW to win/avoid head-to-heads. In the losses we
-            # fled from contested food and wall-hugged at len 4 until pinned.
-            # Here: strongly reward moving toward any food we can reach STRICTLY
-            # before the nearest opponent (an uncontested race we win). This is
-            # safe (opp can't contest it) and keeps us at length parity. We even
-            # allow edge food if we clearly win the race and it isn't a deep
-            # pin-corner (escapes >= 2), so we stop starving on the walls.
-            if my_len <= _max_ol + 1 and not lose_h2h:
-                for f in _food_cells:
-                    my_fd = _manhattan(nc, f)
-                    opp_fd = 999
-                    for opp in opponents:
-                        oh = (opp["body"][0]["x"], opp["body"][0]["y"])
-                        od = _manhattan(oh, f)
-                        if od < opp_fd:
-                            opp_fd = od
-                    # we win the race by a clear margin -> safe to grow here
-                    if my_fd < opp_fd - 1:
-                        _corner_f = ((f[0] in (0, width - 1))
-                                     and (f[1] in (0, height - 1)))
-                        if _corner_f and escapes <= 1:
-                            continue  # deep corner pin risk, skip
-                        # reward getting closer; big bonus for landing on it
-                        score += (opp_fd - my_fd) * 3.0
-                        if my_fd == 0:
-                            score += 45.0
 
         # Anti-coil: when winning (clearly longer) and safe, penalize moves that
         # snug the new head against our own body. Tight self-adjacency in open
