@@ -52,14 +52,16 @@ def inside(p, w, h):
 
 
 def flood(start, blocked, w, h, limit=9999):
-    """Count open cells reachable from start, with a small openness bonus."""
+    """Count open cells reachable from start."""
     if start in blocked or not inside(start, w, h):
         return 0
     q = [start]
     seen = {start}
     total = 0
-    while q and total < limit:
-        p = q.pop(0)
+    qi = 0
+    while qi < len(q) and total < limit:
+        p = q[qi]
+        qi += 1
         total += 1
         for d in MOVES.values():
             n = add(p, d)
@@ -67,6 +69,51 @@ def flood(start, blocked, w, h, limit=9999):
                 seen.add(n)
                 q.append(n)
     return total
+
+
+def adjacent_food(head, food, w, h):
+    """Whether a snake could eat this turn, causing its tail not to vacate."""
+    fs = set(food)
+    return any(inside(add(head, d), w, h) and add(head, d) in fs for d in MOVES.values())
+
+
+def territory(my_start, enemy_starts, blocked, w, h):
+    """Small Voronoi-style estimate of space we can reach before equal/longer enemies."""
+    cells = [(x, y) for x in range(w) for y in range(h) if (x, y) not in blocked]
+
+    def dists(starts):
+        q = []
+        out = {}
+        for st in starts:
+            if inside(st, w, h) and st not in blocked and st not in out:
+                out[st] = 0
+                q.append(st)
+        qi = 0
+        while qi < len(q):
+            p = q[qi]
+            qi += 1
+            for d in MOVES.values():
+                n = add(p, d)
+                if inside(n, w, h) and n not in blocked and n not in out:
+                    out[n] = out[p] + 1
+                    q.append(n)
+        return out
+
+    mine = dists([my_start])
+    theirs = dists(enemy_starts) if enemy_starts else {}
+    score = 0
+    for c in cells:
+        md = mine.get(c)
+        if md is None:
+            continue
+        ed = theirs.get(c, 999)
+        if md < ed:
+            score += 1
+        elif md == ed:
+            score -= 0.25
+        else:
+            score -= 0.5
+    return score
 
 
 def shortest(start, goals, blocked, w, h, max_depth=200):
@@ -125,16 +172,16 @@ def move(game_state):
         snakes = board.get("snakes", [])
         enemies = [s for s in snakes if s.get("id") != my_id]
 
-        # Cells occupied after the normal tail pop.  Tails are allowed only when
-        # the snake is unlikely to grow this turn; this avoids many false traps
-        # while remaining conservative near food.
+        # Cells occupied after the normal tail pop.  An enemy tail is *not* safe
+        # if that enemy can eat this turn, because eating keeps the tail in place.
+        # Our own tail is handled per candidate below (it stays if we eat).
         blocked = set()
         for s in snakes:
             body = [pt(x) for x in s.get("body", [])]
             if not body:
                 continue
-            tail = body[-1]
-            could_grow = (body[0] in food) or (s.get("health", 100) <= 1)
+            is_me = s.get("id") == my_id
+            could_grow = (not is_me) and (adjacent_food(body[0], food, w, h) or s.get("health", 100) <= 1)
             for i, cell in enumerate(body):
                 if i == len(body) - 1 and not could_grow:
                     continue
@@ -178,6 +225,10 @@ def move(game_state):
 
             sim_blocked = set(blocked)
             sim_blocked.add(head)  # our old head becomes neck
+            if n in food and my_body:
+                # If we eat, our current tail does not vacate; do not score paths
+                # that rely on squeezing through it.
+                sim_blocked.add(my_body[-1])
             area = flood(n, sim_blocked, w, h, limit=w * h)
             if area <= 1:
                 continue
@@ -197,6 +248,22 @@ def move(game_state):
             if exits <= 1 and area < my_len + 4:
                 score -= 250
 
+            # One extra ply of survivability: prefer moves that leave several
+            # legal continuations after the opponent also advances.
+            future = 0
+            for d2 in MOVES.values():
+                nn = add(n, d2)
+                if inside(nn, w, h) and nn not in sim_blocked and nn not in danger_equal_longer:
+                    future += 1
+            score += future * 10
+            if future == 0:
+                score -= 500
+
+            # Voronoi-style space ownership versus equal/longer opponents.
+            scary_heads = [pt(s["head"]) for s in enemies if s.get("length", len(s.get("body", []))) >= my_len]
+            if scary_heads:
+                score += territory(n, scary_heads, sim_blocked, w, h) * 1.5
+
             # Food valuation.  Use BFS distance after making this move, because
             # Manhattan distance often walks through bodies.  Be hungrier when low
             # health or when we need length to win head-to-heads.
@@ -208,8 +275,13 @@ def move(game_state):
                 if food_dist <= 2:
                     hunger += 25
                 score += hunger / (food_dist + 1)
-                # Do not bloat forever when healthy and already ahead.
-                if my_health > 75 and my_len > max_enemy_len + 2 and food_dist <= 1:
+                # If eating immediately is safe, take the growth/health edge.
+                # This beats straight-line opponents and also improves future
+                # head-to-head odds against more cautious snakes.
+                if food_dist == 0 and area >= my_len + 3:
+                    score += 55
+                # Do not bloat forever when healthy and already far ahead.
+                if my_health > 80 and my_len > max_enemy_len + 4 and food_dist <= 1:
                     score -= 20
 
             # Stay central/open rather than riding walls.
