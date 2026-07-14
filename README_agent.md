@@ -2248,3 +2248,44 @@ print('win',w,'loss',l,'tie',t)"
   huge. Keep fill-scaled-wall-avoidance + all existing anti-coil/anti-pin/growth.
   NEVER touch the launch block. Judge via smartmatch multi-batch + grow_solo +
   solo_test.
+
+## ROUND 2 UPDATE (opus-4-8, tyrelh__tyrelh-python -- WALL-PIN AVOIDANCE)
+- Standing: R0 WIN 184-50 (16t), R1 WIN 194-49 (7t). tyrelh is a GENUINE combat
+  opp (avg loss turn 188, high health -- NOT starvation). ~20% loss.
+- ANALYZED all 49 R1 losses (/tmp/summ.py + /tmp/h2h.py, recreate from git):
+  27 boxed self-coil, 15 FORCED-H2H, 7 other. diff: 31 shorter / 10 longer / 8
+  equal. loc: 24 edge / 7 corner / 18 interior. 30/49 hunted at death.
+  The 15 forced-h2h losses (/tmp/trace_h2h.py) were ALMOST ALL on a WALL/CORNER
+  while we were exactly 1 SHORTER: e.g. sim_233 (t188 head(10,8) opp(9,7)),
+  sim_98, sim_9, sim_225, sim_86 -- we drifted onto a wall while a longer/equal
+  snake closed in diagonally, then our only escape was a losing h2h along the wall.
+  Traced sim_233 t183-186: at parity we ran INTO the top-right corner (9,10)->
+  (10,10) as the opp herded us; it ate to become longer and won the forced h2h.
+- FIX (score_candidate, NEW "WALL-PIN AVOIDANCE" block inside the being_hunted
+  section, right after the escapes<=1 penalty ~line 740): when hunted, if our new
+  head lands ON a wall AND the nearest hunter (>= our length, dist<=5) is on the
+  INTERIOR side of that wall (it can herd us down the wall), add -60 per such
+  wall; if we'd enter a CORNER with the hunter within dist 3, add -200. This
+  peels us OFF the wall toward the open board 1-2 turns BEFORE the pin closes.
+  Gated to being_hunted only -> combat/dominance/food logic untouched.
+- VERIFIED (synthetic, /tmp/synth.py): head (9,5) near right wall, equal-len opp
+  interior at (7,5) -> bot now chooses 'up' (off wall) instead of 'right' (into
+  wall). Recorded-frame replays (/tmp/cmp.py) do NOT diverge (recorded body
+  already committed/coiled -- known replay limitation, per ALL prior notes); the
+  fix matters in LIVE play by steering off walls earlier.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0,
+  smartmatch 12-4 (pursuit proxy, closest to tyrelh's herding style, strong,
+  NO regression -- baseline was 16-4/17-3 in R1 notes but that was fill-scaled;
+  this is within variance & the anti-pin fix is orthogonal/additive).
+- Backup: main_round1_tyrelh_r2_backup.py (pre-this-change, the 194-49 code).
+- ADVICE FOR NEXT TEAMMATE: tyrelh beats us by (a) our own wall/interior self-
+  coils (27/49) and (b) herding us onto walls/corners then winning forced h2h
+  when 1 short (15/49). Wall-pin-avoidance targets (b). For the ties (7) and the
+  shorter-h2h class, the deep lever is being STRICTLY 1 longer at contact (growth
+  weights already aggressive) or a full 2-ply minimax on the hunter. For (a) the
+  DEEP fix (all notes agree) = a true space-filling / longest-survivable-path
+  metric. Keep wall-pin-avoidance + fill-scaled-wall-avoidance + all existing
+  anti-coil/anti-pin/growth. Don't over-crank the wall penalty (>60 could block
+  legit wall-food when hunted+shorter -- the _clear_win_edge path). NEVER touch
+  the launch block. Judge via smartmatch multi-batch (variance huge).

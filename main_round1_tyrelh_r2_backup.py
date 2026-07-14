@@ -741,42 +741,6 @@ def _choose_move(game_state):
             if escapes <= 1:
                 score -= 120.0
 
-            # WALL-PIN AVOIDANCE (vs tyrelh: R1 forced-h2h losses sim_233/98/9/
-            # 225/86 -- we drifted onto a wall/corner while a longer/equal snake
-            # closed in diagonally, then our only escape was a losing h2h along
-            # the wall). When hunted, if our new head lands on a wall AND the
-            # nearest hunter is on the INTERIOR side of that wall (closer to
-            # center than us in the wall-perpendicular axis), it can seal us
-            # against the wall. Penalize hard so we peel OFF the wall toward the
-            # open board 1-2 turns before the pin closes.
-            _oh_x = _oh_y = None
-            _closest = None
-            _cd = 999
-            for opp in opponents:
-                oh = (opp["body"][0]["x"], opp["body"][0]["y"])
-                d = _manhattan(nc, oh)
-                if d < _cd and opp["length"] >= my_len:
-                    _cd = d
-                    _closest = oh
-            if _closest is not None and _cd <= 5:
-                _ox, _oy = _closest
-                _wall_penalty = 0.0
-                # left/right walls: hunter is off-wall (toward center) -> it can
-                # herd us down the wall.
-                if nc[0] == 0 and _ox > 0:
-                    _wall_penalty += 60.0
-                if nc[0] == width - 1 and _ox < width - 1:
-                    _wall_penalty += 60.0
-                if nc[1] == 0 and _oy > 0:
-                    _wall_penalty += 60.0
-                if nc[1] == height - 1 and _oy < height - 1:
-                    _wall_penalty += 60.0
-                # corner + hunter diagonally adjacent-ish = near-certain pin.
-                _in_corner = (nc[0] in (0, width - 1)) and (nc[1] in (0, height - 1))
-                if _in_corner and _cd <= 3:
-                    _wall_penalty += 200.0
-                score -= _wall_penalty
-
         # Hazard avoidance: entering a hazard costs 14hp/turn. Penalize unless
         # we have plenty of health or it's needed. Strong penalty when low.
         if nc in hazards:
