@@ -1189,3 +1189,88 @@ new failure mode found this session.
   and `kill -9 <pid>` directly (NOT `pkill -f <pattern>`, which can match
   and kill your own current shell command if the pattern text appears in
   it).
+
+## Round (this session) update -- ground truth re-verified, no changes needed
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/` contained only `/logs/rounds/0/`, opponent
+`m-schier__kreuzotter` (yet another new opponent name -- as always, don't
+trust old prose about opponent names/round numbers elsewhere in this
+file). Result: **perfect 40-0 sweep** for `sonnet-5` (40 real games out of
+250 sim slots, 210 empty as usual -- this is a known harness artifact per
+much earlier notes, not evidence of draws). Turn counts min=3 max=11
+avg=6.8 -- opponent self-destructs almost immediately every real game,
+consistent with essentially every opponent seen across this file's entire
+history.
+
+**What I did this session:**
+- Ran `tools/analyze_logs.py` for ground truth (above).
+- Read all of `main.py` (351 lines) end-to-end. Confirmed all the
+  historically-important fixes documented at length earlier in this file
+  are present and intact: safe-move filtering w/ tail-vacate-aware
+  collision checks + H2H avoidance vs equal/longer snakes -> uncapped BFS
+  flood-fill space scoring w/ graduated penalty -> food-eating
+  tail-freeze fix (own tail treated as blocked in a candidate's
+  flood-fill if that candidate lands on food) -> tail-reachability
+  bonus/penalty gated ONLY by the food-freeze cause (not just by raw
+  space size, per the spiral-coil self-trap fix from an earlier session)
+  -> smooth health-based food urgency ramp + explicit "eat now" bonus at
+  low health -> edge-avoidance bonus -> tiny tie-break randomness ->
+  exception-safe fallback. `ast.parse` succeeds cleanly. No bugs found.
+- Ran a real local batch via `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- Ran 3 real self-play games (`main.py` vs itself), seeds 11/22/33: ran
+  315, 311, and 230 turns respectively (long games, exercising the
+  big-snake/spiral/starvation-prone code paths where all the historical
+  bugs documented earlier in this file were originally found), all
+  completed cleanly with a determined winner and **zero
+  exceptions/errors** in either server log.
+- Cleaned up all background test server processes by PID afterward.
+- **Decision: made NO functional changes to `main.py` this session.**
+  Rationale (consistent with the majority of prior sessions documented in
+  this file): the only real round played so far is a perfect sweep
+  (40/40), and fresh local testing (naive-opponent smoke test + three
+  long 200-300+ turn self-play games) found zero bugs, crashes, or
+  exceptions. There are no losing sim files to replay/diagnose this
+  session (that's been the single most effective bug-finding technique
+  historically -- see the several detailed "Fix implemented in main.py
+  this round/session" sections earlier in this file -- but it requires an
+  actual loss to chase). Speculative changes without a concrete failure
+  mode would be pure risk for no measurable upside.
+
+**Suggestions for next teammate (same core guidance as essentially every
+prior session -- still the fastest path to real improvements, still
+valid):**
+- Always start with `python3 tools/analyze_logs.py` for real ground
+  truth; ignore stale round-number/opponent-name claims in old prose
+  elsewhere in this file (opponent identity changes almost every session;
+  full historical list is accumulated across this file if curious, most
+  recently `m-schier__kreuzotter`).
+- **If a real loss ever shows up**, the proven-effective methodology
+  (used to find/fix at least 3 distinct real bugs so far: food-eating
+  self-trap, tail-anxiety starvation, and spiral-coil self-trap -- all
+  documented in full detail earlier in this file) is: find the losing
+  `sim_*.jsonl`, build a synthetic `game_state` from a specific frame
+  (`you` = our snake's own dict from `board.snakes`, rest of the board
+  as-is), call `main.move()` / `main._flood_fill()` directly, and trace
+  per-candidate `space`/`reached_tail`/score diagnostics turn-by-turn
+  leading up to the death. Generic local smoke tests against
+  `tools/opponent_ref.py` are USELESS for this (games end in ~5 turns,
+  never reach health/long-game/spiral scenarios).
+- The bot remains purely greedy/1-ply heuristic with flood-fill-based
+  space safety. This has been sufficient in every real round logged
+  across this file's entire history because no opponent has ever
+  survived/played well enough to expose a weakness beyond the 3
+  already-fixed bugs above. If a future opponent starts playing
+  competently and real losses climb, real lookahead (simulate N further
+  greedy self-moves per candidate branch, not just an immediate
+  post-move flood-fill snapshot) is the natural next investment -- flagged
+  as a limitation by the spiral-coil-fix session but not yet implemented.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers via
+  `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>` by PID
+  (NOT `pkill -f <pattern>`, which can match and kill your own current
+  shell command if the pattern text appears in it).
