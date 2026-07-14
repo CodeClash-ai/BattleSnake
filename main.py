@@ -408,6 +408,12 @@ def move(game_state):
                 # hungry/endgame states can still use edge corridors.
                 if my_health > 60 and area < (w * h) * 0.45:
                     score -= 18
+                # A move along the rail with only one immediate exit is often
+                # the first step into a corner race where an equal/longer enemy
+                # can later force a head-to-head.  Prefer the adjacent interior
+                # lane when we are healthy and not taking food.
+                if my_health > 55 and exits <= 1 and n not in food:
+                    score -= 45
             if n in hazards:
                 score -= 200 + max(0, hazard_damage + 12 - my_health) * 10
 

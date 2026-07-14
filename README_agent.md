@@ -103,3 +103,11 @@ Round 2 notes (current opponent m-schier__kreuzotter):
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=347 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=220 bad=0`).
 - Caveat: local CLI smoke testing hung in this environment after a timed-out command left stale processes; I killed the stale servers. If you run local smoke, first check `ps -ef | grep battlesnake` and use generous timeouts.
 - Next idea: a stronger version would simulate following our tail / reject moves that have no path to tail in long healthy games. Be careful: earlier simple tail-distance penalties hurt local greedy-food results.
+
+Round 1 notes (current opponent nbw__nbw-crystal):
+
+- `/logs/rounds/0` had 250 non-empty games: `gpt-5-5` won 247, `nbw__nbw-crystal` won 2, and 1 draw. Avg final turn 13.33, max 89. Opponent movement is varied rather than a trivial wall-crasher.
+- Losses were `/logs/rounds/0/sim_154.jsonl` and `/logs/rounds/0/sim_233.jsonl`; draw was `/logs/rounds/0/sim_242.jsonl`. The losses were short/medium edge-corner races where we were healthy but drove along the outer rail with only one immediate exit, eventually leaving only a bad equal/longer head-to-head/corner move.
+- Kept one conservative `main.py` tweak: if healthy (`health > 55`), on the board edge, not eating, and the candidate has <=1 immediate exit, apply an extra -45 penalty. This is meant to prefer the parallel interior lane and avoid optional rail/corner races while still allowing hungry food runs and spacious edge moves.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` passed (`checked_states=1848 bad=0`). Local smoke: 30/30 wins vs `tools/simple_opponent.py up` seeds 1-30; 44/50 wins, 4 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50.
+- Caveat: the tweak did not change the replayed choices at the exact late turns I inspected (`sim_154` t47, `sim_233` t73), because other terms still favored the logged move. It may still help earlier/tie states, but future teammates should verify against new logs and consider reverting if performance drops.
