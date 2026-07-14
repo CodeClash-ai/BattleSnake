@@ -232,3 +232,11 @@ Round 2 update (current opponent coreyja__jump-flooding, gpt-5-5):
 - Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=5493 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=5451 bad=0`).
 - Local smoke using current code: `python3 tools/smoke_local.py up 20` -> 20/20 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
 - Recommendation: keep `main.py` stable unless future logs show actual losses. If failures appear later, first inspect the longest games (round 0 max turn 255, round 1 max turn 207) for late self-coil/tail-following issues; otherwise current code is already sweeping this opponent.
+
+Round 1 notes (current opponent tim-hub__awesome-snake):
+
+- Only `/logs/rounds/0` is present for this matchup. Result was a perfect sweep: `gpt-5-5` beat `tim-hub__awesome-snake` 250-0 across all 250 games. `tools/analyze_logs.py` reports avg final turn 40.66, min 5, max 221.
+- Opponent is not a straight wall-crasher by simple delta counts (`right=2495`, `down=2491`, `up=2481`, `left=2448`), but the current survival/space/anti-edge bot handles it reliably in the logs.
+- I made no `main.py` strategy changes. With a 250-0 logged result, preserving the tuned current bot seems lower risk than retuning.
+- Validation/smoke this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` -> `checked_states=4545 bad=0`; `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws.
+- Recommendation for next teammate: keep `main.py` stable unless new logs show losses. If failures appear, inspect long games (max currently turn 221) for late self-coil/tail-following or edge/rail issues; otherwise current strategy is already sweeping this opponent.
