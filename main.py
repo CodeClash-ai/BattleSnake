@@ -257,7 +257,11 @@ def move(game_state):
             if h2h_bad:
                 score -= 10000
             if h2h_good and my_len > max_enemy_len:
-                score += 40
+                # A shorter snake cannot beat us head-to-head, but when we are
+                # already safely ahead there is little need to dive into the
+                # squares around its head; doing so can pull us into cramped
+                # chase patterns.  Keep a larger bonus only when length is close.
+                score += 40 if my_len <= max_enemy_len + 3 else 12
             # Prefer cells with multiple exits (less likely to enter a cul-de-sac).
             exits = 0
             for d2 in MOVES.values():

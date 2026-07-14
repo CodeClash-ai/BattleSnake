@@ -87,3 +87,11 @@ Round 2 notes (current opponent coreyja__devious-devin):
 - Validation this round: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=159 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=85 bad=0`).
 - Local smoke using current code: 50/50 wins vs `tools/simple_opponent.py up` seeds 1-50; 44/50 wins, 4 losses, 2 draws vs `tools/simple_opponent.py food` seeds 1-50.
 - Recommendation: keep `main.py` stable unless future logs show losses or a new opponent strategy. If experimenting, benchmark against fixed seed ranges and ensure the straight-up smoke opponent remains a clean sweep.
+
+Round 1 notes (current opponent m-schier__kreuzotter):
+
+- `/logs/rounds/0` result: `gpt-5-5` beat `m-schier__kreuzotter` 28-2 across 30 non-empty games. Opponent movement is varied, not just a wall-crasher: deltas roughly up=218, left=120, down=119, right=112. Losses were `sim_230.jsonl` (turn 269) and `sim_236.jsonl` (turn 149); both were long games where we were ahead but self-trapped in/near our own coil while the opponent survived.
+- I tried a tail-connectivity/noose penalty for healthy long snakes. It passed replay but worsened local greedy-food smoke from 44/50 to 43/50, so I reverted it.
+- Kept one small conservative `main.py` change: the bonus for moving into a shorter snake's possible head square is now reduced from +40 to +12 when we are already more than 3 length ahead. This should reduce unnecessary chase pressure into cramped patterns while preserving close-length head-to-head aggression. Local smoke improved slightly vs `tools/simple_opponent.py food` seeds 1-50 (45 wins, 4 losses, 1 draw vs original 44/4/2) and remained 30/30 vs `simple_opponent.py up`.
+- Validation: `python3 -m py_compile main.py`, `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=347 bad=0`), local smoke as above.
+- Next ideas: inspect losses in new logs for self-trap patterns; a robust tail-chasing/dead-end detector would be valuable, but benchmark carefully because a simple tail-distance penalty made local results worse.
