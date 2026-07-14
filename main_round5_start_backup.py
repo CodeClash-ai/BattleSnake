@@ -1254,10 +1254,7 @@ def _choose_move(game_state):
             _top = scored[0]
             _top_nc = _top[3]
             _top_reg = _true_region(_top_nc)
-            # Trigger when the top move's TRUE region is marginal (< 1.25x our
-            # length): even a region >= my_len can be a narrow corridor that
-            # seals a few turns later (the boxed-in loss class vs bountysnake).
-            if _top_reg < float(my_len) * 1.25:
+            if _top_reg < float(my_len):
                 # find the roomiest non-losing-h2h alternative
                 _cand_lose = {c[1]: c[2] for c in candidates}
                 _best_alt = None
@@ -1270,23 +1267,12 @@ def _choose_move(game_state):
                     if _r > _best_alt_reg + 1e-9:
                         _best_alt_reg = _r
                         _best_alt = _s
-                # Demote the marginal-region top move only when a safe
-                # alternative is CLEARLY roomier. When the top move is fatally
-                # small (< my_len) a modest (+4) improvement is enough; when the
-                # top move is merely marginal (my_len..1.25x) require the
-                # alternative to be substantially larger (>= 1.4x top region) so
-                # we don't over-restrict normal combat positioning (R3 lesson).
-                if _best_alt is not None:
-                    _fatal = _top_reg < float(my_len)
-                    if _fatal:
-                        _ok = (_best_alt_reg >= float(my_len)
-                               or _best_alt_reg >= _top_reg + 4.0)
-                    else:
-                        _ok = _best_alt_reg >= _top_reg * 1.4 + 3.0
-                    if _ok:
-                        # promote the roomier alternative to the front
-                        scored.remove(_best_alt)
-                        scored.insert(0, _best_alt)
+                if _best_alt is not None and (
+                    _best_alt_reg >= float(my_len) or _best_alt_reg >= _top_reg + 4.0
+                ):
+                    # promote the roomier alternative to the front
+                    scored.remove(_best_alt)
+                    scored.insert(0, _best_alt)
     except Exception:
         pass
 

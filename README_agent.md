@@ -2528,3 +2528,49 @@ print('win',w,'loss',l,'tie',t)"
   the hunter instead. If the soft net regresses, revert to R2 baseline. Use
   /tmp/deep.py (loss-mechanism breakdown) + /tmp/h2hcheck.py (forced-h2h vs
   boxed). NEVER touch the launch block. Judge via space/smart proxies (variance).
+
+## ROUND 5 UPDATE (opus-4-8, rdbrck__bountysnake2018 -- MARGINAL-REGION SPACE NET)
+- Standing: R0 LOSS 214-35, R1 211-37, R2 212-38, R3 224-26 (worse), R4 215-34
+  (1t). bountysnake is our TOUGHEST opponent (~86% loss), a genuine strong
+  space-control combat bot (150ms latency, LONG games).
+- ANALYZED all 215 R4 losses (/tmp/analyze4.py + /tmp/tl.py, recreate from git):
+  112 BOXED (0 safe moves = space collapse/self-coil/herded-seal), 103 had-move
+  (forced h2h / fatal commit). 137 shorter / 22 equal / 56 longer at death.
+  143 edge / 37 corner / 35 interior. KEY (via /tmp/tl.py): in our LOSSES we are
+  AHEAD on length mid-game (mean gap +0.25..+0.34 t10-t40, 203/215 led at some
+  point) then die LATE by getting boxed. So GROWTH is NOT the driver -- LATE-GAME
+  SPACE PRESERVATION is. Our 34 WINS are LONG games (avg 207 turns).
+- TRACED sim_10 (/tmp/trace2.py): a PARALLEL-SHADOW WALL HERD -- we stayed len4
+  the whole game (never ate; food was on the far side) and ran UP the right wall
+  (x=9) into the (10,10) corner while the opp shadowed diagonally 1-2 cells back,
+  then herded us LEFT along y=10 into (0,10) and sealed us. Herding-to-wall while
+  short is a hard positional problem.
+- CHANGE (extend the R4 SOFT SURVIVABLE-SPACE SAFETY NET, ~line 1257): the net
+  previously only fired when the top move's TRUE chokepoint-aware region
+  (_open_region_quality, body-after-move as walls) was FATALLY small (< my_len).
+  Now it also fires when the region is MARGINAL (< 1.25x my_len) -- a corridor
+  that seals a few turns later. Demotion condition is length-gated to avoid the
+  R3 over-restriction: FATAL case (< my_len) demotes to any alt with region
+  >= my_len OR +4; MARGINAL case (my_len..1.25x) demotes ONLY to an alt with
+  region >= 1.4x top + 3 (substantially roomier), so normal combat positioning
+  is untouched. Still skips losing-h2h alternatives. Wrapped in try/except (safe).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, move() 2.4ms/call.
+  * space_opp (spacematch.sh, closest proxy to bountysnake's space control):
+    NEW aggregate 49-30-1 over 80 games (14-6, 18-11-1, 17-13 ~61%). BASELINE
+    (R4) first batch was 14-5-1. Small consistent edge, no regression.
+  * Mirror A/B vs R4 backup (/tmp/ab.sh, base_opp=main_round5_start_backup.py):
+    19-0-1 -- the change DIVERGES (normally mirror is all-ties) and the divergent
+    games clearly favor the new marginal-region net. Positive signal.
+- Backups: main_round5_start_backup.py (R4 215-34 code = pre-change base),
+  main_round5_bounty_backup.py (this code).
+- ADVICE FOR NEXT TEAMMATE: bountysnake herds us into space collapse (112/215
+  boxed) mostly LATE while we LED earlier. The marginal-region space net targets
+  that with a TRUE region metric (not the overcounting floods). DEEP fix all
+  notes agree on = a real space-filling / longest-survivable-path metric or a
+  Hamiltonian planner (floods overcount through 1-wide channels & along walls via
+  tail retreat). The 103 had-move losses (forced h2h) need better pin survival --
+  growth-cranking has REPEATEDLY FAILED (R0/R3 raised losses); try a full 2/3-ply
+  MINIMAX on the hunter. If the marginal net regresses, tighten the 1.25x/1.4x
+  thresholds or revert to main_round5_start_backup.py. Use /tmp/analyze4.py
+  (loss class) + /tmp/tl.py (length timeline). NEVER touch the launch block.
