@@ -4457,3 +4457,117 @@ changes.
   `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
   NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
   `from server import run_server`).
+
+## Round (this session) update -- FOUND & FIXED real "under-eating" growth-rate bug vs nbw__nbw-ruby (41/250 losses), bumped food coefficient 55->90 + made growth_damp opponent-aware
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`nbw__nbw-ruby`**. Result: **198 wins /
+41 losses / 11 draws** out of 250 real games (79.2% win rate). Turn
+counts min=8 max=437 avg=153.4.
+
+**Root cause, confirmed via direct length-over-time comparison across all
+41 losses (script in this session's trajectory, reusable pattern: load
+every board frame from a sim file, track `len(snake["body"])` for both
+`sonnet-5` and the opponent over the whole game):** in essentially EVERY
+loss, the opponent grew noticeably faster than us throughout the entire
+game (avg length diff at death: **-3.63**, i.e. opponent ~3.6 segments
+longer on average; e.g. `sim_121`: at turn 100 we were len 8 vs opp len
+12; `sim_56`: final my_len 18 vs opp_len 30). By contrast, a random sample
+of 5 real WINS showed us typically equal-or-longer than the opponent at
+game end. This is the same "under-eating"/growth-rate-disadvantage bug
+class first found and fixed against a different opponent
+(`coreyja__bombastic-bob`) several sessions ago (search "under-eating"
+earlier in this file for that original writeup) -- except this time it
+resurfaced against a NEW, apparently even more food-aggressive opponent,
+showing the previous fix (food coefficient 20->55) wasn't strong enough
+against every opponent. 30/41 losses still had 2+ legal moves at the
+final logged frame (not yet-unavoidable traps at that point), consistent
+with "we were just generally weaker/shorter, not specifically cornered."
+
+**Fix implemented this session (two small, targeted changes):**
+1. Bumped the food-attraction base coefficient from `55.0` to `90.0`
+   (`score += growth_damp * urgency * (90.0 / (nearest + 1))`) --
+   further increases food priority at comfortable health, following the
+   exact same lever (and reasoning) as the earlier successful
+   `coreyja__bombastic-bob` fix, just re-tuned upward since 55 wasn't
+   enough against this opponent.
+2. Made `growth_damp` (the mechanism that reduces food-seeking once our
+   own snake occupies >25% of the board, added to fix an EARLIER,
+   different spiral-self-trap bug) **opponent-aware**: it now only
+   engages when `my_len >= max_opp_len` (i.e. only damp growth once
+   we're ALREADY at least as long as the longest opponent -- never damp
+   while we're still behind in the length race, since in that case we
+   need to catch up, not slow down). This doesn't touch any hard
+   space/trap safety penalty, only the same soft food-urgency nudge as
+   before.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- **Direct NEW-vs-OLD self-play head-to-head** (the proven technique from
+  the original food-coefficient-tuning session): saved pristine
+  pre-session `main.py` to `/tmp/oldbot/`, ran both concurrently via the
+  real `game/battlesnake` CLI, seeds 1-15, 11x11 standard: **NEW won
+  10/15 (66.7%)**, games ranging 75-329 turns, zero errors/exceptions in
+  either server log. This is a real, direct positive signal (not just
+  theory) that the combined change is a net improvement in genuinely
+  competitive play between near-identical bots.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log -- confirms no
+  regression on the easy/common case.
+- Self-play (`main.py` vs itself), seed 500: ran 293 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Did NOT have remaining budget this session to individually re-trace
+  each of the 41 losses in full detail (only did the length-over-time
+  scan across all of them, which was sufficient to establish the pattern
+  clearly) or to try further tuning the exact `90.0` value (e.g. is
+  100-120 even better, or does it start to risk overeating into unsafe
+  cells -- the hard space/trap penalties are untouched so this should
+  still be safe, but not exhaustively verified beyond the 15-seed
+  self-play batch above).
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real `nbw__nbw-ruby` opponent (or
+  whatever opponent is current) in the next round. If losses drop
+  meaningfully from 41 and the length-gap-at-death pattern shrinks/
+  reverses, this confirms the under-eating diagnosis (again) and the
+  fix direction. If losses persist with the SAME opponent-longer-at-death
+  shape, consider bumping the food coefficient even further (try 120-150)
+  and re-validate with the same NEW-vs-OLD self-play A/B technique (10-15+
+  seeds) before the next submission -- this is a cheap, fast, low-risk
+  lever to keep tuning since the hard safety penalties are unaffected.
+- The `growth_damp` opponent-awareness tweak is a low-risk, strictly
+  more-permissive-only-when-behind change (never reduces existing
+  safety), but wasn't individually isolated/tested apart from the
+  food-coefficient bump in this session's self-play batch (both changes
+  were tested together) -- if you want to isolate its individual
+  contribution, test it alone vs the pre-session baseline.
+- If a future round shows NEW losses with the opposite shape (our snake
+  now overeating into genuinely risky spots, e.g. trapped despite being
+  LONGER than the opponent), that would indicate 90.0 (or the
+  growth_damp change) went too far -- dial back toward 55-70 and
+  re-validate via self-play A/B, per the standard methodology documented
+  extensively throughout this file.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this
+  file: `_HEAD_HISTORY` anti-stalemate, graduated h2h prediction, no hard
+  h2h pre-filter, uncapped flood-fill w/ graduated penalties,
+  tail-reachability gating, adversarial 1-ply `worst_space` lookahead,
+  `_opp_two_ply_reachable` contested-exits penalty, threat-aware
+  edge-weight boost, corner/dead-end food-trap penalties, and the
+  `_lookahead_min_space` bounded multi-turn lookahead added last
+  session for the `OliverMKing__astar-snake` opponent).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw at a specific frame; the length-over-time scan script
+  used this session (load all frames, track both snakes' `len(body)`
+  over turns) is a good FIRST triage step for any future loss batch --
+  faster than per-frame diagnostics for spotting a systemic growth-rate
+  gap before diving into individual spiral-trap analysis.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep python3` + `kill -9 <pid>` by PID (NOT
+  `pkill -f <pattern>`); when copying `main.py` to a scratch dir for
+  NEW-vs-OLD A/B, remember to also copy `server.py` (main.py imports
+  `from server import run_server`).

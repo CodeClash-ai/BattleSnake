@@ -512,7 +512,20 @@ def move(game_state):
         # stop over-growing once already big.
         board_cells = width * height
         overgrow_threshold = board_cells * 0.25
-        if health > 60 and my_len > overgrow_threshold:
+        max_opp_len = max(lengths.values()) if lengths else 0
+        # Real match analysis (opponent nbw__nbw-ruby, see README_agent.md)
+        # found 41/250 real losses where our snake grew noticeably SLOWER
+        # than the opponent throughout the whole game (opponent
+        # consistently 3-4+ segments longer at time of death across nearly
+        # every loss) -- i.e. we were often not even close to the
+        # overgrow_threshold, so growth_damp rarely engaged for these
+        # losses directly, but as an extra safeguard: never damp our own
+        # food-seeking urgency while an opponent is already longer than us
+        # (we need to catch up, not slow down) -- only damp once we are
+        # ALREADY at least as long as the longest opponent (i.e. truly
+        # "already winning the length race", where the self-trap risk of
+        # further unchecked growth outweighs the marginal combat benefit).
+        if health > 60 and my_len > overgrow_threshold and my_len >= max_opp_len:
             excess = min(1.0, (my_len - overgrow_threshold) / (board_cells * 0.25))
             growth_damp = 1.0 - 0.5 * excess
         else:
@@ -817,7 +830,7 @@ def move(game_state):
                     urgency = 1.0 + 8.0 * ((60 - health) / 60.0) ** 2
                 else:
                     urgency = 1.0
-                score += growth_damp * urgency * (55.0 / (nearest + 1))
+                score += growth_damp * urgency * (90.0 / (nearest + 1))
                 # Extra flat bonus for a move that eats RIGHT NOW when
                 # health is getting low -- guarantees survival progress
                 # instead of just "closer is better", which matters once
