@@ -515,7 +515,7 @@ def move(game_state):
                     urgency = 1.0 + 8.0 * ((60 - health) / 60.0) ** 2
                 else:
                     urgency = 1.0
-                score += urgency * (20.0 / (nearest + 1))
+                score += urgency * (55.0 / (nearest + 1))
                 # Extra flat bonus for a move that eats RIGHT NOW when
                 # health is getting low -- guarantees survival progress
                 # instead of just "closer is better", which matters once

@@ -2122,3 +2122,120 @@ was NOT a starved/empty-board scenario).
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- found & fixed real "under-eating" growth-rate bug vs coreyja__bombastic-bob (12/250 losses)
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` only, opponent **`coreyja__bombastic-bob`**. Result:
+**236 wins / 12 losses / 2 draws** out of 250 real games (94.4% win rate).
+Turn counts min=7 max=304 avg=106.7 -- a competent, long-surviving
+opponent.
+
+**Root cause of the 12 losses, found via the standard "replay real losing
+sim frames through `main.move()`/the scoring loop directly" methodology
+(documented extensively earlier in this file):** every single loss showed
+the same shape at time of death: **our snake was noticeably SHORTER than
+the opponent** (my_len 5-9 vs opp_len 6-18 in all 12 losses -- see the
+per-loss dump in this session's trajectory). Traced `sim_144.jsonl` in
+full detail (turn 212, the exact pivotal turn): our only two physically
+legal candidate moves were `up->(3,6)` (a food cell the opponent was also
+one step from and predicted to take -- `danger_h2h` correctly flagged,
+-900 penalty applied) and `left->(2,5)` (flood-fill space=3, below our
+own length of 8 -- a near-certain trap, -5000 penalty). The bot correctly
+picked the *less bad* of two bad options (`up`) per the existing scoring
+-- this specific decision was NOT a bug, it was already optimal given the
+position. But this again raised the question from many earlier sessions:
+why did we end up in a forced-bad-choice position at all? This time the
+answer was different from previous sessions' "cornered along a wall"
+diagnosis: **our snake had simply grown far slower than the opponent
+throughout the whole game** (direct count in `sim_144.jsonl`: opponent
+ate food **12 times** vs our snake's **5 times** over the same 214-turn
+game, despite both snakes having ample health margin and no starvation
+occurring for either side) -- confirmed the same "opponent noticeably
+longer at time of death" pattern held for all other 11 losses too (see
+the per-loss `my_len`/`opp_len` table in this session's trajectory).
+
+**Exact mechanism:** the food-attraction score term
+(`score += urgency * (20.0 / (nearest + 1))`, max value 20 when
+`nearest == 0` and health is comfortable) was dwarfed by the open-space
+term (`score += min(space, width*height) * 2.0`, easily 100-200+ for a
+reasonably open board). This meant that whenever two candidate moves both
+looked "safe enough" (above the hard trap thresholds), the bot would
+almost always prefer whichever one had marginally more raw open space,
+even when the other option ate food and grew -- so the bot was
+systematically undervaluing growth relative to space in the *comfortable
+health* regime (health > 60), even though growing (via food) directly
+determines who wins later forced encounters/head-to-heads. The urgency
+ramp only kicked in hard once health dropped below 60, but by then the
+opponent (who apparently prioritizes food more) had often already built
+a permanent length advantage.
+
+**Fix implemented this session (small, low-risk, single-constant
+change):** increased the food-attraction base coefficient from `20.0` to
+`55.0` (`score += urgency * (55.0 / (nearest + 1))`), i.e. roughly
+2.75x more weight on nearby, actually-reachable food even at comfortable
+health, without touching any of the hard safety mechanisms (space < my_len
+trap penalty, worst_space adversarial penalty, tail-reachability
+gating, danger_h2h penalties, anti-stalemate logic -- all unchanged).
+This nudges the bot toward growing more aggressively/competitively
+whenever it's genuinely safe to do so, closing the gap that let opponents
+consistently out-grow us in long games, while the untouched hard-penalty
+tiers still prevent it from ever eating into a genuine trap (space below
+threshold is still a -1000/-800-per-cell penalty, far larger than any
+food bonus).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- **Head-to-head self-play comparison** (the most direct way to validate
+  a scoring-weight change): ran the NEW `main.py` (food coeff 55) against
+  a copy of the OLD `main.py` (food coeff 20, pre-this-session) via the
+  real `game/battlesnake` CLI, seeds 1-10, 11x11 standard:
+  **NEW won 9/10** (lost only seed 1), games ranging 66-372 turns. This
+  is strong, direct evidence the change is a real improvement, not just a
+  plausible theory -- confirms the higher food-priority bot reliably
+  outgrows and beats the lower-food-priority bot in head-to-head play.
+- Local batch via real `game/battlesnake` CLI: new `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-3: **3/3 wins**, 4-6
+  turns each -- confirms no regression on the easy/common case.
+- Checked all server logs (`grep -iE "error|exception|traceback"`) across
+  every test this session -- zero matches, no crashes.
+- Cleaned up all background test server processes by PID afterward.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this fix performs against the real `coreyja__bombastic-bob` opponent
+  (or whatever opponent is current) in the next round. If losses drop
+  from 12 and the win-rate climbs above 94.4%, this confirms the
+  under-eating theory. Also check whether new losses (if any) still show
+  the same "opponent longer than us" shape, or a different one.
+- If the bot now seems to overeat into genuinely risky spots (e.g. new
+  losses show our snake being trapped despite having MORE length than
+  before), the fix went slightly too far -- consider dialing the
+  coefficient back down (try something between 20 and 55, e.g. 35-40) and
+  re-running the same NEW-vs-OLD self-play head-to-head comparison
+  technique used this session (very fast, very direct signal for tuning
+  a single scalar weight -- much faster than waiting for a full real
+  round) before the next submission.
+- The 12 real losses this session were NOT primarily about self-trapping,
+  starvation, or forced 50/50 mechanics that were the focus of many
+  earlier sessions in this file (those fixes are all still in place and
+  presumably still needed for other opponents/scenarios) -- this was a
+  distinct, simpler "we're not competing hard enough for food when it's
+  safe to" issue, only visible by comparing final lengths at time of
+  death across multiple losses (a quick, cheap diagnostic worth running
+  first thing on any new batch of real losses, before diving into
+  per-turn replay diagnostics).
+- Methodology reminder: the NEW-vs-OLD self-play head-to-head technique
+  used this session (copy the pre-change `main.py` to a scratch dir,
+  run both concurrently via `game/battlesnake` CLI, count wins) is a
+  fast, direct, and underused way to validate/tune a specific scoring
+  weight change -- consider using it routinely for any future weight
+  tuning, rather than only replaying old losing sim files (which tells
+  you about the OLD bot's specific past mistakes, not necessarily
+  whether a proposed NEW weight is actually better on average).
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it).
