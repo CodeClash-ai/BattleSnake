@@ -3373,3 +3373,147 @@ simulation) without real risk of regressing an already-excellent bot.
   servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
   by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
   command if the pattern text appears in it).
+
+## Round (this session) update -- ground truth check vs rdbrck__btas round 1 (247-1-2), confirmed loss+2 draws are the SAME known spiral/forced-corner gap, tried & reverted an unhelpful growth_damp threshold tweak, no net main.py changes
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (248-1-1, avg 79.6 turns) and `/logs/rounds/1/`
+(**247 wins / 1 loss / 2 draws**, 250 games, avg 74.3 turns), opponent
+`rdbrck__btas`, `main.py` unchanged from the previous session (which also
+made no functional changes and added `tools/replay_frame.py`). Still an
+excellent ~98.8% "won or drew, essentially never a real threat" rate, and
+the only real loss (`sim_204.jsonl`) + one of the two draws
+(`sim_144.jsonl`) were investigated in depth this session.
+
+**What I did this session:**
+- Used `tools/replay_frame.py` (from the previous session -- confirmed
+  working great, saves real time) to check both draws
+  (`sim_72/144.jsonl`) and the 1 loss (`sim_204.jsonl`).
+- **`sim_144.jsonl` (draw, 17 turns, short game):** traced turn-by-turn
+  from turn 0. Both snakes (us + `rdbrck__btas`) spent the whole short
+  game growing/moving in a mirrored pattern that funneled BOTH of us into
+  the SAME corner `(0,0)`/`(1,1)` area. By turn 16, our own body had
+  filled in around us so completely that there was only ONE physically
+  legal move (`up`) -- not a choice at all, just the only option -- which
+  happened to be exactly where the opponent (equal length, 5 segments)
+  moved into on the same turn, causing a symmetric head-to-head collision
+  and a draw (equal-length h2h always double-eliminates in this
+  ruleset). This is the same well-documented "wall/corner funnel" 1-ply
+  blind spot described by many earlier sessions (search "corner-herding"
+  / "adversarial shadowing" earlier in this file) -- at turn 16 there was
+  literally nothing left to decide, the fatal geometry was set several
+  turns earlier and isn't recoverable as a clean "which candidate should
+  have scored higher" bug from this frame.
+- **`sim_204.jsonl` (the 1 real loss):** confirmed (via
+  `tools/replay_frame.py --last`) our snake had ZERO legal moves at the
+  last logged frame (length 23, health 90 -- NOT a starvation/under-eating
+  issue). Since this sim file logs EVERY turn for our snake (dense
+  logging, unlike some other sim files), I was able to trace the full
+  arc from turn 31 to 151 by re-deriving per-candidate `space` /
+  `reached_tail` diagnostics directly (see the one-off script in this
+  session's trajectory, reusable pattern: build synthetic `game_state`
+  per turn, call `M._occupied_cells` + `M._flood_fill` directly for each
+  physically-legal candidate). **Key finding: from turn 133 onward, every
+  single candidate at every single turn reported IDENTICAL `space`
+  (82-90 cells) and `reached_tail=True`** -- i.e. the existing scoring
+  metrics were never able to distinguish a "doomed" direction from a
+  "safe" one at any point during the actual slow-motion collapse, because
+  both/all options led into the exact same large connected region (the
+  region just kept getting smaller turn over turn as our own 23-long body
+  consumed more of it while we moved through it, exactly the
+  long-documented "single-snapshot flood-fill can't see multi-turn
+  self-narrowing" gap -- search "spiral-coil" / "multi-ply" earlier in
+  this file for the full history across many other opponents).
+- **Tried a concrete, cheap idea to test whether it would have helped:**
+  implemented a "corridor shape" degree-based metric (fraction of BFS-
+  visited cells with <=2 free neighbors = corridor-like) as a one-off
+  script (NOT merged into `main.py`) and computed it for every candidate
+  at every turn of `sim_204.jsonl`'s collapse. **Confirmed this idea does
+  NOT help for this specific case**: since all candidates at a given turn
+  share (almost) the exact same large connected region (moving up vs.
+  down from the same head differs by only 1-2 cells out of 90+), the
+  corridor-ratio metric came back IDENTICAL for all candidates at every
+  turn too (see this session's trajectory for the full per-turn dump) --
+  it only rises steadily over time (0.13 at turn 133 -> 0.35 at turn 150)
+  as the region genuinely gets more corridor-shaped overall, but never
+  discriminates between the different *options available at a single
+  decision point*. This directly confirms and extends an earlier
+  session's similar finding (search "corridor shape" earlier in this
+  file) -- this specific idea is now disproven on TWO different real
+  losing examples from two different opponents/sessions, so a future
+  session probably shouldn't re-attempt it without a fundamentally
+  different formulation (e.g. computing corridor-ness only over the
+  region NEAR the head / within the next K cells, not the whole reachable
+  region, since the whole-region version is mathematically almost
+  guaranteed to tie between nearby candidates).
+- **Also tried:** lowered the existing `growth_damp` mechanism's
+  `overgrow_threshold` (currently `board_cells * 0.25`, i.e. ~30 cells on
+  11x11) to `board_cells * 0.18` (~22 cells), reasoning that our snake
+  was length 23 (just under the 0.25 threshold, so growth-damping never
+  engaged) when this loss's spiral began forming. Validated via a direct
+  NEW-vs-OLD self-play head-to-head (the proven technique from the
+  food-coefficient-tuning session -- copy old `main.py` to `/tmp/oldbot`,
+  run both concurrently via `game/battlesnake` CLI, seeds 1-8): result
+  was an even **4 wins / 4 losses** for the new (lower-threshold) version
+  -- no clear improvement, and the threshold change was so small it barely
+  engaged `growth_damp` at all at length 23 anyway (computed: at 0.18
+  threshold, excess damping at length 23 is only ~3%, negligible).
+  **Reverted this change** (confirmed via `diff` against the saved
+  pre-session copy that `main.py` is back to byte-identical) since it
+  showed no measurable benefit and isn't worth the risk of touching a
+  currently near-ceiling-performing bot on a coin-flip-inconclusive local
+  test.
+
+**Decision: made NO net functional changes to `main.py` this session**
+(one candidate change was tried, self-play-tested, found inconclusive/not
+clearly better, and reverted). Rationale: (1) win rate is already
+excellent (98.8% win-or-draw, 247/250 clear wins), (2) both investigated
+non-wins are confirmed instances of the same extensively-documented,
+still-unfixed-without-major-risk structural gap (multi-turn self/mutual-
+narrowing invisible to any single-snapshot metric), (3) this session
+directly tested and disproved one of the two standing candidate fix ideas
+from previous sessions' notes (corridor-shape metric) on fresh real data,
+which is valuable negative information for future sessions even though
+it didn't yield a positive change, and (4) the other tried idea (growth
+threshold tuning) was properly validated via self-play A/B and found not
+to help, so reverting was the correct, low-risk call.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on the
+  next real round. A win rate holding around/above ~98% is consistent
+  with being close to a structural floor for this architecture.
+- **Do NOT re-attempt the "corridor shape over the full flood-fill
+  region" idea** as previously scoped (whole-visited-region degree
+  ratio) -- now disproven on two independent real losing examples from
+  two different sessions/opponents (see above and the earlier "corridor
+  shape" section higher in this file) for the fundamental reason that
+  nearby candidates from the same head almost always share the same
+  connected region, so a whole-region metric can't discriminate between
+  them. If you want to revisit this class of idea, the only variant not
+  yet tried is scoping the degree/corridor computation to a bounded
+  radius (e.g. only the first K BFS layers / K cells nearest the
+  candidate, not the full visited set) -- untested, but at least
+  theoretically capable of differing between two candidates 1 step apart
+  in a way the whole-region version cannot.
+- The only other standing not-yet-implemented idea (from many earlier
+  sessions, still the "textbook correct" fix) is genuine recursive
+  N-turn-deep self-play simulation using the bot's own FULL scoring
+  function (not a simplified proxy -- both a pure space-maximizing proxy
+  AND the corridor-shape proxy have now been tried and disproven as
+  proxies on real data across multiple sessions). This remains
+  substantial, expensive, and risky to implement/validate with a limited
+  step budget -- only attempt with a full session's budget and thorough
+  regression testing (naive-opponent smoke test + several 200+ turn
+  self-play games + timing checks) before trusting it.
+- `tools/replay_frame.py` continues to be the fastest way to investigate
+  any future loss/draw -- use it first.
+- Server-testing gotchas (all reconfirmed working again this session):
+  use `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; use fresh/unused port numbers each batch; clean up test
+  servers via `ps aux | grep -E "main.py|opponent_ref"` + `kill -9 <pid>`
+  by PID (NOT `pkill -f <pattern>`, which can kill your own current shell
+  command if the pattern text appears in it). For NEW-vs-OLD A/B tests,
+  save a pristine copy of the pre-change `main.py` to a scratch dir
+  (e.g. `/tmp/oldbot/main.py`) BEFORE editing, so you can `diff`-confirm a
+  clean revert if the change doesn't pan out (did this successfully this
+  session).
