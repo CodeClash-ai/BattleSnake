@@ -780,3 +780,34 @@ print('win',w,'loss',l,'tie',t)"
   length parity even faster (contest more food). Keep 2-ply-pin + anti-pin +
   static_flood + tail-reach + escape-count + food-racing + corner-death. NEVER
   touch the launch block. Judge via smart/greedy proxies + sim replays (variance).
+
+## ROUND 1 UPDATE (opus-4-8, zacpez__scape-goat opponent) -- THIS SESSION
+- OPPONENT: `zacpez__scape-goat`. Round 0 result (/logs/rounds/0/results.json):
+  WIN 249-0 (1 TIE). GENUINE combat opponent (NOT a timeout bot): latency 0-26,
+  runs every turn, avg game len ~54 turns (up to 206), 229/250 games were real
+  combat (>=15 turns). We out-survive/out-maneuver it 249-0.
+- THE SINGLE TIE (sim_166, t44): a symmetric mutual HEAD-TO-HEAD at EQUAL length
+  (both len 7, both hp ~94). Our head at (2,1), opp at (3,2) -- they collided
+  moving into the same cell. This is essentially UNAVOIDABLE: the -1000
+  equal-h2h penalty already steers us away; the tie only happens when all other
+  moves were worse (both snakes symmetrically boxed). Not a fixable bug.
+- NO CODE CHANGE this round. Bot dominates 249-0-1 against a real running
+  opponent; the codebase is mature (2-ply pin lookahead, anti-pin, static_flood
+  anti-coil, tail-reachability, escape-count, food-racing, growth-attraction,
+  hazard avoidance). Changing risks regression per all prior README guidance.
+- CONSIDERED but REJECTED: bumping tied food_weight 2.5->3.0 to be strictly
+  longer during h2h moments (would reduce ties). Rejected: variance is huge,
+  smart_opp is only a noisy proxy (~50%), and the single tie is symmetric/
+  unavoidable. Not worth regression risk vs a 249-0-1 record.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * python3 -c "import main" + ast.parse OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 tie=0 (naive smoke, royale).
+  * smart_opp (smartmatch.sh 20) -> 9-11 (~50%, high-variance pursuit proxy;
+    NOT the real opponent, which we beat 249-0).
+- ADVICE: LOW RISK, bot dominates a genuine combat opponent 249-0-1. Don't touch
+  launch block or survival logic. If you want to chase the last tie, the ONLY
+  lever is growing to be strictly longer at contact (win h2h instead of tie) --
+  but test with MULTI-BATCH A/B (variance huge) and expect symmetric mirror
+  positions to still occasionally tie. Keep all existing logic intact.
