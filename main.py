@@ -371,6 +371,20 @@ def move(game_state):
             score += exits * 18
             if exits <= 1 and area < my_len + 4:
                 score -= 250
+            # Bountysnake2018 tends to outgrow/rail-shadow us while we are
+            # still small or equal length.  A healthy non-food one-exit step
+            # is often the start of a forced perimeter crawl even when the
+            # flood-fill area is huge.  Penalize these earlier than the
+            # long-snake noose rules below so a two-exit/near-food lane wins.
+            if my_health > 70 and my_len <= max_enemy_len + 1 and exits <= 1 and n not in food:
+                score -= 180
+                if my_len <= max_enemy_len and my_len <= 10:
+                    # Small close/shorter snakes die quickly if they enter a
+                    # non-food one-exit lane; prefer any two-exit route even
+                    # when the immediate flood-fill is huge.
+                    score -= 900
+                if n[0] in (0, w - 1) or n[1] in (0, h - 1):
+                    score -= 60
             # Against strong A*/space opponents, equal-length endgames often turn
             # into self-coils: a one-exit move may have more than my_len cells of
             # flood-fill, but still be a one-way pocket with no way back to the
@@ -568,7 +582,9 @@ def move(game_state):
                             # route that stays connected to the moving tail.
                             if exits <= 1:
                                 score -= 900
-                elif my_health > 55 and my_len >= 14 and area < my_len * 3 and n not in food:
+                elif (my_health > 55 and my_len >= 14
+                        and (area < my_len * 3 or (my_len <= max_enemy_len + 1 and area < my_len * 4))
+                        and n not in food):
                     # In close-length long games, survival often depends on staying
                     # connected to our own tail rather than maximizing raw area.
                     # Battlesnake-elon losses often show flood-fill areas of 2+
@@ -601,6 +617,16 @@ def move(game_state):
                             score -= 260
                             if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                                 score -= 90
+                        # Versus bountysnake2018 many close/shorter losses had
+                        # medium-looking regions (3-4x our length) with no route
+                        # back to the moving tail; the opponent then paralleled the
+                        # only lane until flood-fill collapsed.  Discount those
+                        # no-tail regions while close/behind, even before they are
+                        # tiny, but keep food moves exempt via the outer gate.
+                        if my_len <= max_enemy_len + 1 and area <= my_len * 4:
+                            score -= 420
+                            if exits <= 2:
+                                score -= 120
                     else:
                         score += max(0, 12 - tail_dist) * 14
                         if n == my_body[-1]:
