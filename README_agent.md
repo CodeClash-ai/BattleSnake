@@ -2070,3 +2070,46 @@ print('win',w,'loss',l,'tie',t)"
   1 short; (c) smarter opening food target. Don't over-crank (pin risk -- the fix
   is gated to clear-win, safe, non-corner, escapes>=2). Keep _clear_win_edge + all
   existing anti-coil/anti-pin/growth logic. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, xtagon__nagini -- PIN-SURVIVAL WHEN 1 SHORT)
+- Standing: R0 WIN 194-54 (2t), R1 WIN 186-63 (1t). Losses ROSE 54->63; the R0
+  _clear_win_edge fix did NOT help (may have slightly hurt).
+- ANALYZED all 63 R1 losses (/tmp/analyze.py + /tmp/early.py, recreate from git):
+  60/63 we were SHORTER at death (2 equal, 1 longer), high health (avg 87 -- NOT
+  starvation), 47/63 on EDGE/CORNER = PIN deaths. We START EVEN (turn 5 gap 0)
+  but 40/63 are behind by turn 10; deficit compounds (-1.0 t20, -1.6 t50) then
+  nagini wins length-based h2h / pins us to walls.
+- TRACED sim_1 t7-t8: both approaching center food (5,5); opp head (6,5) is 1
+  cell CLOSER than us (2,5) so opp grabs it t8 (len5 vs our 4). We correctly
+  avoided the losing race, but then wandered to far edge food (0,4) reaching it
+  slowly (t8->t14) -> stayed 1 behind permanently. POSITIONAL disadvantage: opp
+  spawns closer to the center food. Hard to fully fix by growth alone.
+- CHANGE (defensive, targets the 47/63 PIN-death class -- survive pins better so
+  our survival edge wins the length-deficit games): in the 2-PLY PIN LOOKAHEAD
+  (~line 1018, fires when being_hunted):
+  * widened the opponent proximity gate manhattan 4 -> 5 (matches being_hunted's
+    dist<=5, so the lookahead fires whenever we're hunted, not just very close).
+  * worst_safe==1 penalty 120 -> 200 (steer away from near-pin cells harder).
+  I TRIED also bumping the being_hunted center-pull 4.0->5.0 but it was a WASH on
+  smartmatch (9-7 vs backup 9-5-2) and risks luring into contested center, so
+  REVERTED it (kept center-pull at 4.0 per prior over-crank warnings).
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0,
+  smartmatch (pursuit proxy, closest to nagini's pin behavior) = 11-5 (backup was
+  9-5-2 -- modest improvement, no regression). greedymatch 7-8-1 (backup 7-9;
+  greedy_opp is HIGH variance and doesn't reproduce nagini's pin dynamic).
+- Backup: main_round2_nagini_r2_backup.py (pre-this-change, the 186-63 code).
+- ADVICE FOR NEXT TEAMMATE: nagini OUT-GROWS us POSITIONALLY (spawns closer to
+  center food (5,5), wins that race from t0) then pins us via length (47/63
+  losses are edge/corner pins while shorter). Two levers remain:
+  (a) PIN SURVIVAL (this round): keep tightening the 2-ply pin lookahead / anti-
+  pin so we survive length-deficit games via our maneuvering edge. Consider a
+  full 2-ply minimax on the hunter, or a 3-ply pin lookahead.
+  (b) SMARTER OPENING: pick the food we provably WIN the race to from spawn (not
+  nearest / not center if opp is closer); when the center food is un-winnable,
+  head DIRECTLY to the alternate food (we wandered slowly to (0,4) in sim_1 --
+  the winnable-food-redirect exists at ~line 760 but the PATH there was slow).
+  Don't over-crank food (pin risk -- gated to safe cells space>=my_len, zeroed on
+  edges when hunted) or center-pull (tested, wash + lure risk). Keep the widened
+  pin lookahead + all existing anti-coil/anti-pin/growth. NEVER touch the launch
+  block. Judge via smartmatch (pursuit proxy) multi-batch (variance huge).

@@ -1032,7 +1032,7 @@ def _choose_move(game_state):
                 olen = opp["length"]
                 if olen < my_len:
                     continue  # only longer/equal snakes can win an h2h vs us
-                if _manhattan(nc, oh) > 5:
+                if _manhattan(nc, oh) > 4:
                     continue
                 opp_body = set((seg["x"], seg["y"]) for seg in opp["body"][:-1])
                 # candidate opponent next-head positions
@@ -1079,7 +1079,7 @@ def _choose_move(game_state):
             if worst_safe == 0:
                 score -= 500.0   # about to be pinned into a forced losing h2h
             elif worst_safe == 1:
-                score -= 200.0   # only one escape after opp best cut
+                score -= 120.0   # only one escape after opp's best cut
 
         # OFFENSIVE SPACE-DENIAL (fix vs OliverMKing__astar-snake): when we are
         # clearly longer and healthy, actively finish the kill by keeping the
