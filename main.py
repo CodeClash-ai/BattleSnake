@@ -315,17 +315,19 @@ def move(game_state):
                     # down rails instead of preserving open space.
                     score += 8
                 elif my_len <= max_enemy_len + 4:
-                    # At +4 length a chase bonus has caused us to shadow a smaller
-                    # snake into our own coil in this long-survivor matchup, so keep
-                    # the move neutral unless it is otherwise best.
-                    score += 0
+                    # Battlejake-style survivor losses often begin at only +4: we
+                    # are long enough to win a direct head-to-head, but stepping into
+                    # the shorter head's possible square lets it mirror beside our
+                    # body and close a pocket.  Make these optional chase moves
+                    # mildly unattractive unless area/food clearly demand them.
+                    score -= 60
                 else:
                     # When we are already far ahead, do not enter even a shorter
                     # snake's possible head square just to chase it.  Amphibious
                     # Arthur's rare wins often start with us shadowing a much
                     # smaller head into a cramped pocket; outliving in open space
                     # is safer than forcing a nonessential head-to-head.
-                    score -= 70
+                    score -= 170
             # Prefer cells with multiple exits (less likely to enter a cul-de-sac).
             exits = 0
             for d2 in MOVES.values():
@@ -691,6 +693,14 @@ def move(game_state):
                     # we are far ahead; this is softer than the actual-edge penalty.
                     if (my_health > 80 and my_len >= max_enemy_len + 6 and outer_food):
                         score -= 70
+                    # Versus battlejake-like survivors, rare losses often start by
+                    # taking a high-health edge snack at a +5/+6 lead that leaves only
+                    # a one-cell rail continuation.  That growth is not needed to win
+                    # head-to-heads and pins the tail, so require notably more space
+                    # for optional one-exit rail food once we are comfortably ahead.
+                    if (my_health > 80 and my_len >= 14 and my_len >= max_enemy_len + 5
+                            and edge_food and exits <= 1):
+                        score -= 260
                     # Do not grab optional rail food when a longer/equal enemy is
                     # already close enough to force the next exit.  Several Xe__since
                     # losses were healthy top/bottom-edge snacks that immediately
