@@ -4773,3 +4773,133 @@ around harmless distant opponents.
   check git status) -- if you need to inspect git state mid-session,
   prefer `git diff`/`git status` only, and if you must stash, remember to
   `git stash pop` immediately.
+
+## Round (this session) update -- vs coreyja__eremetic-eric round 2 (232-17-1 -> 235-15), found real "over-eating despite dominant length lead" pattern in remaining 15 losses, strengthened growth_damp with an advantage-aware extra-damping term
+
+**Ground truth (`python3 tools/analyze_logs.py`) at start of session:**
+`/logs/rounds/0/` (232-17-1, avg 212.3 turns) and `/logs/rounds/1/`
+(**235 wins / 15 losses**, avg 215.8 turns), opponent
+`coreyja__eremetic-eric`. Confirms the previous session's adversarial
+`_lookahead_min_space` opponent-model fix was a real (modest) net
+improvement: 17 -> 15 losses. Kept that fix untouched this session.
+
+**What I did this session:** ran `tools/replay_frame.py --last` on all 15
+round-1 losses. **Every single one** showed our snake with ZERO legal
+moves at the last logged frame, our snake MASSIVELY longer than the
+opponent (my_len 27-69, opp_len 6-14 -- ratio 3x-11x!), and health at or
+near 100 in 11/15 cases. This is a clear, consistent pattern: we keep
+eating far beyond any competitive need (opponent is tiny, often far away
+and low-health itself) until the board becomes too cramped and a
+self-inflicted spiral trap becomes inevitable. This is the same
+fundamental "single-snapshot flood-fill can't see multi-turn
+self-narrowing" structural gap documented at exhausting length by many
+previous sessions (search "spiral-coil"/"multi-ply" earlier in this
+file) -- but this session's specific angle (a systemic OVER-eating
+pattern at high health with a dominant length lead) hadn't been
+articulated quite this precisely before, and points at a concrete,
+low-risk lever: `growth_damp`.
+
+**Fix implemented in `main.py` this session:** `growth_damp` (the
+existing mechanism, added several sessions ago, that softens food-
+seeking urgency once we're big/board-crowded) now has an ADDITIONAL
+"dominant advantage" extra-damping term, layered on top of (not
+replacing) the original curve:
+```python
+excess = min(1.0, (my_len - overgrow_threshold) / (board_cells * 0.25))
+base_damp = 1.0 - 0.5 * excess                       # unchanged original curve
+advantage = my_len - max_opp_len
+adv_excess = min(1.0, max(0.0, advantage - board_cells * 0.10) / (board_cells * 0.30))
+extra_damp = 0.42 * adv_excess
+growth_damp = max(0.05, base_damp - extra_damp)
+```
+This only meaningfully engages once our length advantage over the
+longest opponent exceeds ~12 cells (`board_cells*0.10` on 11x11), ramping
+to a strong extra reduction by an advantage of ~48+ cells. For modest
+leads / close races (the common self-play/competitive scenario), this is
+a near-no-op (`adv_excess` stays ~0, so `growth_damp` matches the
+original pre-session curve almost exactly). For the real losing scenario
+shape (my_len 3x-11x the opponent's), this now drives food-seeking
+urgency down to ~0.08-0.5 (vs. the old flat 0.5 floor) -- verified
+numerically against the actual observed (my_len, opp_len) pairs from all
+15 real losses this session (see trajectory).
+
+**Why the two-term design (not just a uniformly-stronger single curve):**
+first tried a simpler, uniformly-stronger version (wider ramp + deeper
+floor on the SAME single curve, no separate advantage term). Validated
+via the proven NEW-vs-OLD self-play A/B technique (documented extensively
+earlier in this file): **that version lost the A/B badly, 3/10** --
+likely because it also damps modest/competitive length leads that matter
+in a close length race between two similarly-capable bots (self-play
+being the closest available proxy for "close race" dynamics). Reverted
+that version and designed the two-term version above specifically so the
+extra damping ONLY engages once the advantage is genuinely dominant (not
+just any lead), preserving the original behavior for close races.
+Re-validated via the same technique: **9/20 vs 11/20 across seeds 1-20**
+-- statistically indistinguishable from a coin flip, i.e. no measurable
+regression in competitive/close-race self-play, while still providing
+strong extra damping in the specific dominant-advantage scenario that
+caused the real losses (verified numerically, see above).
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-5: **5/5 wins**, 4-6
+  turns each, zero errors/exceptions in either server log.
+- NEW-vs-OLD self-play A/B (seeds 1-10) for the first (uniformly-
+  stronger, single-curve) version: 3/10 -- rejected, reverted.
+- NEW-vs-OLD self-play A/B (seeds 1-20) for the final (two-term,
+  advantage-gated) version: 9/20 -- accepted as noise-level-neutral.
+- Self-play (`main.py` vs itself), seed 777: ran 143 turns, completed
+  cleanly with a decisive winner, zero exceptions in either server log.
+- Numerically verified the new `growth_damp` formula against all 15 real
+  round-1 losses' actual (my_len, max_opp_len) pairs -- confirms strong
+  extra damping (0.08-0.5, vs. old flat 0.5) engages in every one of
+  those specific scenarios (see the Python snippet in this session's
+  trajectory, reusable for future tuning checks).
+- Did NOT have remaining budget this session to re-run the full local
+  batch against `OliverMKing__astar-snake`-style long games or to try
+  further tuning the exact `0.42`/`board_cells*0.10`/`board_cells*0.30`
+  constants beyond this one iteration -- the real validation is the next
+  round's `/logs/rounds/N/results.json` against `coreyja__eremetic-eric`.
+
+**For next teammate:**
+- First: `python3 tools/analyze_logs.py` for fresh ground truth on how
+  this change performs in the next real round. If losses drop further
+  from 15 (especially if the my_len/opp_len ratio pattern in any
+  remaining losses shrinks), this confirms the over-eating-despite-
+  dominant-lead diagnosis and fix direction. If losses persist with the
+  SAME "massively longer, high health, opponent tiny and far" shape,
+  consider strengthening the extra-damping term further (e.g. raise
+  `0.42` toward 0.6-0.7, or lower the `board_cells*0.10` engagement
+  threshold) and re-validate with the same two-part methodology used this
+  session (numeric check against real losses' actual lengths, PLUS a
+  20+-seed NEW-vs-OLD self-play A/B to catch any regression in close
+  races) before trusting a further change.
+- If a future round shows a DIFFERENT new failure mode (e.g. losing
+  head-to-heads because we're now too short relative to a competitive
+  opponent that keeps pace), that would indicate this change went too
+  far in some scenario not captured by the 20-seed self-play sample --
+  dial back the `0.42` extra_damp coefficient and re-test.
+- All other historically-important fixes/logic remain intact and
+  untouched this session (see the very long history earlier in this
+  file: food coefficient 90.0, `_HEAD_HISTORY` anti-stalemate, graduated
+  h2h prediction, no hard h2h pre-filter, uncapped flood-fill w/
+  graduated penalties, tail-reachability gating, adversarial 1-ply
+  `worst_space` lookahead + the adversarial `_lookahead_min_space` deep
+  lookahead from last session, `_opp_two_ply_reachable` contested-exits
+  penalty, threat-aware edge-weight boost, corner/dead-end food-trap
+  penalties).
+- `tools/replay_frame.py` remains the fastest way to investigate any
+  future loss/draw -- use it first, as done again successfully this
+  session (used `--last` across all 15 losses for quick triage).
+- Server-testing gotchas (all reconfirmed working again this session,
+  including a fresh reminder of the classic one): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a`; clean up test servers via `ps aux | grep -E
+  "main.py|opponent_ref"` + `kill -9 <pid>` by PID -- **do NOT use
+  `pkill -f "<port_number>"`, it can match your own current shell command
+  line (which contains that same port number) and SIGKILL your own
+  command mid-execution (exit code 137, no output) -- hit this again
+  this session, cost a couple of steps.** When copying `main.py` to a
+  scratch dir for NEW-vs-OLD A/B, remember to also copy `server.py`
+  (main.py imports `from server import run_server`).

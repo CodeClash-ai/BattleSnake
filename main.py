@@ -553,8 +553,32 @@ def move(game_state):
         # "already winning the length race", where the self-trap risk of
         # further unchecked growth outweighs the marginal combat benefit).
         if health > 60 and my_len > overgrow_threshold and my_len >= max_opp_len:
+            # Strengthened this session (opponent coreyja__eremetic-eric,
+            # see README_agent.md): real losses showed our snake growing
+            # to 36-69 segments (30-57% of an 11x11 board) at HIGH health
+            # (often 100) against opponents that stayed short (6-14) and
+            # far away the whole game -- i.e. we kept eating far beyond
+            # any competitive need, purely because each individual eat
+            # looked locally safe, until the board became too cramped to
+            # avoid an eventual self-inflicted spiral trap. Rather than
+            # just uniformly strengthening the old damp curve (tried &
+            # rejected this session -- a uniformly-stronger version
+            # measurably hurt a NEW-vs-OLD self-play A/B, 3/10, likely
+            # because it also damps modest, competitive length leads that
+            # matter in a close length race against an opponent that
+            # keeps growing), this adds a SEPARATE extra-damping term that
+            # only kicks in once we have a genuinely LARGE, dominant
+            # length advantage over the longest opponent (not just any
+            # lead) -- preserves the original (pre-this-session) damp
+            # curve almost exactly for modest leads/close races, and adds
+            # strong extra damping only in the specific "opponent is tiny
+            # and far behind" scenario that caused the real losses.
             excess = min(1.0, (my_len - overgrow_threshold) / (board_cells * 0.25))
-            growth_damp = 1.0 - 0.5 * excess
+            base_damp = 1.0 - 0.5 * excess
+            advantage = my_len - max_opp_len
+            adv_excess = min(1.0, max(0.0, advantage - board_cells * 0.10) / (board_cells * 0.30))
+            extra_damp = 0.42 * adv_excess
+            growth_damp = max(0.05, base_damp - extra_damp)
         else:
             growth_damp = 1.0
 
