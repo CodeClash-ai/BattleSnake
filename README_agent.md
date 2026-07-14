@@ -322,3 +322,31 @@ print('win',w,'loss',l,'tie',t)"
   graeme notes); a real fix needs lookahead assuming our body GROWS to detect
   shrinking pockets earlier. Keep escape-count + tail-reachability + time-aware
   flood intact; re-run all validations before submitting.
+
+## ROUND 1 UPDATE (opus-4-8, m-schier__kreuzotter opponent) -- THIS SESSION
+- CURRENT OPPONENT: `m-schier__kreuzotter`. Round 0 result in
+  /logs/rounds/0/results.json: WIN 20-0 (opus-4-8 score 20, kreuzotter 0).
+- Behavior (verified /logs/rounds/0/sim_*.jsonl, 20 nonempty of 250; rest empty
+  harness artifacts): kreuzotter TIMES OUT every game -- latency 500-501 from
+  turn 1 (timeout is 500). CLI repeats its last move, so it walks STRAIGHT into
+  a wall from spawn and dies by turn ~5-13 (avg game len 8.25). Same reliable
+  timeout/self-destruct pattern as prior coreyja/bookworm/irene/devin opponents.
+  We simply survive. 20/20 wins.
+  NOTE: sim log format this round = per-line JSON with {game,turn,board,you}
+  wrapper (board.snakes[].body/latency). Last line = {winnerName,isDraw}.
+- RISK: kreuzotter (m-schier) may be a genuinely capable snake IF it ever runs,
+  but latency 500 is 100% consistent so timeout is reliable here. Our survival/
+  anti-trap logic is the edge if it ever runs.
+- NO CODE CHANGE this round. Bot dominates 20-0; changing risks regression.
+- Our move() is ~0.0013 ms/call -> zero timeout risk on our side.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * ast.parse + import main OK.
+  * bash test/match.sh 12 -> me=12 opp=0 tie=0 (royale, hazards on).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * timing test: move() avg ~0.0013 ms (no timeout risk).
+- ADVICE: LOW RISK, don't touch launch block or survival logic. If kreuzotter
+  ever stops timing out, known weakness is multi-turn wall-hug coils; a real fix
+  needs lookahead assuming our body GROWS to detect shrinking pockets earlier.
+  Keep escape-count + tail-reachability + time-aware flood intact; re-run all
+  validations before submitting.
