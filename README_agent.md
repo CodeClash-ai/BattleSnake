@@ -1075,3 +1075,117 @@ improvements):**
   `ps aux | grep -E "main.py|opponent_ref"` and `kill -9 <pid>` directly
   (NOT `pkill -f <pattern>`, which can match and kill your own current
   shell command if the pattern text appears in it).
+
+## Round (this session) update -- FOUND & FIXED a real self-trap bug (spiral-coil pocket death)
+
+**Ground truth at start of session (`python3 tools/analyze_logs.py`):**
+`/logs/rounds/0/` and `/logs/rounds/1/` both existed, opponent
+`coreyja__devious-devin`:
+- Round 0: perfect 20-0 sweep, turns min=3 max=11 avg=7.3.
+- Round 1: **23 wins / 1 loss** (24 real games), turns min=3 max=202
+  avg=27.5.
+
+**Root cause of the 1 real loss (`/logs/rounds/1/sim_247.jsonl`), found by
+replaying the exact real match board states directly through
+`main.move()`:** our snake (length 22-23) coiled itself into a spiral in
+the left/top area of the board. At turn 114, it had two candidate moves,
+both flood-fill reporting a large `space` (90/91 cells, well above the
+`open_threshold = max(my_len*4, 24) = 88` gate that was added in an
+earlier session to fix a *different* bug -- see the long history further
+up this file for the starvation-bug fix). One candidate (`down`) had
+`reached_tail=True`; the other (`up`, the one actually chosen) had
+`reached_tail=False` **for genuinely structural reasons** (that branch's
+BFS truly could not path back to our own tail -- NOT because of the
+food-eating tail-freeze effect the gating was designed for; there was no
+food anywhere nearby). Because raw `space` was large, the old code
+collapsed the tail-reachability bonus/penalty to a negligible `+3`/`0`
+tie-break for BOTH branches, so other tiny score terms picked `up`
+anyway. Two moves later (turn 116), our snake's head was fully boxed in
+by its own body + the opponent's body with **zero legal moves at all**,
+and died on the following turn. Confirmed by direct diagnostic dump of
+each candidate's `space`/`reached_tail` at turns 105-115 (see this
+session's trajectory for the exact script -- it builds a synthetic
+`game_state` from the real sim frame + calls `main._flood_fill`/`move()`
+directly).
+
+**Why this is distinct from the earlier starvation bug (both bugs
+involved the same `open_threshold` gating code, but for opposite
+reasons):** the starvation-bug session correctly identified that
+`reached_tail` goes False almost automatically whenever a candidate move
+eats food (because the code deliberately treats our own tail as still-
+blocked in that BFS, since eating means the tail won't actually vacate
+that turn) -- and that's a harmless, temporary, one-turn artifact on a
+wide-open board, not a real trap signal. But the fix that session
+over-generalized: it gated the penalty based purely on `space` being
+large, regardless of *why* `reached_tail` was False. This session's loss
+shows that when `reached_tail` is False for a **non-food, structural**
+reason (the branch actually doesn't lead back to the tail, e.g. because
+it's heading into a partially-sealed spiral chamber), a large raw `space`
+count is NOT a reliable safety signal -- a long coiled snake can have 90+
+"open" cells that are really just the inside of a spiral about to be
+sealed by its own advancing tail a few turns later. Flood-fill space is a
+single-snapshot metric and doesn't account for our own body continuing to
+consume the corridor as we keep moving through it.
+
+**Fix implemented in `main.py` this session (targeted, minimal):**
+changed the `open_threshold` gating so it ONLY softens the
+tail-reachability penalty when the move actually causes `will_eat` (the
+specific food-freeze scenario the gating was designed for) AND
+`space >= open_threshold`. In ALL other cases where `reached_tail` is
+False (i.e. not caused by eating food this turn), the full `-60` penalty
+now always applies, regardless of how large `space` looks. The `+15`
+bonus for `reached_tail=True` is unconditional in both old and new code
+(unchanged). This preserves the starvation fix exactly for its original
+purpose (don't be scared away from eating adjacent food on an open
+board) while restoring strong anti-spiral-trap protection for the actual
+new failure mode found this session.
+
+**Testing done this session:**
+- `ast.parse` syntax check: OK.
+- Replayed `sim_247.jsonl` turn 114 (the exact pivotal decision) through
+  the patched `move()` 20 times (small residual randomness in tie-break):
+  now **consistently (20/20) picks `down`** (the `reached_tail=True`
+  branch) instead of the old fatal `up` branch that led to the sealed
+  pocket 2 turns later.
+- Built a synthetic open-board "food adjacent, plenty of space" scenario
+  (the original starvation-bug shape) and confirmed the patched bot still
+  correctly walks onto/eats the adjacent food (`move -> right`, landing
+  on the food cell) -- confirms the starvation fix from the earlier
+  session is NOT regressed by this more targeted gating.
+- Local batch via real `game/battlesnake` CLI: `main.py` vs
+  `tools/opponent_ref.py` (naive stand-in), seeds 1-6: **6/6 wins**, 4-6
+  turns each, zero errors/exceptions in server logs.
+- Self-play (`main.py` vs itself), seeds 21/22/23: games ran 125, 270,
+  and 199 turns respectively (exercises long-game/big-snake/spiral-prone
+  code paths directly relevant to the bug just fixed), all completed
+  cleanly with a winner, **zero exceptions/errors** in either server log.
+
+**For next teammate:**
+- First: run `python3 tools/analyze_logs.py` for fresh ground truth on
+  how this fix performed in the next real round. If round-2 shows 0
+  losses (or losses of a clearly different flavor), that's confirmation.
+- If a similar spiral/coil self-trap loss shows up again despite this
+  fix, the likely next step is a genuine multi-turn lookahead (simulate
+  N further greedy self-moves after each candidate and re-check
+  reachable space/tail-reachability at that future point, not just
+  immediately after 1 move) since a single-snapshot flood-fill
+  fundamentally cannot see "this corridor will narrow further as my own
+  body keeps advancing through it" -- that's the deeper limitation
+  exposed by this bug. The targeted fix above patches the *specific*
+  gating-scope bug found this session but does not add real lookahead.
+- Methodology reminder (proven repeatedly now across many sessions): the
+  fastest way to find and fix real bugs is to take a real losing
+  `sim_*.jsonl`, build a synthetic `game_state` from a specific frame
+  (`you` = our snake's own dict from `board.snakes`, rest of board as-is)
+  and call `main.move()` / `main._flood_fill()` directly to inspect
+  per-candidate diagnostics turn-by-turn leading up to the death. Local
+  smoke tests against `tools/opponent_ref.py` are USELESS for this class
+  of bug (games end in ~5 turns, never reach the long-game/big-snake
+  spiral scenario).
+- Server-testing gotchas (all reconfirmed working this session): use
+  `setsid nohup env PORT=X python3 main.py > /tmp/x.log 2>&1 < /dev/null &`
+  + `disown -a` to detach across tool calls; use fresh/unused port
+  numbers each batch; clean up test servers by finding PIDs via `ps aux`
+  and `kill -9 <pid>` directly (NOT `pkill -f <pattern>`, which can match
+  and kill your own current shell command if the pattern text appears in
+  it).

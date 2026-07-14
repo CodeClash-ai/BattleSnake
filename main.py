@@ -267,12 +267,34 @@ def move(game_state):
             # relative to our length.
             open_threshold = max(my_len * 4, 24)
             if my_tail is not None and my_len >= 4:
-                if space >= open_threshold:
-                    # Plenty of room either way; tiny tie-break only.
-                    score += 3.0 if reached_tail else 0.0
+                if reached_tail:
+                    score += 15.0
                 else:
-                    if reached_tail:
-                        score += 15.0
+                    # Losing tail-reachability is only "harmless" when the
+                    # SPECIFIC cause is our own food-freeze adjustment above
+                    # (eating this turn artificially blocks the tail cell
+                    # for this one BFS, even though the board is wide open
+                    # and the tail will still vacate as normal in reality).
+                    # In ALL other cases (i.e. genuine structural reasons --
+                    # the candidate cell just doesn't have a real path back
+                    # to our tail because our own coiled body walls it off),
+                    # losing tail-reachability is a real self-trap warning
+                    # sign REGARDLESS of how big raw `space` looks right
+                    # now -- a long spiral can have 90+ "open" cells that
+                    # are actually a single dead-end pocket that our own
+                    # advancing tail will seal off a few turns later.
+                    # Real loss analysis (see README_agent.md): a 23-long
+                    # snake at turn 114 had two candidates both reporting
+                    # space=90/91 (>> open_threshold), one with
+                    # reached_tail=True and one False (non-food-related);
+                    # the old code gated the penalty down to a negligible
+                    # +3/0 tie-break purely because space was "big", picked
+                    # the reached_tail=False branch anyway, and spiraled
+                    # into a sealed pocket 2 turns later with zero legal
+                    # moves. Gating must be scoped to the food-freeze cause
+                    # only, not to "space happens to be large".
+                    if will_eat and space >= open_threshold:
+                        score += 0.0
                     else:
                         score -= 60.0
 
