@@ -312,6 +312,8 @@ def move(game_state):
                 if my_health > 15 and my_len + 1 >= max_enemy_len and area >= max(12, my_len * 3):
                     best_safe_area = 0
                     best_safe_exits = 0
+                    best_safe_actual_edge = False
+                    best_safe_food_dist = None
                     for od in MOVES.values():
                         on = add(head, od)
                         if on == n or not inside(on, w, h):
@@ -331,8 +333,22 @@ def move(game_state):
                                  if inside(add(on, d2), w, h) and add(on, d2) not in osimb)
                         if oa > best_safe_area or (oa == best_safe_area and oe > best_safe_exits):
                             best_safe_area, best_safe_exits = oa, oe
+                            best_safe_actual_edge = (on[0] in (0, w - 1) or on[1] in (0, h - 1))
+                            best_safe_food_dist = shortest(on, food, osimb, w, h, max_depth=60)
                     if best_safe_area <= max(4, my_len // 2) or (best_safe_area <= my_len and best_safe_exits <= 1):
                         h2h_penalty = 850 + max(0, max_enemy_len - my_len) * 220
+                    # Bountysnake2018 rail squeezes create another kind of "certain
+                    # trap": the only non-head-risk move keeps a small close-length
+                    # snake crawling along the actual wall while a merely +0/+1 enemy
+                    # controls the interior square.  If the risky square is spacious
+                    # and food-neutral/better, prefer the possible H2H gamble over a
+                    # deterministic rail noose.
+                    elif (my_health > 65 and my_len <= 8 and my_len + 3 >= max_enemy_len
+                          and best_safe_actual_edge and best_safe_exits <= 2):
+                        risky_fd = shortest(n, food, sim_blocked, w, h, max_depth=60)
+                        if (best_safe_food_dist is None or risky_fd is None
+                                or risky_fd <= best_safe_food_dist + 1):
+                            h2h_penalty = 720 + max(0, max_enemy_len - my_len) * 180
                 score -= h2h_penalty
             if h2h_good and my_len > max_enemy_len:
                 # A shorter snake cannot beat us head-to-head, but when we are
@@ -385,6 +401,26 @@ def move(game_state):
                     score -= 900
                 if n[0] in (0, w - 1) or n[1] in (0, h - 1):
                     score -= 60
+            # Bountysnake2018 repeatedly wins close/small games after we choose
+            # to continue along the actual rail while healthy and not eating; the
+            # vertical-biased opponent then shadows the adjacent lane until every
+            # exit is a losing head-to-head.  The existing one-exit penalty catches
+            # some final states, but many bad bottom/top rail decisions still have
+            # two immediate exits and huge flood-fill.  Prefer the adjacent interior
+            # lane for small close/shorter snakes unless the rail move is food.
+            if (my_health > 65 and my_len <= max_enemy_len + 1 and my_len <= 12
+                    and n not in food
+                    and (head[0] in (0, w - 1) or head[1] in (0, h - 1))
+                    and (n[0] in (0, w - 1) or n[1] in (0, h - 1))):
+                score -= 170
+                if exits <= 2:
+                    score -= 90
+                # If this rail continuation is not even improving the route to food,
+                # treat it as optional space-orbiting rather than productive growth.
+                cur_fd = shortest(head, food, blocked, w, h, max_depth=60)
+                rail_food_dist = shortest(n, food, sim_blocked, w, h, max_depth=60)
+                if rail_food_dist is not None and cur_fd is not None and rail_food_dist >= cur_fd:
+                    score -= 85
             # Against strong A*/space opponents, equal-length endgames often turn
             # into self-coils: a one-exit move may have more than my_len cells of
             # flood-fill, but still be a one-way pocket with no way back to the
