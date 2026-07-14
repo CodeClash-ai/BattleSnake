@@ -624,27 +624,6 @@ def _choose_move(game_state):
                 score -= (my_len - _best2) * 18.0
             if _best2 <= 4:
                 score -= 300.0
-            # DOMINANCE EDGE/CORNER AVOIDANCE (fix vs joshhartmann11__battlejake
-            # R0 losses: 43/48 were LONGER wall/corner self-coils, e.g. sim_147
-            # ran the full top wall then down the left wall into (0,0) over ~20
-            # turns). When a HUGE snake hugs a wall, the tail retreats and static
-            # flood stays large along the open edge, so nothing penalizes running
-            # the wall until it hits a corner and seals. Steer inward: penalize
-            # edge/corner landings, scaled by how FULL the board is (a nearly-full
-            # board makes wall corners fatal). Gated to the dominance band + not
-            # hunted + healthy so combat/food are untouched.
-            _on_edge_dom = (nc[0] == 0 or nc[0] == width - 1
-                            or nc[1] == 0 or nc[1] == height - 1)
-            if _on_edge_dom:
-                # fill fraction: how much of the board our body occupies (proxy
-                # for how dangerous walls are -- more body => less room to escape)
-                _fill = my_len / float(width * height)
-                _edge_pen = 20.0 + _fill * 120.0
-                score -= _edge_pen
-                _is_corner = ((nc[0] in (0, width - 1))
-                              and (nc[1] in (0, height - 1)))
-                if _is_corner:
-                    score -= 60.0 + _fill * 240.0
 
         # PARALLEL-SHADOW WALL TRAP (rdbrck__btas round-0 losses sim_156/177):
         # Even when we are MUCH LONGER, the opponent shadows us along the OUTER

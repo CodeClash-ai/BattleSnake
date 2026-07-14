@@ -2113,3 +2113,48 @@ print('win',w,'loss',l,'tie',t)"
   edges when hunted) or center-pull (tested, wash + lure risk). Keep the widened
   pin lookahead + all existing anti-coil/anti-pin/growth. NEVER touch the launch
   block. Judge via smartmatch (pursuit proxy) multi-batch (variance huge).
+
+## ROUND 3 UPDATE (opus-4-8, joshhartmann11__battlejake -- DOMINANCE EDGE/CORNER AVOIDANCE)
+- OPPONENT: `joshhartmann11__battlejake`. R0 result: WIN 200-48 (2 ties). GENUINE
+  combat opp, LONG endgames (loss turns 138-470, high health 52-100).
+- ANALYZED all 48 losses (/tmp/analyze.py, recreate from git): 47/48 were
+  DOMINANCE SELF-COILS while LONGER (ml 6-53 vs opp 6-27), high health,
+  boxed in. 22 corner / 21 edge / 4 interior / 1 equal-corner. NOT starvation,
+  NOT h2h. We grow HUGE then seal ourselves against walls/corners.
+- TRACED sim_147 (ml29 ol12, t306): at t287 we DOVE onto the top wall (y=10),
+  ran the ENTIRE top wall left, then DOWN the left wall (x=0) into (0,0) over
+  ~20 turns, sealing ourselves. Classic wall death-march: along a wall the tail
+  retreats and static/time-aware flood stay LARGE (open board along the edge),
+  so nothing penalized running the wall until it hit the corner.
+- ROOT CAUSE: the DOMINANCE branch (my_len>_max_ol+3) had strong tail-follow +
+  static-lookahead but NO plain edge/corner penalty. When far from the opponent,
+  hugging a wall scored fine (parallel-shadow only fires at opp dist<=4).
+- FIX (main.py, NEW "DOMINANCE EDGE/CORNER AVOIDANCE" block in the dominance
+  branch, right after the 2-ply static lookahead ~line 627, gated not-hunted +
+  health>=30 + my_len>_max_ol+3): penalize edge landings -(20 + fill*120) and
+  corner landings an extra -(60 + fill*240), where fill = my_len/(w*h). Scaling
+  with board fill makes walls near-prohibitive for a huge snake (when the board
+  is full, wall corners are fatal) while barely affecting a moderate snake. This
+  steers a dominant snake INWARD before it commits to a wall death-march.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, grow_solo 7/8 (== baseline, no regress;
+  solo has no opponent so board-fill/wall dynamics differ from real losses),
+  match.sh naive 6-0, smartmatch 7-5 (combat proxy, within variance, no regress).
+- HONEST NOTE (replay limitation, per ALL prior notes): frozen-opp livesim of
+  the recorded losses does NOT diverge (recorded body already coiled AND the opp
+  was frozen -- opp movement was part of the seal). Synthetic wall-run scenarios
+  showed the existing tail-follow already turns inward in many cases; the new
+  edge penalty adds an incremental push in the exact loss regime (huge + near
+  wall + opp far). Directionally correct + provably SAFE (additive, gated to the
+  dominance band, combat/food untouched).
+- Backup: main_round0_battlejake_r3_backup.py (pre-this-change, the 200-48 code).
+- ADVICE FOR NEXT TEAMMATE: battlejake beats us ONLY by our own dominance
+  wall/corner self-coils in long endgames (47/48). The edge-avoidance helps steer
+  off walls but the DEEP fix (all notes agree) = a real space-filling /
+  longest-survivable-path metric or Hamiltonian-cycle planner when huge (the
+  static/time-aware floods OVERCOUNT space reachable along a wall via tail retreat,
+  so the bot can't tell a survivable open board from a wall death-march). That's
+  the remaining lever. Keep dominance-edge-avoidance + tail-follow + tail-region +
+  2-ply-static + anti-serpentine + all existing anti-coil/anti-pin. Use
+  /tmp/analyze.py + /tmp/trace.py (head trajectory over last turns) to study the
+  wall-coils. NEVER touch the launch block.
