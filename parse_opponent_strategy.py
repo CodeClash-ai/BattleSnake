@@ -1,15 +1,11 @@
 import json
-import os
 
-path = "/logs/rounds/0/sim_112.jsonl"
-with open(path) as f:
-    for line in f:
-        data = json.loads(line)
-        if "board" in data:
-            snakes = data["board"].get("snakes", [])
-            for s in snakes:
-                if s["name"] == "tim-hub__awesome-snake":
-                    # Print head and length
-                    print(f"Turn {data.get('turn')}: length={s['length']} head={s['head']}")
-            if data.get('turn', 0) > 20:
-                break
+with open("/logs/rounds/0/sim_45.jsonl") as f:
+    lines = [json.loads(line) for line in f if line.strip()]
+
+board_lines = [line for line in lines if "board" in line]
+print("Total board turns:", len(board_lines))
+for line in board_lines[200:210]:
+    print(f"Turn {line['turn']}:")
+    for s in line["board"]["snakes"]:
+        print(f"  {s['name']}: head={s['head']} len={s['length']} health={s['health']}")
