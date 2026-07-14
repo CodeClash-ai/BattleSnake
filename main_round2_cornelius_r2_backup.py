@@ -278,44 +278,6 @@ def _choose_move(game_state):
                 dq.append(nn)
         return count, tail_ok
 
-
-    def _open_region_quality(start_cell, blocked, limit=None):
-        # Flood from start_cell (body-after-move as `blocked`) and measure a
-        # CHOKEPOINT-AWARE region size. Static/time-aware floods overcount space
-        # reachable through 1-wide channels (a coil clears as the tail retreats),
-        # which is why the bot serpentines into shrinking pockets and self-coils
-        # (the dominant loss class vs cornelius/elon/tantilla/eremetic). Here we
-        # penalize cells whose only in-region access is a narrow corridor: a cell
-        # with <=1 free (non-blocked, in-bounds) neighbour contributes 0.35, a
-        # cell with 2 free neighbours contributes 0.75, else 1.0. This yields a
-        # much lower "quality" for a serpentine channel than for open room, so
-        # the scorer prefers genuinely open moves and breaks coils earlier.
-        from collections import deque
-        seen = {start_cell}
-        dq = deque([start_cell])
-        quality = 0.0
-        while dq:
-            cur = dq.popleft()
-            free_nbrs = 0
-            for ddx, ddy in DIRS.values():
-                nn = (cur[0] + ddx, cur[1] + ddy)
-                if not in_bounds(nn) or nn in blocked:
-                    continue
-                free_nbrs += 1
-                if nn in seen:
-                    continue
-                seen.add(nn)
-                dq.append(nn)
-            if free_nbrs <= 1:
-                quality += 0.35
-            elif free_nbrs == 2:
-                quality += 0.75
-            else:
-                quality += 1.0
-            if limit and len(seen) >= limit:
-                break
-        return quality
-
     # Opponent body cells (static, no retreat) for the 2-ply lookahead.
     opp_bodies_static = set()
     for s in opponents:
@@ -440,17 +402,6 @@ def _choose_move(game_state):
                 score -= (my_len - _reg_u) * 14.0
             if _reg_u <= 4:
                 score -= 250.0
-            # CHOKEPOINT-AWARE OPEN-REGION QUALITY (fix vs cornelius/elon/tantilla
-            # self-coils): static/time-aware floods overcount space reachable
-            # through 1-wide channels, so a serpentine coil looks "big" while it
-            # is actually a shrinking corridor. Reward moves whose reachable
-            # region is genuinely OPEN (few chokepoints) and penalize corridor-
-            # heavy regions. Only meaningful when the quality falls short of our
-            # length (we need room to keep moving without sealing in).
-            _q_u = _open_region_quality(nc, _occ_u, limit=None)
-            score += _q_u * 2.0
-            if _q_u < my_len:
-                score -= (my_len - _q_u) * 8.0
             # NEAR-EQUAL-LENGTH ANTI-COIL (fix vs jackisherwood__battlesnake-elon
             # R1: 15 losses were near-equal-length INTERIOR self-coils, ml~ol,
             # high health, boxed in via a multi-turn serpentine weave -- e.g.

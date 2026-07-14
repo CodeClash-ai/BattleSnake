@@ -1682,3 +1682,47 @@ print('win',w,'loss',l,'tie',t)"
   1-wide channels). Keep the boosted near-equal anti-coil + all existing
   anti-coil/anti-pin/dominance/growth logic. Judge via smartmatch (variance!)
   + solo/grow_solo. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, ChaelCodes__cornelius -- THIS SESSION, CHOKEPOINT-QUALITY ANTI-COIL)
+- Standing: R0 WIN 218-31 (1t), R1 WIN 211-37 (2t). Losses ROSE 31->37; the R1
+  near-equal anti-coil weight boost did NOT help (may have slightly hurt).
+- ANALYZED all 37 R1 losses (/tmp/cat2.py, recreate from git): SPLIT into two
+  clear classes by our length at death:
+  * 18 losses we were LONGER -> ALL were SELF-COIL (0 safe nbrs). We win then
+    seal ourselves in during long endgames (t114-415), high health (67-98).
+    Lengths 13-31 (NOT the huge len-60+ dominance regime). Interior-heavy.
+  * 18 losses we were SHORTER -> mix of 10 self-coil + 8 h2h/pin (cornelius
+    out-grows us then traps/pins). 1 equal-length coil.
+  Overall: 27 self-coil / 10 h2h. Interior 18, edge 10, corner 9.
+- ROOT CAUSE (self-coil class, per ALL prior notes): static/time-aware floods
+  OVERCOUNT space reachable through 1-wide channels (a coil clears as the tail
+  retreats), so a serpentine coil looks "big" while it is really a shrinking
+  corridor. The bot happily weaves into it and seals.
+- FIX (the deep lever every prior note flagged, implemented lightly & safely):
+  new helper `_open_region_quality(start, blocked)` -- a CHOKEPOINT-AWARE flood.
+  Each reachable cell contributes 0.35 if it has <=1 free neighbour (corridor/
+  dead-end), 0.75 if 2, else 1.0. A serpentine channel scores far lower quality
+  than genuinely open room. Used in the UNIVERSAL tail-region block (fires for
+  ALL length bands, gated not-hunted + health>=30): score += q*2.0, and
+  -(my_len-q)*8.0 when q < my_len. Steers us toward genuinely open moves and
+  breaks forming coils earlier, independent of length.
+- TUNING: first tried q*3 + (-6) with limit=my_len*3 -> deep grow_solo 4/8
+  (slightly worse, limit too small for huge snakes). Settled on q*2 + (-8) with
+  NO limit -> deep grow_solo 5/8 (== baseline, no regress) AND moderate regime
+  (400t/14food, the real loss-length band) 8/8, (450t/22food) 12/12.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 6-0,
+  smartmatch 11-5 then 10-2 (strong combat, no regression),
+  greedymatch 9-3, grow_solo deep A/B vs backup 9/14==9/14 (no regress), moderate
+  8/8 & 12/12.
+- Backup: main_round2_cornelius_r2_backup.py (pre-this-change, the 211-37 code).
+- ADVICE FOR NEXT TEAMMATE: cornelius beats us by (a) our own self-coils when
+  LONGER (18/37) and (b) out-growing then pinning us when SHORTER (18/37). The
+  chokepoint-quality term directly targets class (a) -- the real fix vs the
+  overcounting floods. For class (b), growth weights are already aggressive;
+  next lever = grow to parity even faster early, or extend 2-ply pin lookahead.
+  The DEEPEST coils (len 60+) still need a true space-filling/Hamiltonian path
+  planner. Keep chokepoint-quality + universal-tail-region + all existing anti-
+  coil/anti-pin/dominance/growth. Don't over-crank q weight (>~3 distorts deep
+  play, tested). NEVER touch the launch block. Judge via grow_solo A/B (moderate
+  AND deep) + smart/greedy proxies (variance huge).
