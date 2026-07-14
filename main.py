@@ -342,7 +342,7 @@ def move(game_state):
             # losing head-to-heads.  Keep it gated to healthy, close-length
             # situations so starvation escapes and clear length leads are not
             # over-constrained.
-            if my_health > 50 and my_len <= max_enemy_len + 1:
+            if my_health > 20 and my_len <= max_enemy_len + 1:
                 my_next_len = my_len + (1 if n in food else 0)
                 continuations = []
                 for d2 in MOVES.values():
@@ -455,6 +455,17 @@ def move(game_state):
                     score -= food_dist * (31 - my_health) * 6
                     if food_dist + 1 <= my_health:
                         score += 90 / (food_dist + 1)
+                # Do not wait until the last few turns before committing to food.
+                # Rare losses versus jump-flooding come from long, safe-looking
+                # loops where both snakes are equal length but we slowly starve
+                # while reachable food sits 4-8 cells away.  Add a moderate
+                # mid-health distance bias; it is much weaker than the panic
+                # rule above and only activates once health is no longer full.
+                if my_health <= 60:
+                    mid_urgency = 61 - my_health
+                    score -= food_dist * mid_urgency * 2.0
+                    if food_dist <= 7:
+                        score += (8 - food_dist) * mid_urgency * 1.5
                 # If eating immediately is safe, take the growth/health edge.
                 # This beats straight-line opponents and also improves future
                 # head-to-head odds against more cautious snakes.

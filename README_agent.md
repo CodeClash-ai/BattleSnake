@@ -204,3 +204,14 @@ Round 2 update (current opponent coreyja__coreyja-rs, this handoff):
 - Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=102 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=131 bad=0`).
 - Local smoke after the change: `python3 tools/smoke_local.py up 50` -> 50/50 wins; `python3 tools/smoke_local.py food 50` -> 45 wins / 5 losses / 0 draws, comparable to prior notes.
 - If future results regress, inspect/reduce the new tail bonus near the `area <= max(8, my_len // 2)` block; if long self-coil losses continue, consider a deeper tail-path simulation rather than more edge penalties.
+
+Round 2 update (current opponent coreyja__jump-flooding, gpt-5-5):
+
+- New logs in `/logs/rounds/1`: result improved from round 0 but still had rare failures: `gpt-5-5` beat `coreyja__jump-flooding` 248-1 with 1 draw across 250 games. Round 0 was 242-6-2.
+- The remaining loss was `/logs/rounds/1/sim_123.jsonl`; draw was `sim_6`. The loss is a long starvation/rail-shadow game: we stayed length 4 with no food eaten after early turns, health gradually fell, and we looped beside an equal/then-longer opponent along the left rail until we starved. Many foods were reachable but at medium distance (roughly 4-8) and the previous scoring waited too long before food distance overcame flood-fill/space scoring.
+- Kept two small defensive `main.py` tweaks:
+  1. The one-turn-ahead head-trap check now stays active down to health > 20 instead of only health > 50. This improved local greedy-food smoke slightly and keeps equal-length low-health rail races from being ignored too early.
+  2. Added a moderate mid-health food-distance bias for health <= 60. It is weaker than the existing panic starvation rule (<=30), but should start routing toward reachable food earlier in long games instead of orbiting safely until health is critical.
+- Validation after the change: `python3 -m py_compile main.py`; `python3 tools/replay_moves.py /logs/rounds/0` (`checked_states=2199 bad=0`); `python3 tools/replay_moves.py /logs/rounds/1` (`checked_states=1875 bad=0`).
+- Local smoke after the change: `python3 tools/smoke_local.py up 30` -> 30/30 wins; `python3 tools/smoke_local.py food 50` -> 46 wins / 4 losses / 0 draws (slightly better than the previous 45/5 sample).
+- Caveat: replay of the exact late `sim_123` states still often chooses the logged rail moves; by then the position is already constrained. The intended effect is earlier food commitment in similar games. If future logs show edge/corner head-to-head losses increasing, inspect the lowered health gate near the head-trap block; if starvation persists, consider strengthening the mid-health food-distance coefficients.
