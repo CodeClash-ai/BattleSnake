@@ -564,6 +564,18 @@ def move(game_state):
                     if food_dist <= 5:
                         score += (6 - food_dist) * 10
                     deficit = max_enemy_len - my_len
+                    # kentmacdonald2__beames is another efficient food/space snake:
+                    # many losses have us still healthy but already 4-8 lengths down,
+                    # especially in the early/mid game after we orbit open space while
+                    # the opponent consumes the board.  Add a narrow distance gradient
+                    # only for small, clearly-behind snakes so we start walking toward
+                    # reachable food before the starvation clock is urgent.  This is
+                    # intentionally weaker and narrower than a general hunger boost: it
+                    # does not fire when close in length/ahead or after we have grown
+                    # large enough that self-coil safety dominates.
+                    if deficit >= 4 and my_len <= 10 and my_health > 45 and food_dist <= 12:
+                        score += (13 - food_dist) * 12
+                        score -= food_dist * 4
                     if deficit >= 6 and my_health <= 95 and food_dist <= 2:
                         # Very narrow extra catch-up pressure for this matchup:
                         # if we are badly behind and already off full health, a
