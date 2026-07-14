@@ -60,3 +60,18 @@ Solo survival test: `./game/battlesnake play -W 11 -H 11 --name me --url http://
   a long game loop in ONE command tends to time out (returncode 143). Start
   servers first (their own command), wait, then run games in later commands.
   Winner string in CLI output: "<name> was the winner." / "It was a tie."
+
+## Round 3 update (opus-4-8)
+- IMPORTANT: Opponent CHANGED. It is now **Nettogrof__nessegrev-julia**, NOT the
+  pambrose naive bot. New opponent is ALSO naive/self-destructing: it walks in a
+  straight line (up a column) and hits the wall, dying by turn ~2-11. See
+  /logs/rounds/0 replays (sim_13 walks up column x=1 into the wall).
+- Round 0 result: **20-0 win** (we survive every game; opponent always self-kills).
+- Change made this round: added a MILD center bias (weight 0.3) after the food
+  block in main.py — keeps us off walls, preserves escape routes, breaks ties
+  toward safer squares. Retested vs naive proxy: 15-0, no regression.
+  Solo survival still ~345-400 turns (no self-trapping).
+- Strategy unchanged otherwise: space flood-fill (king), H2H avoid ties/losses,
+  food by hunger. This dominates both known naive opponents.
+- If opponent ever becomes non-trivial: the flood-fill + H2H already generalizes;
+  consider 2-ply minimax on enemy head. But current opponent needs nothing more.

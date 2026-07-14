@@ -169,6 +169,12 @@ def _choose(game_state):
             if (nx, ny) in food:
                 score += 40.0
 
+        # Mild center bias: staying off the walls preserves escape routes and
+        # avoids the wall-deaths the naive opponent suffers. Tiny weight so it
+        # only breaks ties among otherwise-equal moves.
+        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+        score -= (abs(nx - cx) + abs(ny - cy)) * 0.3
+
         if best_score is None or score > best_score:
             best_score = score
             best_move = name
