@@ -711,3 +711,43 @@ print('win',w,'loss',l,'tie',t)"
   + escape-count + anti-pin + growth-attraction intact. Next real lever = 2-ply
   lookahead to detect wall-coil buildup 3+ turns before the seal. Always re-run
   all validations + smart/greedy proxies before submitting.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__jump-flooding opponent) -- THIS SESSION
+- OPPONENT: `coreyja__jump-flooding`. Round 0 result: WIN 244-4 (2 ties).
+  GENUINE combat opponent (runs, ~17-turn avg games, up to 102). Strong PURSUIT
+  snake that cuts off our escapes.
+- ANALYZED ALL 4 LOSSES (sim_141/232/92/119): ROOT CAUSE = forced losing
+  HEAD-TO-HEAD in a corner while SHORTER (us len4 vs opp len5) at HIGH health.
+  Pattern (sim_141): the longer opp shadowed us and cut off center access; by
+  turn ~26 our ONLY non-losing-h2h move was UP into the wall, then we ran the
+  top row into the (10,10) corner where our only exit (10,9) was a cell the
+  longer opp could also enter -> forced losing h2h. The fatal commit happened
+  2-3 turns BEFORE death; 1-ply escape-count/anti-pin couldn't see it because
+  the opponent hadn't moved yet. (sim_119 was a rare draw/quirk, opp only.)
+- FIX (score_candidate, the big lever the README kept flagging as TODO):
+  2-PLY PIN LOOKAHEAD. When being_hunted, for each close longer/equal opponent
+  we simulate its possible next-head positions; for its WORST-case (for us) move
+  we count how many of OUR moves-from-nc stay safe (in bounds, not our body,
+  not a cell adjacent to/equal to the opp's projected head = losing h2h, not a
+  cell another enemy can take). worst_safe==0 -> -500 (about to be pinned into a
+  forced losing h2h), worst_safe==1 -> -120. This steers us away from pin setups
+  1-2 turns earlier. Verified on sim_141: at turn 25 bot now goes DOWN into open
+  board instead of continuing along the wall.
+- VALIDATION -- ALL PASS:
+  * ast.parse + import main OK; launch block intact (tail shows it).
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 8 -> me=8 opp=0 (naive smoke test, royale).
+  * smart_opp (smartmatch.sh 20) new: 12-8 then 14-6 => 26-14 (~65%) over 2
+    batches; baseline batch 14-4-2. smart_opp variance is HUGE (per prior notes)
+    and doesn't fully replicate jump-flooding's pin, so judge the FIX on the sim
+    replay (it fixes the exact corner-pin death) not on noisy smart_opp batches.
+- BUG FIXED during dev: my_body is a list of TUPLES (not dicts) -- use
+  my_body[-1] directly, not my_body[-1]["x"]. (Caught by the try/except fallback
+  returning 'up' -- always test _choose_move directly, not just move.)
+- Backup: main_round1_jumpflooding_backup.py (pre-this-change, proven 244-4 code).
+- ADVICE FOR NEXT TEAMMATE: jump-flooding pins us in corners when we're SHORTER.
+  The 2-ply pin lookahead is the key edge -- KEEP IT. Complementary next levers:
+  (1) grow to length parity FASTER early (food weight already boosted 4.5 when
+  behind) so we WIN h2h instead of only avoiding it; (2) extend the pin lookahead
+  to full 2-ply minimax if steps allow. Keep 2-ply-pin + anti-pin + static_flood
+  + tail-reach + escape-count + growth-attraction. NEVER touch the launch block.
