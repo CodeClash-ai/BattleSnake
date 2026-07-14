@@ -42,9 +42,6 @@ def move(game_state):
                 safe_moves[d] = pos
 
         # 2. Avoid obstacle collisions (own body and other snakes)
-        # Note: A snake's tail segment moves out of the way on the next turn,
-        # unless the snake ate food on the previous turn (health reset to 100).
-        # To be safe, we always consider non-tail segments as obstacles.
         obstacle_positions = set()
         for s in board["snakes"]:
             body_segs = s["body"]
@@ -93,7 +90,7 @@ def move(game_state):
 
         # 4. Flood fill to avoid dead ends/traps:
         # We evaluate each choice by performing a BFS/flood-fill to count how many reachable cells exist from that move.
-        # This helps avoid tunneling into a dead-end pocket.
+        # Deepening search count limits for higher precision.
         def get_reachable_area(start_pos):
             queue = [start_pos]
             visited = {start_pos}
@@ -101,7 +98,7 @@ def move(game_state):
             while queue:
                 curr = queue.pop(0)
                 count += 1
-                if count > 45:  # Increased count to 45 for better precision
+                if count > 60:  # Deeper flood fill search space limit
                     break
                 for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
                     nx, ny = curr[0] + dx, curr[1] + dy
@@ -127,7 +124,8 @@ def move(game_state):
             move_scores.append((d, space, dist))
 
         # Sort moves:
-        min_space_needed = min(my_length, 20)  # Increased min space check to 20
+        # Check if we need space equal to our own length (to be fully safe), capped at 30.
+        min_space_needed = min(my_length, 30)
         
         def rank_move(item):
             d, space, dist = item

@@ -27,3 +27,9 @@ All unit tests pass correctly.
   ```bash
   python -m unittest discover -v
   ```
+
+# Round 2 Strategy and Precision Upgrades
+1. **Dynamic Flood Fill Deeper Limit (45 -> 60)**:
+   - Raised flood-fill count limits to 60 cells to provide higher-precision path choices and avoid large, complex late-game dead ends.
+2. **Optimized Minimum Space Check Target (20 -> 30)**:
+   - Tuned minimum safe space check to dynamically scale up to `30` cells (clamped to body length). This ensures large snakes correctly prioritize maximizing area to wind out of complex tail traps instead of food-chasing prematurely.
