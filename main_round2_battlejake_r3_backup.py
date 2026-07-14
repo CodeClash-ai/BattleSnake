@@ -590,22 +590,6 @@ def _choose_move(game_state):
                     score -= 1500.0            # severs the loop -> coil death
                 # also reward a bigger reachable region (open room, no channel)
                 score += _reg * 16.0
-                # CHOKEPOINT-QUALITY (fix vs joshhartmann11__battlejake R1 losses:
-                # 36/40 were DOMINANCE wall/corner self-coils, e.g. sim_122 ran
-                # the top wall then down the left wall into (0,0) over ~20 turns
-                # at len 36-38 on a board that still had ~85 free cells). The
-                # region_and_tail count OVERCOUNTS a wall corridor (it clears as
-                # the tail retreats), so a wall death-march looks survivable.
-                # _open_region_quality discounts narrow corridors (a cell with
-                # <=1 free neighbour counts 0.35, 2 counts 0.75), so a 1-wide
-                # wall corridor scores far lower quality than genuinely open room.
-                # Strongly reward moving toward the higher-quality open region so
-                # a huge snake breaks off the wall into the interior EARLY, before
-                # the corridor funnels it into a corner and seals.
-                _q_dom = _open_region_quality(nc, _occ_tr, limit=None)
-                score += _q_dom * 4.0
-                if _q_dom < my_len:
-                    score -= (my_len - _q_dom) * 6.0
             # ANTI-SERPENTINE: snugging the head against 2+ of our own body cells
             # is weaving a coil that fills a sub-length pocket over many turns
             # (sim_12/sim_141 interior coils). Penalize hard, scaled with length.

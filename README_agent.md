@@ -2158,3 +2158,45 @@ print('win',w,'loss',l,'tie',t)"
   2-ply-static + anti-serpentine + all existing anti-coil/anti-pin. Use
   /tmp/analyze.py + /tmp/trace.py (head trajectory over last turns) to study the
   wall-coils. NEVER touch the launch block.
+
+## ROUND 2 UPDATE (opus-4-8, joshhartmann11__battlejake -- CHOKEPOINT-QUALITY IN DOMINANCE)
+- Standing: R0 WIN 200-48, R1 WIN 209-40 (the R0 dominance edge/corner avoidance
+  cut losses 48->40). Analyzed all 40 R1 losses (/tmp/analyze.py, recreate from
+  git): 36/40 DOMINANCE SELF-COILS while LONGER (ml 6-53 vs opp), HIGH health,
+  31/40 edge/corner. Same wall/corner death-march class.
+- TRACED sim_122 (398t, ml38 ol17, hp100, head (0,0)): at t378 we entered the
+  (10,10) corner, ran the ENTIRE top wall left (y=10), then DOWN the left wall
+  (x=0) into (0,0) over ~20 turns -- a classic wall death-march on a board that
+  still had ~85 FREE cells (len 36-38 of 121). ROOT CAUSE (all prior notes agree):
+  the dominance branch used _region_and_tail + static floods which OVERCOUNT a
+  wall corridor (it clears as the tail retreats), so a wall death-march looked
+  survivable and nothing pulled us off the wall in time.
+- FIX (in the DOMINANCE tail-reachable-region block ~line 592, gated not-hunted +
+  health>=30 + my_len>_max_ol+3): added the CHOKEPOINT-AWARE _open_region_quality
+  metric (already used in the universal band) to the DOMINANCE band. It discounts
+  narrow corridors (cell with <=1 free nbr = 0.35, 2 = 0.75, else 1.0), so a
+  1-wide wall corridor scores far lower QUALITY than open interior. score +=
+  q*4.0 and -(my_len-q)*6.0 when q<my_len. Steers a huge snake OFF the wall into
+  the interior EARLY, before the corridor funnels it into a corner.
+- TUNING: first tried q*6 + -(my_len-q)*10 -> too strong (over-aggressive interior
+  moves, seeds coiled bigger); dialed to q*4 + *6 which is the sweet spot.
+- REPRO: test/grow_solo.py (nfood=30, 400t). BASELINE (main_round2_battlejake_r3_
+  backup.py) seeds 0-5: seed 1 dies WALL len 57. NEW: seed 1 SURVIVES; net 5/6
+  survive both (the one different death is seed 2 = a DEEPER interior coil at len
+  73, a separate class). The wall death-march (the DOMINANT real loss class) is
+  addressed. NOTE: grow_solo has NO opponent so lengths/food diverge between
+  versions -- judge by the wall-death-march seed (seed 1) being fixed.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 6, match.sh naive 6-0, smartmatch 9-1 (strong
+  combat, no regression).
+- Backup: main_round2_battlejake_r3_backup.py (pre-this-change, the 209-40 code).
+- ADVICE FOR NEXT TEAMMATE: battlejake beats us ONLY by our own dominance
+  wall/corner self-coils in long endgames (36/40). Chokepoint-quality in the
+  dominance band directly targets the wall death-march (the overcounting-flood
+  problem all notes flag). The DEEPEST interior coils (len 70+) still need a true
+  space-filling / Hamiltonian-cycle planner when huge. Keep chokepoint-quality
+  (dominance) + dominance edge/corner avoidance + tail-follow + tail-region +
+  2-ply-static + anti-serpentine + all existing anti-coil/anti-pin. Use
+  test/grow_solo.py (nfood=30, 400t, seeds 0-5) as the repro -- keep grow_solo
+  runs SMALL (<=6 seeds, <=400t) or the test's own body-set times out the 30s
+  shell (move() is fast, ~1.7ms). NEVER touch the launch block.
