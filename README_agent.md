@@ -323,3 +323,89 @@ concrete recommended next step (use `tools/passive_opponent.py` for
 validation, consider genuine recursive self-play simulation) -- also
 check `docs/HISTORY_ARCHIVE.md` (search "dominant-length self-trap" or
 "adv_scale") for exhaustive prior-session detail if needed.
+
+**Session (round 2, opponent `tyrelh__tyrelh-python`, still rung ~as
+before -- round 0: 209W/31L/10D 83.6%, round 1: 209W/27L/14D 83.6%,
+stable/strong):** Ran `tools/analyze_logs.py` first (per instructions).
+Win rate held steady across rounds 0 and 1 (no regression from round-1's
+"no functional changes" session). Triaged all 27 round-1 losses:
+confirmed (again) these are NOT the old "dominant-length self-trap"
+class -- in every loss, my_len was close to opp_len (equal or off by
+1-2), consistent with round-1's finding that this specific opponent is a
+comparably-strong, comparably-fast-growing snake.
+
+Deep-dived a concrete new repro, `/logs/rounds/1/sim_49.jsonl` (turns
+88-94, both snakes len ~10-11): bot walked along the bottom wall
+(y=0) rightward for 3+ consecutive turns while a same-length opponent
+approached, ending 0-legal-moves-dead at turn 94 -- same surface
+"wall-hugging corner trap" symptom flagged in round-1's session for
+`sim_153.jsonl`. But this time I actually instrumented `main.py`'s
+scoring loop with temporary debug prints (see method below) and found
+the ROOT CAUSE precisely, which is more specific than round-1's
+writeup: at turn 90, head=(4,0), 'up'->(4,1) and 'right'->(5,0) both
+report identical `space=102, reached_tail=True`, but they get WILDLY
+different final scores (111 vs 249) -- NOT primarily from food/edge
+terms (those are small and if anything favor 'up'), but from the
+**bounded `_lookahead_min_space` term**: for 'up', the adversarial
+forward simulation predicted `lookahead_space=0` (a hard future trap),
+costing ~165 points; for 'right', the same simulation predicted
+`lookahead_space>=my_len` (no penalty at all). In actual real-game play,
+BOTH directions were apparently doomed (the bot picked 'right' repeatedly
+over the next few turns and still died at turn 94, well within the
+lookahead's own depth-6 window) -- i.e. **the lookahead's own bounded
+forward simulation gave a false negative for 'right'**: it assumes our
+*future self* greedily maximizes space at each simulated step, but the
+REAL future self is driven by the full scoring function (food
+attraction, edge terms, etc.), which in this exact position kept
+choosing to hug the same wall rightward instead of maximizing space --
+so the simplified proxy's predicted trajectory diverged from the
+policy's actual trajectory, and the trap it should have caught 4 turns
+later was invisible to it.
+
+This is a concrete, reproducible instance of the long-flagged
+"still-unimplemented textbook correct fix" idea in the "big remaining
+unsolved failure class" section above (genuine recursive self-play using
+the bot's OWN full scoring function instead of a simplified
+space-maximizing proxy) -- except here it applies to a close-race
+wall-hugging trap, not just the old dominant-length self-trap. This is
+the first session with a fully concrete, instrumented, byte-level root
+cause for this failure mode (previous sessions only had the
+surface-level "wall-hugging" symptom, not the specific mechanism/lever).
+
+**Did NOT ship a fix this session** (only ~5 steps of budget left after
+the investigation) -- deliberately, per the validation methodology in
+this file: any change to `_lookahead_min_space`'s internal simulated
+policy is exactly the kind of change that needs full self-play A/B +
+passive-opponent validation + perf profiling before shipping, and I did
+not have the budget left to do that responsibly this session.
+
+**Debug method used (reusable for next teammate)**: copy `main.py` to a
+scratch path (e.g. `/tmp/dbgmain.py`), insert
+`if os.environ.get('DBG'): print(...)` lines after specific score-mutating
+lines (grep `main.py` for `score += \|score -= ` to find them all), copy
+`tools/replay_frame.py` to a scratch path and redirect its
+`import main as M` to import the scratch module instead, then run with
+`DBG=1 python3 /tmp/dbg_replay.py <simfile> --turn N --diag`. This
+gives a full per-term score breakdown per candidate direction, not just
+the coarse space/reached_tail numbers `--diag` already prints -- much
+faster than hand-tracing the scoring loop by eye. Recommend adding a
+permanent `DBG` env-var-gated verbose mode directly into `main.py` itself
+in a future session (behind the env var so it's zero-cost/silent in
+real matches) so this doesn't need to be re-created from scratch each
+time.
+
+**For next teammate:** (1) Re-run `tools/analyze_logs.py` fresh -- don't
+assume opponent/behavior unchanged. (2) The concrete, mechanistically-
+diagnosed repro is `/logs/rounds/1/sim_49.jsonl` turn 90 (see above) --
+a great test case for validating any future fix to
+`_lookahead_min_space`'s internal simulated policy, since we now know
+EXACTLY which internal term (the lookahead proxy's false-negative) is
+responsible, not just the surface symptom. (3) Any fix attempt should
+make the lookahead's simulated future-self use (a cheaper approximation
+of) the REAL scoring function's actual move preferences instead of pure
+space-maximization, per the long-standing "still-unimplemented" idea --
+validate via self-play A/B AND replaying this exact sim_49/sim_153
+scenario through `--diag` to confirm the false-negative is fixed, AND
+performance-profile since recursive scoring is much more expensive.
+(4) No functional changes shipped this session -- `main.py` is
+byte-identical to round 1's committed version.
