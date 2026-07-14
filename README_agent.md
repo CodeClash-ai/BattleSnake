@@ -1416,3 +1416,40 @@ print('win',w,'loss',l,'tie',t)"
   900 turns) as the repro -- target getting >8/12 seeds to SURVIVE. Keep
   tail-reachable-region + tail-follow + 2-ply-static + anti-serpentine + all
   existing anti-coil/anti-pin. Test carefully; the 224-25 record is the floor.
+
+## ROUND 1 UPDATE (opus-4-8, Flipez__flipez-crystal opponent) -- THIS SESSION
+- OPPONENT: `Flipez__flipez-crystal`. Round 0 result: WIN 219-29 (2 ties).
+  GENUINE combat opponent, avg game len 112 turns, max 260. NOT a timeout bot.
+- ANALYZED all 29 losses (/tmp/analyze.py, /tmp/analyze2.py): CLEAR SINGLE
+  ROOT CAUSE = in 100% of losses WE WERE SHORTER than flipez (avg gap 5.3 cells,
+  range 1-13). flipez OUT-GROWS us EARLY (traced sim_36/145/153: by turn 40-50 it
+  is len 8-13 while we hang at len 4-6), then pins us to walls/corners and wins
+  forced head-to-heads. Not self-coil, not starvation (hp 50-95 at death) -- pure
+  LENGTH DEFICIT. It grabs food aggressively; we were too passive.
+- WHY WE WERE PASSIVE: score is dominated by space*10 (space 50+ => 500+ pts)
+  while food weight 4.5*dist(~10)=45 pts, easily overwhelmed. Food racing was
+  also too conservative (required my_fd < opp_fd-1, so tied races were ceded).
+- CHANGES to main.py (targeted growth parity, additive to existing food logic):
+  1. _food_weight when BEHIND: was flat 4.5 -> now 7.0 + min(behind,6)*0.8
+     (7.0..11.8, scales with how far behind we are). Tied: 2.5 -> 3.5.
+  2. FOOD RACING when BEHIND: contest food we WIN OR TIE (my_fd <= opp_fd)
+     instead of only clear wins; race reward 3.0->5.0 when behind, land bonus
+     45->55. When even/ahead the old conservative my_fd<opp_fd-1 still applies.
+  These make us keep up on length so we WIN h2h instead of getting pinned.
+- VALIDATION -- ALL PASS: ast.parse+import OK, launch block intact,
+  solo_test SURVIVED 300 turns len 7, match.sh naive 8-0.
+  greedy_opp (aggressive grower proxy for flipez): 11-9, 13-11 (~54%, no regress;
+  greedy_opp is HIGH variance per prior notes and grows fast like flipez).
+  NOTE: mirror A/B (/tmp/ab.sh) is all-ties (deterministic symmetric) -- ignore
+  per all prior README notes. Single-decision tests (/tmp/decision*.py) confirm
+  the food logic already handles clear cases; the change matters at the MARGINS
+  (stronger pull vs competing space/wall terms) accumulating over a game.
+- Backup: main_round0_flipez_backup.py (pre-this-change, proven 219-29 code).
+- ADVICE FOR NEXT TEAMMATE: flipez beats us by OUT-GROWING us then pinning.
+  Growth parity is THE lever -- keep the boosted behind-food-weight + tie-race.
+  If losses persist, consider growing even more aggressively early (contest food
+  within manhattan even when slightly losing the race, IF escape>=2), or 2-ply
+  h2h to win length-based contacts. Don't over-crank food (could dive into pins;
+  food is still gated to safe cells space>=my_len and zeroed on edges when hunted).
+  Keep all existing anti-coil/anti-pin/parallel-shadow/dominance logic intact.
+  NEVER touch the launch block. Judge via greedy_opp multi-batch (variance huge).

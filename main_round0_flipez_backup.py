@@ -311,12 +311,9 @@ def _choose_move(game_state):
     if my_health < 35:
         _food_weight = 4.0            # starving: prioritise reaching food
     elif my_len < _max_ol:
-        # BEHIND on length -- flipez-crystal out-grows us early (avg gap 5.3)
-        # then wins forced h2h. Grow AGGRESSIVELY to reach length parity.
-        _behind = _max_ol - my_len
-        _food_weight = 7.0 + min(_behind, 6) * 0.8   # 7.0..11.8
+        _food_weight = 4.5            # behind on length: grow to win h2h
     elif my_len == _max_ol:
-        _food_weight = 3.5            # tied: keep growing to gain edge
+        _food_weight = 2.5            # tied: keep growing to gain edge
     else:
         _food_weight = 0.6            # ahead: mild interest
     # DOMINANCE ANTI-COIL (fix vs pinky-snek sim_145 R1 loss): when we are
@@ -587,7 +584,6 @@ def _choose_move(game_state):
             # allow edge food if we clearly win the race and it isn't a deep
             # pin-corner (escapes >= 2), so we stop starving on the walls.
             if my_len <= _max_ol + 1 and not lose_h2h:
-                _behind_now = my_len < _max_ol
                 for f in _food_cells:
                     my_fd = _manhattan(nc, f)
                     opp_fd = 999
@@ -596,20 +592,16 @@ def _choose_move(game_state):
                         od = _manhattan(oh, f)
                         if od < opp_fd:
                             opp_fd = od
-                    # When BEHIND on length we MUST grow to reach parity, so
-                    # contest any food we win OR tie the race for (my_fd<=opp_fd);
-                    # when even/ahead only take food we clearly win (my_fd<opp_fd-1).
-                    _win_race = (my_fd <= opp_fd) if _behind_now else (my_fd < opp_fd - 1)
-                    if _win_race:
+                    # we win the race by a clear margin -> safe to grow here
+                    if my_fd < opp_fd - 1:
                         _corner_f = ((f[0] in (0, width - 1))
                                      and (f[1] in (0, height - 1)))
                         if _corner_f and escapes <= 1:
                             continue  # deep corner pin risk, skip
                         # reward getting closer; big bonus for landing on it
-                        _race_w = 5.0 if _behind_now else 3.0
-                        score += (opp_fd - my_fd + 1) * _race_w
+                        score += (opp_fd - my_fd) * 3.0
                         if my_fd == 0:
-                            score += 55.0
+                            score += 45.0
 
         # NEUTRAL-ZONE WALL AVOIDANCE (fix vs amphibious-arthur sim_124/38/85):
         # In several losses we were roughly EVEN length (e.g. len5 vs 4) and got
