@@ -1,45 +1,4 @@
-"""
-Faithful port of pambrose/battlesnake-examples -> SimpleSnake (Kotlin) into
-CodeClash v1.
-
-Original: io/battlesnake/examples/kotlin/SimpleSnake.kt (uses the
-battlesnake-quickstart "io.battlesnake.core" framework, which speaks the raw
-BattleSnake v1 API JSON directly -- board width/height, body/food x,y, and the
-standard y-up / bottom-left coordinate system where "up" = y+1, "down" = y-1).
-
-Original strategy (reproduced exactly):
-
-    fun moveTo(request, position): MoveResponse =
-        when {
-            head.x > position.x -> LEFT
-            head.x < position.x -> RIGHT
-            head.y > position.y -> DOWN
-            else                -> UP
-        }
-
-    fun nearestFood(head, foodList): Food =
-        foodList.maxByOrNull { head - it.position }!!   // Position.minus == Manhattan
-                                                        // -> picks the FARTHEST food
-
-    if (isFoodAvailable)
-        moveTo(head, nearestFood(head, foodList).position)
-    else
-        moveTo(head, boardCenter)
-
-Faithfulness notes:
-  - Position.minus is Manhattan distance; maxByOrNull selects the largest, i.e.
-    the *farthest* food (a genuine quirk of the original -- preserved).
-  - moveTo returns exactly ONE move by strict priority: x fully dominates y.
-    If x differs, y is never consulted. The final "else -> UP" also covers the
-    fully-aligned (head == target) case.
-  - The original has NO collision / out-of-bounds avoidance at all; it blindly
-    returns the moveTo direction. We do not add any. The only wrapper is the
-    arena-required try/except legal fallback.
-"""
-
-
 def info():
-    # DescribeResponse("me", "#ff00ff", "beluga", "bolt")
     return {
         "apiversion": "1",
         "author": "me",
@@ -48,69 +7,144 @@ def info():
         "tail": "bolt",
     }
 
-
 def start(game_state):
     return None
-
 
 def end(game_state):
     return None
 
-
 def _manhattan(a, b):
-    # Position.minus: abs(dx) + abs(dy)
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-
-def _board_center(width, height):
-    # Board.center: ((w even ? w/2 : (w+1)/2) - 1, same for height)
-    center_x = (width // 2 if width % 2 == 0 else (width + 1) // 2) - 1
-    center_y = (height // 2 if height % 2 == 0 else (height + 1) // 2) - 1
-    return (center_x, center_y)
-
-
-def _move_to(head, target):
-    """Exact reproduction of SimpleSnake.moveTo (y-up API)."""
-    hx, hy = head
-    tx, ty = target
-    if hx > tx:
-        return "left"
-    if hx < tx:
-        return "right"
-    if hy > ty:
-        return "down"
-    return "up"
-
 
 def move(game_state):
     try:
         board = game_state["board"]
         width, height = board["width"], board["height"]
-        head_seg = game_state["you"]["body"][0]
+        
+        my_id = game_state["you"]["id"]
+        my_body = game_state["you"]["body"]
+        my_length = len(my_body)
+        head_seg = my_body[0]
         head = (head_seg["x"], head_seg["y"])
 
+        # Determine possible next steps
+        possible_moves = {
+            "up": (head[0], head[1] + 1),
+            "down": (head[0], head[1] - 1),
+            "left": (head[0] - 1, head[1]),
+            "right": (head[0] + 1, head[1])
+        }
+
+        # 1. Avoid out of bounds
+        safe_moves = {}
+        for d, pos in possible_moves.items():
+            if 0 <= pos[0] < width and 0 <= pos[1] < height:
+                safe_moves[d] = pos
+
+        # 2. Avoid obstacle collisions (own body and other snakes)
+        # Note: A snake's tail segment will move out of the way on this turn, UNLESS they consumed food on the previous turn.
+        # However, to be absolutely safe, let's treat the entire body as an obstacle except maybe the tail if we want to be fancy.
+        # But for now, let's just avoid all segments to be extremely robust.
+        obstacle_positions = set()
+        for s in board["snakes"]:
+            for seg in s["body"]:
+                obstacle_positions.add((seg["x"], seg["y"]))
+
+        # Filter out safe moves that collide with obstacles
+        non_colliding_moves = {}
+        for d, pos in safe_moves.items():
+            if pos not in obstacle_positions:
+                non_colliding_moves[d] = pos
+
+        # 3. Head-to-Head Collision Avoidance:
+        # If an adjacent cell is next to an opponent's head, they could move there.
+        # We should only allow it if we are strictly longer than that opponent.
+        # If we are shorter or equal, we should avoid moving to any cell adjacent to their head.
+        dangerous_head_moves = set()
+        for s in board["snakes"]:
+            if s["id"] == my_id:
+                continue
+            opp_head = (s["head"]["x"], s["head"]["y"])
+            opp_length = len(s["body"])
+            
+            # If opponent is longer or equal to us, their potential next moves are dangerous
+            if opp_length >= my_length:
+                for opp_d in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
+                    dangerous_head_moves.add((opp_head[0] + opp_d[0], opp_head[1] + opp_d[1]))
+
+        # Filter out dangerous head-to-head moves
+        smart_moves = {}
+        for d, pos in non_colliding_moves.items():
+            if pos not in dangerous_head_moves:
+                smart_moves[d] = pos
+
+        # Fallback logic:
+        # Best: smart_moves (no collisions, no disadvantageous head-to-heads)
+        # Second best: non_colliding_moves (no standard collisions, but possible risk of head-to-head)
+        # Third best: safe_moves (only avoid walls, might crash into bodies)
+        # Last resort: just go up
+        choices = smart_moves if smart_moves else (non_colliding_moves if non_colliding_moves else safe_moves)
+        if not choices:
+            return {"move": "up"}
+
+        # 4. Flood fill to avoid dead ends/traps:
+        # We evaluate each choice by performing a BFS/flood-fill to count how many reachable cells exist from that move.
+        # This helps avoid tunneling into a dead-end pocket.
+        def get_reachable_area(start_pos):
+            queue = [start_pos]
+            visited = {start_pos}
+            count = 0
+            while queue:
+                curr = queue.pop(0)
+                count += 1
+                if count > 30:  # Cap the BFS to keep it fast
+                    break
+                for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
+                    nx, ny = curr[0] + dx, curr[1] + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        if (nx, ny) not in obstacle_positions and (nx, ny) not in visited:
+                            visited.add((nx, ny))
+                            queue.append((nx, ny))
+            return count
+
+        # Find food target
         food = board.get("food", [])
         if food:
-            # nearestFood: maxByOrNull(Manhattan) -> farthest food.
-            # Kotlin maxByOrNull keeps the FIRST element attaining the max.
-            target = None
-            best = -1
-            for f in food:
-                fp = (f["x"], f["y"])
-                d = _manhattan(head, fp)
-                if d > best:
-                    best = d
-                    target = fp
+            closest_food = min(food, key=lambda f: _manhattan(head, (f["x"], f["y"])))
+            target = (closest_food["x"], closest_food["y"])
         else:
-            target = _board_center(width, height)
+            target = (width // 2, height // 2)
 
-        return {"move": _move_to(head, target)}
+        # We will rank moves first by reachable area (avoiding traps), then by distance to target.
+        # Specifically: group choices by whether they have enough space (e.g., space >= my_length),
+        # or just maximize space if all have less.
+        move_scores = []
+        for d, pos in choices.items():
+            space = get_reachable_area(pos)
+            dist = _manhattan(pos, target)
+            move_scores.append((d, space, dist))
+
+        # Sort moves:
+        # 1. Primary key: Whether they have sufficient space (e.g., >= min(my_length, 15)). If yes, they are equal.
+        # 2. Secondary key: Manhattan distance to target (closer is better)
+        # 3. Tertiary key: Actual space (more is better, as a tie-breaker or fallback if space is insufficient)
+        min_space_needed = min(my_length, 15)
+        
+        def rank_move(item):
+            d, space, dist = item
+            has_enough_space = 1 if space >= min_space_needed else 0
+            # We want: has_enough_space (descending -> -has_enough_space),
+            # dist (ascending), space (descending -> -space)
+            return (-has_enough_space, dist, -space)
+
+        move_scores.sort(key=rank_move)
+        best_move = move_scores[0][0]
+
+        return {"move": best_move}
+
     except Exception:
-        # Arena-required legal fallback (original has none).
         return {"move": "up"}
-
 
 if __name__ == "__main__":
     from server import run_server
-
     run_server({"info": info, "start": start, "move": move, "end": end})
