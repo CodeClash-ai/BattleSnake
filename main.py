@@ -658,8 +658,8 @@ def move(game_state):
         # (small/no advantage) completely unaffected.
         advantage = my_len - max_opp_len
         adv_scale = min(1.0, max(0.0, advantage - board_cells * 0.12) / (board_cells * 0.35))
-        lookahead_weight = 15.0 + 35.0 * adv_scale
-        lookahead_depth = 6 + int(round(6 * adv_scale))
+        lookahead_weight = 20.0 + 35.0 * adv_scale
+        lookahead_depth = 8 + int(round(6 * adv_scale))
 
         for name, npt, danger_h2h in pool:
             # If this move lands on food, our own tail will NOT vacate this

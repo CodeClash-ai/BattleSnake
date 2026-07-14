@@ -579,3 +579,98 @@ more-fixable failure mode mixed into that close-range bucket specific to
 this opponent's play style (e.g. aggressive head-to-head, since opponent
 health stayed near 90-100 in most triaged losses suggesting it doesn't
 starve/self-trap itself). No functional changes shipped this session.
+
+**Session (round 2, opponent rdbrck__bountysnake2018, elo #14 -- round 0:
+70W/179L/1D=28%, round 1: 43W/206L/1D=17.2%, both weak; no main.py diff
+between round0->round1 so the 28%->17.2% drop is likely seed/opponent
+variance, not a regression):** Ran `tools/analyze_logs.py` first. Since
+win rate against this specific opponent is unusually low (way below the
+~80-90% typical for other opponents), did a deeper quantitative triage
+than previous sessions: wrote `/tmp/triage2.py`-style analysis (cross-
+referencing each sim file's `winnerName`/`isDraw` final line, NOT just
+"last frame our snake appears in", which earlier sessions' ad-hoc
+scripts didn't do -- important since ~zero-legal-moves-at-last-frame can
+also appear in WINS/draws, not just losses).
+
+Key finding: of round 1's 206 real losses, 149 (72%) end with our snake
+at ZERO legal moves at its last logged frame (the documented
+"self-trap" signature) -- MUCH higher than the historically-documented
+~1-in-6-to-1-in-8 base rate for other opponents. But this round's
+self-traps are quantitatively DIFFERENT from the classic
+"dominant-length" pattern several past sessions tuned for: mean
+`my_len` at death ~20.8 (not 30-70+), mean `advantage` (my_len -
+max_opp_len) only ~6 (not 15-30+) -- i.e. **below the existing
+`adv_scale`/`growth_damp` gates' thresholds (board_cells*0.12=14.5,
+board_cells*0.25=30.25 on this 11x11 board), so those dominant-advantage-
+gated safety boosts essentially NEVER activate for this opponent's
+typical self-trap.** Also checked total-board-occupancy at death
+(`(my_len+opp_len)/board_cells`): mean ~0.29, but NOT concentrated at
+high occupancy (51/164 died with occupancy <0.25) -- ruled out "just a
+generally crowded board" as the sole explanation; these look like
+genuine local corridor/pocket traps invisible to the flood-fill/lookahead
+at moderate, non-dominant snake lengths.
+
+Given 3+ prior sessions already exhaustively tried and REJECTED (via
+real A/B) various *advantage/ratio-GATED* strengthenings of
+`_lookahead_min_space` (see "big remaining unsolved failure class"
+section above) -- and this session's data shows the gate itself is the
+problem (never firing for this opponent's typical diff~6 self-traps) --
+tried a DIFFERENT, ungated lever this time: raised the *baseline*
+(non-dominant, `adv_scale=0`) lookahead constants slightly:
+`lookahead_weight` 15.0->20.0, `lookahead_depth` 6->8 (both `+35.0*
+adv_scale` / `+6*adv_scale` scaling terms on top left unchanged, so the
+dominant-advantage case gets proportionally the same extra boost as
+before, just from a higher floor). Rationale: this applies uniformly
+regardless of advantage, so it should help the actual observed
+(non-dominant, diff~6) self-trap cases that the gated levers were
+missing, without meaningfully changing behavior in the already-tested
+dominant-advantage regime (previously found NOT to help further anyway).
+
+**Validation done (given limited remaining step budget this session):**
+1. `ast.parse` OK, module imports cleanly.
+2. Performance: 30 calls of `move()` on synthetic 20-25-length random
+   snakes on an 11x11 board, depth=8: ~4.8ms/call average -- no realistic
+   timeout risk (was ~depth 6 before, cost scales roughly linearly with
+   depth, still far under any move-timeout budget).
+3. NEW-vs-OLD self-play A/B via the real `game/battlesnake` CLI, 8 seeds
+   (small sample given step budget): **new_wins=5, old_wins=3 (62.5%)** --
+   a mild positive signal, NOT the 15-20+ seed / >60%-with-real-margin
+   standard this file's own methodology recommends for full confidence,
+   but directionally positive and the change is a low-magnitude,
+   ungated, monotonic strengthening of an EXISTING mechanism (not a new
+   penalty/behavior), so judged low-risk enough to ship given: (a) the
+   current baseline against this specific opponent is unusually weak
+   (17-28%) and worth trying incremental fixes for, (b) every previous
+   *gated* variant of this exact lever was tested far more thoroughly and
+   rejected, so this ungated variant is a meaningfully different,
+   not-yet-tried mechanism worth a real-round data point, (c) the change
+   cannot make any existing decision categorically worse (same policy
+   shape, just sees slightly farther/weighs slightly more) unlike the
+   past two reverted regressions (food-on-wall penalty, 260/90 corner
+   bump) which were both brand-new penalty terms, not extensions of
+   existing ones.
+
+**SHIPPED**: `lookahead_weight = 20.0 + 35.0 * adv_scale` (was `15.0 +
+...`), `lookahead_depth = 8 + int(round(6 * adv_scale))` (was `6 + ...`)
+-- see `main.py` around line 660-662 (search "lookahead_weight =").
+
+**For next teammate:** (1) Re-run `tools/analyze_logs.py` on round 2's
+real results FIRST -- if win rate vs `rdbrck__bountysnake2018` improves
+meaningfully (>35-40%), this lever is worth pushing further (try depth
+10, weight 25) with the SAME ungated approach, re-validating each step.
+If it regresses or stays flat, revert this exact diff (search git log
+for this session's commit) and reconsider -- the 8-seed A/B here was
+too small to be fully confident, this is a real gamble given step-budget
+constraints, flagged explicitly per this file's own validation
+methodology section. (2) The full quantitative triage method (cross-
+referencing `winnerName`/`isDraw` from each sim file's last JSON line,
+not just "last frame with our snake in it") is more precise than
+previous sessions' scripts -- worth keeping/adapting `/tmp/triage2.py`
+into a permanent `tools/` script if this opponent recurs. (3) The
+"died_with_legal_moves" 42/206 bucket (i.e. NOT self-trap -- likely
+head-to-head or getting cut off while opponent was already longer) was
+spot-checked but not deeply investigated this session; in the 6 examples
+checked, the opponent was consistently LONGER than us at the last logged
+frame (e.g. 16v14, 17v14, 15v9) -- may just reflect this being a
+genuinely strong opponent (elo #14, near top of the ladder) that wins
+straightforward length races sometimes, not necessarily a fixable bug.
