@@ -652,3 +652,33 @@ print('win',w,'loss',l,'tie',t)"
   self-adjacency 22 + static_flood + tail-reach + escape-count + anti-pin.
   Don't over-crank (a bigger center weight risks luring into contested center).
   NEVER touch the launch block. Judge via smart/greedy proxies + sim replays.
+
+## ROUND 1 UPDATE (opus-4-8, coreyja__coreyja-rs opponent) -- THIS SESSION
+- OPPONENT: `coreyja__coreyja-rs`. Round 0 result: WIN 26-2. GENUINE combat
+  opponent (games run 180-268 turns), NOT a timeout bot.
+- ANALYZED both round-0 LOSSES (sim_242, sim_246): BOTH were multi-turn WALL/
+  CORNER SELF-COIL deaths while we were WINNING BIG at high health:
+  * sim_242 (t264): we were LONGER (24 vs 15, hp 97) yet crawled up the RIGHT
+    wall (x=10) then coiled into the top-right region (x=8-10, y=6-10) and
+    walked the top row y=10 into a dead-end, sealing ourselves.
+  * sim_246 (t176): LONGER (21 vs 12, hp 93), coiled into the bottom-right.
+  ROOT CAUSE: chronic wall-hug -> tight coil in a corner region that seals as
+  our long body fills it, even while dominating. Same class as bob/crystal/Xe.
+- CHANGE (score_candidate, low-risk tuning of existing anti-coil logic):
+  * static-region penalty (my_len - sspace): 12.0 -> 16.0
+  * tiny static-region penalties: sspace<=4: 250->400; sspace<=8: 80->140;
+    NEW sspace<=12: -40 (catch medium pockets earlier before they seal).
+  * winning anti-wall-coil center pull (my_health>=30, winning, not hunted):
+    dist_center weight 2.5 -> 3.5 (leave walls earlier while dominating).
+- TESTING (variance HUGE on smart_opp; use multi-batch):
+  * smart_opp (smartmatch.sh 24): new = 19-5, 19-5, 20-3-1 (~81% aggregate);
+    baseline (main_round1_coreyja_rs_backup.py) = 17-7 and 19-4-1 (noisy).
+    Net: clear/consistent edge or at worst a wash + safer anti-coil.
+  * greedy_opp (greedymatch.sh 20): 11-9 (fine). naive match.sh 10 -> 10-0.
+  * solo_test -> SURVIVED 300 turns. ast.parse+import OK; launch block intact.
+- Backup: main_round1_coreyja_rs_backup.py (pre-this-change, proven 26-2 code).
+- ADVICE: coreyja-rs loses ONLY by our self-coils when we dominate; strengthened
+  static-space + center-pull removes the coil deaths. Next lever = 2-ply
+  lookahead to detect wall-coil buildup 3+ turns before the seal (single-turn
+  static flood can't see the multi-turn coil forming). Keep static_flood +
+  center-pull + tail-reach + escape-count + anti-pin. NEVER touch launch block.

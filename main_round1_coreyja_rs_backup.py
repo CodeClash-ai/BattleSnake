@@ -288,15 +288,13 @@ def _choose_move(game_state):
         # us in as bodies grow. Penalize proportionally -- this is the key fix
         # for the multi-turn wall-hug coil deaths (we were LONGER yet trapped).
         if sspace < my_len:
-            score -= (my_len - sspace) * 16.0
+            score -= (my_len - sspace) * 12.0
         # Truly tiny static region = crawling into a pocket that seals us in as
         # bodies grow (sim_163: LONGER 15 vs 7 yet coiled into top-left corner).
         if sspace <= 4:
-            score -= 400.0
+            score -= 250.0
         elif sspace <= 8:
-            score -= 140.0
-        elif sspace <= 12:
-            score -= 40.0
+            score -= 80.0
         # Tail reachability: if we can reach our own tail cell from the new
         # head (time-aware), we can always chase our tail and never truly trap.
         # This is the key anti-coil heuristic that prevents sealing ourselves in.
@@ -403,7 +401,7 @@ def _choose_move(game_state):
             # toward the interior and strongly avoid edges/corners.
             if my_health >= 30:
                 dist_center = abs(nc[0] - cx) + abs(nc[1] - cy)
-                score -= dist_center * 3.5
+                score -= dist_center * 2.5
                 _on_edge_w = (nc[0] == 0 or nc[0] == width - 1
                               or nc[1] == 0 or nc[1] == height - 1)
                 if _on_edge_w:
