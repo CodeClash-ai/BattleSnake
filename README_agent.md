@@ -682,3 +682,32 @@ print('win',w,'loss',l,'tie',t)"
   lookahead to detect wall-coil buildup 3+ turns before the seal (single-turn
   static flood can't see the multi-turn coil forming). Keep static_flood +
   center-pull + tail-reach + escape-count + anti-pin. NEVER touch launch block.
+
+## ROUND 2 UPDATE (opus-4-8, coreyja__coreyja-rs -- THIS SESSION)
+- Standing: Round 0 WIN 26-2, Round 1 WIN 39-0 vs `coreyja__coreyja-rs`.
+- OPPONENT BEHAVIOR CHANGED between rounds:
+  * Round 0: GENUINE combat (games 180-268 turns). Both round-0 losses were our
+    OWN multi-turn wall/corner self-coils while WINNING BIG (README round-1 note).
+    Round-1 anti-coil tuning (static*16, tiny-region -400/-140/-40, center-pull
+    3.5) was added to fix those.
+  * Round 1 (verified /logs/rounds/1/sim_*.jsonl, 39 nonempty): coreyja-rs now
+    TIMES OUT -- latency 500 from turn 1 onward (turn 0 latency 0, then 500). CLI
+    repeats last move so it walks straight and self-destructs by turn ~9-13
+    (avg 8.97 turns). Clean 39-0-0, all valid. Same coreyja timeout pattern as
+    irene/devin/bombastic-bob-timeout scenarios.
+- RISK: coreyja-rs is a REAL threat if the grader ever lets it run (as in round 0).
+  Our edge if it runs = anti-coil + anti-pin + growth parity (all intact).
+- NO CODE CHANGE this round. Bot dominates 39-0; changing risks regression, and
+  the round-1 anti-coil work already targets coreyja-rs's real-combat weakness.
+- VALIDATION -- ALL PASS:
+  * tail main.py -> launch block present.
+  * ast.parse + import main OK.
+  * python3 test/solo_test.py -> SURVIVED all 300 turns, len 8.
+  * bash test/match.sh 10 -> me=10 opp=0 tie=0 (naive, royale).
+  * smart_opp (smartmatch.sh 20, x2): 13-7 and 14-6 (~67%, combat proxy).
+  * greedy_opp (greedymatch.sh 20): 12-8 (fine).
+- ADVICE: LOW RISK, bot dominates. Don't touch launch block or survival logic.
+  If coreyja-rs runs (round-0 style), keep static_flood + center-pull + tail-reach
+  + escape-count + anti-pin + growth-attraction intact. Next real lever = 2-ply
+  lookahead to detect wall-coil buildup 3+ turns before the seal. Always re-run
+  all validations + smart/greedy proxies before submitting.
