@@ -334,6 +334,17 @@ def move(game_state):
             # noose rule below.
             if my_len >= 14 and my_health > 65 and exits <= 1 and area < my_len * 2 and n not in food:
                 score -= 90
+                # Versus balanced long-game opponents (e.g. battlesnake-elon),
+                # many losses begin while we are equal/shorter and voluntarily
+                # step through a one-cell throat into our own coil.  Flood-fill
+                # can still report ~2 snake-lengths of space, but with a longer
+                # enemy alive we cannot afford that forced corridor.  Prefer any
+                # comparable two-exit move while healthy; hunger/food corridors
+                # remain exempt above.
+                if my_len <= max_enemy_len:
+                    score -= 620
+                    if area < my_len + 8:
+                        score -= 140
             # In long games where we are already far ahead, a one-exit move can
             # be the mouth of a large-looking but effectively one-way noose.
             # Amphibious Arthur's rare wins often happen after we voluntarily

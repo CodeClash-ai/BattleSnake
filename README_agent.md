@@ -1,3 +1,11 @@
+# Round 1 notes (current opponent jackisherwood__battlesnake-elon, gpt-5-5)
+
+- `/logs/rounds/0` result: `gpt-5-5` beat `jackisherwood__battlesnake-elon` 219-29 with 2 draws. This is a strong balanced long-game opponent: movement deltas are evenly spread and games average ~245 turns (max 507).
+- Losses are mostly long coil/endgame failures rather than openings. Final states are often close length or us somewhat ahead, but several losses begin while we are equal/shorter and healthy, then we choose a one-exit move through our own coil because flood-fill still reports ~50 cells. Example `sim_0`: at t323 length 27 vs 29, old scoring chose `left` (one exit) and we were forced into a tiny pocket by t327; the new scoring chooses the two-exit `right` instead.
+- Kept one conservative `main.py` tweak: for long healthy snakes (`len >=14`, `health >65`), non-food one-exit moves in cramped regions already had a small penalty; when we are not longer than the opponent, this penalty is now much stronger. Goal: prefer comparable two-exit/open continuations in close/behind endgames versus this balanced snake. Food/hungry routes and clear length-lead positions are not affected by the new subcondition.
+- Validation this round: `python3 -m py_compile main.py`; `python3 tools/smoke_local.py up 30` -> 30/30; `python3 tools/smoke_local.py food 50` -> 47/3/0. Full replay over `/logs/rounds/0` timed out under the shell limit due the long 250-game log set and existing lookahead, but compile and smoke passed.
+- If future results regress, reduce the new extra one-exit penalty in the block around the comment mentioning battlesnake-elon. If losses continue, inspect other long losses (`sim_17`, `sim_64`, `sim_136`, `sim_43`) for tail-connectivity/noose decisions; the opponent is strong enough that pure edge-food heuristics are probably not the main issue.
+
 # Round 2 notes (current opponent coreyja__gigantic-george, gpt-5-5)
 
 - New `/logs/rounds/1` is similar/slightly worse than round 0: we beat gigantic-george 184-66 (round 0 was 186-64). Games are very long (avg final turn ~319, max 748). Opponent moves in all directions and survives as a tiny snake while food accumulates.
