@@ -195,6 +195,27 @@ def _opp_candidate_cells(body, blocked, width, height):
         if _in_bounds(npt, width, height) and npt not in blocked:
             cells.append(npt)
     return cells
+def _opp_two_ply_reachable(body, blocked, width, height):
+    """Cells an opposing snake could plausibly occupy within its next TWO
+    moves (not just one). Used to detect a scarce "single exit" cell that
+    looks uncontested one move from now but that a nearby threat could
+    still reposition onto by its second move -- exactly the mechanism
+    behind a real corner-trap loss (see README_agent.md): our snake
+    committed to a corner cell with only 1 real exit; the opponent wasn't
+    adjacent to that exit yet, but its very next move repositioned it
+    right next to it, letting it contest/win a head-to-head there on the
+    following turn. A pure 1-ply check missed this. Cheap approximation:
+    treat the snake as if it simply advances its head each ply (body
+    shifts by one), ignoring growth/food -- fine for a short-horizon
+    threat estimate.
+    """
+    step1 = _opp_candidate_cells(body, blocked, width, height)
+    result = set(step1)
+    for c in step1:
+        new_body = [{"x": c[0], "y": c[1]}] + list(body[:-1])
+        step2 = _opp_candidate_cells(new_body, blocked, width, height)
+        result.update(step2)
+    return result
 
 
 def _predict_opp_move(opp_body, opp_moves, food, width, height):
@@ -416,6 +437,44 @@ def move(game_state):
             # over, and got sealed into the corner once the wall ran out
             # -- at the time, the immediate flood-fill looked fine because
             # it assumed the opponent wouldn't move).
+            # Branching-factor / single-exit-corridor safety: raw
+            # flood-fill `space` only tells us the SIZE of the reachable
+            # region, not whether this specific candidate cell is a
+            # chokepoint with just one (or zero) legal follow-up moves.
+            # A corner/dead-end cell can report the exact same huge
+            # `space` as a cell with several exits (the region "behind"
+            # it is identical), but committing to a single-exit cell is
+            # much riskier: if an opponent takes that one exit next turn
+            # (or it's otherwise unavailable), we are fully sealed in
+            # regardless of how big the region looked a moment ago. Real
+            # match analysis (see README_agent.md) found exactly this: a
+            # corner cell and a mid-wall cell both reported `space=111,
+            # reached_tail=True` (indistinguishable by the existing
+            # metrics), but the corner had only 1 real exit which a
+            # longer opponent was then able to contest in a head-to-head,
+            # while the alternative had 2 exits and survived. Compute the
+            # number of legal immediate follow-up cells from `npt`
+            # (its degree in the collision graph) and penalize low-degree
+            # cells, especially when a threat snake could also legally
+            # move onto that same scarce exit next turn.
+            exits = 0
+            contested_exits = 0
+            threat_2ply = [
+                _opp_two_ply_reachable(opp_body, eff_blocked, width, height)
+                for opp_body in threat_bodies
+            ]
+            for edx, edy in DIRS.values():
+                ept = (npt[0] + edx, npt[1] + edy)
+                if not _in_bounds(ept, width, height):
+                    continue
+                if ept in eff_blocked:
+                    continue
+                exits += 1
+                for reach in threat_2ply:
+                    if ept in reach:
+                        contested_exits += 1
+                        break
+
             worst_space = space
             if threat_bodies:
                 for opp_body in threat_bodies:
@@ -458,6 +517,19 @@ def move(game_state):
             if worst_space < my_len:
                 score -= 800.0 * (my_len - worst_space)
             score -= 8.0 * max(0, space - worst_space)
+
+            # Apply the branching-factor safety term computed above: mild
+            # continuous reward for having more exits (tie-break in favor
+            # of leaving more options open), and a real penalty for
+            # committing to a scarce (<=1) exit, made much worse if that
+            # scarce exit is itself contestable by a threat snake's own
+            # legal next move (i.e. it could vanish out from under us the
+            # very next turn, fully sealing us in).
+            score += exits * 6.0
+            if exits <= 1:
+                score -= 40.0
+                if threat_bodies and contested_exits >= exits:
+                    score -= 150.0
 
             # Tail-chasing safety net: if we can still path to our own
             # tail (which is guaranteed to vacate soon), that's a strong
