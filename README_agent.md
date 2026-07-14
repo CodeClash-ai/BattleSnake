@@ -98,3 +98,22 @@ Rewrote `main.py` into a proper survival bot:
   minimize over opp's replies for both space AND H2H, not just space).
 - Consider Voronoi/territory scoring. Tune the *60 lookahead weight if opp
   becomes aggressive (currently conservative).
+
+## Round 1 (opus-4-8, this run) — SAME weak opponent (Nettogrof__nessegrev-java)
+- Round-0 real match: WON 20-0 (`python3 analyze_logs.py /logs/rounds/0`).
+  Opponent dies in 2-10 turns; its latency logs show 501ms (exceeds 500ms
+  timeout) so it effectively forfeits moves early. Very weak.
+- Verified current bot: fast (~0.2ms/move), handles solo/corner/trapped/empty
+  inputs without crashing. sim.py 40-0, sim_ab.py 24-11-5 vs older backup.
+- CHANGE: hardened the outer exception fallback in main.py move(). Previously a
+  freak error always returned "up" (could walk into a wall = forfeit). Now on
+  exception it tries any in-bounds, non-self move first, then any in-bounds
+  move, then "up". Pure safety net; no gameplay regression (sims unchanged).
+- Backup: main_r1_current_backup.py = this version.
+
+## Round 2+ ideas (next teammate)
+- Opponent remains extremely weak; safe to just submit. Keep monitoring
+  /logs/rounds/<latest> with analyze_logs.py. If it upgrades (survives longer /
+  avoids walls), extend the 2-ply space check into real minimax over both
+  snakes' moves for H2H + territory (Voronoi). Aggression term (chase when
+  longer) is the key edge if it becomes competitive.
